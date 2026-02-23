@@ -14,6 +14,7 @@ export const translations = {
       vip: 'VIP',
       guide: 'Guide',
       kelly: 'Calculatrice',
+      concierge: 'Concierge',
       profile: 'Profil'
     },
     home: {
@@ -144,7 +145,26 @@ export const translations = {
       reset_subtitle: 'Entrez votre email pour recevoir un lien.',
       back_to_login: 'Retour à la connexion',
       reset_success: 'Email de réinitialisation envoyé !',
-    }
+    },
+    concierge: {
+      title: 'VANTAGE',
+      title_accent: 'CONCIERGE',
+      subtitle: 'Laissez l\'IA composer votre ticket idéal.',
+      step_1: 'Mise & Objectif',
+      step_2: 'Niveau de Risque',
+      step_3: 'Votre Ticket',
+      stake_label: 'Votre Mise (FCFA)',
+      goal_label: 'Gain Souhaité (FCFA)',
+      risk_label: 'Profil de Risque',
+      risk_low: 'Conservateur (Sûr)',
+      risk_med: 'Équilibré (Optimal)',
+      risk_high: 'Agressif (Grosse Cote)',
+      generate_btn: 'GÉNÉRER MON TICKET',
+      regenerate_btn: 'RÉESSAYER',
+      no_matches: 'Aucune combinaison trouvée. Essayez de baisser votre objectif.',
+      total_odds: 'Cote Totale',
+      potential_win: 'Gain Potentiel'
+    },
   },
   en: {
     nav: {
@@ -153,6 +173,7 @@ export const translations = {
       vip: 'VIP',
       guide: 'Guide',
       kelly: 'Calculator',
+      concierge: 'Concierge',
       profile: 'Profile'
     },
     home: {
@@ -283,6 +304,25 @@ export const translations = {
       reset_subtitle: 'Enter your email to receive a reset link.',
       back_to_login: 'Back to Login',
       reset_success: 'Reset email sent!',
+    },
+    concierge: {
+      title: 'VANTAGE',
+      title_accent: 'CONCIERGE',
+      subtitle: 'Let AI build your perfect betting slip.',
+      step_1: 'Stake & Goal',
+      step_2: 'Risk Level',
+      step_3: 'Your Ticket',
+      stake_label: 'Your Stake (FCFA)',
+      goal_label: 'Target Win (FCFA)',
+      risk_label: 'Risk Profile',
+      risk_low: 'Conservative (Safe)',
+      risk_med: 'Balanced (Optimal)',
+      risk_high: 'Aggressive (High Odds)',
+      generate_btn: 'GENERATE MY TICKET',
+      regenerate_btn: 'TRY AGAIN',
+      no_matches: 'No combination found. Try lowering your target goal.',
+      total_odds: 'Total Odds',
+      potential_win: 'Potential Win'
     }
   }
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Home, Unlock, Lock, User, BookOpen, Calculator } from 'lucide-react';
+import { Home, Unlock, Lock, User, BookOpen, Calculator, Sparkles } from 'lucide-react';
 import { NavigationTab } from '../types';
 import { useAppContext } from '../context/AppContext';
 
@@ -16,8 +16,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
     { id: 'home', icon: Home, label: t('nav.home') },
     { id: 'free', icon: Unlock, label: t('nav.free') },
     { id: 'vip', icon: Lock, label: t('nav.vip') },
-    { id: 'kelly', icon: Calculator, label: 'Kelly' },
-    { id: 'guide', icon: BookOpen, label: t('nav.guide') },
+    { id: 'concierge', icon: Sparkles, label: t('nav.concierge') },
+    { id: 'kelly', icon: Calculator, label: t('nav.kelly') },
     { id: 'profile', icon: User, label: t('nav.profile') },
   ] as const;
 

@@ -1,5 +1,5 @@
 
-export type NavigationTab = 'home' | 'free' | 'vip' | 'guide' | 'profile' | 'admin' | 'kelly';
+export type NavigationTab = 'home' | 'free' | 'vip' | 'guide' | 'profile' | 'admin' | 'kelly' | 'concierge';
 
 export type Sport = 'football' | 'basketball';
 

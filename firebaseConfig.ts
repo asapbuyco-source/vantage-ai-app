@@ -4,13 +4,13 @@ import { getFirestore } from "firebase/firestore";
 
 // Configuration using Vite Environment Variables with provided fallbacks
 const firebaseConfig = {
-  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || "AIzaSyCVDmeMSReJ6MCpMW95LIGf-SxtTjTgWWY",
-  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || "vantage-ai-4d17d.firebaseapp.com",
-  projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || "vantage-ai-4d17d",
-  storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || "vantage-ai-4d17d.firebasestorage.app",
-  messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || "459344360478",
-  appId: import.meta.env?.VITE_FIREBASE_APP_ID || "1:459344360478:web:88cb257dea87a19177ea0f",
-  measurementId: import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID || "G-NM09XQ8QM5"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase

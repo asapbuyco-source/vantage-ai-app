@@ -13,6 +13,7 @@ import { Profile } from './pages/Profile';
 import { Admin } from './pages/Admin';
 import { BettingGuide } from './pages/BettingGuide';
 import { Kelly } from './pages/Kelly';
+import { TicketWizard } from './components/TicketWizard';
 import { LandingPage } from './pages/LandingPage';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -174,6 +175,7 @@ function AppContent() {
               {activeTab === 'profile' && <Profile />}
               {activeTab === 'admin' && <Admin setTab={setActiveTab} />}
               {activeTab === 'kelly' && <Kelly setTab={setActiveTab} />}
+              {activeTab === 'concierge' && <TicketWizard />}
             </motion.div>
           }
         </AnimatePresence>
