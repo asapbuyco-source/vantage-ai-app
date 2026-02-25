@@ -163,12 +163,12 @@ export const PublicStats: React.FC<PublicStatsProps> = ({ setTab }) => {
                         <CheckCircle2 className="text-vantage-purple shrink-0" size={22} />
                         <div>
                             <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                                {language === 'fr' ? 'Powered by Gemini AI' : 'Powered by Gemini AI'}
+                                {language === 'fr' ? 'Powered by Vantage AI' : 'Powered by Vantage AI'}
                             </h4>
                             <p className="text-xs text-gray-500 mt-1">
                                 {language === 'fr'
-                                    ? 'Notre moteur IA Gemini analyse les données en temps réel pour chaque prédiction.'
-                                    : 'Our Gemini AI engine analyzes real-time fixture data for every single prediction.'}
+                                    ? 'Notre moteur IA Vantage analyse les données en temps réel pour chaque prédiction.'
+                                    : 'Our Vantage AI engine analyzes real-time fixture data for every single prediction.'}
                             </p>
                         </div>
                     </div>

@@ -449,7 +449,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                         </div>
                     </GlassCard>
 
-                    {/* Gemini Intelligence Unit */}
+                    {/* Vantage Intelligence Unit */}
                     <GlassCard className="border-vantage-cyan/30 bg-vantage-cyan/5">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-sm font-bold text-vantage-cyan uppercase flex items-center gap-2">

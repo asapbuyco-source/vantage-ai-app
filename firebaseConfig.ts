@@ -21,5 +21,6 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Log successful initialization
-console.log("Firebase initialized with project:", firebaseConfig.projectId);
+// Log successful initialization (Safe for production, only shows first few chars or length)
+const apiKeyStatus = firebaseConfig.apiKey ? `Loaded (${firebaseConfig.apiKey.length} chars)` : "MISSING";
+console.log(`Firebase initialized. Project: ${firebaseConfig.projectId}, API Key: ${apiKeyStatus}`);
