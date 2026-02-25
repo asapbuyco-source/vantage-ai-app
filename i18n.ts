@@ -4,7 +4,7 @@
 
 
 
-export type Language = 'en' | 'fr';
+export type Language = 'en' | 'fr' | 'sw' | 'ha' | 'yo' | 'ig' | 'zu' | 'xh' | 'pt';
 
 export const translations = {
   fr: {
@@ -324,5 +324,21 @@ export const translations = {
       total_odds: 'Total Odds',
       potential_win: 'Potential Win'
     }
+  },
+  sw: {
+    nav: { home: 'Nyumbani', free: 'Za Bure', vip: 'VIP', guide: 'Mwongozo', kelly: 'Kikokotoo', concierge: 'Concierge', profile: 'Wasifu' },
+    home: { system: 'MFUMO WA UTABIRI V.4.0', online: 'Kwenye Mtandao', performance: 'Utendaji', success_rate: 'KIWANGO CHA MAFANIKIO', vs: 'DHIDI' },
+    free: { title: 'UTABIRI', title_accent: 'WA BURE', pred_label: 'Utabiri', prob_label: 'Uwezekano' },
+    vip: { title: 'ENEO LA', title_accent: 'VIP', active: 'Ufikiaji wa VIP Unaoendelea', select_plan: 'Chagua mpango wako', pay_btn: 'LIPIA KWA SIMU' },
+    profile: { title: 'WASIFU', title_accent: 'WANGU', earnings: 'Salio Linalopatikana', logout: 'Ondoka' },
+    auth: { login_btn: 'Ingia', signup_btn: 'Jisajili' },
+  },
+  pt: {
+    nav: { home: 'Início', free: 'Grátis', vip: 'VIP', guide: 'Guia', kelly: 'Calculadora', concierge: 'Concierge', profile: 'Perfil' },
+    home: { system: 'SISTEMA PREDITIVO V.4.0', online: 'Online', performance: 'Desempenho', success_rate: 'TAXA DE SUCESSO', vs: 'VS' },
+    free: { title: 'PALPITES', title_accent: 'GRÁTIS', pred_label: 'Previsão', prob_label: 'Probabilidade' },
+    vip: { title: 'ÁREA', title_accent: 'VIP', active: 'Acesso VIP Ativo', select_plan: 'Escolha seu plano', pay_btn: 'PAGAR POR MOBILE' },
+    profile: { title: 'MEU', title_accent: 'PERFIL', earnings: 'Saldo Disponível', logout: 'Sair' },
+    auth: { login_btn: 'Entrar', signup_btn: 'Cadastrar-se' },
   }
 };

@@ -106,9 +106,9 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
     const saved = isPickSaved(match.id);
     showToast(
       saved
-        ? (language === 'fr' ? 'Retiré du slip' : 'Removed from slip')
-        : (language === 'fr' ? 'Ajouté au slip !' : 'Added to slip!'),
-      saved ? 'info' : 'success'
+        ? (language === 'fr' ? 'Ajouté au slip !' : 'Added to slip!')
+        : (language === 'fr' ? 'Retiré du slip' : 'Removed from slip'),
+      saved ? 'success' : 'info'
     );
   };
 
@@ -270,8 +270,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
               key={sport}
               onClick={() => setActiveSport(sport)}
               className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${activeSport === sport
-                  ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white'
-                  : 'text-gray-500'
+                ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white'
+                : 'text-gray-500'
                 }`}
             >
               {sport === 'football' ? '⚽' : '🏀'}
@@ -289,8 +289,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
               key={cat}
               onClick={() => setCategoryFilter(cat)}
               className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${categoryFilter === cat
-                  ? 'bg-vantage-cyan text-slate-900 border-transparent shadow'
-                  : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-gray-500'
+                ? 'bg-vantage-cyan text-slate-900 border-transparent shadow'
+                : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-gray-500'
                 }`}
             >
               {cat === 'all' ? (language === 'fr' ? 'Tous' : 'All') : CAT_LABELS[cat]}
@@ -425,8 +425,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                         <button
                           onClick={() => handleSaveToggle(match)}
                           className={`absolute top-3 right-3 p-1.5 rounded-full transition-all border ${saved
-                              ? 'text-vantage-purple bg-vantage-purple/10 border-vantage-purple/30'
-                              : 'text-gray-400 bg-white/5 border-white/10 hover:border-vantage-purple/20'
+                            ? 'text-vantage-purple bg-vantage-purple/10 border-vantage-purple/30'
+                            : 'text-gray-400 bg-white/5 border-white/10 hover:border-vantage-purple/20'
                             }`}
                         >
                           {saved ? <BookmarkCheck size={14} fill="currentColor" /> : <Bookmark size={14} />}

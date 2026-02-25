@@ -7,7 +7,7 @@ import { UserProfile, NavigationTab, Match, PayoutRequest, TeamAsset } from '../
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
 import { testGeminiConnection, setGeminiModel, getGeminiModel, AVAILABLE_MODELS, gradeYesterdayPredictions } from '../services/gemini';
-import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, getPredictionsForDate, saveTeamAsset, deleteTeamAsset, getAllTeamAssets } from '../services/db';
+import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, getPredictionsForDate, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings } from '../services/db';
 import { TeamLogo } from '../components/TeamLogo';
 
 interface AdminProps {
@@ -47,10 +47,32 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const [newTeamName, setNewTeamName] = useState('');
     const [newLogoUrl, setNewLogoUrl] = useState('');
 
+    // WhatsApp Group State
+    const [whatsappUrl, setWhatsappUrl] = useState('');
+    const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+    const [whatsappSaved, setWhatsappSaved] = useState(false);
+
     useEffect(() => {
         isMounted.current = true;
+        // Load WhatsApp settings
+        getAppSettings().then(s => {
+            if (s.whatsappGroupUrl && isMounted.current) setWhatsappUrl(s.whatsappGroupUrl);
+        });
         return () => { isMounted.current = false; };
     }, []);
+
+    const handleSaveWhatsApp = async () => {
+        setSavingWhatsapp(true);
+        try {
+            await saveAppSettings({ whatsappGroupUrl: whatsappUrl.trim() });
+            setWhatsappSaved(true);
+            setTimeout(() => setWhatsappSaved(false), 3000);
+        } catch (e) {
+            console.error('Failed to save WhatsApp link', e);
+        } finally {
+            setSavingWhatsapp(false);
+        }
+    };
 
     const fetchUsers = useCallback(async () => {
         setLoading(true);
@@ -584,6 +606,40 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                         {isSystemGenerating && <p className="text-xs text-orange-500 mt-2 text-center animate-pulse">Vantage AI is currently searching and analyzing...</p>}
                     </GlassCard>
 
+                    {/* WhatsApp Community */}
+                    <GlassCard className="border-green-500/30 bg-green-500/5">
+                        <h3 className="text-sm font-bold text-green-500 uppercase mb-3 flex items-center gap-2">
+                            <Link size={16} /> WhatsApp Community
+                        </h3>
+                        <p className="text-xs text-gray-400 mb-3">
+                            Paste your VIP WhatsApp group invite link. Members will see a join button after upgrading.
+                        </p>
+                        <div className="flex gap-2">
+                            <input
+                                type="url"
+                                placeholder="https://chat.whatsapp.com/..."
+                                value={whatsappUrl}
+                                onChange={(e) => setWhatsappUrl(e.target.value)}
+                                className="flex-1 bg-slate-200 dark:bg-black/40 border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-green-500 outline-none text-slate-900 dark:text-white"
+                            />
+                            <button
+                                onClick={handleSaveWhatsApp}
+                                disabled={savingWhatsapp}
+                                className={`px-4 font-bold rounded-lg text-sm transition-colors disabled:opacity-50 ${whatsappSaved ? 'bg-green-500 text-white' : 'bg-green-500/20 hover:bg-green-500/30 text-green-500 border border-green-500/30'}`}
+                            >
+                                {savingWhatsapp ? <RefreshCw size={14} className="animate-spin" /> : whatsappSaved ? '✓ Saved' : 'Save'}
+                            </button>
+                        </div>
+                        {whatsappUrl && (
+                            <button
+                                onClick={() => { setWhatsappUrl(''); saveAppSettings({ whatsappGroupUrl: '' }); }}
+                                className="mt-2 text-xs text-red-400 hover:text-red-500"
+                            >
+                                Remove link
+                            </button>
+                        )}
+                    </GlassCard>
+
                     {/* User Management */}
                     <GlassCard className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -650,8 +706,8 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                                 onClick={() => handleToggleBlock(u)}
                                                 disabled={processingId === u.uid}
                                                 className={`p-2 rounded-lg transition-colors ${u.isBlocked
-                                                        ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
-                                                        : 'bg-gray-200 dark:bg-white/5 text-gray-400 hover:text-red-500'
+                                                    ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
+                                                    : 'bg-gray-200 dark:bg-white/5 text-gray-400 hover:text-red-500'
                                                     }`}
                                                 title={u.isBlocked ? "Unblock User" : "Block User"}
                                             >
@@ -663,8 +719,8 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                                 onClick={() => handleToggleVip(u)}
                                                 disabled={processingId === u.uid}
                                                 className={`p-2 rounded-lg transition-colors ${u.isVip
-                                                        ? 'bg-vantage-purple/10 text-vantage-purple hover:bg-vantage-purple/20'
-                                                        : 'bg-gray-200 dark:bg-white/5 text-gray-400 hover:text-green-500'
+                                                    ? 'bg-vantage-purple/10 text-vantage-purple hover:bg-vantage-purple/20'
+                                                    : 'bg-gray-200 dark:bg-white/5 text-gray-400 hover:text-green-500'
                                                     }`}
                                                 title={u.isVip ? "Revoke VIP" : "Grant VIP"}
                                             >
@@ -721,8 +777,8 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                             <div className="text-right">
                                                 <span className="text-lg font-bold font-orbitron text-vantage-purple block">{p.amount} FCFA</span>
                                                 <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${p.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' :
-                                                        p.status === 'paid' ? 'bg-green-500/10 text-green-500' :
-                                                            'bg-red-500/10 text-red-500'
+                                                    p.status === 'paid' ? 'bg-green-500/10 text-green-500' :
+                                                        'bg-red-500/10 text-red-500'
                                                     }`}>
                                                     {p.status}
                                                 </span>

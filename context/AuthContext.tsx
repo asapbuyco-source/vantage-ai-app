@@ -13,7 +13,8 @@ import {
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where, increment, addDoc, orderBy, runTransaction } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
-import { checkPaymentStatus } from '../services/fapshi';
+import { checkPaymentStatus } from "../services/fapshi";
+import { verifySelarTransaction } from "../services/selar";
 
 interface AuthContextType {
     user: User | null;
@@ -53,7 +54,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const isAdmin = (user?.email === ADMIN_EMAIL) || (userProfile?.isAdmin === true);
 
     const generateReferralCode = (name: string | null): string => {
-        const prefix = name ? name.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'VAN') : 'VAN';
+        // Fix: Properly sanitize name to get exactly 3 uppercase letters, or 'VAN' as fallback
+        const cleanName = (name || '').toUpperCase().replace(/[^A-Z]/g, '');
+        const prefix = cleanName.length >= 3 ? cleanName.substring(0, 3) : (cleanName + 'VAN').substring(0, 3);
         const random = Math.random().toString(36).substring(2, 7).toUpperCase();
         return `${prefix}${random}`;
     };
@@ -95,8 +98,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
                 if (profileData.isVip && profileData.vipExpiry) {
                     if (new Date() > new Date(profileData.vipExpiry)) {
-                        await updateDoc(userRef, { isVip: false, vipExpiry: null });
-                        profileData.isVip = false;
+                        try {
+                            // Fix: Ensure UI state reflects expiration even if DB write fails temporarily
+                            await updateDoc(userRef, { isVip: false, vipExpiry: null });
+                            profileData.isVip = false;
+                            profileData.vipExpiry = null;
+                        } catch (e) {
+                            console.error("Expired VIP update failed:", e);
+                            // Still set locally so user doesn't get free access due to DB error
+                            profileData.isVip = false;
+                        }
                     }
                 }
             }
@@ -356,24 +367,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const verifyTransaction = async (transId: string): Promise<boolean> => {
         if (!user) return false;
         const cleanTransId = transId.split(',')[0].trim();
+
         try {
-            const { status, amount } = await checkPaymentStatus(cleanTransId);
-            if (status === 'SUCCESSFUL') {
+            let isSuccess = false;
+            let amount: number | undefined;
+
+            // Detect Selar Reference (Growth Phase)
+            if (cleanTransId.startsWith('VAN_')) {
+                isSuccess = await verifySelarTransaction(cleanTransId);
+            } else {
+                // Default to Fapshi (Cameroon)
+                const result = await checkPaymentStatus(cleanTransId);
+                isSuccess = result.status === 'SUCCESSFUL';
+                amount = result.amount;
+            }
+
+            if (isSuccess) {
                 let plan: 'daily' | 'weekly' | 'monthly' | null = localStorage.getItem('pendingVipPlan') as any;
-                if (!plan && amount) {
-                    if (amount >= 4500) plan = 'monthly';
+
+                // Fix: More robust plan detection if localStorage is lost
+                if (!plan) {
+                    if (amount === undefined) {
+                        // For Selar, if amount isn't returned by verification yet, try to infer from ref or just default
+                        plan = 'daily';
+                    } else if (amount >= 4500) plan = 'monthly';
                     else if (amount >= 1500) plan = 'weekly';
                     else plan = 'daily';
                 }
-                await upgradeToVip(plan || 'daily');
+
+                await upgradeToVip(plan);
                 localStorage.removeItem('pendingVipPlan');
                 return true;
             }
             return false;
         } catch (e) {
+            console.error("Verification failed:", e);
             return false;
         }
     };
+
 
     return (
         <AuthContext.Provider value={{

@@ -1,52 +1,57 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Smartphone, Loader2, ArrowRight } from 'lucide-react';
+import { X, CreditCard, Smartphone, CheckCircle2, ShieldCheck, ArrowRight, Loader2, Globe } from 'lucide-react';
+import { GlassCard } from './GlassCard';
 import { initiatePayment } from '../services/fapshi';
+import { initiateSelarPayment } from '../services/selar';
+import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  plan: { id: string; label: string; price: string };
-  onSuccess: () => void;
+  plan: {
+    id: 'daily' | 'weekly' | 'monthly';
+    label: string;
+    price: string;
+    features: string[];
+  };
+  onSuccess?: () => void;
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan, onSuccess }) => {
-  const { user } = useAuth();
+  const { t, language, showToast } = useAppContext();
+  const { user, userProfile } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [gateway, setGateway] = useState<'fapshi' | 'selar'>('fapshi');
 
-  const handlePay = async () => {
-    if (!user?.email) {
-      setError("Email requis pour le reçu.");
+  const handlePayment = async () => {
+    if (!user) {
+      showToast(language === 'fr' ? "Veuillez vous connecter d'abord" : "Please login first", "info");
       return;
     }
 
     setLoading(true);
-    setError(null);
+    localStorage.setItem('pendingVipPlan', plan.id);
 
     try {
-      // Sanitize price (remove non-digits) to handle "1 500" or "1,500" formatted strings
-      const numericPrice = parseInt(plan.price.replace(/\D/g, ''));
-
-      // 1. Initiate Payment
-      const result = await initiatePayment(numericPrice, user.email, user.uid);
-
-      // 2. Handle Redirect Flow
-      if (result.link) {
-        // Save the plan ID to localStorage so we can retrieve it when the user returns
-        localStorage.setItem('pendingVipPlan', plan.id);
-
-        // Redirect the user to the payment page (Fapshi)
-        // They will be redirected back to our site with a transaction ID
-        window.location.href = result.link;
+      if (gateway === 'fapshi') {
+        const { link } = await initiatePayment(
+          parseInt(plan.price),
+          user.email || 'user@vantage.ai',
+          user.uid
+        );
+        window.location.href = link;
       } else {
-        throw new Error("Pas de lien de paiement reçu.");
+        const { checkout_url } = await initiateSelarPayment(
+          parseInt(plan.price),
+          user.email || 'user@vantage.ai',
+          userProfile?.name || 'Vantage User'
+        );
+        window.location.href = checkout_url;
       }
-
-    } catch (err: any) {
-      console.error(err);
-      setError("Erreur de paiement. Veuillez réessayer.");
+    } catch (e: any) {
+      showToast(e.message || "Payment initiation failed", "error");
       setLoading(false);
     }
   };
@@ -54,90 +59,89 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
-          {
-            // @ts-ignore
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={onClose}
-              className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md"
-            />
-          }
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none">
-            {
-              // @ts-ignore
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-sm pointer-events-auto bg-white dark:bg-vantage-bg border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-2xl relative overflow-hidden"
-              >
-                {/* Decorative background */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-vantage-purple/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
 
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors z-10">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="relative w-full max-w-md"
+          >
+            <GlassCard className="border-vantage-purple/20 overflow-hidden">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold font-orbitron text-slate-900 dark:text-white">
+                  {language === 'fr' ? 'Paiement Sécurisé' : 'Secure Payment'}
+                </h2>
+                <button
+                  onClick={onClose}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors"
+                >
                   <X size={20} className="text-gray-500" />
                 </button>
+              </div>
 
-                <div className="space-y-6">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-vantage-purple/10 text-vantage-purple rounded-2xl flex items-center justify-center mx-auto mb-4 border border-vantage-purple/20">
-                      <Smartphone size={32} />
-                    </div>
-                    <h2 className="text-xl font-bold font-orbitron text-slate-900 dark:text-white">Paiement Mobile</h2>
-                    <p className="text-sm text-gray-500 mt-1">Sécurisé par Fapshi</p>
-                  </div>
-
-                  <div className="bg-slate-50 dark:bg-black/20 p-4 rounded-xl border border-slate-200 dark:border-white/5 space-y-2">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Plan</span>
-                      <span className="font-bold text-slate-900 dark:text-white">{plan.label}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Montant</span>
-                      <span className="font-bold text-vantage-purple font-orbitron text-lg">{plan.price} FCFA</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-500">Compte</span>
-                      <span className="font-medium text-slate-700 dark:text-gray-300 truncate max-w-[150px]">{user?.email}</span>
-                    </div>
-                  </div>
-
-                  {error && (
-                    <div className="p-3 bg-red-500/10 text-red-500 text-xs rounded-lg border border-red-500/20 text-center">
-                      {error}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handlePay}
-                    disabled={loading}
-                    className="w-full py-4 bg-vantage-purple hover:bg-purple-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-vantage-purple/30 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 size={20} className="animate-spin" />
-                        <span>Redirection...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Payer Maintenant</span>
-                        <ArrowRight size={18} />
-                      </>
-                    )}
-                  </button>
-
-                  <div className="flex justify-center items-center space-x-4 opacity-50 grayscale">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/3/3f/MTN-logo.jpg" alt="MTN" className="h-6" />
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg" alt="Orange" className="h-6" />
-                  </div>
+              <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/10 mb-6">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-500">{plan.label}</span>
+                  <span className="text-lg font-bold text-vantage-purple">{plan.price} FCFA</span>
                 </div>
-              </motion.div>
-            }
-          </div>
-        </>
+                <div className="space-y-1">
+                  {plan.features.slice(0, 2).map((feat, i) => (
+                    <div key={i} className="flex items-center text-[10px] text-gray-400">
+                      <CheckCircle2 size={10} className="text-vantage-cyan mr-1.5" />
+                      {feat}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Gateway Selection */}
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                <button
+                  onClick={() => setGateway('fapshi')}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${gateway === 'fapshi' ? 'border-vantage-purple bg-vantage-purple/10 text-vantage-purple' : 'border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400'}`}
+                >
+                  <Smartphone size={20} />
+                  <span className="text-xs font-bold">Cameroon (MoMo)</span>
+                </button>
+                <button
+                  onClick={() => setGateway('selar')}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${gateway === 'selar' ? 'border-vantage-cyan bg-vantage-cyan/10 text-vantage-cyan' : 'border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400'}`}
+                >
+                  <Globe size={20} />
+                  <span className="text-xs font-bold">Global (Selar)</span>
+                </button>
+              </div>
+
+              <button
+                onClick={handlePayment}
+                disabled={loading}
+                className="w-full py-4 bg-vantage-purple hover:bg-purple-600 text-white font-bold rounded-2xl transition-all shadow-lg shadow-vantage-purple/30 flex items-center justify-center space-x-2"
+              >
+                {loading ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
+                  <>
+                    <span>{language === 'fr' ? 'Payer Maintenant' : 'Pay Now'}</span>
+                    <ArrowRight size={20} />
+                  </>
+                )}
+              </button>
+
+              <div className="mt-4 flex items-center justify-center space-x-2 text-[10px] text-gray-500">
+                <ShieldCheck size={12} className="text-green-500" />
+                <span>Secure SSL Encryption • Vantage AI v4.0</span>
+              </div>
+            </GlassCard>
+          </motion.div>
+        </div>
       )}
     </AnimatePresence>
   );

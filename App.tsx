@@ -15,6 +15,8 @@ import { BettingGuide } from './pages/BettingGuide';
 import { Kelly } from './pages/Kelly';
 import { TicketWizard } from './components/TicketWizard';
 import { LandingPage } from './pages/LandingPage';
+import { PublicStats } from './pages/PublicStats';
+import { Results } from './pages/Results';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
@@ -104,7 +106,7 @@ function AppContent() {
       }
     };
     checkPayment();
-  }, [verifyTransaction, language, authLoading, user]);
+  }, [verifyTransaction, authLoading, user]);
 
   // Auth loading spinner
   if (authLoading) {
@@ -176,6 +178,8 @@ function AppContent() {
               {activeTab === 'admin' && <Admin setTab={setActiveTab} />}
               {activeTab === 'kelly' && <Kelly setTab={setActiveTab} />}
               {activeTab === 'concierge' && <TicketWizard />}
+              {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
+              {activeTab === 'results' && <Results />}
             </motion.div>
           }
         </AnimatePresence>

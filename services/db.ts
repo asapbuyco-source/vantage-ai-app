@@ -86,6 +86,8 @@ export const getFirestorePredictionsOnly = async (): Promise<Match[] | null> => 
     return getPredictionsForDate(getGlobalTodayKey());
 };
 
+export const getTodaysPredictions = getFirestorePredictionsOnly;
+
 export const saveTodaysPredictions = async (matches: Match[]): Promise<void> => {
     return savePredictionsForDate(getGlobalTodayKey(), matches);
 };
@@ -113,6 +115,22 @@ export const deleteTodaysPredictions = async (): Promise<void> => {
  */
 export const getWinRateStats = async (): Promise<WinRateStats> => {
     const defaultStats: WinRateStats = { daily: 0, weekly: 0, monthly: 0, streak: 0, todayWon: 0, todayTotal: 0 };
+    const todayStr = getGlobalTodayKey();
+    const cacheKey = `vantage_stats_cache_${todayStr}`;
+
+    // 1. Check Cache
+    try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+            const { stats, timestamp } = JSON.parse(cached);
+            // Cache valid for 2 hours
+            if (Date.now() - timestamp < 2 * 60 * 60 * 1000) {
+                return stats;
+            }
+        }
+    } catch (e) {
+        console.warn("Stats cache read error", e);
+    }
 
     try {
         const results: { won: number; total: number }[] = [];
@@ -145,7 +163,7 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
             if (graded.length === 0) return;
 
             const won = graded.filter(m => m.status === 'won').length;
-            const isWinDay = won / graded.length >= 0.5;
+            const isWinDay = won / (graded.length || 1) >= 0.5;
 
             // Streak = consecutive winning days from yesterday backward
             if (streakActive && isWinDay) {
@@ -170,7 +188,15 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
         const weekly = weekTotal > 0 ? Math.round((weekWon / weekTotal) * 100) : 0;
         const monthly = monthTotal > 0 ? Math.round((monthWon / monthTotal) * 100) : 0;
 
-        return { daily, weekly, monthly, streak, todayWon, todayTotal };
+        const stats = { daily, weekly, monthly, streak, todayWon, todayTotal };
+
+        // 2. Save Cache
+        localStorage.setItem(cacheKey, JSON.stringify({
+            stats,
+            timestamp: Date.now()
+        }));
+
+        return stats;
     } catch (e) {
         console.error("Failed to calculate win rate stats:", e);
         return defaultStats;
@@ -258,4 +284,78 @@ export const saveTeamAsset = async (name: string, logoUrl: string) => {
 export const deleteTeamAsset = async (id: string) => {
     if (!auth.currentUser) return;
     await deleteDoc(doc(db, "team_assets", id));
+};
+
+// ─── RESULTS HISTORY ─────────────────────────────────────────────────────────
+
+export interface DayResult {
+    date: string;
+    matches: Match[];
+    wonCount: number;
+    lostCount: number;
+    totalGraded: number;
+}
+
+export const getResultsHistory = async (days: number = 30): Promise<DayResult[]> => {
+    const results: DayResult[] = [];
+    const fetchPromises = Array.from({ length: days }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (i + 1));
+        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return getPredictionsForDate(dateKey).then(matches => ({ dateKey, matches }));
+    });
+
+    const allDays = await Promise.all(fetchPromises);
+    allDays.forEach(({ dateKey, matches }) => {
+        if (!matches) return;
+        const graded = matches.filter(m => m.status && m.status !== 'pending');
+        if (graded.length === 0) return;
+        results.push({
+            date: dateKey,
+            matches: graded,
+            wonCount: graded.filter(m => m.status === 'won').length,
+            lostCount: graded.filter(m => m.status === 'lost').length,
+            totalGraded: graded.length,
+        });
+    });
+
+    return results;
+};
+
+// ─── APP SETTINGS (WhatsApp link, etc.) ──────────────────────────────────────
+
+export interface AppSettings {
+    whatsappGroupUrl?: string;
+    updatedAt?: string;
+}
+
+export const getAppSettings = async (): Promise<AppSettings> => {
+    try {
+        const snap = await getDoc(doc(db, "settings", "app"));
+        if (snap.exists()) return snap.data() as AppSettings;
+    } catch (e) {
+        console.warn("Failed to load app settings", e);
+    }
+    return {};
+};
+
+export const saveAppSettings = async (settings: Partial<AppSettings>): Promise<void> => {
+    if (!auth.currentUser) return;
+    await setDoc(doc(db, "settings", "app"), {
+        ...settings,
+        updatedAt: new Date().toISOString(),
+    }, { merge: true });
+};
+
+// ─── USER COUNT ───────────────────────────────────────────────────────────────
+
+export const getUserCount = async (): Promise<{ total: number; vip: number }> => {
+    try {
+        const snap = await getDocs(collection(db, "users"));
+        let vip = 0;
+        snap.forEach(d => { if (d.data().isVip) vip++; });
+        return { total: snap.size, vip };
+    } catch (e) {
+        return { total: 0, vip: 0 };
+    }
 };

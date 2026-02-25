@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Home, Unlock, Lock, User, BookOpen, Calculator, Sparkles } from 'lucide-react';
+import { Home, Unlock, Lock, User, Sparkles, History } from 'lucide-react';
 import { NavigationTab } from '../types';
 import { useAppContext } from '../context/AppContext';
 
@@ -10,14 +10,14 @@ interface BottomNavProps {
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
-  const { t } = useAppContext();
+  const { t, language } = useAppContext();
 
   const navItems = [
     { id: 'home', icon: Home, label: t('nav.home') },
     { id: 'free', icon: Unlock, label: t('nav.free') },
+    { id: 'results', icon: History, label: language === 'fr' ? 'Archive' : 'Results' },
     { id: 'vip', icon: Lock, label: t('nav.vip') },
     { id: 'concierge', icon: Sparkles, label: t('nav.concierge') },
-    { id: 'kelly', icon: Calculator, label: t('nav.kelly') },
     { id: 'profile', icon: User, label: t('nav.profile') },
   ] as const;
 
