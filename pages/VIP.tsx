@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Star, ShieldCheck, CheckCircle2, Unlock, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp } from 'lucide-react';
+import { motion, AnimatePresence, useSpring, useMotionValue, useTransform } from 'framer-motion';
+import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, Trophy } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
@@ -148,68 +148,126 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const valueBets = predictions.filter(m => m.category === 'value');
   const riskyBets = predictions.filter(m => m.category === 'risky');
 
+  // ── Category styling config ────────────────────────────────────────────────
+  const CAT_CONFIG = {
+    safe: { border: 'border-l-green-500', badge: 'bg-green-500/15 text-green-500 border-green-500/30', icon: <ShieldCheck size={12} />, label: '🟢 Safe' },
+    value: { border: 'border-l-vantage-cyan', badge: 'bg-vantage-cyan/15 text-vantage-cyan border-vantage-cyan/30', icon: <Star size={12} />, label: '⭐ Value' },
+    risky: { border: 'border-l-orange-500', badge: 'bg-orange-500/15 text-orange-500 border-orange-500/30', icon: <Flame size={12} />, label: '🔥 Risky' },
+  } as const;
+
+  // ── Animated confidence bar component ────────────────────────────────────
+  const ConfidenceBar = ({ pct }: { pct: number }) => (
+    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-200 dark:bg-white/5 overflow-hidden">
+      <motion.div
+        className="h-full bg-gradient-to-r from-vantage-cyan to-green-400"
+        initial={{ width: 0 }}
+        animate={{ width: `${pct}%` }}
+        transition={{ duration: 1.2, ease: [0.25, 0.46, 0.45, 0.94], delay: 0.3 }}
+      />
+    </div>
+  );
+
   const renderMatchList = (matches: Match[], title: string, icon: React.ReactNode, color: string) => {
     if (matches.length === 0) return null;
     return (
       <div className="space-y-3 mb-6">
         <h3 className={`text-sm font-bold uppercase tracking-widest flex items-center gap-2 ${color}`}>
           {icon} {title}
+          <span className="ml-auto text-[10px] font-normal text-gray-500">{matches.length} picks</span>
         </h3>
-        {matches.map((match) => (
-          <GlassCard key={match.id} className="border-slate-200 dark:border-white/10">
-            <div className="flex justify-between items-start mb-4">
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 mt-1">{match.league}</span>
-              <div className="flex items-center space-x-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">{match.time}</span>
-                <button
-                  onClick={() => handleCopy(`${match.homeTeam} vs ${match.awayTeam}`, match.id)}
-                  className="p-1.5 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 dark:text-gray-500 hover:text-vantage-cyan dark:hover:text-vantage-cyan"
-                  title="Copier le match"
-                >
-                  {copiedId === match.id ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-                </button>
-              </div>
-            </div>
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center space-x-3 w-5/12 overflow-hidden">
-                <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-8 h-8" />
-                <span className="text-base font-bold text-slate-900 dark:text-white truncate">{match.homeTeam}</span>
-              </div>
-              <span className="text-xs text-gray-400">VS</span>
-              <div className="flex items-center justify-end space-x-3 w-5/12 overflow-hidden">
-                <span className="text-base font-bold text-slate-900 dark:text-white text-right truncate">{match.awayTeam}</span>
-                <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-8 h-8" />
-              </div>
-            </div>
+        <AnimatePresence>
+          {matches.map((match, idx) => {
+            const cat = match.category as keyof typeof CAT_CONFIG;
+            const cfg = CAT_CONFIG[cat] || CAT_CONFIG.safe;
+            return (
+              <motion.div
+                key={match.id}
+                initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.35, delay: idx * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
+              >
+                <div className={`relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 ${cfg.border}`}>
 
-            <div className="p-3 bg-slate-100 dark:bg-black/30 rounded-xl flex items-center justify-between border border-slate-200 dark:border-white/5 relative overflow-hidden">
-              <div
-                className="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-vantage-cyan to-green-400 opacity-50"
-                style={{ width: `${match.confidence}%` }}
-              />
+                  {/* Header row */}
+                  <div className="flex justify-between items-center px-4 pt-4 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">{match.league}</span>
+                      <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.badge}`}>
+                        {cfg.icon} {cfg.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                        <Clock size={10} />{match.time}
+                      </span>
+                      <button
+                        onClick={() => handleCopy(`${match.homeTeam} vs ${match.awayTeam} — ${getPredictionText(match)}`, match.id)}
+                        className="p-1.5 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 hover:text-vantage-cyan"
+                      >
+                        {copiedId === match.id ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
+                      </button>
+                    </div>
+                  </div>
 
-              <div className="flex flex-col flex-1 mr-4 min-w-0">
-                <span className="text-[10px] text-gray-500 uppercase tracking-wide">{t('free.pred_label')}</span>
-                <span className="text-sm font-bold text-vantage-cyan break-words leading-tight">{getPredictionText(match)}</span>
-              </div>
+                  {/* Teams row */}
+                  <div className="flex justify-between items-center px-4 py-3">
+                    <div className="flex items-center gap-2.5 w-5/12 overflow-hidden">
+                      <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0 p-1">
+                        <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-7 h-7" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">{match.homeTeam}</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 shrink-0 px-1">
+                      <span className="text-[10px] font-orbitron text-gray-400">VS</span>
+                      {match.odds > 1 && (
+                        <span className="text-[10px] font-bold bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">{match.odds.toFixed(2)}x</span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-end gap-2.5 w-5/12 overflow-hidden">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white text-right truncate leading-tight">{match.awayTeam}</span>
+                      <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0 p-1">
+                        <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-7 h-7" />
+                      </div>
+                    </div>
+                  </div>
 
-              <div className="flex flex-col items-end border-l border-slate-200 dark:border-white/5 pl-4 shrink-0">
-                <span className="text-[10px] text-gray-500 uppercase tracking-wide">{t('free.prob_label')}</span>
-                <span className="text-sm font-bold text-green-500 dark:text-green-400">{match.confidence}%</span>
-              </div>
-            </div>
+                  {/* Prediction + confidence row */}
+                  <div className="relative mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 overflow-hidden">
+                    <ConfidenceBar pct={match.confidence} />
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col flex-1 mr-3 min-w-0">
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">{t('free.pred_label')}</span>
+                        <span className="text-sm font-bold text-vantage-cyan leading-tight break-words">{getPredictionText(match)}</span>
+                      </div>
+                      <div className="flex flex-col items-center shrink-0">
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">{t('free.prob_label')}</span>
+                        <motion.span
+                          className="text-lg font-bold font-orbitron text-green-500 dark:text-green-400"
+                          initial={{ scale: 0.5, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ delay: idx * 0.07 + 0.4, type: 'spring', stiffness: 300 }}
+                        >
+                          {match.confidence}%
+                        </motion.span>
+                      </div>
+                    </div>
+                  </div>
 
-            <div className="mt-3 flex items-start gap-2 bg-slate-50 dark:bg-white/5 p-2 rounded-lg border border-slate-100 dark:border-white/5">
-              <BrainCircuit size={14} className="text-vantage-purple mt-0.5 shrink-0" />
-              <div className="flex flex-col">
-                <span className="text-[10px] text-vantage-purple font-bold uppercase">AI Reasoning</span>
-                <p className="text-xs text-gray-600 dark:text-gray-300 leading-tight">
-                  {getAnalysisText(match)}
-                </p>
-              </div>
-            </div>
-          </GlassCard>
-        ))}
+                  {/* AI Reasoning */}
+                  <div className="mx-4 mb-4 p-3 rounded-xl bg-gradient-to-r from-vantage-purple/5 to-transparent border border-vantage-purple/15">
+                    <div className="flex items-start gap-2">
+                      <BrainCircuit size={13} className="text-vantage-purple mt-0.5 shrink-0" />
+                      <div>
+                        <span className="text-[10px] text-vantage-purple font-bold uppercase tracking-wide">AI Analysis</span>
+                        <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed mt-0.5">{getAnalysisText(match)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
     );
   };
@@ -218,28 +276,69 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
 
   // --- UNLOCKED VIEW (Active VIP) ---
   if (isUnlocked) {
+    const expiryDate = userProfile?.vipExpiry ? new Date(userProfile.vipExpiry) : null;
+    const daysLeft = expiryDate ? Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / 86400000)) : null;
+
     return (
       <div className="space-y-4 pb-24 relative min-h-screen">
-        <div className="flex flex-col space-y-1">
-          <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white">{t('vip.title')} <span className="text-vantage-purple">{t('vip.title_accent')}</span></h1>
+        {/* Header */}
+        <motion.div
+          className="flex flex-col space-y-1"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white">
+            {t('vip.title')} <span className="text-vantage-purple">{t('vip.title_accent')}</span>
+          </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{t('vip.subtitle')}</p>
-        </div>
+        </motion.div>
 
-        <GlassCard className="border-green-500/30 bg-green-500/5 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
-              {isAdmin ? <ShieldAlert size={24} className="text-red-500" /> : <CheckCircle2 size={24} />}
-              <span className="font-bold text-lg">
-                {isAdmin ? 'Admin Bypass Active' : t('vip.active')}
-              </span>
+        {/* Premium VIP status badge */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className={`relative overflow-hidden rounded-2xl p-4 border ${isAdmin
+              ? 'border-red-500/30 bg-red-500/5'
+              : 'border-vantage-purple/40 bg-gradient-to-r from-vantage-purple/10 to-vantage-cyan/5'
+            }`}
+        >
+          {/* Animated ring */}
+          {!isAdmin && (
+            <motion.div
+              className="absolute -top-4 -right-4 w-24 h-24 rounded-full border-2 border-vantage-purple/20"
+              animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0, 0.5] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          )}
+          <div className="flex items-center justify-between relative z-10">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isAdmin ? 'bg-red-500/20 text-red-500' : 'bg-vantage-purple/20 text-vantage-purple'
+                }`}>
+                {isAdmin ? <ShieldAlert size={20} /> : <Crown size={20} />}
+              </div>
+              <div>
+                <p className="font-bold text-slate-900 dark:text-white text-sm">
+                  {isAdmin ? 'Admin Bypass Active' : t('vip.active')}
+                </p>
+                {daysLeft !== null && !isAdmin && (
+                  <p className="text-[11px] text-vantage-purple font-semibold">
+                    {daysLeft === 0 ? 'Expires today!' : `${daysLeft}d remaining`}
+                  </p>
+                )}
+              </div>
             </div>
-            {userProfile?.vipExpiry && !isAdmin && (
-              <span className="text-xs font-bold font-orbitron text-green-800 dark:text-green-200 bg-green-500/10 px-2 py-1 rounded">
-                Exp: {new Date(userProfile.vipExpiry).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}
-              </span>
+            {expiryDate && !isAdmin && (
+              <div className="text-right">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Expires</p>
+                <p className="text-xs font-bold font-orbitron text-white">
+                  {expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </p>
+              </div>
             )}
           </div>
-        </GlassCard>
+        </motion.div>
 
         {/* WhatsApp Community CTA (for active VIPs) */}
         {whatsappGroupUrl && (
