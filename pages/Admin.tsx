@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Users, Crown, Search, RefreshCw, ChevronLeft, CheckCircle2, XCircle, ShieldAlert, Trash2, StopCircle, Ban, Lock, AlertTriangle, Database, Activity, Server, Zap, Globe, Cpu, ChevronDown, ChevronUp, Play, Coins, Wallet, BookCheck, ImagePlus, Link, Layers } from 'lucide-react';
+import { Shield, Users, Crown, Search, RefreshCw, ChevronLeft, CheckCircle2, XCircle, ShieldAlert, Trash2, StopCircle, Ban, Lock, AlertTriangle, Database, Activity, Server, Zap, Globe, Cpu, ChevronDown, ChevronUp, Play, Coins, Wallet, BookCheck, ImagePlus, Link, Layers, Send, Bell, Gift, Save } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile, NavigationTab, Match, PayoutRequest, TeamAsset } from '../types';
@@ -19,7 +19,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const { getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, getPayoutRequests, processPayout } = useAuth();
     const { clearData, generateData, generateAccumulators, generateBasketballData, isSystemGenerating, isBasketballGenerating, cancelAnalysis, systemError, predictions } = useData();
 
-    const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'payouts' | 'assets'>('users');
+    const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'payouts' | 'assets' | 'bots'>('users');
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
     const [assets, setAssets] = useState<TeamAsset[]>([]);
@@ -47,16 +47,27 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const [newTeamName, setNewTeamName] = useState('');
     const [newLogoUrl, setNewLogoUrl] = useState('');
 
-    // WhatsApp Group State
+    // WhatsApp & Bot Settings
     const [whatsappUrl, setWhatsappUrl] = useState('');
+    const [telegramBotToken, setTelegramBotToken] = useState('');
+    const [telegramChannelId, setTelegramChannelId] = useState('');
+    const [telegramEnabled, setTelegramEnabled] = useState(false);
+    const [referralRewardDays, setReferralRewardDays] = useState(2);
     const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+    const [savingBotSettings, setSavingBotSettings] = useState(false);
     const [whatsappSaved, setWhatsappSaved] = useState(false);
+    const [botSettingsSaved, setBotSettingsSaved] = useState(false);
 
     useEffect(() => {
         isMounted.current = true;
-        // Load WhatsApp settings
+        // Load all settings
         getAppSettings().then(s => {
-            if (s.whatsappGroupUrl && isMounted.current) setWhatsappUrl(s.whatsappGroupUrl);
+            if (!isMounted.current) return;
+            if (s.whatsappGroupUrl) setWhatsappUrl(s.whatsappGroupUrl);
+            if (s.telegramBotToken) setTelegramBotToken(s.telegramBotToken);
+            if (s.telegramChannelId) setTelegramChannelId(s.telegramChannelId);
+            if (s.telegramEnabled !== undefined) setTelegramEnabled(s.telegramEnabled);
+            if (s.referralRewardDays !== undefined) setReferralRewardDays(s.referralRewardDays);
         });
         return () => { isMounted.current = false; };
     }, []);
@@ -71,6 +82,24 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             console.error('Failed to save WhatsApp link', e);
         } finally {
             setSavingWhatsapp(false);
+        }
+    };
+
+    const handleSaveBotSettings = async () => {
+        setSavingBotSettings(true);
+        try {
+            await saveAppSettings({
+                telegramBotToken: telegramBotToken.trim(),
+                telegramChannelId: telegramChannelId.trim(),
+                telegramEnabled,
+                referralRewardDays,
+            });
+            setBotSettingsSaved(true);
+            setTimeout(() => setBotSettingsSaved(false), 3000);
+        } catch (e) {
+            console.error('Failed to save bot settings', e);
+        } finally {
+            setSavingBotSettings(false);
         }
     };
 
@@ -338,25 +367,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             </div>
 
             {/* Tab Switcher */}
-            <div className="flex p-1 bg-slate-200 dark:bg-white/5 rounded-xl space-x-1">
-                <button
-                    onClick={() => setActiveAdminTab('users')}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${activeAdminTab === 'users' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}
-                >
-                    System
-                </button>
-                <button
-                    onClick={() => setActiveAdminTab('payouts')}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${activeAdminTab === 'payouts' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}
-                >
-                    Payouts
-                </button>
-                <button
-                    onClick={() => setActiveAdminTab('assets')}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${activeAdminTab === 'assets' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}
-                >
-                    Teams
-                </button>
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-200 dark:bg-white/5 rounded-xl">
+                <button onClick={() => setActiveAdminTab('users')} className={`py-2 rounded-lg text-[10px] font-bold transition-colors ${activeAdminTab === 'users' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}>System</button>
+                <button onClick={() => setActiveAdminTab('payouts')} className={`py-2 rounded-lg text-[10px] font-bold transition-colors ${activeAdminTab === 'payouts' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}>Payouts</button>
+                <button onClick={() => setActiveAdminTab('assets')} className={`py-2 rounded-lg text-[10px] font-bold transition-colors ${activeAdminTab === 'assets' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}>Teams</button>
+                <button onClick={() => setActiveAdminTab('bots')} className={`py-2 rounded-lg text-[10px] font-bold transition-colors ${activeAdminTab === 'bots' ? 'bg-white dark:bg-white/10 shadow text-vantage-cyan' : 'text-gray-500'}`}>Bots</button>
             </div>
 
             {activeAdminTab === 'users' && (
@@ -896,6 +911,132 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                             )}
                         </div>
                     </GlassCard>
+                </div>
+            )}
+
+            {/* ─── BOTS & NOTIFICATIONS TAB ─── */}
+            {activeAdminTab === 'bots' && (
+                <div className="space-y-4 animate-in slide-in-from-right duration-300">
+                    {/* Telegram Bot */}
+                    <GlassCard className="border-blue-500/20 bg-blue-500/5">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Send size={18} className="text-blue-400" />
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Telegram Bot</h3>
+                                <p className="text-[10px] text-gray-500">Auto-posts today's top pick to your Telegram channel</p>
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Bot Token</label>
+                                <input
+                                    type="password"
+                                    placeholder="123456789:ABCdef..."
+                                    value={telegramBotToken}
+                                    onChange={e => setTelegramBotToken(e.target.value)}
+                                    className="w-full bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg py-2 px-3 text-sm font-mono focus:ring-1 focus:ring-blue-400 outline-none text-slate-900 dark:text-white"
+                                />
+                                <p className="text-[9px] text-gray-400 mt-1">Get from @BotFather on Telegram. Type /newbot to create one.</p>
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Channel / Group ID</label>
+                                <input
+                                    type="text"
+                                    placeholder="-1001234567890 or @channelname"
+                                    value={telegramChannelId}
+                                    onChange={e => setTelegramChannelId(e.target.value)}
+                                    className="w-full bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg py-2 px-3 text-sm font-mono focus:ring-1 focus:ring-blue-400 outline-none text-slate-900 dark:text-white"
+                                />
+                                <p className="text-[9px] text-gray-400 mt-1">Forward a message from your channel to @userinfobot to get the ID.</p>
+                            </div>
+                            <div className="flex items-center justify-between p-3 bg-white/50 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/10">
+                                <div>
+                                    <p className="text-xs font-bold text-slate-900 dark:text-white">Enable Telegram</p>
+                                    <p className="text-[10px] text-gray-500">Post today's top pick automatically</p>
+                                </div>
+                                <button
+                                    onClick={() => setTelegramEnabled(v => !v)}
+                                    className={`w-11 h-6 rounded-full transition-colors relative ${telegramEnabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-white/20'}`}
+                                >
+                                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${telegramEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                </button>
+                            </div>
+                            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-[10px] text-yellow-700 dark:text-yellow-400 space-y-1">
+                                <p className="font-bold">📋 Setup Instructions:</p>
+                                <ol className="list-decimal pl-3 space-y-0.5">
+                                    <li>Create a bot via @BotFather → /newbot</li>
+                                    <li>Add the bot as admin to your channel</li>
+                                    <li>Paste the token and channel ID above</li>
+                                    <li>The bot will post automatically when you generate predictions</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </GlassCard>
+
+                    {/* Referral Settings */}
+                    <GlassCard className="border-vantage-purple/20 bg-vantage-purple/5">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Gift size={18} className="text-vantage-purple" />
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Referral Program</h3>
+                                <p className="text-[10px] text-gray-500">Free VIP days awarded per successful referral</p>
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <label className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Reward Days per Referral</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={30}
+                                        value={referralRewardDays}
+                                        onChange={e => setReferralRewardDays(Number(e.target.value))}
+                                        className="w-full bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-vantage-purple outline-none text-slate-900 dark:text-white"
+                                    />
+                                </div>
+                                <div className="text-center pt-4">
+                                    <p className="text-xl font-bold font-orbitron text-vantage-purple">{referralRewardDays}d</p>
+                                    <p className="text-[9px] text-gray-500">free VIP</p>
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-gray-500 bg-slate-100 dark:bg-white/5 rounded-lg p-2">
+                                When a user signs up using another user's referral link, the referrer earns {referralRewardDays} free VIP day(s). You can fulfil these manually from the Users tab by toggling their VIP status.
+                            </p>
+                        </div>
+                    </GlassCard>
+
+                    {/* WhatsApp Group */}
+                    <GlassCard className="border-green-500/20 bg-green-500/5">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Bell size={16} className="text-green-500" />
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white">WhatsApp Group Link</h3>
+                        </div>
+                        <input
+                            type="url"
+                            placeholder="https://chat.whatsapp.com/..."
+                            value={whatsappUrl}
+                            onChange={e => setWhatsappUrl(e.target.value)}
+                            className="w-full bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-green-400 outline-none text-slate-900 dark:text-white mb-3"
+                        />
+                        <button
+                            onClick={handleSaveWhatsApp}
+                            disabled={savingWhatsapp}
+                            className="w-full py-2 bg-green-500 text-white text-xs font-bold rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+                        >
+                            {whatsappSaved ? '✅ Saved!' : savingWhatsapp ? 'Saving...' : 'Save WhatsApp Link'}
+                        </button>
+                    </GlassCard>
+
+                    {/* Save Bot Settings Button */}
+                    <button
+                        onClick={handleSaveBotSettings}
+                        disabled={savingBotSettings}
+                        className="w-full py-3 bg-gradient-to-r from-blue-500 to-vantage-purple text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
+                        <Save size={16} />
+                        {botSettingsSaved ? '✅ Settings Saved!' : savingBotSettings ? 'Saving...' : 'Save Bot & Referral Settings'}
+                    </button>
                 </div>
             )}
         </div>

@@ -1,6 +1,6 @@
 
-import { Match, TeamAsset, AccumulatorSet, DailyAnalysis, WinRateStats } from "../types";
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from "firebase/firestore";
+import { Match, TeamAsset, AccumulatorSet, DailyAnalysis, WinRateStats, UserProfile } from "../types";
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "../firebaseConfig";
 
 // Return simple YYYY-MM-DD for the current client date
@@ -322,10 +322,15 @@ export const getResultsHistory = async (days: number = 30): Promise<DayResult[]>
     return results;
 };
 
-// ─── APP SETTINGS (WhatsApp link, etc.) ──────────────────────────────────────
+// ─── APP SETTINGS ─────────────────────────────────────────────────────────────
 
 export interface AppSettings {
     whatsappGroupUrl?: string;
+    telegramBotToken?: string;
+    telegramChannelId?: string;
+    telegramEnabled?: boolean;
+    referralRewardDays?: number; // Free VIP days granted per successful referral
+    annualPlanEnabled?: boolean;
     updatedAt?: string;
 }
 
@@ -345,6 +350,135 @@ export const saveAppSettings = async (settings: Partial<AppSettings>): Promise<v
         ...settings,
         updatedAt: new Date().toISOString(),
     }, { merge: true });
+};
+
+// ─── GENERATION LOCK (prevents concurrent Gemini calls by multiple users) ──────
+
+/**
+ * Tries to acquire a generation lock for today.
+ * Returns true if lock was acquired (caller may proceed to generate).
+ * Returns false if another client already holds the lock (caller should wait).
+ */
+export const acquireGenerationLock = async (todayKey: string): Promise<boolean> => {
+    try {
+        const lockRef = doc(db, "generation_locks", todayKey);
+        const lockSnap = await getDoc(lockRef);
+
+        if (lockSnap.exists()) {
+            const data = lockSnap.data();
+            // Allow re-acquiring if lock is stale (older than 10 minutes)
+            const lockedAt = data.lockedAt?.toDate?.();
+            if (lockedAt && Date.now() - lockedAt.getTime() < 10 * 60 * 1000) {
+                return false; // Lock is fresh, another client is generating
+            }
+        }
+
+        // Write our lock
+        await setDoc(lockRef, {
+            lockedAt: serverTimestamp(),
+            lockedBy: auth.currentUser?.uid || 'anonymous',
+        });
+        return true;
+    } catch (e) {
+        // If we can't write the lock, assume we can proceed (fail open)
+        console.warn('[Lock] Could not acquire generation lock:', e);
+        return true;
+    }
+};
+
+export const releaseGenerationLock = async (todayKey: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(db, "generation_locks", todayKey));
+    } catch (e) {
+        console.warn('[Lock] Could not release generation lock:', e);
+    }
+};
+
+// ─── REFERRAL SYSTEM ──────────────────────────────────────────────────────────
+
+/** Generate a unique referral code for a user (based on their UID). */
+export const generateReferralCode = (uid: string): string => {
+    return uid.slice(0, 6).toUpperCase();
+};
+
+/** Save the referral code to a user's Firestore profile. */
+export const ensureReferralCode = async (uid: string): Promise<string> => {
+    const code = generateReferralCode(uid);
+    try {
+        const userRef = doc(db, 'users', uid);
+        await setDoc(userRef, { referralCode: code }, { merge: true });
+    } catch (e) {
+        console.warn('[Referral] Could not save referral code', e);
+    }
+    return code;
+};
+
+/**
+ * When a new user signs up with a referral code, record the referral in Firestore.
+ * The referrer gets a "referral reward" credit that the admin can fulfill as free VIP days.
+ */
+export const recordReferral = async (newUserId: string, referralCode: string): Promise<void> => {
+    try {
+        // Find the referrer by code
+        const usersSnap = await getDocs(collection(db, 'users'));
+        let referrerId: string | null = null;
+        usersSnap.forEach(d => {
+            if (d.data().referralCode === referralCode) {
+                referrerId = d.id;
+            }
+        });
+
+        if (!referrerId) {
+            console.warn('[Referral] Referral code not found:', referralCode);
+            return;
+        }
+
+        // Link new user to referrer
+        await setDoc(doc(db, 'users', newUserId), { referredBy: referrerId }, { merge: true });
+
+        // Increment referrer's count and earnings
+        const referrerRef = doc(db, 'users', referrerId);
+        const snap = await getDoc(referrerRef);
+        const current = snap.data() || {};
+        await setDoc(referrerRef, {
+            referralCount: (current.referralCount || 0) + 1,
+            referralEarnings: (current.referralEarnings || 0) + 1, // +1 pending day credit
+            lifetimeEarnings: (current.lifetimeEarnings || 0) + 1,
+        }, { merge: true });
+
+        // Log referral event
+        await setDoc(doc(db, 'referral_events', `${referrerId}_${newUserId}`), {
+            referrerId,
+            newUserId,
+            referralCode,
+            createdAt: new Date().toISOString(),
+            rewarded: false,
+        });
+
+        console.log(`[Referral] ✅ Recorded referral from ${referrerId} for new user ${newUserId}`);
+    } catch (e) {
+        console.error('[Referral] Error recording referral:', e);
+    }
+};
+
+// ─── USER PROFILE HELPERS ─────────────────────────────────────────────────────
+
+export const getUserProfile = async (uid: string): Promise<Partial<UserProfile> | null> => {
+    try {
+        const snap = await getDoc(doc(db, 'users', uid));
+        if (snap.exists()) return snap.data() as Partial<UserProfile>;
+    } catch (e) {
+        console.warn('[DB] getUserProfile error:', e);
+    }
+    return null;
+};
+
+export const updateUserProfile = async (uid: string, data: Partial<UserProfile>): Promise<void> => {
+    try {
+        await setDoc(doc(db, 'users', uid), data, { merge: true });
+    } catch (e) {
+        console.error('[DB] updateUserProfile error:', e);
+    }
 };
 
 // ─── USER COUNT ───────────────────────────────────────────────────────────────

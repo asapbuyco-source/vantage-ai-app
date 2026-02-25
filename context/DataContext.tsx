@@ -3,7 +3,8 @@ import { Match, AccumulatorSet, WinRateStats } from '../types';
 import {
     getTodaysPredictions, deleteTodaysPredictions, getGlobalTodayKey,
     saveTodaysPredictions, getAccumulatorsForDate, saveAccumulatorsForDate,
-    getDailyData, getWinRateStats, getTodaysBasketballPredictions, saveBasketballPredictions
+    getDailyData, getWinRateStats, getTodaysBasketballPredictions, saveBasketballPredictions,
+    acquireGenerationLock, releaseGenerationLock,
 } from '../services/db';
 import { generateDailyPredictions, generateSmartAccumulators } from '../services/gemini';
 import { useAuth } from './AuthContext';
@@ -86,23 +87,47 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         setLoading(false);
                     }
                 } else {
-                    if (!forceGeneration) {
-                        if (mountedRef.current) { setPredictions([]); setAccumulators(null); setLoading(false); }
-                        return;
-                    }
+                    // ─── AUTO-GENERATION LOGIC ───────────────────────────────
+                    // Any authenticated user can trigger generation (not just admin).
+                    // A Firestore generation lock prevents concurrent calls.
 
-                    if (mountedRef.current) setIsSystemGenerating(true);
-                    try {
-                        const backendMatches = await generateDailyPredictions(signal);
-                        if (signal.aborted) return;
-                        if (backendMatches && backendMatches.length > 0) {
-                            if (mountedRef.current) setPredictions(backendMatches);
-                            await saveTodaysPredictions(backendMatches);
-                        } else {
-                            if (mountedRef.current) setPredictions([]);
+                    const lockAcquired = await acquireGenerationLock(todayKey);
+
+                    if (!lockAcquired) {
+                        // Another client is already generating. Poll every 5s for up to 2 min.
+                        if (mountedRef.current) setIsSystemGenerating(true);
+                        let attempts = 0;
+                        while (attempts < 24) {
+                            await new Promise(res => setTimeout(res, 5000));
+                            if (signal.aborted) return;
+                            attempts++;
+                            const fresh = await getDailyData(todayKey);
+                            if (fresh && fresh.matches && fresh.matches.length > 0) {
+                                if (mountedRef.current) {
+                                    setPredictions(fresh.matches);
+                                    setAccumulators(fresh.accumulators || null);
+                                }
+                                break;
+                            }
                         }
-                    } catch (genError) {
-                        if (mountedRef.current) setSystemError((genError as Error).message);
+                        if (mountedRef.current) setIsSystemGenerating(false);
+                    } else {
+                        // We hold the lock — generate predictions
+                        if (mountedRef.current) setIsSystemGenerating(true);
+                        try {
+                            const backendMatches = await generateDailyPredictions(signal);
+                            if (signal.aborted) return;
+                            if (backendMatches && backendMatches.length > 0) {
+                                if (mountedRef.current) setPredictions(backendMatches);
+                                await saveTodaysPredictions(backendMatches);
+                            } else {
+                                if (mountedRef.current) setPredictions([]);
+                            }
+                        } catch (genError) {
+                            if (mountedRef.current) setSystemError((genError as Error).message);
+                        } finally {
+                            await releaseGenerationLock(todayKey);
+                        }
                     }
                 }
 

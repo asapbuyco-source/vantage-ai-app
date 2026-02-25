@@ -11,7 +11,7 @@ interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   plan: {
-    id: 'daily' | 'weekly' | 'monthly';
+    id: 'daily' | 'weekly' | 'monthly' | 'annual';
     label: string;
     price: string;
     features: string[];

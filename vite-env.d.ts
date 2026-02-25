@@ -17,6 +17,7 @@ interface ImportMetaEnv {
   readonly VITE_SELAR_DAILY_LINK: string
   readonly VITE_SELAR_WEEKLY_LINK: string
   readonly VITE_SELAR_MONTHLY_LINK: string
+  readonly VITE_SELAR_ANNUAL_LINK: string
   readonly VITE_FOOTBALL_API_KEY: string
 }
 

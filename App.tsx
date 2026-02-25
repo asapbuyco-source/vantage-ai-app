@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { verifySelarOrder } from './services/selar';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle, X, Crown } from 'lucide-react';
 import { NavigationTab } from './types';
 import { BottomNav } from './components/BottomNav';
 import { ToastContainer } from './components/Toast';
@@ -38,6 +38,9 @@ function AppContent() {
 
   // Onboarding: show once, only after login
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // VIP renewal reminder
+  const [showRenewalBanner, setShowRenewalBanner] = useState(false);
+  const [renewalDaysLeft, setRenewalDaysLeft] = useState(0);
 
   const { theme, language, showToast } = useAppContext();
   const { user, userProfile, verifyTransaction, loading: authLoading } = useAuth();
@@ -48,6 +51,25 @@ function AppContent() {
       setShowOnboarding(true);
     }
   }, [user]);
+
+  // VIP Renewal Reminder — fires when VIP expires within 3 days
+  useEffect(() => {
+    if (!userProfile?.isVip || !userProfile.vipExpiry) {
+      setShowRenewalBanner(false);
+      return;
+    }
+    const expiry = new Date(userProfile.vipExpiry);
+    const now = new Date();
+    const msLeft = expiry.getTime() - now.getTime();
+    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+    const dismissed = localStorage.getItem('vantage_renewal_dismissed');
+    if (daysLeft <= 3 && daysLeft >= 0 && dismissed !== userProfile.vipExpiry) {
+      setRenewalDaysLeft(daysLeft);
+      setShowRenewalBanner(true);
+    } else {
+      setShowRenewalBanner(false);
+    }
+  }, [userProfile]);
 
   const handleOnboardingComplete = () => {
     localStorage.setItem('vantage_onboarded', 'true');
@@ -114,7 +136,18 @@ function AppContent() {
     const checkSelarPayment = async () => {
       if (authLoading || !user) return;
       const urlParams = new URLSearchParams(window.location.search);
-      const selarRef = urlParams.get('selar_ref');
+      let selarRef = urlParams.get('selar_ref');
+
+      // ✔ Fallback: if user returns without the URL param (different browser / stripped query)
+      // check localStorage for pending reference set before they left
+      if (!selarRef) {
+        const pending = localStorage.getItem('pendingSelarRef');
+        if (pending) {
+          console.log('[Selar] No URL param found. Trying localStorage fallback:', pending);
+          selarRef = pending;
+        }
+      }
+
       if (!selarRef) return;
 
       // Clean URL immediately so refresh doesn't re-trigger
@@ -122,7 +155,6 @@ function AppContent() {
 
       const result = await verifySelarOrder(selarRef);
       if (result.success && result.plan) {
-        // verifySelarOrder already protected against replay — safe to upgrade directly
         await verifyTransaction(`SELAR_${selarRef}`);
         showToast(
           language === 'fr' ? '✅ Paiement Selar confirmé ! Bienvenue VIP 🎉' : '✅ Selar payment confirmed! Welcome VIP 🎉',
@@ -130,10 +162,14 @@ function AppContent() {
         );
         setActiveTab('vip');
       } else {
-        showToast(
-          language === 'fr' ? 'Vérification Selar échouée. Contactez le support.' : 'Selar verification failed. Please contact support.',
-          'error'
-        );
+        // Only show error if there was a ref to check (don't spam on normal load)
+        const hadUrlParam = !!urlParams.get('selar_ref');
+        if (hadUrlParam) {
+          showToast(
+            language === 'fr' ? 'Vérification Selar échouée. Contactez le support.' : 'Selar verification failed. Please contact support.',
+            'error'
+          );
+        }
       }
     };
     checkSelarPayment();
@@ -189,7 +225,47 @@ function AppContent() {
         <div className={`absolute bottom-0 right-0 w-64 h-64 blur-[100px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-purple/5' : 'bg-purple-200/40'}`} />
       </div>
 
-      <main className="relative z-10 container mx-auto max-w-md px-4 pt-6 min-h-screen pb-24">
+      {/* VIP Renewal Reminder Banner */}
+      <AnimatePresence>
+        {showRenewalBanner && (
+          // @ts-ignore
+          <motion.div
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -60, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white text-sm font-bold shadow-lg"
+          >
+            <div className="flex items-center gap-2">
+              <Crown size={16} className="shrink-0" />
+              <span>
+                {renewalDaysLeft === 0
+                  ? (language === 'fr' ? 'Votre VIP expire aujourd\'hui !' : 'Your VIP expires today!')
+                  : (language === 'fr' ? `VIP expire dans ${renewalDaysLeft}j — Renouveler` : `VIP expires in ${renewalDaysLeft}d — Renew now`)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab('vip')}
+                className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
+              >
+                {language === 'fr' ? 'Renouveler' : 'Renew'}
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.setItem('vantage_renewal_dismissed', userProfile?.vipExpiry || '');
+                  setShowRenewalBanner(false);
+                }}
+                className="text-white/70 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <main className="relative z-10 container mx-auto max-w-md px-4 pt-6 min-h-screen pb-24" style={{ paddingTop: showRenewalBanner ? '4rem' : undefined }}>
         <AnimatePresence mode="wait">
           {
             // @ts-ignore

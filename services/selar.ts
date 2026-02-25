@@ -26,6 +26,7 @@ const SELAR_PRODUCTS: Record<string, string> = {
     daily: import.meta.env.VITE_SELAR_DAILY_LINK || 'https://selar.co/vantage-daily',
     weekly: import.meta.env.VITE_SELAR_WEEKLY_LINK || 'https://selar.co/vantage-weekly',
     monthly: import.meta.env.VITE_SELAR_MONTHLY_LINK || 'https://selar.co/vantage-monthly',
+    annual: import.meta.env.VITE_SELAR_ANNUAL_LINK || 'https://selar.co/vantage-annual',
 };
 
 export interface SelarInitResponse {
@@ -39,7 +40,7 @@ export interface SelarInitResponse {
  * The `plan` param in the redirect URL is how we know which plan to activate on return.
  */
 export const initiateSelarPayment = async (
-    plan: 'daily' | 'weekly' | 'monthly',
+    plan: 'daily' | 'weekly' | 'monthly' | 'annual',
     email: string,
     userId: string,
 ): Promise<SelarInitResponse> => {

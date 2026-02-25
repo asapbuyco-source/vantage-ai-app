@@ -28,7 +28,7 @@ interface AuthContextType {
     logout: () => Promise<void>;
     deleteAccount: () => Promise<void>;
     clearError: () => void;
-    upgradeToVip: (plan: 'daily' | 'weekly' | 'monthly') => Promise<void>;
+    upgradeToVip: (plan: 'daily' | 'weekly' | 'monthly' | 'annual') => Promise<void>;
     getAllUsers: () => Promise<UserProfile[]>;
     toggleUserVip: (uid: string, currentStatus: boolean) => Promise<void>;
     toggleUserAdmin: (uid: string, currentStatus: boolean) => Promise<void>;
@@ -223,14 +223,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const resetPassword = async (email: string) => { await sendPasswordResetEmail(auth, email); };
 
-    const upgradeToVip = async (plan: 'daily' | 'weekly' | 'monthly') => {
+    const upgradeToVip = async (plan: 'daily' | 'weekly' | 'monthly' | 'annual') => {
         if (!user) return;
         const now = new Date();
         let expiry = new Date();
         if (plan === 'daily') expiry.setDate(now.getDate() + 1);
         if (plan === 'weekly') expiry.setDate(now.getDate() + 7);
         if (plan === 'monthly') expiry.setDate(now.getDate() + 30);
-        const planCost = plan === 'daily' ? 500 : (plan === 'weekly' ? 1500 : 4500);
+        if (plan === 'annual') expiry.setDate(now.getDate() + 365);
+        const planCost = plan === 'daily' ? 500 : plan === 'weekly' ? 1500 : plan === 'monthly' ? 4500 : 25000;
 
         try {
             const userRef = doc(db, "profiles", user.uid);

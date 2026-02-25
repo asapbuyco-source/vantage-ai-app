@@ -42,7 +42,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'annual'>('daily');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -85,9 +85,18 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
       features: ['Full Month Access', 'All Features', 'VIP WhatsApp', 'Biggest Saving'],
       color: 'border-vantage-cyan bg-vantage-cyan/10 shadow-[0_0_30px_rgba(34,211,238,0.15)]'
     },
+    {
+      id: 'annual',
+      label: language === 'fr' ? 'Annuel' : 'Annual',
+      price: '25000',
+      originalPrice: '54000', // 4500 * 12 = 54000
+      badge: '🔥 BEST DEAL',
+      features: ['Full Year Access (365 days)', 'All VIP Features', 'VIP WhatsApp Group', '54% CHEAPER than monthly'],
+      color: 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_30px_rgba(234,179,8,0.15)]'
+    },
   ] as const;
 
-  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly') => {
+  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'annual') => {
     setSelectedPlanId(planId);
     setShowPaymentModal(true);
   };
@@ -300,8 +309,8 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.4, delay: 0.1 }}
           className={`relative overflow-hidden rounded-2xl p-4 border ${isAdmin
-              ? 'border-red-500/30 bg-red-500/5'
-              : 'border-vantage-purple/40 bg-gradient-to-r from-vantage-purple/10 to-vantage-cyan/5'
+            ? 'border-red-500/30 bg-red-500/5'
+            : 'border-vantage-purple/40 bg-gradient-to-r from-vantage-purple/10 to-vantage-cyan/5'
             }`}
         >
           {/* Animated ring */}

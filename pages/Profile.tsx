@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LegalDoc } from '../components/LegalDoc';
 import { HistoryModal } from '../components/HistoryModal';
+import { ensureReferralCode } from '../services/db';
 
 interface ProfileProps {
     initialMode?: 'login' | 'signup';
@@ -45,17 +46,22 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
             setIsLoginMode(initialMode === 'login');
         }
 
-        // 2. Check for saved referral code
+        // 2. Check for saved referral code (on unauthenticated sign-up form)
         const savedRef = localStorage.getItem('vantage_referral_code');
         if (savedRef) {
             setReferralCodeInput(savedRef);
-            // Only switch to signup mode if no specific mode was requested
-            // This allows users to still login if they have an account, but keeps the ref code ready if they google-sign-up
             if (!initialMode) {
                 setIsLoginMode(false);
             }
         }
     }, [initialMode]);
+
+    // 3. Auto-generate referral code for authenticated users who don't have one yet
+    useEffect(() => {
+        if (user && userProfile && !userProfile.referralCode) {
+            ensureReferralCode(user.uid);
+        }
+    }, [user, userProfile]);
 
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -123,19 +129,24 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
     };
 
     const shareReferral = () => {
-        if (navigator.share && userProfile?.referralCode) {
+        const code = userProfile?.referralCode;
+        if (!code) return;
+        const shareUrl = `${window.location.origin}?ref=${code}`;
+        if (navigator.share) {
             navigator.share({
-                title: 'Vantage AI Invite',
-                text: `Rejoignez Vantage AI avec mon code ${userProfile.referralCode} pour gagner !`,
-                url: window.location.origin
+                title: 'Vantage AI — AI Football Picks',
+                text: language === 'fr'
+                    ? `J'utilise Vantage AI pour mes pronostics. Inscris-toi avec mon lien et gagne des accès VIP !`
+                    : `I use Vantage AI for football predictions. Sign up with my link and get VIP access!`,
+                url: shareUrl
             }).catch((err) => {
-                // Ignore AbortError which occurs when user cancels the share dialog
-                if (err.name !== 'AbortError') {
-                    console.error('Share error:', err);
-                }
+                if (err.name !== 'AbortError') console.error('Share error:', err);
             });
         } else {
-            copyReferralCode();
+            // Fallback: copy the full share URL
+            navigator.clipboard.writeText(shareUrl);
+            setCopiedCode(true);
+            setTimeout(() => setCopiedCode(false), 2000);
         }
     };
 
