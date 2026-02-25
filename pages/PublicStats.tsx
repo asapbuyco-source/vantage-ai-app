@@ -175,7 +175,7 @@ export const PublicStats: React.FC<PublicStatsProps> = ({ setTab }) => {
                 </GlassCard>
             </div>
 
-            {/* View Full Archive CTA */}
+            {/* View Full Archive CTA — only if logged in (setTab provided) */}
             {setTab && (
                 <button
                     onClick={() => setTab('results')}

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { verifySelarOrder } from './services/selar';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, AlertTriangle, X, Crown } from 'lucide-react';
+import { Loader2, X, Crown } from 'lucide-react';
 import { NavigationTab } from './types';
 import { BottomNav } from './components/BottomNav';
 import { ToastContainer } from './components/Toast';
 import { BetSlip } from './components/BetSlip';
 import { Onboarding } from './components/Onboarding';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Home } from './pages/Home';
 import { FreePicks } from './pages/FreePicks';
 import { VIP } from './pages/VIP';
@@ -28,11 +29,12 @@ function AppContent() {
     return (saved as NavigationTab) || 'home';
   });
 
-  const [authView, setAuthView] = useState<'landing' | 'login' | 'signup'>(() => {
+  const [authView, setAuthView] = useState<'landing' | 'login' | 'signup' | 'stats'>(() => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
     if (mode === 'signup') return 'signup';
     if (mode === 'login') return 'login';
+    if (mode === 'stats') return 'stats';
     return 'landing';
   });
 
@@ -105,15 +107,49 @@ function AppContent() {
     }
   }, []);
 
-  // Automatic Payment Verification — Fapshi (Cameroon MoMo)
+  // ── Unified Payment Verification (Selar first, then Fapshi) ──────────────────
+  // Runs as a single sequential effect to prevent double-VIP race conditions.
   useEffect(() => {
-    const checkPayment = async () => {
+    const checkPayments = async () => {
       if (authLoading || !user) return;
       const urlParams = new URLSearchParams(window.location.search);
+
+      // 1️⃣  Selar (card / global payment) — check first
+      let selarRef = urlParams.get('selar_ref');
+      if (!selarRef) {
+        // Fallback: user may have returned in a new tab without the URL param
+        const pending = localStorage.getItem('pendingSelarRef');
+        if (pending) selarRef = pending;
+      }
+
+      if (selarRef) {
+        // Consume the ref immediately from both URL and storage
+        window.history.replaceState({}, document.title, window.location.pathname);
+        localStorage.removeItem('pendingSelarRef');
+
+        const result = await verifySelarOrder(selarRef);
+        if (result.success && result.plan) {
+          await verifyTransaction(`SELAR_${selarRef}`);
+          showToast(
+            language === 'fr' ? '✅ Paiement Selar confirmé ! Bienvenue VIP 🎉' : '✅ Selar payment confirmed! Welcome VIP 🎉',
+            'success'
+          );
+          setActiveTab('vip');
+        } else if (urlParams.get('selar_ref')) {
+          showToast(
+            language === 'fr' ? 'Vérification Selar échouée. Contactez le support.' : 'Selar verification failed. Please contact support.',
+            'error'
+          );
+        }
+        // Selar handled — do NOT fall through to Fapshi check
+        return;
+      }
+
+      // 2️⃣  Fapshi (Cameroon MoMo) — only if Selar was not triggered
       const transId = urlParams.get('transId');
       if (transId) {
-        const success = await verifyTransaction(transId);
         window.history.replaceState({}, document.title, window.location.pathname);
+        const success = await verifyTransaction(transId);
         if (success) {
           showToast(
             language === 'fr' ? 'Paiement réussi ! Bienvenue VIP. 🎉' : 'Payment successful! Welcome VIP. 🎉',
@@ -128,51 +164,7 @@ function AppContent() {
         }
       }
     };
-    checkPayment();
-  }, [verifyTransaction, authLoading, user]);
-
-  // Automatic Payment Verification — Selar (Global / Card)
-  useEffect(() => {
-    const checkSelarPayment = async () => {
-      if (authLoading || !user) return;
-      const urlParams = new URLSearchParams(window.location.search);
-      let selarRef = urlParams.get('selar_ref');
-
-      // ✔ Fallback: if user returns without the URL param (different browser / stripped query)
-      // check localStorage for pending reference set before they left
-      if (!selarRef) {
-        const pending = localStorage.getItem('pendingSelarRef');
-        if (pending) {
-          console.log('[Selar] No URL param found. Trying localStorage fallback:', pending);
-          selarRef = pending;
-        }
-      }
-
-      if (!selarRef) return;
-
-      // Clean URL immediately so refresh doesn't re-trigger
-      window.history.replaceState({}, document.title, window.location.pathname);
-
-      const result = await verifySelarOrder(selarRef);
-      if (result.success && result.plan) {
-        await verifyTransaction(`SELAR_${selarRef}`);
-        showToast(
-          language === 'fr' ? '✅ Paiement Selar confirmé ! Bienvenue VIP 🎉' : '✅ Selar payment confirmed! Welcome VIP 🎉',
-          'success'
-        );
-        setActiveTab('vip');
-      } else {
-        // Only show error if there was a ref to check (don't spam on normal load)
-        const hadUrlParam = !!urlParams.get('selar_ref');
-        if (hadUrlParam) {
-          showToast(
-            language === 'fr' ? 'Vérification Selar échouée. Contactez le support.' : 'Selar verification failed. Please contact support.',
-            'error'
-          );
-        }
-      }
-    };
-    checkSelarPayment();
+    checkPayments();
   }, [authLoading, user, verifyTransaction, showToast, language]);
 
   // Auth loading spinner
@@ -201,7 +193,32 @@ function AppContent() {
             {authView === 'landing' ? (
               // @ts-ignore
               <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
-                <LandingPage onGetStarted={() => setAuthView('signup')} onLogin={() => setAuthView('login')} />
+                <LandingPage
+                  onGetStarted={() => setAuthView('signup')}
+                  onLogin={() => setAuthView('login')}
+                  onShowStats={() => setAuthView('stats')}
+                />
+              </motion.div>
+            ) : authView === 'stats' ? (
+              // @ts-ignore
+              <motion.div key="stats" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
+                <div className="flex flex-col min-h-screen">
+                  <div className="flex items-center gap-2 py-4 mb-2">
+                    <button onClick={() => setAuthView('landing')} className="p-2 bg-white/5 rounded-lg text-gray-500 hover:text-vantage-cyan transition-colors">
+                      <X size={20} />
+                    </button>
+                    <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Back</span>
+                  </div>
+                  <PublicStats />
+                  <div className="mt-auto py-8">
+                    <button
+                      onClick={() => setAuthView('signup')}
+                      className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl shadow-lg"
+                    >
+                      Get Started Free
+                    </button>
+                  </div>
+                </div>
               </motion.div>
             ) : (
               // @ts-ignore
@@ -277,16 +294,18 @@ function AppContent() {
               transition={{ duration: 0.25, ease: "easeOut" }}
               className="h-full"
             >
-              {activeTab === 'home' && <Home setTab={setActiveTab} />}
-              {activeTab === 'free' && <FreePicks />}
-              {activeTab === 'vip' && <VIP setTab={setActiveTab} />}
-              {activeTab === 'guide' && <BettingGuide />}
-              {activeTab === 'profile' && <Profile />}
-              {activeTab === 'admin' && <Admin setTab={setActiveTab} />}
-              {activeTab === 'kelly' && <Kelly setTab={setActiveTab} />}
-              {activeTab === 'concierge' && <TicketWizard />}
-              {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
-              {activeTab === 'results' && <Results />}
+              <ErrorBoundary>
+                {activeTab === 'home' && <Home setTab={setActiveTab} />}
+                {activeTab === 'free' && <FreePicks />}
+                {activeTab === 'vip' && <VIP setTab={setActiveTab} />}
+                {activeTab === 'guide' && <BettingGuide />}
+                {activeTab === 'profile' && <Profile />}
+                {activeTab === 'admin' && <Admin setTab={setActiveTab} />}
+                {activeTab === 'kelly' && <Kelly setTab={setActiveTab} />}
+                {activeTab === 'concierge' && <TicketWizard />}
+                {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
+                {activeTab === 'results' && <Results />}
+              </ErrorBoundary>
             </motion.div>
           }
         </AnimatePresence>

@@ -9,9 +9,10 @@ import { Match } from '../types';
 interface LandingPageProps {
     onGetStarted: () => void;
     onLogin: () => void;
+    onShowStats: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin, onShowStats }) => {
     const [liveMatch, setLiveMatch] = useState<Match | null>(null);
     const [loadingHero, setLoadingHero] = useState(true);
 
@@ -61,6 +62,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
                 >
                     <span>Login</span>
                     <LogIn size={14} />
+                </button>
+            </div>
+
+            {/* Trust Banner / Stats Ticker */}
+            <div className="px-2 mb-6">
+                <button
+                    onClick={onShowStats}
+                    className="w-full flex items-center justify-between px-4 py-2.5 bg-green-500/10 border border-green-500/20 rounded-xl group transition-all"
+                >
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
+                        <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">
+                            Live Performance stats verified
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-green-500 uppercase tracking-widest">
+                        <span>Check Track Record</span>
+                        <ChevronRight size={10} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
                 </button>
             </div>
 

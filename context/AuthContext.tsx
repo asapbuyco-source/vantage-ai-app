@@ -41,8 +41,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// FIXED: Removed hardcoded email to prevent GitHub Secret Scanning blocks
-const ADMIN_EMAIL = import.meta.env?.VITE_ADMIN_EMAIL || "abrackly@gmail.com";
+// Admin check is based exclusively on Firestore profile to avoid exposing any
+// identifying information in the client JS bundle.
+// Bootstrap: first login from VITE_ADMIN_EMAIL sets isAdmin:true in Firestore (see onAuthStateChanged).
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
@@ -50,7 +51,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const isAdmin = (user?.email === ADMIN_EMAIL) || (userProfile?.isAdmin === true);
+    // isAdmin is derived purely from Firestore — no email string in the bundle
+    const isAdmin = userProfile?.isAdmin === true;
 
     const generateReferralCode = (name: string | null): string => {
         // Fix: Properly sanitize name to get exactly 3 uppercase letters, or 'VAN' as fallback
@@ -111,7 +113,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
-            if (firebaseUser.email === ADMIN_EMAIL && !profileData?.isAdmin) {
+            // Bootstrap: if the env-configured admin email matches, grant isAdmin on first setup
+            const adminEmail = import.meta.env?.VITE_ADMIN_EMAIL;
+            if (adminEmail && firebaseUser.email === adminEmail && !profileData?.isAdmin) {
                 await setDoc(userRef, { isAdmin: true }, { merge: true });
                 if (profileData) profileData.isAdmin = true;
             }
@@ -133,7 +137,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
                 isVip: false,
-                isAdmin: firebaseUser.email === ADMIN_EMAIL,
+                isAdmin: import.meta.env?.VITE_ADMIN_EMAIL ? firebaseUser.email === import.meta.env.VITE_ADMIN_EMAIL : false,
                 displayName: firebaseUser.displayName,
                 isBlocked: false,
                 referralCode: newReferralCode,

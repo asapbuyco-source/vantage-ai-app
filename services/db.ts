@@ -405,7 +405,7 @@ export const generateReferralCode = (uid: string): string => {
 export const ensureReferralCode = async (uid: string): Promise<string> => {
     const code = generateReferralCode(uid);
     try {
-        const userRef = doc(db, 'users', uid);
+        const userRef = doc(db, 'profiles', uid);
         await setDoc(userRef, { referralCode: code }, { merge: true });
     } catch (e) {
         console.warn('[Referral] Could not save referral code', e);
@@ -420,7 +420,7 @@ export const ensureReferralCode = async (uid: string): Promise<string> => {
 export const recordReferral = async (newUserId: string, referralCode: string): Promise<void> => {
     try {
         // Find the referrer by code
-        const usersSnap = await getDocs(collection(db, 'users'));
+        const usersSnap = await getDocs(collection(db, 'profiles'));
         let referrerId: string | null = null;
         usersSnap.forEach(d => {
             if (d.data().referralCode === referralCode) {
@@ -434,15 +434,15 @@ export const recordReferral = async (newUserId: string, referralCode: string): P
         }
 
         // Link new user to referrer
-        await setDoc(doc(db, 'users', newUserId), { referredBy: referrerId }, { merge: true });
+        await setDoc(doc(db, 'profiles', newUserId), { referredBy: referrerId }, { merge: true });
 
         // Increment referrer's count and earnings
-        const referrerRef = doc(db, 'users', referrerId);
+        const referrerRef = doc(db, 'profiles', referrerId);
         const snap = await getDoc(referrerRef);
         const current = snap.data() || {};
         await setDoc(referrerRef, {
             referralCount: (current.referralCount || 0) + 1,
-            referralEarnings: (current.referralEarnings || 0) + 1, // +1 pending day credit
+            referralEarnings: (current.referralEarnings || 0) + 1,
             lifetimeEarnings: (current.lifetimeEarnings || 0) + 1,
         }, { merge: true });
 
@@ -465,7 +465,7 @@ export const recordReferral = async (newUserId: string, referralCode: string): P
 
 export const getUserProfile = async (uid: string): Promise<Partial<UserProfile> | null> => {
     try {
-        const snap = await getDoc(doc(db, 'users', uid));
+        const snap = await getDoc(doc(db, 'profiles', uid));
         if (snap.exists()) return snap.data() as Partial<UserProfile>;
     } catch (e) {
         console.warn('[DB] getUserProfile error:', e);
@@ -475,7 +475,7 @@ export const getUserProfile = async (uid: string): Promise<Partial<UserProfile> 
 
 export const updateUserProfile = async (uid: string, data: Partial<UserProfile>): Promise<void> => {
     try {
-        await setDoc(doc(db, 'users', uid), data, { merge: true });
+        await setDoc(doc(db, 'profiles', uid), data, { merge: true });
     } catch (e) {
         console.error('[DB] updateUserProfile error:', e);
     }
@@ -485,7 +485,7 @@ export const updateUserProfile = async (uid: string, data: Partial<UserProfile>)
 
 export const getUserCount = async (): Promise<{ total: number; vip: number }> => {
     try {
-        const snap = await getDocs(collection(db, "users"));
+        const snap = await getDocs(collection(db, 'profiles'));
         let vip = 0;
         snap.forEach(d => { if (d.data().isVip) vip++; });
         return { total: snap.size, vip };
