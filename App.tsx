@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { verifySelarOrder } from './services/selar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { NavigationTab } from './types';
@@ -82,7 +83,7 @@ function AppContent() {
     }
   }, []);
 
-  // Automatic Payment Verification
+  // Automatic Payment Verification — Fapshi (Cameroon MoMo)
   useEffect(() => {
     const checkPayment = async () => {
       if (authLoading || !user) return;
@@ -107,6 +108,36 @@ function AppContent() {
     };
     checkPayment();
   }, [verifyTransaction, authLoading, user]);
+
+  // Automatic Payment Verification — Selar (Global / Card)
+  useEffect(() => {
+    const checkSelarPayment = async () => {
+      if (authLoading || !user) return;
+      const urlParams = new URLSearchParams(window.location.search);
+      const selarRef = urlParams.get('selar_ref');
+      if (!selarRef) return;
+
+      // Clean URL immediately so refresh doesn't re-trigger
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      const result = await verifySelarOrder(selarRef);
+      if (result.success && result.plan) {
+        // verifySelarOrder already protected against replay — safe to upgrade directly
+        await verifyTransaction(`SELAR_${selarRef}`);
+        showToast(
+          language === 'fr' ? '✅ Paiement Selar confirmé ! Bienvenue VIP 🎉' : '✅ Selar payment confirmed! Welcome VIP 🎉',
+          'success'
+        );
+        setActiveTab('vip');
+      } else {
+        showToast(
+          language === 'fr' ? 'Vérification Selar échouée. Contactez le support.' : 'Selar verification failed. Please contact support.',
+          'error'
+        );
+      }
+    };
+    checkSelarPayment();
+  }, [authLoading, user, verifyTransaction, showToast, language]);
 
   // Auth loading spinner
   if (authLoading) {

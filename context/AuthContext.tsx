@@ -14,7 +14,6 @@ import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, 
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
 import { checkPaymentStatus } from "../services/fapshi";
-import { verifySelarTransaction } from "../services/selar";
 
 interface AuthContextType {
     user: User | null;
@@ -369,28 +368,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const cleanTransId = transId.split(',')[0].trim();
 
         try {
-            let isSuccess = false;
-            let amount: number | undefined;
-
-            // Detect Selar Reference (Growth Phase)
-            if (cleanTransId.startsWith('VAN_')) {
-                isSuccess = await verifySelarTransaction(cleanTransId);
-            } else {
-                // Default to Fapshi (Cameroon)
-                const result = await checkPaymentStatus(cleanTransId);
-                isSuccess = result.status === 'SUCCESSFUL';
-                amount = result.amount;
+            // ── Selar (Global) ──────────────────────────────────────────────
+            // App.tsx already called verifySelarOrder() which validated and
+            // marked the Firestore token as used. Here we just need to read
+            // the plan from that token and upgrade the user.
+            if (cleanTransId.startsWith('SELAR_')) {
+                // Strip the "SELAR_" prefix to get the original VAN_ reference
+                const selarRef = cleanTransId.replace(/^SELAR_/, '');
+                const tokenSnap = await getDoc(doc(db, 'selar_pending', selarRef));
+                if (!tokenSnap.exists()) return false;
+                const data = tokenSnap.data();
+                const plan: 'daily' | 'weekly' | 'monthly' = data.plan || 'daily';
+                await upgradeToVip(plan);
+                localStorage.removeItem('pendingVipPlan');
+                return true;
             }
 
-            if (isSuccess) {
-                let plan: 'daily' | 'weekly' | 'monthly' | null = localStorage.getItem('pendingVipPlan') as any;
+            // ── Fapshi (Cameroon MoMo) ──────────────────────────────────────
+            const result = await checkPaymentStatus(cleanTransId);
+            const isSuccess = result.status === 'SUCCESSFUL';
+            const amount = result.amount;
 
-                // Fix: More robust plan detection if localStorage is lost
+            if (isSuccess) {
+                let plan: 'daily' | 'weekly' | 'monthly' | null =
+                    localStorage.getItem('pendingVipPlan') as any;
+
                 if (!plan) {
-                    if (amount === undefined) {
-                        // For Selar, if amount isn't returned by verification yet, try to infer from ref or just default
-                        plan = 'daily';
-                    } else if (amount >= 4500) plan = 'monthly';
+                    if (amount === undefined) plan = 'daily';
+                    else if (amount >= 4500) plan = 'monthly';
                     else if (amount >= 1500) plan = 'weekly';
                     else plan = 'daily';
                 }

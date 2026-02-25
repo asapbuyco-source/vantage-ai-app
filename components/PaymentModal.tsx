@@ -44,9 +44,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
         window.location.href = link;
       } else {
         const { checkout_url } = await initiateSelarPayment(
-          parseInt(plan.price),
+          plan.id,
           user.email || 'user@vantage.ai',
-          userProfile?.name || 'Vantage User'
+          user.uid
         );
         window.location.href = checkout_url;
       }
