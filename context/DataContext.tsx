@@ -11,6 +11,7 @@ import { useAuth } from './AuthContext';
 
 interface DataContextType {
     predictions: Match[];
+    rawFixtures: Match[];
     accumulators: AccumulatorSet | null;
     basketballPredictions: Match[];
     winRateStats: WinRateStats;
@@ -33,6 +34,7 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user, loading: authLoading, isAdmin } = useAuth();
     const [predictions, setPredictions] = useState<Match[]>([]);
+    const [rawFixtures, setRawFixtures] = useState<Match[]>([]);
     const [accumulators, setAccumulators] = useState<AccumulatorSet | null>(null);
     const [basketballPredictions, setBasketballPredictions] = useState<Match[]>([]);
     const [winRateStats, setWinRateStats] = useState<WinRateStats>(DEFAULT_WIN_RATES);
@@ -83,6 +85,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (dailyData && dailyData.matches && dailyData.matches.length > 0) {
                     if (mountedRef.current) {
                         setPredictions(dailyData.matches);
+                        setRawFixtures(dailyData.rawFixtures || []);
                         setAccumulators(dailyData.accumulators || null);
                         setLoading(false);
                     }
@@ -105,6 +108,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             if (fresh && fresh.matches && fresh.matches.length > 0) {
                                 if (mountedRef.current) {
                                     setPredictions(fresh.matches);
+                                    setRawFixtures(fresh.rawFixtures || []);
                                     setAccumulators(fresh.accumulators || null);
                                 }
                                 break;
@@ -118,8 +122,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             const backendMatches = await generateDailyPredictions(signal);
                             if (signal.aborted) return;
                             if (backendMatches && backendMatches.length > 0) {
-                                if (mountedRef.current) setPredictions(backendMatches);
                                 await saveTodaysPredictions(backendMatches);
+                                // Refresh to get both matches and the rawFixtures saved during generation
+                                const freshDaily = await getDailyData(todayKey);
+                                if (mountedRef.current) {
+                                    setPredictions(backendMatches);
+                                    setRawFixtures(freshDaily?.rawFixtures || []);
+                                }
                             } else {
                                 if (mountedRef.current) setPredictions([]);
                             }
@@ -201,7 +210,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const clearData = async () => {
         cancelAnalysis();
-        if (mountedRef.current) { setLoading(true); setPredictions([]); setAccumulators(null); }
+        if (mountedRef.current) { setLoading(true); setPredictions([]); setRawFixtures([]); setAccumulators(null); }
         try {
             await deleteTodaysPredictions();
             if (mountedRef.current) { setSystemError(null); setLoading(false); }
@@ -228,6 +237,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return (
         <DataContext.Provider value={{
             predictions,
+            rawFixtures,
             accumulators,
             basketballPredictions,
             winRateStats,

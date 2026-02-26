@@ -1,6 +1,6 @@
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { Match, AccumulatorSet } from "../types";
-import { getGlobalTodayKey, saveTodaysPredictions, getGlobalYesterdayKey, getPredictionsForDate, savePredictionsForDate, getTeamAssetsMap, saveTeamAsset } from "./db";
+import { getGlobalTodayKey, saveTodaysPredictions, saveDailyFixtures, getGlobalYesterdayKey, getPredictionsForDate, savePredictionsForDate, getTeamAssetsMap, saveTeamAsset } from "./db";
 import { getTodaysFixtures, filterGlobalFixtures, enrichFixtures, formatFixtureContext } from "./sportsData";
 
 // Dynamic Model Management
@@ -273,6 +273,25 @@ export const generateDailyPredictions = async (signal?: AbortSignal): Promise<Ma
         try {
             const rawFixtures = await getTodaysFixtures();
             const filteredFixtures = filterGlobalFixtures(rawFixtures);
+
+            if (filteredFixtures.length > 0) {
+                const simplifiedRaw: Match[] = filteredFixtures.map(f => ({
+                    id: f.fixture.id.toString(),
+                    league: f.league.name,
+                    homeTeam: f.teams.home.name,
+                    awayTeam: f.teams.away.name,
+                    time: new Date(f.fixture.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    prediction: '',
+                    confidence: 0,
+                    odds: 0,
+                    category: 'safe',
+                    homeTeamLogo: f.teams.home.logo,
+                    awayTeamLogo: f.teams.away.logo,
+                    sport: 'football',
+                    status: 'pending'
+                }));
+                saveDailyFixtures(todayStr, simplifiedRaw).catch(console.error);
+            }
 
             // Enrich with form, H2H, odds, and injuries — all in parallel
             let fixtureContext: string;

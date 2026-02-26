@@ -14,35 +14,25 @@ interface HomeProps {
   setTab: (tab: NavigationTab) => void;
 }
 
-type SortKey = 'confidence' | 'time' | 'odds' | 'league';
-type CategoryFilter = 'all' | 'safe' | 'value' | 'risky';
-
-const CAT_COLORS: Record<string, string> = {
-  safe: 'text-green-400 bg-green-400/10 border-green-400/30',
-  value: 'text-blue-400 bg-blue-400/10 border-blue-400/30',
-  risky: 'text-red-400 bg-red-400/10 border-red-400/30',
-};
-const CAT_LABELS: Record<string, string> = { safe: '🟢 Safe', value: '🔵 Value', risky: '🔴 Risky' };
+type SortKey = 'time' | 'league';
 
 export const Home: React.FC<HomeProps> = ({ setTab }) => {
-  const { t, language, setLanguage, theme, toggleTheme, toggleSavedPick, isPickSaved, showToast } = useAppContext();
+  const { t, language, setLanguage, theme, toggleTheme } = useAppContext();
   const { userProfile, isAdmin } = useAuth();
-  const { predictions, basketballPredictions, winRateStats, loading, isSystemGenerating, systemError } = useData();
+  const { rawFixtures, basketballPredictions, winRateStats, loading, isSystemGenerating, systemError } = useData();
 
   const isVip = userProfile?.isVip || isAdmin;
 
   // ─── Filters ─────────────────────────────────────────────────────────────
   const [activeSport, setActiveSport] = useState<Sport>('football');
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
-  const [sortKey, setSortKey] = useState<SortKey>('confidence');
+  const [sortKey, setSortKey] = useState<SortKey>('time');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
-  const allMatches = activeSport === 'football' ? predictions : basketballPredictions;
+  const allMatches = activeSport === 'football' ? rawFixtures : basketballPredictions;
 
   const filteredMatches = useMemo(() => {
     let result = [...allMatches];
-    if (categoryFilter !== 'all') result = result.filter(m => m.category === categoryFilter);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(m =>
@@ -52,16 +42,14 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
       );
     }
     switch (sortKey) {
-      case 'confidence': result.sort((a, b) => b.confidence - a.confidence); break;
-      case 'odds': result.sort((a, b) => b.odds - a.odds); break;
       case 'time': result.sort((a, b) => a.time.localeCompare(b.time)); break;
       case 'league': result.sort((a, b) => a.league.localeCompare(b.league)); break;
     }
     return result;
-  }, [allMatches, categoryFilter, searchQuery, sortKey]);
+  }, [allMatches, searchQuery, sortKey]);
 
   const groupedMatches = useMemo(() => {
-    if (sortKey !== 'league' && sortKey !== 'confidence') {
+    if (sortKey !== 'league') {
       return { 'All Matches': filteredMatches };
     }
     const groups: Record<string, Match[]> = {};
@@ -72,53 +60,15 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
     return groups;
   }, [filteredMatches, sortKey]);
 
-  const getPredictionText = (match: Match) => {
-    if (language === 'fr') return match.prediction_fr || match.prediction;
-    return match.prediction_en || match.prediction;
-  };
 
-  const featuredMatch = predictions.length > 0
-    ? predictions.reduce((prev, curr) => (prev.confidence > curr.confidence ? prev : curr))
-    : null;
 
   const todayDisplay = new Date().toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', {
     weekday: 'short', day: 'numeric', month: 'short'
   });
 
   const sortLabels: Record<SortKey, string> = {
-    confidence: language === 'fr' ? 'Confiance' : 'Confidence',
-    odds: language === 'fr' ? 'Cote' : 'Odds',
     time: language === 'fr' ? 'Heure' : 'Time',
     league: language === 'fr' ? 'Ligue' : 'League',
-  };
-
-  const handleSaveToggle = (match: Match) => {
-    if (!isVip) {
-      setTab('vip');
-      showToast(language === 'fr' ? 'Accès VIP requis' : 'VIP Access Required', 'info');
-      return;
-    }
-    const pick: SavedPick = {
-      id: match.id,
-      homeTeam: match.homeTeam,
-      awayTeam: match.awayTeam,
-      prediction: getPredictionText(match),
-      confidence: match.confidence,
-      odds: match.odds,
-      league: match.league,
-      homeTeamLogo: match.homeTeamLogo,
-      awayTeamLogo: match.awayTeamLogo,
-      sport: match.sport || activeSport,
-      savedAt: new Date().toISOString(),
-    };
-    toggleSavedPick(pick);
-    const saved = isPickSaved(match.id);
-    showToast(
-      saved
-        ? (language === 'fr' ? 'Ajouté au slip !' : 'Added to slip!')
-        : (language === 'fr' ? 'Retiré du slip' : 'Removed from slip'),
-      saved ? 'success' : 'info'
-    );
   };
 
   if (isSystemGenerating) return <AnalyzingLoader />;
@@ -203,54 +153,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         )}
       </GlassCard>
 
-      {/* ── Featured Match ── */}
-      {!loading && featuredMatch && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest flex items-center gap-2">
-              <Zap size={14} className="text-yellow-500" /> {t('home.featured')}
-            </h2>
-            <span className="text-xs text-vantage-cyan bg-vantage-cyan/10 px-2 py-0.5 rounded border border-vantage-cyan/20">{t('home.high_conf')}</span>
-          </div>
-          <GlassCard highlight className="relative" delay={2}>
-            <div className="absolute top-0 right-0 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 text-[10px] font-bold px-3 py-1 rounded-bl-xl border-l border-b border-yellow-500/20">
-              🔥 {t('home.hot_pick')}
-            </div>
-            <div className="flex flex-col items-center space-y-4 pt-2">
-              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-widest">{featuredMatch.league} • {featuredMatch.time}</div>
-              <div className="flex w-full items-center justify-between px-2">
-                <div className="text-center w-1/3 flex flex-col items-center gap-2">
-                  <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-white/5 mb-1 flex items-center justify-center border border-slate-200 dark:border-white/5 p-2">
-                    <TeamLogo src={featuredMatch.homeTeamLogo} teamName={featuredMatch.homeTeam} className="w-12 h-12" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight">{featuredMatch.homeTeam}</span>
-                </div>
-                <div className="text-2xl font-bold font-orbitron text-vantage-cyan">{t('home.vs')}</div>
-                <div className="text-center w-1/3 flex flex-col items-center gap-2">
-                  <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-white/5 mb-1 flex items-center justify-center border border-slate-200 dark:border-white/5 p-2">
-                    <TeamLogo src={featuredMatch.awayTeamLogo} teamName={featuredMatch.awayTeam} className="w-12 h-12" />
-                  </div>
-                  <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight">{featuredMatch.awayTeam}</span>
-                </div>
-              </div>
-              <div className="w-full bg-black/5 dark:bg-black/40 rounded-xl p-3 flex justify-between items-center border border-black/5 dark:border-white/5">
-                <div>
-                  <div className="text-[10px] text-gray-500 uppercase">{t('home.ai_pred')}</div>
-                  <div className="text-sm font-bold text-vantage-cyan">
-                    {isVip ? getPredictionText(featuredMatch) : 'LOCKED / VIP'}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[10px] text-gray-500 uppercase">{t('home.confidence')}</div>
-                  <div className="text-sm font-bold text-green-500">
-                    {isVip ? `${featuredMatch.confidence}%` : '??%'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </GlassCard>
-        </div>
-      )}
+
 
       {/* ── VIP Teaser ── */}
       {
@@ -295,21 +198,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
           ))}
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {(['all', 'safe', 'value', 'risky'] as CategoryFilter[]).map(cat => (
-            <button
-              key={cat}
-              onClick={() => setCategoryFilter(cat)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${categoryFilter === cat
-                ? 'bg-vantage-cyan text-slate-900 border-transparent shadow'
-                : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-gray-500'
-                }`}
-            >
-              {cat === 'all' ? (language === 'fr' ? 'Tous' : 'All') : CAT_LABELS[cat]}
-            </button>
-          ))}
-        </div>
+
 
         {/* Search + Sort Row */}
         <div className="flex gap-2">
@@ -360,8 +249,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         <div className="text-xs text-gray-500 flex items-center gap-1.5">
           <TrendingUp size={11} />
           {language === 'fr'
-            ? `${filteredMatches.length} sur ${allMatches.length} pronostics`
-            : `${filteredMatches.length} of ${allMatches.length} predictions`}
+            ? `${filteredMatches.length} matchs aujourd'hui`
+            : `${filteredMatches.length} matches today`}
         </div>
       </div>
 
@@ -381,13 +270,13 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                 <h3 className="text-slate-900 dark:text-white font-bold mb-1">{language === 'fr' ? 'Erreur de l\'IA' : 'AI Analysis Error'}</h3>
                 <p className="text-xs text-gray-500 max-w-[220px]">{language === 'fr' ? 'Réessayez plus tard.' : 'Please try again later.'}</p>
               </>
-            ) : searchQuery || categoryFilter !== 'all' ? (
+            ) : searchQuery ? (
               <>
                 <div className="w-12 h-12 bg-vantage-cyan/10 rounded-full flex items-center justify-center mb-3">
                   <Search size={24} className="text-vantage-cyan" />
                 </div>
                 <h3 className="text-slate-900 dark:text-white font-bold mb-1">{language === 'fr' ? 'Aucun résultat' : 'No matches found'}</h3>
-                <p className="text-xs text-gray-500">{language === 'fr' ? 'Essayez un autre filtre.' : 'Try adjusting your filters.'}</p>
+                <p className="text-xs text-gray-500">{language === 'fr' ? 'Essayez une autre recherche.' : 'Try adjusting your search.'}</p>
               </>
             ) : (
               <>
@@ -429,21 +318,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                       transition={{ delay: idx * 0.04 }}
                     >
                       <GlassCard className="!p-0 overflow-hidden relative group border border-slate-200 dark:border-white/10">
-                        {/* Category badge */}
-                        <div className={`absolute top-3 left-3 text-[9px] font-bold px-2 py-0.5 rounded-full border ${CAT_COLORS[match.category]}`}>
-                          {CAT_LABELS[match.category]}
-                        </div>
 
-                        {/* Save button */}
-                        <button
-                          onClick={() => handleSaveToggle(match)}
-                          className={`absolute top-3 right-3 p-1.5 rounded-full transition-all border ${saved
-                            ? 'text-vantage-purple bg-vantage-purple/10 border-vantage-purple/30'
-                            : 'text-gray-400 bg-white/5 border-white/10 hover:border-vantage-purple/20'
-                            }`}
-                        >
-                          {saved ? <BookmarkCheck size={14} fill="currentColor" /> : <Bookmark size={14} />}
-                        </button>
 
                         <div className="p-4 pt-10 relative z-10">
                           {/* Time + League */}
@@ -472,29 +347,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                             </div>
                           </div>
 
-                          {/* Prediction Footer */}
-                          <div className="mt-3 bg-black/5 dark:bg-black/30 rounded-xl p-3 flex justify-between items-center border border-black/5 dark:border-white/5">
-                            <div>
-                              <div className="text-[10px] text-gray-500 uppercase">{t('home.ai_pred')}</div>
-                              <div className="text-xs font-bold text-vantage-cyan">
-                                {isVip ? getPredictionText(match) : 'LOCKED / VIP'}
-                              </div>
-                            </div>
-                            <div className="flex gap-3">
-                              <div className="text-right">
-                                <div className="text-[10px] text-gray-500 uppercase">Conf.</div>
-                                <div className="text-xs font-bold text-green-500">
-                                  {isVip ? `${match.confidence}%` : '??%'}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-[10px] text-gray-500 uppercase">{language === 'fr' ? 'Cote' : 'Odds'}</div>
-                                <div className="text-xs font-bold text-yellow-500">
-                                  {isVip ? `@${match.odds}` : '@?.??'}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+
                         </div>
                       </GlassCard>
                     </motion.div>

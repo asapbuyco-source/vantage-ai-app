@@ -92,6 +92,20 @@ export const saveTodaysPredictions = async (matches: Match[]): Promise<void> => 
     return savePredictionsForDate(getGlobalTodayKey(), matches);
 };
 
+export const saveDailyFixtures = async (dateStr: string, fixtures: Match[]): Promise<void> => {
+    try {
+        if (!auth.currentUser) return;
+        const docRef = doc(db, "daily_predictions", dateStr);
+        await setDoc(docRef, {
+            rawFixtures: fixtures,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log(`Raw fixtures successfully updated for ${dateStr}.`);
+    } catch (e) {
+        console.error("Firestore Save Fixtures Error:", e);
+    }
+};
+
 export const deleteTodaysPredictions = async (): Promise<void> => {
     const todayStr = getGlobalTodayKey();
     localStorage.removeItem(`vantage_cache_${todayStr}`);
