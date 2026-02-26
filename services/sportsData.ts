@@ -3,7 +3,12 @@
 // We now route all Sportmonks requests through our Express backend
 // This solves CORS and hides the API key from the frontend.
 // ══════════════════════════════════════════════════════════════════════
-const BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || "http://localhost:8080";
+let BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || "http://localhost:8080";
+if (BACKEND_URL && !BACKEND_URL.startsWith('http')) {
+    BACKEND_URL = `https://${BACKEND_URL}`;
+}
+// Remove trailing slash if present
+BACKEND_URL = BACKEND_URL.replace(/\/$/, "");
 const API_BASE = `${BACKEND_URL}/api/sportmonks`;
 
 // The API token is securely appended by the backend proxy.
