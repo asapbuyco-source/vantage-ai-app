@@ -183,20 +183,73 @@ ${JSON.stringify(matchesToGrade.map(m => ({ id: m.id, home: m.homeTeam, away: m.
 SCORES RETRIEVED:
 ${rawScores}
 
-GRADING RULES (apply strictly):
-- Use FULL-TIME scores only. Ignore half-time, live, or pre-match data.
+GRADING RULES (apply strictly — COMPREHENSIVE):
+
+═══ GENERAL ═══
+- Use FULL-TIME (90 min + injury time) scores only unless specified otherwise.
+- Ignore half-time, live, or pre-match data for FT markets.
+- If a match was postponed, abandoned before 90 min, or no result found → status: "void".
+
+═══ MATCH RESULT (1X2) ═══
 - "Home Win" → won if home goals > away goals at FT.
 - "Away Win" → won if away goals > home goals at FT.
 - "Draw" → won if goals are equal at FT.
+
+═══ DOUBLE CHANCE ═══
 - "Double Chance (1X)" → won if home wins OR draw.
-- "Double Chance (2X)" → won if away wins OR draw.
-- "Double Chance (12)" → won if home wins OR away wins (i.e. not a draw).
+- "Double Chance (X2)" → won if away wins OR draw.
+- "Double Chance (12)" → won if home wins OR away wins (not a draw).
+
+═══ DRAW NO BET ═══
 - "Draw No Bet (Home)" → won if home wins; void if draw; lost if away wins.
 - "Draw No Bet (Away)" → won if away wins; void if draw; lost if home wins.
+
+═══ OVER/UNDER GOALS ═══
+- "Over 0.5 Goals" → won if total goals >= 1.
 - "Over 1.5 Goals" → won if total goals >= 2.
 - "Over 2.5 Goals" → won if total goals >= 3.
-- "Both Teams Score" → won if both teams scored at least 1 goal.
-- If a match was postponed, abandoned, or no result found → status: "void".
+- "Over 3.5 Goals" → won if total goals >= 4.
+- "Under 1.5 Goals" → won if total goals <= 1.
+- "Under 2.5 Goals" → won if total goals <= 2.
+- "Under 3.5 Goals" → won if total goals <= 3.
+
+═══ BOTH TEAMS TO SCORE (BTTS) ═══
+- "Both Teams Score" → won if both teams scored at least 1 goal each.
+- "Both Teams Score - No" → won if at least one team scored 0 goals.
+- "BTTS & Over 2.5" → won if both teams scored AND total goals >= 3.
+- "BTTS & Under 3.5" → won if both teams scored AND total goals <= 3.
+
+═══ HANDICAP ═══
+- "Home -1" → apply -1 to home score, then grade as Home Win. Example: 2-1 → 1-1 → lost.
+- "Home -1.5" → apply -1.5 to home score, then grade as Home Win. Example: 2-0 → 0.5-0 → won.
+- "Away +1.5" → apply +1.5 to away score, then grade as Away Win or Draw. Example: 1-0 → 1-1.5 → won.
+- General pattern: "Team ±N" → apply handicap, then evaluate.
+
+═══ WIN TO NIL ═══
+- "Home Win to Nil" → won if home wins AND away scored 0 goals.
+- "Away Win to Nil" → won if away wins AND home scored 0 goals.
+
+═══ CLEAN SHEET ═══
+- "Home Clean Sheet" → won if away scored 0 goals (regardless of match result).
+- "Away Clean Sheet" → won if home scored 0 goals (regardless of match result).
+
+═══ HALF-TIME / FULL-TIME ═══
+- "HT/FT: X/Y" → X is HT result, Y is FT result. Example: "HT/FT: Home/Home" → home leading at HT AND home winning at FT.
+- Results: "Home", "Draw", "Away". All 9 combinations valid.
+- "HT: Home" / "HT: Draw" / "HT: Away" → based on half-time score only.
+
+═══ CORRECT SCORE ═══
+- "Correct Score: X-Y" → won ONLY if the exact FT score matches (e.g., "Correct Score: 2-1" → FT must be 2-1).
+
+═══ ODD / EVEN ═══
+- "Total Goals Odd" → won if total goals is an odd number (1, 3, 5...).
+- "Total Goals Even" → won if total goals is even (0, 2, 4...). 0-0 counts as even.
+
+═══ SPECIAL CASES ═══
+- Cup matches with Extra Time: grade on 90-minute (FT) score for goal-based markets. For match result markets, grade on the final result (including ET/penalties if applicable).
+- Penalty Shootout: does NOT affect goal-based markets (Over/Under, BTTS, etc.). Only affects match winner markets.
+- Walkover / Technical result → status: "void".
+- If prediction text doesn't match any known market above, attempt best-effort interpretation; if ambiguous → status: "void".
 
 Return a JSON array with id, score ("2-1" format), and status ("won"|"lost"|"void") for each match.
     `;
@@ -313,7 +366,7 @@ export const generateDailyPredictions = async (signal?: AbortSignal): Promise<Ma
             }
 
             const searchPrompt = `
-You are the "Quant-Desk Decision Engine v5.0", an elite global sports betting model with access to real statistical data.
+You are the "Quant-Desk Decision Engine v6.0", an elite global sports betting model with access to real statistical data.
 
 DATE: ${todayStr}
 
@@ -324,18 +377,44 @@ YOUR OBJECTIVE
 ═══════════════════════════════════════════════
 Using the enriched fixture data above AND Google Search for additional matches today:
 - Identify and analyze at least 15 to 20 high-quality betting opportunities.
-- Goal: Ensure the app is content-rich. If major leagues are scanty, look for high-confidence picks in secondary leagues (Championship, Eredivisie, MLS, etc.).
-- African leagues (Nigeria, Ghana, Kenya, South Africa, Cameroon) remain TOP PRIORITY — analyse them first.
+- Goal: Ensure the app is content-rich. If marquee leagues are light, look for high-confidence picks in secondary leagues.
+
+LEAGUE PRIORITY (scan in this order — this reflects actual African betting volume):
+1. 🏆 English Premier League + UEFA Champions League (HIGHEST — ~50% of bets)
+2. ⭐ La Liga, Serie A, Bundesliga, UEFA Europa League (~25%)
+3. 🇫🇷 Ligue 1, Primeira Liga, Conference League (~10%) — Ligue 1 is key for Francophone Africa
+4. 🌍 Eredivisie, Championship, Turkish Süper Lig, MLS, Brazilian Série A (~8%)
+5. 🌍 AFCON, CAF Champions League, NPFL (big derbies only), Ghana Premier League (~5%)
+6. 🌍 Other African domestic leagues — only if there are high-confidence picks (~2%)
+
 - Only include matches where you have a "Model Edge" (your probability > bookmaker implied probability).
-- Predictions must be professional (e.g., "Home Win", "Over 2.5", "BTTS", "DC 1X").
+- Predictions must be professional and use standard market labels.
 
 ═══════════════════════════════════════════════
 🧮 QUANTITATIVE RULES (NON-NEGOTIABLE)
 ═══════════════════════════════════════════════
 1. EV CALCULATION: EV = (Your model probability × Decimal odds) − 1. Only pick if EV ≥ +0.06 (6% edge).
 2. CONFIDENCE FLOOR: ≥ 72%. Use team form, H2H record, injury absences, and market implied probability.
-3. ONE Market Per Match (safest one). Market hierarchy:
-   Double Chance > Draw No Bet > Over 1.5 Goals > Home/Away Win > Over 2.5 Goals
+3. ONE Market Per Match (safest one). Choose from:
+
+   AVAILABLE MARKETS (pick the safest qualifying one):
+   • Match Result: "Home Win", "Away Win", "Draw"
+   • Double Chance: "Double Chance (1X)", "Double Chance (X2)", "Double Chance (12)"
+   • Draw No Bet: "Draw No Bet (Home)", "Draw No Bet (Away)"
+   • Goals Over/Under: "Over 0.5 Goals", "Over 1.5 Goals", "Over 2.5 Goals", "Over 3.5 Goals",
+     "Under 1.5 Goals", "Under 2.5 Goals", "Under 3.5 Goals"
+   • BTTS: "Both Teams Score", "Both Teams Score - No"
+   • Combo: "BTTS & Over 2.5", "BTTS & Under 3.5"
+   • Win to Nil: "Home Win to Nil", "Away Win to Nil"
+   • Clean Sheet: "Home Clean Sheet", "Away Clean Sheet"
+   • Handicap: "Home -1", "Home -1.5", "Away +1.5", etc.
+   • HT/FT: "HT/FT: Home/Home", "HT/FT: Draw/Home", etc.
+   • Correct Score: "Correct Score: 2-1", etc. (use sparingly, high risk)
+   • Odd/Even: "Total Goals Odd", "Total Goals Even"
+
+   SAFETY HIERARCHY (prefer safer markets):
+   Double Chance > Draw No Bet > Over 1.5 Goals > BTTS > Home/Away Win > Over 2.5 > Handicap > HT/FT > Correct Score
+
 4. INJURY IMPACT: If a key player is listed as injured in the data above, lower confidence accordingly.
 5. H2H WEIGHT: If H2H strongly contradicts form, de-risk to Double Chance or DNB.
 6. FORM MOMENTUM: Teams on W W W W W form get +5% confidence boost; L L L L L get −10%.
@@ -343,7 +422,7 @@ Using the enriched fixture data above AND Google Search for additional matches t
 ═══════════════════════════════════════════════
 🚨 OUTPUT FORMAT
 ═══════════════════════════════════════════════
-- 'prediction_en' / 'prediction_fr': Localized prediction label.
+- 'prediction_en' / 'prediction_fr': Localized prediction label (must exactly match one of the market names above).
 - 'analysis_en' format: "EV: +X.X% | Edge: Y% | [max 20 words of reasoning including key stat used]"
 - 'analysis_fr': French translation of analysis.
 - 'confidence': 0–100 integer. Be honest — do NOT inflate.
@@ -688,63 +767,54 @@ async function parseAndEnhanceMatches(jsonText: string): Promise<Match[]> {
 async function generateLocalFallbackMatches(): Promise<Match[]> {
     console.log("[Gemini] Generating Local Fallback Data (Rotating Pool, Offline Mode)");
 
-    // 50-match pool — African leagues prominently featured
+    // 50-match pool — Ordered by actual African betting volume (EPL first)
     const FALLBACK_POOL = [
-        // ── African Leagues (HIGH PRIORITY in prompt) ───────────────────────
-        { league: "NPFL", homeTeam: "Enyimba", awayTeam: "Remo Stars", time: "16:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 76, odds: 1.85, category: "safe", analysis_en: "EV: +7.5% | Edge: 9% | Enyimba unbeaten in last 6 home games.", analysis_fr: "EV: +7.5% | Edge: 9% | Enyimba invaincu à domicile sur 6 matchs." },
-        { league: "NPFL", homeTeam: "Rivers United", awayTeam: "Kano Pillars", time: "16:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 74, odds: 1.55, category: "safe", analysis_en: "EV: +5.8% | Edge: 8% | Rivers strong at home, Kano poor away form.", analysis_fr: "EV: +5.8% | Edge: 8% | Rivers solide à domicile." },
-        { league: "Ghana Premier League", homeTeam: "Hearts of Oak", awayTeam: "Asante Kotoko", time: "15:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 73, odds: 1.60, category: "safe", analysis_en: "EV: +6.1% | Edge: 8% | Derby — home advantage decisive in last 4 meetings.", analysis_fr: "EV: +6.1% | Edge: 8% | Derby — avantage domicile." },
-        { league: "Kenya Premier League", homeTeam: "Gor Mahia", awayTeam: "AFC Leopards", time: "13:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 78, odds: 1.75, category: "safe", analysis_en: "EV: +7.2% | Edge: 10% | Gor Mahia dominant at home in 2024 season.", analysis_fr: "EV: +7.2% | Edge: 10% | Gor Mahia dominant à domicile." },
-        { league: "South Africa PSL", homeTeam: "Mamelodi Sundowns", awayTeam: "Orlando Pirates", time: "17:30", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 80, odds: 1.45, category: "safe", analysis_en: "EV: +6.8% | Edge: 9% | Sundowns league leaders, home fortress record.", analysis_fr: "EV: +6.8% | Edge: 9% | Sundowns leaders, forteresse à domicile." },
-        { league: "CAF Champions League", homeTeam: "Al Ahly", awayTeam: "Wydad", time: "20:00", prediction_en: "Draw No Bet (Home)", prediction_fr: "Remboursé si Nul (Domicile)", confidence: 75, odds: 1.70, category: "safe", analysis_en: "EV: +7.0% | Edge: 9% | Al Ahly 8-time CL champions, strong home record.", analysis_fr: "EV: +7.0% | Edge: 9% | Al Ahly 8x champion, record domicile fort." },
-        { league: "CAF Champions League", homeTeam: "Esperance", awayTeam: "Simba SC", time: "21:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 77, odds: 1.80, category: "safe", analysis_en: "EV: +7.8% | Edge: 10% | Esperance dominant in group stage, Simba poor away.", analysis_fr: "EV: +7.8% | Edge: 10% | Esperance dominant en phase de groupes." },
-        { league: "Cameroon Elite One", homeTeam: "Coton Sport", awayTeam: "Canon Yaounde", time: "16:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 72, odds: 1.50, category: "value", analysis_en: "EV: +5.4% | Edge: 7% | Home advantage decisive in Cameroon top flight.", analysis_fr: "EV: +5.4% | Edge: 7% | Avantage domicile décisif en Elite One." },
-        // ── Premier League ────────────────────────────────────────────────────
-        { league: "Premier League", homeTeam: "Manchester City", awayTeam: "Arsenal", time: "20:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 72, odds: 1.45, category: "value", analysis_en: "EV: +4.4% | Edge: 5% | Public heavy on City, line moving to Arsenal.", analysis_fr: "EV: +4.4% | Edge: 5% | Attention piège: public sur City." },
-        { league: "Premier League", homeTeam: "Liverpool", awayTeam: "Chelsea", time: "17:30", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 75, odds: 1.33, category: "safe", analysis_en: "EV: +5.8% | Edge: 7% | Anfield fortress holds strong.", analysis_fr: "EV: +5.8% | Edge: 7% | La forteresse d'Anfield tient bon." },
-        { league: "Premier League", homeTeam: "Tottenham", awayTeam: "Newcastle", time: "15:00", prediction_en: "Over 1.5 Goals", prediction_fr: "Plus de 1.5 Buts", confidence: 85, odds: 1.22, category: "safe", analysis_en: "EV: +5.9% | Edge: 8% | Both teams average 2.3 goals per game.", analysis_fr: "EV: +5.9% | Edge: 8% | Les deux équipes marquent en moyenne 2.3 buts." },
+        // ── TIER 1: Premier League + Champions League (~40% of pool = 20 matches) ──
+        { league: "Premier League", homeTeam: "Manchester City", awayTeam: "Arsenal", time: "17:30", prediction_en: "Both Teams Score", prediction_fr: "Les deux équipes marquent", confidence: 82, odds: 1.65, category: "safe", analysis_en: "EV: +7.2% | Edge: 9% | Both sides average 1.8+ goals scored per game.", analysis_fr: "EV: +7.2% | Edge: 9% | Les deux équipes marquent en moyenne 1.8+ buts." },
+        { league: "Premier League", homeTeam: "Liverpool", awayTeam: "Chelsea", time: "17:30", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 78, odds: 1.33, category: "safe", analysis_en: "EV: +5.8% | Edge: 7% | Anfield fortress holds strong.", analysis_fr: "EV: +5.8% | Edge: 7% | La forteresse d'Anfield tient bon." },
+        { league: "Premier League", homeTeam: "Tottenham", awayTeam: "Newcastle", time: "15:00", prediction_en: "Over 2.5 Goals", prediction_fr: "Plus de 2.5 Buts", confidence: 80, odds: 1.70, category: "safe", analysis_en: "EV: +6.8% | Edge: 9% | Both teams average 2.8 combined goals.", analysis_fr: "EV: +6.8% | Edge: 9% | Les deux équipes marquent 2.8 buts ensemble." },
         { league: "Premier League", homeTeam: "Aston Villa", awayTeam: "West Ham", time: "14:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 78, odds: 1.75, category: "safe", analysis_en: "EV: +7.3% | Edge: 9% | Villa strong at home, West Ham struggling away.", analysis_fr: "EV: +7.3% | Edge: 9% | Villa solide à domicile." },
-        // ── La Liga ───────────────────────────────────────────────────────────
-        { league: "La Liga", homeTeam: "Real Madrid", awayTeam: "Sevilla", time: "21:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 86, odds: 1.55, category: "safe", analysis_en: "EV: +8.2% | Edge: 11% | Market volume aligns with historical win probability.", analysis_fr: "EV: +8.2% | Edge: 11% | Volume de marché aligné sur probabilité historique." },
-        { league: "La Liga", homeTeam: "Barcelona", awayTeam: "Atl. Madrid", time: "21:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 76, odds: 1.30, category: "safe", analysis_en: "EV: +5.1% | Edge: 6% | Safer than goal line against Simeone's defense.", analysis_fr: "EV: +5.1% | Edge: 6% | Plus sûr que les buts contre Simeone." },
-        { league: "La Liga", homeTeam: "Valencia", awayTeam: "Athletic Bilbao", time: "18:30", prediction_en: "Over 1.5 Goals", prediction_fr: "Plus de 1.5 Buts", confidence: 82, odds: 1.25, category: "safe", analysis_en: "EV: +5.8% | Edge: 7% | Open game expected, both teams attack-minded.", analysis_fr: "EV: +5.8% | Edge: 7% | Match ouvert attendu." },
-        // ── Bundesliga ────────────────────────────────────────────────────────
-        { league: "Bundesliga", homeTeam: "Bayern Munich", awayTeam: "RB Leipzig", time: "18:30", prediction_en: "Over 1.5 Goals", prediction_fr: "Plus de 1.5 Buts", confidence: 88, odds: 1.18, category: "safe", analysis_en: "EV: +5.5% | Edge: 8% | Goals guaranteed in this high-tempo matchup.", analysis_fr: "EV: +5.5% | Edge: 8% | Buts garantis dans ce choc." },
-        { league: "Bundesliga", homeTeam: "Dortmund", awayTeam: "Leverkusen", time: "15:30", prediction_en: "Double Chance (12)", prediction_fr: "Double Chance (12)", confidence: 83, odds: 1.25, category: "safe", analysis_en: "EV: +5.3% | Edge: 7% | Open game, unlikely to end in a draw.", analysis_fr: "EV: +5.3% | Edge: 7% | Match ouvert, nul improbable." },
-        { league: "Bundesliga", homeTeam: "Eintracht Frankfurt", awayTeam: "Wolfsburg", time: "15:30", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 76, odds: 1.80, category: "safe", analysis_en: "EV: +7.2% | Edge: 9% | Frankfurt strong home form, Wolfsburg poor away.", analysis_fr: "EV: +7.2% | Edge: 9% | Frankfurt fort à domicile." },
-        // ── Serie A ───────────────────────────────────────────────────────────
-        { league: "Serie A", homeTeam: "Juventus", awayTeam: "AC Milan", time: "19:45", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 78, odds: 1.35, category: "safe", analysis_en: "EV: +6.1% | Edge: 9% | Defensive metrics strong for both, playing safe.", analysis_fr: "EV: +6.1% | Edge: 9% | Métriques défensives fortes." },
-        { league: "Serie A", homeTeam: "Napoli", awayTeam: "Lazio", time: "20:45", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 78, odds: 1.35, category: "safe", analysis_en: "EV: +5.0% | Edge: 7% | Napoli unbeaten at home vs Lazio in last 5.", analysis_fr: "EV: +5.0% | Edge: 7% | Napoli invaincu à domicile vs Lazio." },
+        { league: "Premier League", homeTeam: "Brighton", awayTeam: "Brentford", time: "15:00", prediction_en: "Over 1.5 Goals", prediction_fr: "Plus de 1.5 Buts", confidence: 87, odds: 1.22, category: "safe", analysis_en: "EV: +5.3% | Edge: 7% | Both teams high xG per 90 this season.", analysis_fr: "EV: +5.3% | Edge: 7% | Les deux équipes à haut xG cette saison." },
+        { league: "Premier League", homeTeam: "Manchester United", awayTeam: "Everton", time: "20:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 76, odds: 1.80, category: "safe", analysis_en: "EV: +7.0% | Edge: 9% | United strong home form, Everton winless in 5 away.", analysis_fr: "EV: +7.0% | Edge: 9% | United fort à domicile, Everton sans victoire." },
+        { league: "Premier League", homeTeam: "Crystal Palace", awayTeam: "Wolves", time: "15:00", prediction_en: "Under 2.5 Goals", prediction_fr: "Moins de 2.5 Buts", confidence: 75, odds: 1.70, category: "safe", analysis_en: "EV: +6.5% | Edge: 8% | Both teams low-scoring, avg 1.8 combined.", analysis_fr: "EV: +6.5% | Edge: 8% | Les deux équipes peu offensives." },
+        { league: "Premier League", homeTeam: "Fulham", awayTeam: "Bournemouth", time: "15:00", prediction_en: "Both Teams Score", prediction_fr: "Les deux équipes marquent", confidence: 80, odds: 1.55, category: "safe", analysis_en: "EV: +6.2% | Edge: 8% | Open attacking game, BTTS landed in 7/10 H2H.", analysis_fr: "EV: +6.2% | Edge: 8% | Match ouvert, BTTS dans 7/10 H2H." },
+        { league: "Champions League", homeTeam: "Real Madrid", awayTeam: "Man City", time: "21:00", prediction_en: "Both Teams Score", prediction_fr: "Les deux équipes marquent", confidence: 84, odds: 1.50, category: "safe", analysis_en: "EV: +7.1% | Edge: 9% | BTTS in last 6 meetings between these sides.", analysis_fr: "EV: +7.1% | Edge: 9% | BTTS dans 6 dernières confrontations." },
+        { league: "Champions League", homeTeam: "Bayern Munich", awayTeam: "Arsenal", time: "21:00", prediction_en: "Over 2.5 Goals", prediction_fr: "Plus de 2.5 Buts", confidence: 79, odds: 1.65, category: "safe", analysis_en: "EV: +6.8% | Edge: 9% | High-scoring UCL ties, both attack-minded.", analysis_fr: "EV: +6.8% | Edge: 9% | Matchs à buts en LDC, styles offensifs." },
+        { league: "Champions League", homeTeam: "Inter Milan", awayTeam: "Benfica", time: "20:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 76, odds: 1.35, category: "safe", analysis_en: "EV: +5.5% | Edge: 7% | Inter strong at home in UCL.", analysis_fr: "EV: +5.5% | Edge: 7% | Inter fort à domicile en LDC." },
+        { league: "Champions League", homeTeam: "PSG", awayTeam: "Dortmund", time: "21:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 77, odds: 1.30, category: "safe", analysis_en: "EV: +5.2% | Edge: 7% | Parc des Princes historically difficult for German visitors.", analysis_fr: "EV: +5.2% | Edge: 7% | Le Parc est historiquement difficile pour les visiteurs allemands." },
+        // ── TIER 2: La Liga, Serie A, Bundesliga, Europa League (~25% = 12 matches) ──
+        { league: "La Liga", homeTeam: "Real Madrid", awayTeam: "Sevilla", time: "21:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 86, odds: 1.55, category: "safe", analysis_en: "EV: +8.2% | Edge: 11% | Market volume aligns with historical win prob.", analysis_fr: "EV: +8.2% | Edge: 11% | Volume de marché aligné sur probabilité historique." },
+        { league: "La Liga", homeTeam: "Barcelona", awayTeam: "Atl. Madrid", time: "21:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 76, odds: 1.30, category: "safe", analysis_en: "EV: +5.1% | Edge: 6% | Safer vs Simeone's low-block defense.", analysis_fr: "EV: +5.1% | Edge: 6% | Plus sûr contre la défense de Simeone." },
+        { league: "La Liga", homeTeam: "Villarreal", awayTeam: "Getafe", time: "14:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 78, odds: 1.75, category: "safe", analysis_en: "EV: +7.2% | Edge: 9% | Villarreal dominant vs bottom-half opponents.", analysis_fr: "EV: +7.2% | Edge: 9% | Villarreal dominant vs bas de tableau." },
         { league: "Serie A", homeTeam: "Inter Milan", awayTeam: "Roma", time: "20:45", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 81, odds: 1.65, category: "safe", analysis_en: "EV: +7.8% | Edge: 10% | Inter dominant at San Siro, Roma poor away xGA.", analysis_fr: "EV: +7.8% | Edge: 10% | Inter dominant à San Siro." },
-        // ── Ligue 1 ───────────────────────────────────────────────────────────
-        { league: "Ligue 1", homeTeam: "PSG", awayTeam: "Monaco", time: "21:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 79, odds: 1.60, category: "safe", analysis_en: "EV: +7.0% | Edge: 10% | PSG squad depth superior at Parc des Princes.", analysis_fr: "EV: +7.0% | Edge: 10% | Profondeur du PSG supérieure." },
-        { league: "Ligue 1", homeTeam: "Marseille", awayTeam: "Nice", time: "21:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 74, odds: 1.30, category: "value", analysis_en: "EV: +4.2% | Edge: 5% | Tactical derby, avoiding goal lines.", analysis_fr: "EV: +4.2% | Edge: 5% | Derby tactique." },
-        { league: "Ligue 1", homeTeam: "Lyon", awayTeam: "Lens", time: "20:00", prediction_en: "Double Chance (12)", prediction_fr: "Double Chance (12)", confidence: 77, odds: 1.28, category: "safe", analysis_en: "EV: +5.6% | Edge: 7% | Both offensive, draw unlikely.", analysis_fr: "EV: +5.6% | Edge: 7% | Les deux offensifs, nul improbable." },
-        // ── Champions League ──────────────────────────────────────────────────
-        { league: "Champions League", homeTeam: "Real Madrid", awayTeam: "Man City", time: "21:00", prediction_en: "Double Chance (12)", prediction_fr: "Double Chance (12)", confidence: 84, odds: 1.20, category: "safe", analysis_en: "EV: +5.2% | Edge: 7% | Superclash — decisive game expected, fading the draw.", analysis_fr: "EV: +5.2% | Edge: 7% | Superchoc — nul improbable." },
-        { league: "Champions League", homeTeam: "Inter Milan", awayTeam: "Benfica", time: "20:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 74, odds: 1.30, category: "value", analysis_en: "EV: +4.1% | Edge: 5% | Mixed signals on home advantage, taking 1X.", analysis_fr: "EV: +4.1% | Edge: 5% | Signaux mixtes sur l'avantage domicile." },
+        { league: "Serie A", homeTeam: "Napoli", awayTeam: "Lazio", time: "20:45", prediction_en: "Both Teams Score", prediction_fr: "Les deux équipes marquent", confidence: 78, odds: 1.60, category: "safe", analysis_en: "EV: +6.5% | Edge: 8% | BTTS in 4 of last 5 H2H meetings.", analysis_fr: "EV: +6.5% | Edge: 8% | BTTS dans 4 des 5 derniers H2H." },
+        { league: "Serie A", homeTeam: "Juventus", awayTeam: "AC Milan", time: "19:45", prediction_en: "Under 2.5 Goals", prediction_fr: "Moins de 2.5 Buts", confidence: 76, odds: 1.75, category: "safe", analysis_en: "EV: +6.8% | Edge: 9% | Defensive matchup, avg 1.6 goals in last 6 H2H.", analysis_fr: "EV: +6.8% | Edge: 9% | Match défensif, 1.6 buts en moyenne." },
+        { league: "Serie A", homeTeam: "Milan", awayTeam: "Empoli", time: "20:45", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 82, odds: 1.50, category: "safe", analysis_en: "EV: +7.8% | Edge: 10% | Milan dominant, Empoli winless away.", analysis_fr: "EV: +7.8% | Edge: 10% | Milan dominant vs bas de tableau." },
+        { league: "Bundesliga", homeTeam: "Bayern Munich", awayTeam: "RB Leipzig", time: "18:30", prediction_en: "Over 2.5 Goals", prediction_fr: "Plus de 2.5 Buts", confidence: 85, odds: 1.55, category: "safe", analysis_en: "EV: +7.5% | Edge: 10% | 3+ goals in 8 of last 10 meetings.", analysis_fr: "EV: +7.5% | Edge: 10% | 3+ buts dans 8 des 10 derniers matchs." },
+        { league: "Bundesliga", homeTeam: "Dortmund", awayTeam: "Leverkusen", time: "15:30", prediction_en: "Both Teams Score", prediction_fr: "Les deux équipes marquent", confidence: 83, odds: 1.55, category: "safe", analysis_en: "EV: +6.8% | Edge: 8% | BTTS landed in 9 of last 10 H2H.", analysis_fr: "EV: +6.8% | Edge: 8% | BTTS dans 9 des 10 derniers H2H." },
+        { league: "Bundesliga", homeTeam: "Bayer Leverkusen", awayTeam: "Mainz", time: "18:30", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 84, odds: 1.38, category: "safe", analysis_en: "EV: +7.2% | Edge: 9% | Leverkusen unbeaten, Mainz poor away record.", analysis_fr: "EV: +7.2% | Edge: 9% | Leverkusen invaincu." },
+        { league: "Europa League", homeTeam: "Atalanta", awayTeam: "Apollon", time: "18:45", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 86, odds: 1.40, category: "safe", analysis_en: "EV: +8.5% | Edge: 11% | Heavy European home advantage.", analysis_fr: "EV: +8.5% | Edge: 11% | Fort avantage à domicile pour Atalanta." },
         { league: "Europa League", homeTeam: "AS Roma", awayTeam: "Brighton", time: "18:45", prediction_en: "Over 1.5 Goals", prediction_fr: "Plus de 1.5 Buts", confidence: 80, odds: 1.28, category: "safe", analysis_en: "EV: +6.5% | Edge: 8% | Attacking styles guarantee chances.", analysis_fr: "EV: +6.5% | Edge: 8% | Styles offensifs garantissent des occasions." },
-        // ── Other Leagues ─────────────────────────────────────────────────────
-        { league: "Eredivisie", homeTeam: "Ajax", awayTeam: "Feyenoord", time: "14:30", prediction_en: "Double Chance (12)", prediction_fr: "Double Chance (12)", confidence: 70, odds: 1.30, category: "risky", analysis_en: "EV: +4.5% | Edge: 6% | High volatility derby, fading the draw.", analysis_fr: "EV: +4.5% | Edge: 6% | Derby volatil, on évite le nul." },
-        { league: "Primeira Liga", homeTeam: "Porto", awayTeam: "Sporting CP", time: "21:15", prediction_en: "Over 1.5 Goals", prediction_fr: "Plus de 1.5 Buts", confidence: 85, odds: 1.35, category: "safe", analysis_en: "EV: +6.9% | Edge: 9% | Both teams scoring, but O2.5 is risky.", analysis_fr: "EV: +6.9% | Edge: 9% | Les deux équipes marquent." },
-        { league: "Championship", homeTeam: "Leeds United", awayTeam: "Leicester", time: "20:45", prediction_en: "Draw No Bet (Leeds)", prediction_fr: "Remboursé si Nul (Leeds)", confidence: 72, odds: 1.70, category: "value", analysis_en: "EV: +4.8% | Edge: 6% | Home advantage crucial in top-table clash.", analysis_fr: "EV: +4.8% | Edge: 6% | Avantage domicile crucial." },
-        { league: "Scottish Premiership", homeTeam: "Celtic", awayTeam: "Rangers", time: "12:30", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 74, odds: 1.55, category: "safe", analysis_en: "EV: +5.7% | Edge: 7% | Celtic dominant at home in Old Firm derbies.", analysis_fr: "EV: +5.7% | Edge: 7% | Celtic dominant à domicile." },
-        { league: "MLS", homeTeam: "Inter Miami", awayTeam: "LA Galaxy", time: "01:30", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 73, odds: 1.85, category: "value", analysis_en: "EV: +6.5% | Edge: 8% | Messi factor + home support decisive.", analysis_fr: "EV: +6.5% | Edge: 8% | Facteur Messi + soutien domicile." },
-        // ── Extra African Fixtures ─────────────────────────────────────────────
-        { league: "Uganda Premier League", homeTeam: "KCCA FC", awayTeam: "Vipers SC", time: "14:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 74, odds: 1.55, category: "safe", analysis_en: "EV: +5.5% | Edge: 7% | KCCA strong home advantage in Ugandan capital.", analysis_fr: "EV: +5.5% | Edge: 7% | KCCA fort avantage à domicile." },
-        { league: "Tanzania Premier League", homeTeam: "Young Africans", awayTeam: "Simba SC", time: "15:00", prediction_en: "Double Chance (12)", prediction_fr: "Double Chance (12)", confidence: 76, odds: 1.35, category: "safe", analysis_en: "EV: +5.8% | Edge: 8% | Volatile derby, high goals expected.", analysis_fr: "EV: +5.8% | Edge: 8% | Derby volatile, buts attendus." },
-        { league: "NPFL", homeTeam: "Rangers Int.", awayTeam: "Plateau United", time: "16:00", prediction_en: "Over 1.5 Goals", prediction_fr: "Plus de 1.5 Buts", confidence: 78, odds: 1.40, category: "safe", analysis_en: "EV: +5.2% | Edge: 7% | Both teams high-scoring in 2024 season.", analysis_fr: "EV: +5.2% | Edge: 7% | Les deux équipes ont marqué beaucoup en 2024." },
-        { league: "Ghana Premier League", homeTeam: "Accra Lions", awayTeam: "Dreams FC", time: "15:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 74, odds: 1.90, category: "value", analysis_en: "EV: +6.5% | Edge: 8% | Accra Lions solid at home this term.", analysis_fr: "EV: +6.5% | Edge: 8% | Accra Lions solide à domicile." },
-        // ── Extra European Depth ──────────────────────────────────────────────
-        { league: "Serie A", homeTeam: "Fiorentina", awayTeam: "Torino", time: "15:00", prediction_en: "Over 1.5 Goals", prediction_fr: "Plus de 1.5 Buts", confidence: 82, odds: 1.30, category: "safe", analysis_en: "EV: +6.0% | Edge: 8% | Both teams averaged 2.1 goals recent form.", analysis_fr: "EV: +6.0% | Edge: 8% | Les deux équipes en forme offensive." },
-        { league: "Bundesliga", homeTeam: "Stuttgart", awayTeam: "Freiburg", time: "15:30", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 73, odds: 1.50, category: "safe", analysis_en: "EV: +5.4% | Edge: 7% | Stuttgart unbeaten at home vs bottom half.", analysis_fr: "EV: +5.4% | Edge: 7% | Stuttgart invaincu à domicile." },
-        { league: "La Liga", homeTeam: "Villarreal", awayTeam: "Getafe", time: "14:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 78, odds: 1.75, category: "safe", analysis_en: "EV: +7.2% | Edge: 9% | Villarreal dominant over bottom-half opponents.", analysis_fr: "EV: +7.2% | Edge: 9% | Villarreal dominant vs bas de tableau." },
-        { league: "Europa League", homeTeam: "Atalanta", awayTeam: "Apollon", time: "18:45", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 86, odds: 1.40, category: "safe", analysis_en: "EV: +8.5% | Edge: 11% | Heavy European home advantage for Atalanta.", analysis_fr: "EV: +8.5% | Edge: 11% | Fort avantage à domicile pour Atalanta." },
-        { league: "Ligue 1", homeTeam: "Brest", awayTeam: "Rennes", time: "17:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 72, odds: 1.50, category: "value", analysis_en: "EV: +4.7% | Edge: 6% | Brest strong at home, Rennes inconsistent away.", analysis_fr: "EV: +4.7% | Edge: 6% | Brest fort à domicile." },
-        { league: "Premier League", homeTeam: "Brighton", awayTeam: "Brentford", time: "15:00", prediction_en: "Over 1.5 Goals", prediction_fr: "Plus de 1.5 Buts", confidence: 87, odds: 1.18, category: "safe", analysis_en: "EV: +5.3% | Edge: 7% | Both teams high xG per 90 this season.", analysis_fr: "EV: +5.3% | Edge: 7% | Les deux équipes à haut xG cette saison." },
-        { league: "Champions League", homeTeam: "Bayern Munich", awayTeam: "Arsenal", time: "21:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 76, odds: 1.45, category: "safe", analysis_en: "EV: +5.9% | Edge: 8% | Bayern home advantage in UCL historically decisive.", analysis_fr: "EV: +5.9% | Edge: 8% | Avantage domicile domicile de Bayern en LDC." },
-        { league: "Bundesliga", homeTeam: "Bayer Leverkusen", awayTeam: "Mainz", time: "18:30", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 84, odds: 1.38, category: "safe", analysis_en: "EV: +7.2% | Edge: 9% | Leverkusen unbeaten run, Mainz poor away record.", analysis_fr: "EV: +7.2% | Edge: 9% | Leverkusen invaincu, Mainz mauvais hors de chez eux." },
-        { league: "Serie A", homeTeam: "Milan", awayTeam: "Empoli", time: "20:45", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 82, odds: 1.50, category: "safe", analysis_en: "EV: +7.8% | Edge: 10% | Milan dominant vs bottom-half, Empoli win-less away.", analysis_fr: "EV: +7.8% | Edge: 10% | Milan dominant vs bas de tableau." },
+        // ── TIER 3: Ligue 1, Primeira Liga (~15% = 7 matches) ──
+        { league: "Ligue 1", homeTeam: "PSG", awayTeam: "Monaco", time: "21:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 79, odds: 1.60, category: "safe", analysis_en: "EV: +7.0% | Edge: 10% | PSG squad depth superior.", analysis_fr: "EV: +7.0% | Edge: 10% | Profondeur du PSG supérieure." },
+        { league: "Ligue 1", homeTeam: "Marseille", awayTeam: "Nice", time: "21:00", prediction_en: "Under 2.5 Goals", prediction_fr: "Moins de 2.5 Buts", confidence: 74, odds: 1.70, category: "value", analysis_en: "EV: +5.8% | Edge: 7% | Tactical derby, both teams defensively sound.", analysis_fr: "EV: +5.8% | Edge: 7% | Derby tactique, défensif." },
+        { league: "Ligue 1", homeTeam: "Lyon", awayTeam: "Lens", time: "20:00", prediction_en: "Both Teams Score", prediction_fr: "Les deux équipes marquent", confidence: 77, odds: 1.60, category: "safe", analysis_en: "EV: +6.2% | Edge: 8% | Both teams offensive, BTTS in 4/5 recent.", analysis_fr: "EV: +6.2% | Edge: 8% | Les deux offensifs, BTTS dans 4/5 récents." },
+        { league: "Ligue 1", homeTeam: "Brest", awayTeam: "Rennes", time: "17:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 72, odds: 1.50, category: "value", analysis_en: "EV: +4.7% | Edge: 6% | Brest strong at home.", analysis_fr: "EV: +4.7% | Edge: 6% | Brest fort à domicile." },
+        { league: "Primeira Liga", homeTeam: "Porto", awayTeam: "Sporting CP", time: "21:15", prediction_en: "Both Teams Score", prediction_fr: "Les deux équipes marquent", confidence: 82, odds: 1.55, category: "safe", analysis_en: "EV: +6.9% | Edge: 9% | BTTS in 7 of last 10 H2H meetings.", analysis_fr: "EV: +6.9% | Edge: 9% | BTTS dans 7 des 10 derniers H2H." },
+        { league: "Primeira Liga", homeTeam: "Benfica", awayTeam: "Braga", time: "20:30", prediction_en: "Over 2.5 Goals", prediction_fr: "Plus de 2.5 Buts", confidence: 80, odds: 1.60, category: "safe", analysis_en: "EV: +6.8% | Edge: 9% | High-scoring fixture historically.", analysis_fr: "EV: +6.8% | Edge: 9% | Rencontre historiquement prolifique." },
+        { league: "Ligue 1", homeTeam: "Lille", awayTeam: "Strasbourg", time: "19:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 76, odds: 1.70, category: "safe", analysis_en: "EV: +6.5% | Edge: 8% | Lille dominant at home this season.", analysis_fr: "EV: +6.5% | Edge: 8% | Lille dominant à domicile." },
+        // ── TIER 4: Eredivisie, Championship, MLS (~10% = 5 matches) ──
+        { league: "Eredivisie", homeTeam: "Ajax", awayTeam: "Feyenoord", time: "14:30", prediction_en: "Over 2.5 Goals", prediction_fr: "Plus de 2.5 Buts", confidence: 78, odds: 1.65, category: "safe", analysis_en: "EV: +6.5% | Edge: 8% | De Klassieker always has goals.", analysis_fr: "EV: +6.5% | Edge: 8% | De Klassieker toujours prolifique." },
+        { league: "Championship", homeTeam: "Leeds United", awayTeam: "Leicester", time: "20:45", prediction_en: "Draw No Bet (Home)", prediction_fr: "Remboursé si Nul (Domicile)", confidence: 73, odds: 1.70, category: "value", analysis_en: "EV: +4.8% | Edge: 6% | Home advantage crucial.", analysis_fr: "EV: +4.8% | Edge: 6% | Avantage domicile crucial." },
+        { league: "Scottish Premiership", homeTeam: "Celtic", awayTeam: "Rangers", time: "12:30", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 76, odds: 1.55, category: "safe", analysis_en: "EV: +5.7% | Edge: 7% | Celtic dominant at home in Old Firm.", analysis_fr: "EV: +5.7% | Edge: 7% | Celtic dominant à domicile." },
+        { league: "MLS", homeTeam: "Inter Miami", awayTeam: "LA Galaxy", time: "01:30", prediction_en: "Both Teams Score", prediction_fr: "Les deux équipes marquent", confidence: 78, odds: 1.55, category: "safe", analysis_en: "EV: +6.0% | Edge: 8% | Attacking game guaranteed with Messi.", analysis_fr: "EV: +6.0% | Edge: 8% | Match offensif garanti avec Messi." },
+        { league: "Eredivisie", homeTeam: "PSV", awayTeam: "AZ Alkmaar", time: "16:45", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 80, odds: 1.55, category: "safe", analysis_en: "EV: +7.0% | Edge: 9% | PSV dominant at Philips Stadion.", analysis_fr: "EV: +7.0% | Edge: 9% | PSV dominant au Philips Stadion." },
+        // ── TIER 5-6: African leagues (~10% = 5 matches — only big derbies) ──
+        { league: "CAF Champions League", homeTeam: "Al Ahly", awayTeam: "Wydad", time: "20:00", prediction_en: "Draw No Bet (Home)", prediction_fr: "Remboursé si Nul (Domicile)", confidence: 75, odds: 1.70, category: "safe", analysis_en: "EV: +7.0% | Edge: 9% | Al Ahly 8-time CL champions.", analysis_fr: "EV: +7.0% | Edge: 9% | Al Ahly 8x champion." },
+        { league: "NPFL", homeTeam: "Enyimba", awayTeam: "Remo Stars", time: "16:00", prediction_en: "Home Win", prediction_fr: "Victoire Domicile", confidence: 76, odds: 1.85, category: "safe", analysis_en: "EV: +7.5% | Edge: 9% | Enyimba unbeaten in last 6 home games.", analysis_fr: "EV: +7.5% | Edge: 9% | Enyimba invaincu à domicile sur 6 matchs." },
+        { league: "South Africa PSL", homeTeam: "Mamelodi Sundowns", awayTeam: "Orlando Pirates", time: "17:30", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 80, odds: 1.45, category: "safe", analysis_en: "EV: +6.8% | Edge: 9% | Sundowns home fortress record.", analysis_fr: "EV: +6.8% | Edge: 9% | Sundowns forteresse à domicile." },
+        { league: "Ghana Premier League", homeTeam: "Hearts of Oak", awayTeam: "Asante Kotoko", time: "15:00", prediction_en: "Both Teams Score", prediction_fr: "Les deux équipes marquent", confidence: 74, odds: 1.70, category: "value", analysis_en: "EV: +5.8% | Edge: 7% | Derby — goals expected, form secondary.", analysis_fr: "EV: +5.8% | Edge: 7% | Derby — buts attendus." },
+        { league: "Cameroon Elite One", homeTeam: "Coton Sport", awayTeam: "Canon Yaounde", time: "16:00", prediction_en: "Double Chance (1X)", prediction_fr: "Double Chance (1X)", confidence: 72, odds: 1.50, category: "value", analysis_en: "EV: +5.4% | Edge: 7% | Home advantage decisive.", analysis_fr: "EV: +5.4% | Edge: 7% | Avantage domicile décisif." },
     ];
 
     // Use day-of-week to rotate the starting index (7 days × 8 matches = 56 slots, wraps around pool)
