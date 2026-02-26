@@ -1,7 +1,7 @@
 
 export type NavigationTab = 'home' | 'free' | 'vip' | 'guide' | 'profile' | 'admin' | 'kelly' | 'concierge' | 'stats' | 'results';
 
-export type Language = 'en' | 'fr' | 'sw' | 'ha' | 'yo' | 'ig' | 'zu' | 'xh' | 'pt';
+export type Language = 'en' | 'fr';
 
 export type Sport = 'football' | 'basketball';
 

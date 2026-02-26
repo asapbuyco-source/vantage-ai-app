@@ -4,7 +4,7 @@
 
 
 
-export type Language = 'en' | 'fr' | 'sw' | 'ha' | 'yo' | 'ig' | 'zu' | 'xh' | 'pt';
+export type Language = 'en' | 'fr';
 
 export const translations = {
   fr: {
@@ -14,7 +14,7 @@ export const translations = {
       vip: 'VIP',
       guide: 'Guide',
       kelly: 'Calculatrice',
-      concierge: 'Concierge',
+      concierge: 'Smart Ticket',
       profile: 'Profil'
     },
     home: {
@@ -147,8 +147,8 @@ export const translations = {
       reset_success: 'Email de réinitialisation envoyé !',
     },
     concierge: {
-      title: 'VANTAGE',
-      title_accent: 'CONCIERGE',
+      title: 'SMART',
+      title_accent: 'TICKET',
       subtitle: 'Laissez l\'IA composer votre ticket idéal.',
       step_1: 'Mise & Objectif',
       step_2: 'Niveau de Risque',
@@ -173,7 +173,7 @@ export const translations = {
       vip: 'VIP',
       guide: 'Guide',
       kelly: 'Calculator',
-      concierge: 'Concierge',
+      concierge: 'Smart Ticket',
       profile: 'Profile'
     },
     home: {
@@ -306,8 +306,8 @@ export const translations = {
       reset_success: 'Reset email sent!',
     },
     concierge: {
-      title: 'VANTAGE',
-      title_accent: 'CONCIERGE',
+      title: 'SMART',
+      title_accent: 'TICKET',
       subtitle: 'Let AI build your perfect betting slip.',
       step_1: 'Stake & Goal',
       step_2: 'Risk Level',
@@ -324,69 +324,5 @@ export const translations = {
       total_odds: 'Total Odds',
       potential_win: 'Potential Win'
     }
-  },
-  sw: {
-    nav: { home: 'Nyumbani', free: 'Za Bure', vip: 'VIP', guide: 'Mwongozo', kelly: 'Kikokotoo', concierge: 'Concierge', profile: 'Wasifu' },
-    home: { system: 'MFUMO WA UTABIRI V.4.0', online: 'Kwenye Mtandao', performance: 'Utendaji', success_rate: 'KIWANGO CHA MAFANIKIO', vs: 'DHIDI' },
-    free: { title: 'UTABIRI', title_accent: 'WA BURE', pred_label: 'Utabiri', prob_label: 'Uwezekano' },
-    vip: { title: 'ENEO LA', title_accent: 'VIP', active: 'Ufikiaji wa VIP Unaoendelea', select_plan: 'Chagua mpango wako', pay_btn: 'LIPIA KWA SIMU' },
-    profile: { title: 'WASIFU', title_accent: 'WANGU', earnings: 'Salio Linalopatikana', logout: 'Ondoka' },
-    auth: { login_btn: 'Ingia', signup_btn: 'Jisajili' },
-    guide: {
-      title: 'VANTAGE',
-      title_accent: 'ACADEMY',
-      subtitle: 'Jifunze sanaa ya kamari ya kitaalamu ya michezo.',
-    },
-    concierge: {
-      title: 'VANTAGE',
-      title_accent: 'CONCIERGE',
-      subtitle: 'Acha IA ijenge mkeka wako kamili.',
-      step_1: 'Dau na Lengo',
-      step_2: 'Kiwango cha Hatari',
-      step_3: 'Mkeka Wako',
-      stake_label: 'Dau Lako (FCFA)',
-      goal_label: 'Lengo la Ushindi (FCFA)',
-      risk_label: 'Wasifu wa Hatari',
-      risk_low: 'Mhafidhina (Salama)',
-      risk_med: 'Uwiano (Bora)',
-      risk_high: 'Mkakamavu (Cote Kubwa)',
-      generate_btn: 'TENGENEZA MKEKA WANGU',
-      regenerate_btn: 'JARIBU TENA',
-      no_matches: 'Hakuna mchanganyiko uliopatikana. Jaribu kupunguza lengo lako.',
-      total_odds: 'Cote Jumla',
-      potential_win: 'Ushindi Unaotarajiwa'
-    },
-  },
-  pt: {
-    nav: { home: 'Início', free: 'Grátis', vip: 'VIP', guide: 'Guia', kelly: 'Calculadora', concierge: 'Concierge', profile: 'Perfil' },
-    home: { system: 'SISTEMA PREDITIVO V.4.0', online: 'Online', performance: 'Desempenho', success_rate: 'TAXA DE SUCESSO', vs: 'VS' },
-    free: { title: 'PALPITES', title_accent: 'GRÁTIS', pred_label: 'Previsão', prob_label: 'Probabilidade' },
-    vip: { title: 'ÁREA', title_accent: 'VIP', active: 'Acesso VIP Ativo', select_plan: 'Escolha seu plano', pay_btn: 'PAGAR POR MOBILE' },
-    profile: { title: 'MEU', title_accent: 'PERFIL', earnings: 'Saldo Disponível', logout: 'Sair' },
-    auth: { login_btn: 'Entrar', signup_btn: 'Cadastrar-se' },
-    guide: {
-      title: 'VANTAGE',
-      title_accent: 'ACADEMIA',
-      subtitle: 'Domine a arte das apostas desportivas profissionais.',
-    },
-    concierge: {
-      title: 'VANTAGE',
-      title_accent: 'CONCIERGE',
-      subtitle: 'Deixe a IA construir o seu bilhete ideal.',
-      step_1: 'Aposta e Meta',
-      step_2: 'Nível de Risco',
-      step_3: 'O Seu Bilhete',
-      stake_label: 'Sua Aposta (FCFA)',
-      goal_label: 'Meta de Ganho (FCFA)',
-      risk_label: 'Perfil de Risco',
-      risk_low: 'Conservador (Seguro)',
-      risk_med: 'Equilibrado (Ideal)',
-      risk_high: 'Agressivo (Odds Altas)',
-      generate_btn: 'GERAR MEU BILHETE',
-      regenerate_btn: 'TENTAR NOVAMENTE',
-      no_matches: 'Nenhuma combinação encontrada. Tente baixar sua meta.',
-      total_odds: 'Odds Totais',
-      potential_win: 'Ganho Potencial'
-    },
   }
 };

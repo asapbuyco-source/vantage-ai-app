@@ -16,14 +16,7 @@ export const TicketWizard: React.FC = () => {
     const { predictions, basketballPredictions } = useData();
     const { toggleSavedPick, isPickSaved } = useAppContext();
 
-    // Safety check for missing translations
-    if (!t || !t.concierge) {
-        return (
-            <div className="pb-24 pt-12 px-4 text-center">
-                <p className="text-gray-500">Loading translations...</p>
-            </div>
-        );
-    }
+    // Safety check for missing translations - removed because t is always defined as a fallback function
 
     const [step, setStep] = useState(1);
     const [stake, setStake] = useState<string>('1000');
@@ -87,11 +80,11 @@ export const TicketWizard: React.FC = () => {
     return (
         <div className="pb-24 pt-4 px-4 max-w-lg mx-auto">
             {/* Header */}
-            <div className="mb-6 text-center">
-                <h1 className="text-2xl font-black font-orbitron text-slate-900 dark:text-white flex items-center justify-center gap-2">
-                    {t.concierge.title} <span className="text-vantage-purple">{t.concierge.title_accent}</span>
-                </h1>
-                <p className="text-gray-500 text-sm">{t.concierge.subtitle}</p>
+            <div className="mb-8">
+                <h2 className="text-3xl font-black font-orbitron tracking-tighter text-slate-900 dark:text-white leading-tight">
+                    {t('concierge.title')} <span className="text-vantage-purple">{t('concierge.title_accent')}</span>
+                </h2>
+                <p className="text-gray-500 text-sm">{t('concierge.subtitle')}</p>
             </div>
 
             <div className="flex justify-between mb-8 px-4">
@@ -102,7 +95,7 @@ export const TicketWizard: React.FC = () => {
                             {step > s ? <Check size={16} /> : s}
                         </div>
                         <span className={`text-[10px] font-bold uppercase tracking-wider ${step >= s ? 'text-vantage-purple' : 'text-gray-400'}`}>
-                            {t.concierge[`step_${s}`]}
+                            {t(`concierge.step_${s}`)}
                         </span>
                     </div>
                 ))}
@@ -120,7 +113,7 @@ export const TicketWizard: React.FC = () => {
                         <GlassCard className="p-6 space-y-4">
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
-                                    <Wallet size={14} className="text-vantage-purple" /> {t.concierge.stake_label}
+                                    <Wallet size={14} className="text-vantage-purple" /> {t('concierge.stake_label')}
                                 </label>
                                 <div className="relative">
                                     <input
@@ -135,7 +128,7 @@ export const TicketWizard: React.FC = () => {
 
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
-                                    <Target size={14} className="text-vantage-cyan" /> {t.concierge.goal_label}
+                                    <Target size={14} className="text-vantage-cyan" /> {t('concierge.goal_label')}
                                 </label>
                                 <div className="relative">
                                     <input
@@ -178,9 +171,9 @@ export const TicketWizard: React.FC = () => {
                     >
                         <div className="space-y-3">
                             {[
-                                { id: 'low', label: t.concierge.risk_low, icon: ShieldCheck, color: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' },
-                                { id: 'med', label: t.concierge.risk_med, icon: TrendingUp, color: 'text-vantage-cyan', bg: 'bg-vantage-cyan/10', border: 'border-vantage-cyan/20' },
-                                { id: 'high', label: t.concierge.risk_high, icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+                                { id: 'low', label: t('concierge.risk_low'), icon: ShieldCheck, color: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' },
+                                { id: 'med', label: t('concierge.risk_med'), icon: TrendingUp, color: 'text-vantage-cyan', bg: 'bg-vantage-cyan/10', border: 'border-vantage-cyan/20' },
+                                { id: 'high', label: t('concierge.risk_high'), icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
                             ].map((r) => (
                                 <button
                                     key={r.id}
@@ -219,7 +212,7 @@ export const TicketWizard: React.FC = () => {
                                 className="flex-[2] py-4 bg-vantage-purple hover:bg-purple-600 text-white font-bold rounded-2xl shadow-xl shadow-vantage-purple/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
                             >
                                 {isGenerating ? <RefreshCw className="animate-spin" size={20} /> : <Wand2 size={20} />}
-                                <span>{t.concierge.generate_btn}</span>
+                                <span>{t('concierge.generate_btn')}</span>
                             </button>
                         </div>
                     </motion.div>
@@ -237,11 +230,11 @@ export const TicketWizard: React.FC = () => {
                                 <GlassCard className="overflow-hidden border-2 border-vantage-purple/30">
                                     <div className="bg-vantage-purple p-4 flex justify-between items-center text-white">
                                         <div>
-                                            <p className="text-[10px] uppercase font-bold opacity-80">{t.concierge.total_odds}</p>
+                                            <p className="text-[10px] uppercase font-bold opacity-80">{t('concierge.total_odds')}</p>
                                             <p className="text-2xl font-black font-orbitron">{totalOdds.toFixed(2)}</p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-[10px] uppercase font-bold opacity-80">{t.concierge.potential_win}</p>
+                                            <p className="text-[10px] uppercase font-bold opacity-80">{t('concierge.potential_win')}</p>
                                             <p className="text-2xl font-black font-orbitron text-vantage-cyan">{potentialPayout.toLocaleString()} F</p>
                                         </div>
                                     </div>
@@ -304,7 +297,7 @@ export const TicketWizard: React.FC = () => {
                                     className="w-full py-4 bg-slate-100 dark:bg-white/5 text-gray-500 hover:text-vantage-purple font-bold rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] border border-slate-200 dark:border-white/10"
                                 >
                                     <RefreshCw size={18} />
-                                    <span>{t.concierge.regenerate_btn}</span>
+                                    <span>{t('concierge.regenerate_btn')}</span>
                                 </button>
                             </div>
                         ) : (
@@ -312,12 +305,12 @@ export const TicketWizard: React.FC = () => {
                                 <div className="w-20 h-20 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
                                     <Target size={40} />
                                 </div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{t.concierge.no_matches}</h3>
+                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{t('concierge.no_matches')}</h3>
                                 <button
                                     onClick={() => setStep(1)}
                                     className="px-8 py-3 bg-vantage-purple text-white font-bold rounded-xl shadow-lg"
                                 >
-                                    {t.concierge.regenerate_btn}
+                                    {t('concierge.regenerate_btn')}
                                 </button>
                             </div>
                         )}
