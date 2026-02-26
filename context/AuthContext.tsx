@@ -10,7 +10,7 @@ import {
     onAuthStateChanged,
     User
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where, increment, addDoc, orderBy, runTransaction } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where, increment, addDoc, orderBy, runTransaction, limit } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
 import { checkPaymentStatus } from "../services/fapshi";
@@ -359,7 +359,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getAllUsers = async (): Promise<UserProfile[]> => {
         if (!isAdmin) return [];
         try {
-            const querySnapshot = await getDocs(collection(db, "profiles"));
+            const q = query(collection(db, "profiles"), limit(500));
+            const querySnapshot = await getDocs(q);
             const profiles: UserProfile[] = [];
             querySnapshot.forEach((doc) => profiles.push(doc.data() as UserProfile));
             return profiles;

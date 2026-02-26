@@ -1,6 +1,6 @@
 
 import { Match, TeamAsset, AccumulatorSet, DailyAnalysis, WinRateStats, UserProfile } from "../types";
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, updateDoc, serverTimestamp, getCountFromServer, query, where } from "firebase/firestore";
 import { db, auth } from "../firebaseConfig";
 
 // Return simple YYYY-MM-DD for the current client date
@@ -118,7 +118,7 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
     const todayStr = getGlobalTodayKey();
     const cacheKey = `vantage_stats_cache_${todayStr}`;
 
-    // 1. Check Cache
+    // 1. Check Local Cache (0 reads)
     try {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
@@ -132,6 +132,23 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
         console.warn("Stats cache read error", e);
     }
 
+    // 2. Check Global Firestore Cache (1 read instead of 31)
+    try {
+        const statsDoc = await getDoc(doc(db, "settings", "app_stats"));
+        if (statsDoc.exists()) {
+            const data = statsDoc.data();
+            // We consider the global cache valid if it matches today
+            if (data.date === todayStr && data.stats) {
+                const stats = data.stats;
+                localStorage.setItem(cacheKey, JSON.stringify({ stats, timestamp: Date.now() }));
+                return stats as WinRateStats;
+            }
+        }
+    } catch (e) {
+        console.warn("Global stats read error", e);
+    }
+
+    // 3. Perform Heavy Calculation (31 reads - only happens if global cache is stale/missing)
     try {
         const results: { won: number; total: number }[] = [];
 
@@ -188,13 +205,25 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
         const weekly = weekTotal > 0 ? Math.round((weekWon / weekTotal) * 100) : 0;
         const monthly = monthTotal > 0 ? Math.round((monthWon / monthTotal) * 100) : 0;
 
-        const stats = { daily, weekly, monthly, streak, todayWon, todayTotal };
+        const stats: WinRateStats = { daily, weekly, monthly, streak, todayWon, todayTotal };
 
-        // 2. Save Cache
         localStorage.setItem(cacheKey, JSON.stringify({
             stats,
             timestamp: Date.now()
         }));
+
+        // Attempt to save to global cache for all other users today
+        if (auth.currentUser) {
+            try {
+                await setDoc(doc(db, "settings", "app_stats"), {
+                    date: todayStr,
+                    stats,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+            } catch (e) {
+                // Fails silently if user doesn't have write permissions (e.g. non-admin)
+            }
+        }
 
         return stats;
     } catch (e) {
@@ -413,53 +442,7 @@ export const ensureReferralCode = async (uid: string): Promise<string> => {
     return code;
 };
 
-/**
- * When a new user signs up with a referral code, record the referral in Firestore.
- * The referrer gets a "referral reward" credit that the admin can fulfill as free VIP days.
- */
-export const recordReferral = async (newUserId: string, referralCode: string): Promise<void> => {
-    try {
-        // Find the referrer by code
-        const usersSnap = await getDocs(collection(db, 'profiles'));
-        let referrerId: string | null = null;
-        usersSnap.forEach(d => {
-            if (d.data().referralCode === referralCode) {
-                referrerId = d.id;
-            }
-        });
-
-        if (!referrerId) {
-            console.warn('[Referral] Referral code not found:', referralCode);
-            return;
-        }
-
-        // Link new user to referrer
-        await setDoc(doc(db, 'profiles', newUserId), { referredBy: referrerId }, { merge: true });
-
-        // Increment referrer's count and earnings
-        const referrerRef = doc(db, 'profiles', referrerId);
-        const snap = await getDoc(referrerRef);
-        const current = snap.data() || {};
-        await setDoc(referrerRef, {
-            referralCount: (current.referralCount || 0) + 1,
-            referralEarnings: (current.referralEarnings || 0) + 1,
-            lifetimeEarnings: (current.lifetimeEarnings || 0) + 1,
-        }, { merge: true });
-
-        // Log referral event
-        await setDoc(doc(db, 'referral_events', `${referrerId}_${newUserId}`), {
-            referrerId,
-            newUserId,
-            referralCode,
-            createdAt: new Date().toISOString(),
-            rewarded: false,
-        });
-
-        console.log(`[Referral] ✅ Recorded referral from ${referrerId} for new user ${newUserId}`);
-    } catch (e) {
-        console.error('[Referral] Error recording referral:', e);
-    }
-};
+/** (Removed dangerous full-table scan recordReferral function) **/
 
 // ─── USER PROFILE HELPERS ─────────────────────────────────────────────────────
 
@@ -485,11 +468,14 @@ export const updateUserProfile = async (uid: string, data: Partial<UserProfile>)
 
 export const getUserCount = async (): Promise<{ total: number; vip: number }> => {
     try {
-        const snap = await getDocs(collection(db, 'profiles'));
-        let vip = 0;
-        snap.forEach(d => { if (d.data().isVip) vip++; });
-        return { total: snap.size, vip };
+        const coll = collection(db, 'profiles');
+        const [totalSnap, vipSnap] = await Promise.all([
+            getCountFromServer(coll),
+            getCountFromServer(query(coll, where('isVip', '==', true)))
+        ]);
+        return { total: totalSnap.data().count, vip: vipSnap.data().count };
     } catch (e) {
+        console.warn('getUserCount error', e);
         return { total: 0, vip: 0 };
     }
 };

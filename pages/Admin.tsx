@@ -7,7 +7,7 @@ import { UserProfile, NavigationTab, Match, PayoutRequest, TeamAsset } from '../
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
 import { testGeminiConnection, setGeminiModel, getGeminiModel, AVAILABLE_MODELS, gradeYesterdayPredictions } from '../services/gemini';
-import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, getPredictionsForDate, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings } from '../services/db';
+import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, getPredictionsForDate, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount } from '../services/db';
 import { TeamLogo } from '../components/TeamLogo';
 
 interface AdminProps {
@@ -103,11 +103,24 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         }
     };
 
+    const [userStats, setUserStats] = useState({ total: 0, vip: 0, admin: 0, free: 0 });
+
     const fetchUsers = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await getAllUsers();
-            if (isMounted.current) setUsers(data);
+            const [data, countData] = await Promise.all([
+                getAllUsers(),
+                getUserCount()
+            ]);
+            if (isMounted.current) {
+                setUsers(data);
+                setUserStats({
+                    total: countData.total,
+                    vip: countData.vip,
+                    admin: data.filter(u => u.isAdmin).length,
+                    free: countData.total - countData.vip
+                });
+            }
         } catch (e) {
             console.error("Failed to load users in Admin page", e);
         } finally {
@@ -152,6 +165,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             await toggleUserVip(user.uid, user.isVip);
             // Optimistic update
             setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: !u.isVip } : u));
+            setUserStats(prev => ({
+                ...prev,
+                vip: prev.vip + (user.isVip ? -1 : 1),
+                free: prev.free + (user.isVip ? 1 : -1)
+            }));
         } catch (e) {
             alert("Error updating user VIP status");
         } finally {
@@ -167,6 +185,10 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                 await toggleUserAdmin(user.uid, user.isAdmin || false);
                 // Optimistic update
                 setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isAdmin: !u.isAdmin } : u));
+                setUserStats(prev => ({
+                    ...prev,
+                    admin: prev.admin + (user.isAdmin ? -1 : 1)
+                }));
             } catch (e) {
                 alert("Error updating user Admin status");
             } finally {
@@ -343,12 +365,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         return email.includes(s) || name.includes(s);
     });
 
-    const stats = {
-        total: users.length,
-        vip: users.filter(u => u.isVip).length,
-        free: users.filter(u => !u.isVip).length,
-        admin: users.filter(u => u.isAdmin).length
-    };
+    const stats = userStats;
 
     return (
         <div className="space-y-6 pb-24">
