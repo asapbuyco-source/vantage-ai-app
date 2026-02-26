@@ -5,6 +5,7 @@ import { GlassCard } from '../components/GlassCard';
 import { CircularProgress } from '../components/CircularProgress';
 import { AnalyzingLoader } from '../components/AnalyzingLoader';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { NavigationTab, Match, Sport, SavedPick } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
@@ -25,7 +26,10 @@ const CAT_LABELS: Record<string, string> = { safe: '🟢 Safe', value: '🔵 Val
 
 export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const { t, language, setLanguage, theme, toggleTheme, toggleSavedPick, isPickSaved, showToast } = useAppContext();
+  const { userProfile, isAdmin } = useAuth();
   const { predictions, basketballPredictions, winRateStats, loading, isSystemGenerating, systemError } = useData();
+
+  const isVip = userProfile?.isVip || isAdmin;
 
   // ─── Filters ─────────────────────────────────────────────────────────────
   const [activeSport, setActiveSport] = useState<Sport>('football');
@@ -89,6 +93,11 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   };
 
   const handleSaveToggle = (match: Match) => {
+    if (!isVip) {
+      setTab('vip');
+      showToast(language === 'fr' ? 'Accès VIP requis' : 'VIP Access Required', 'info');
+      return;
+    }
     const pick: SavedPick = {
       id: match.id,
       homeTeam: match.homeTeam,
@@ -227,11 +236,15 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
               <div className="w-full bg-black/5 dark:bg-black/40 rounded-xl p-3 flex justify-between items-center border border-black/5 dark:border-white/5">
                 <div>
                   <div className="text-[10px] text-gray-500 uppercase">{t('home.ai_pred')}</div>
-                  <div className="text-sm font-bold text-vantage-cyan">{getPredictionText(featuredMatch)}</div>
+                  <div className="text-sm font-bold text-vantage-cyan">
+                    {isVip ? getPredictionText(featuredMatch) : 'LOCKED / VIP'}
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] text-gray-500 uppercase">{t('home.confidence')}</div>
-                  <div className="text-sm font-bold text-green-500">{featuredMatch.confidence}%</div>
+                  <div className="text-sm font-bold text-green-500">
+                    {isVip ? `${featuredMatch.confidence}%` : '??%'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -463,16 +476,22 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                           <div className="mt-3 bg-black/5 dark:bg-black/30 rounded-xl p-3 flex justify-between items-center border border-black/5 dark:border-white/5">
                             <div>
                               <div className="text-[10px] text-gray-500 uppercase">{t('home.ai_pred')}</div>
-                              <div className="text-xs font-bold text-vantage-cyan">{getPredictionText(match)}</div>
+                              <div className="text-xs font-bold text-vantage-cyan">
+                                {isVip ? getPredictionText(match) : 'LOCKED / VIP'}
+                              </div>
                             </div>
                             <div className="flex gap-3">
                               <div className="text-right">
                                 <div className="text-[10px] text-gray-500 uppercase">Conf.</div>
-                                <div className="text-xs font-bold text-green-500">{match.confidence}%</div>
+                                <div className="text-xs font-bold text-green-500">
+                                  {isVip ? `${match.confidence}%` : '??%'}
+                                </div>
                               </div>
                               <div className="text-right">
                                 <div className="text-[10px] text-gray-500 uppercase">{language === 'fr' ? 'Cote' : 'Odds'}</div>
-                                <div className="text-xs font-bold text-yellow-500">@{match.odds}</div>
+                                <div className="text-xs font-bold text-yellow-500">
+                                  {isVip ? `@${match.odds}` : '@?.??'}
+                                </div>
                               </div>
                             </div>
                           </div>

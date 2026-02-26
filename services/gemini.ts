@@ -296,9 +296,11 @@ ${fixtureContext}
 YOUR OBJECTIVE
 ═══════════════════════════════════════════════
 Using the enriched fixture data above AND Google Search for additional matches today:
-- Identify only the HIGHEST CONFIDENCE, lowest-variance opportunities.
-- African leagues (Nigeria, Ghana, Kenya, South Africa, Cameroon) are TOP PRIORITY — analyse them first.
-- You MUST derive real EV from the market odds provided above. If no odds are provided, search for current bookmaker lines.
+- Identify and analyze at least 15 to 20 high-quality betting opportunities.
+- Goal: Ensure the app is content-rich. If major leagues are scanty, look for high-confidence picks in secondary leagues (Championship, Eredivisie, MLS, etc.).
+- African leagues (Nigeria, Ghana, Kenya, South Africa, Cameroon) remain TOP PRIORITY — analyse them first.
+- Only include matches where you have a "Model Edge" (your probability > bookmaker implied probability).
+- Predictions must be professional (e.g., "Home Win", "Over 2.5", "BTTS", "DC 1X").
 
 ═══════════════════════════════════════════════
 🧮 QUANTITATIVE RULES (NON-NEGOTIABLE)

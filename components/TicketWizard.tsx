@@ -15,6 +15,15 @@ export const TicketWizard: React.FC = () => {
     const { t } = useAppContext();
     const { predictions, basketballPredictions, toggleSavedPick, isPickSaved } = useData();
 
+    // Safety check for missing translations
+    if (!t || !t.concierge) {
+        return (
+            <div className="pb-24 pt-12 px-4 text-center">
+                <p className="text-gray-500">Loading translations...</p>
+            </div>
+        );
+    }
+
     const [step, setStep] = useState(1);
     const [stake, setStake] = useState<string>('1000');
     const [goal, setGoal] = useState<string>('5000');
@@ -176,8 +185,8 @@ export const TicketWizard: React.FC = () => {
                                     key={r.id}
                                     onClick={() => setRisk(r.id as any)}
                                     className={`w-full p-6 rounded-2xl border-2 transition-all flex items-center gap-4 ${risk === r.id
-                                            ? `${r.border} ${r.bg} shadow-lg scale-[1.02]`
-                                            : 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/5 grayscale'
+                                        ? `${r.border} ${r.bg} shadow-lg scale-[1.02]`
+                                        : 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/5 grayscale'
                                         }`}
                                 >
                                     <div className={`p-3 rounded-xl ${r.bg} ${r.color}`}>
@@ -268,8 +277,8 @@ export const TicketWizard: React.FC = () => {
                                                         savedAt: new Date().toISOString()
                                                     })}
                                                     className={`p-2 rounded-lg transition-all ${isPickSaved(match.id)
-                                                            ? 'bg-vantage-purple text-white shadow-lg'
-                                                            : 'bg-slate-100 dark:bg-white/5 text-gray-400 hover:text-vantage-purple'
+                                                        ? 'bg-vantage-purple text-white shadow-lg'
+                                                        : 'bg-slate-100 dark:bg-white/5 text-gray-400 hover:text-vantage-purple'
                                                         }`}
                                                 >
                                                     <Check size={16} />

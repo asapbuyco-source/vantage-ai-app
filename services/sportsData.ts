@@ -128,23 +128,47 @@ export const getTodaysFixtures = async (): Promise<Fixture[]> => {
 };
 
 /**
- * Filters & PRIORITISES fixtures — African leauges come first,
- * then top European leagues, max 30 to avoid Gemini context bloat.
+ * Assigns a priority score to a fixture based on its league and country.
+ * Higher scores mean the match is more relevant to our target audience (Africa + Top Europe).
+ */
+const getPriorityScore = (f: Fixture): number => {
+    let score = 0;
+
+    // African Leagues (Highest Priority)
+    if (['Nigeria', 'Ghana', 'Kenya', 'South Africa', 'Uganda', 'Tanzania', 'Rwanda', 'Cameroon'].includes(f.league.country)) score += 100;
+    if (PRIORITY_LEAGUE_IDS.has(f.league.id)) score += 50;
+
+    // Major European Leagues
+    if (['England', 'Spain', 'Germany', 'Italy', 'France', 'Portugal'].includes(f.league.country)) score += 80;
+    if ([39, 140, 78, 135, 61, 94].includes(f.league.id)) score += 40;
+
+    // Major International/Continental
+    if (['UEFA Champions League', 'UEFA Europa League', 'UEFA Conference League', 'World Cup', 'Euro', 'Copa America', 'CAF Champions League'].includes(f.league.name)) score += 90;
+
+    // Secondary European/Global (Good volume)
+    if (['Netherlands', 'Belgium', 'Turkey', 'Brazil', 'Argentina', 'USA'].includes(f.league.country)) score += 60;
+
+    // General "Top Tier" leagues in any country (usually league id is small or historically known)
+    if (f.league.name.toLowerCase().includes('premier') || f.league.name.toLowerCase().includes('division 1')) score += 20;
+
+    return score;
+};
+
+/**
+ * Filters & PRIORITISES fixtures — ensures we always have enough matches (target 15-20)
+ * by taking the highest scoring games globally.
  */
 export const filterGlobalFixtures = (fixtures: Fixture[]) => {
-    const matched = fixtures.filter(f =>
-        PRIORITY_COUNTRIES.has(f.league.country) ||
-        PRIORITY_LEAGUE_IDS.has(f.league.id) ||
-        ['UEFA Champions League', 'UEFA Europa League', 'Premier League'].includes(f.league.name)
-    );
+    // Sort all fixtures by our priority score
+    const scored = fixtures
+        .map(f => ({ fixture: f, score: getPriorityScore(f) }))
+        .sort((a, b) => b.score - a.score);
 
-    // Put African leagues at the front so they get the AI's attention first
-    const african = matched.filter(f =>
-        ['Nigeria', 'Ghana', 'Kenya', 'South Africa', 'Uganda', 'Tanzania', 'Rwanda', 'Cameroon'].includes(f.league.country)
-    );
-    const european = matched.filter(f => !african.includes(f));
+    // Filter out very low quality or irrelevant matches (score > 0 ensures we have some criteria)
+    const filtered = scored.filter(s => s.score > 0).map(s => s.fixture);
 
-    return [...african, ...european].slice(0, 30);
+    // Increase limit to 50 to give Gemini more "raw material" to work with
+    return filtered.slice(0, 50);
 };
 
 /**
