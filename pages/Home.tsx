@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon, Trophy, AlertTriangle, Hourglass, Search, SlidersHorizontal, ChevronDown, Bookmark, BookmarkCheck, Flame, TrendingUp } from 'lucide-react';
+import { Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon, Trophy, AlertTriangle, Hourglass, Search, SlidersHorizontal, ChevronDown, Flame, TrendingUp } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { CircularProgress } from '../components/CircularProgress';
 import { AnalyzingLoader } from '../components/AnalyzingLoader';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { NavigationTab, Match, Sport, SavedPick } from '../types';
+import { NavigationTab, Match, Sport } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
+import { MatchDetailsModal } from '../components/MatchDetailsModal';
 
 interface HomeProps {
   setTab: (tab: NavigationTab) => void;
@@ -26,6 +27,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   // ─── Filters ─────────────────────────────────────────────────────────────
   const [activeSport, setActiveSport] = useState<Sport>('football');
   const [sortKey, setSortKey] = useState<SortKey>('time');
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
@@ -306,7 +308,6 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
 
               <AnimatePresence>
                 {groupedMatches[groupKey].map((match, idx) => {
-                  const saved = isPickSaved(match.id);
                   return (
                     // @ts-ignore
                     <motion.div
@@ -317,39 +318,42 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                       exit={{ opacity: 0, scale: 0.96 }}
                       transition={{ delay: idx * 0.04 }}
                     >
-                      <GlassCard className="!p-0 overflow-hidden relative group border border-slate-200 dark:border-white/10">
+                      <button
+                        onClick={() => setSelectedMatch(match)}
+                        className="w-full text-left"
+                      >
+                        <GlassCard className="!p-0 overflow-hidden relative group border border-slate-200 dark:border-white/10 hover:border-vantage-cyan/40 transition-colors">
+                          <div className="p-4 pt-10 relative z-10">
+                            {/* Time + League */}
+                            <div className="flex justify-center mb-3">
+                              <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full">
+                                <Clock size={10} /> {match.time} · {match.league}
+                              </span>
+                            </div>
 
-
-                        <div className="p-4 pt-10 relative z-10">
-                          {/* Time + League */}
-                          <div className="flex justify-center mb-3">
-                            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full">
-                              <Clock size={10} /> {match.time} · {match.league}
-                            </span>
-                          </div>
-
-                          {/* Teams */}
-                          <div className="flex justify-between items-start">
-                            <div className="flex flex-col items-center w-2/5 space-y-2">
-                              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 p-2 flex items-center justify-center border border-slate-200 dark:border-white/10">
-                                <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-full h-full" />
+                            {/* Teams */}
+                            <div className="flex justify-between items-start">
+                              <div className="flex flex-col items-center w-2/5 space-y-2">
+                                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 p-2 flex items-center justify-center border border-slate-200 dark:border-white/10">
+                                  <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-full h-full" />
+                                </div>
+                                <span className="text-xs font-bold text-center text-slate-900 dark:text-white leading-tight line-clamp-2 min-h-[2.5em] flex items-center justify-center">{match.homeTeam}</span>
                               </div>
-                              <span className="text-xs font-bold text-center text-slate-900 dark:text-white leading-tight line-clamp-2 min-h-[2.5em] flex items-center justify-center">{match.homeTeam}</span>
-                            </div>
-                            <div className="flex flex-col items-center justify-center w-1/5 pt-3">
-                              <span className="text-lg font-bold font-orbitron text-vantage-cyan/40">VS</span>
-                            </div>
-                            <div className="flex flex-col items-center w-2/5 space-y-2">
-                              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 p-2 flex items-center justify-center border border-slate-200 dark:border-white/10">
-                                <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-full h-full" />
+                              <div className="flex flex-col items-center justify-center w-1/5 pt-3">
+                                <span className="text-lg font-bold font-orbitron text-vantage-cyan/40">VS</span>
                               </div>
-                              <span className="text-xs font-bold text-center text-slate-900 dark:text-white leading-tight line-clamp-2 min-h-[2.5em] flex items-center justify-center">{match.awayTeam}</span>
+                              <div className="flex flex-col items-center w-2/5 space-y-2">
+                                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 p-2 flex items-center justify-center border border-slate-200 dark:border-white/10">
+                                  <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-full h-full" />
+                                </div>
+                                <span className="text-xs font-bold text-center text-slate-900 dark:text-white leading-tight line-clamp-2 min-h-[2.5em] flex items-center justify-center">{match.awayTeam}</span>
+                              </div>
                             </div>
+
+
                           </div>
-
-
-                        </div>
-                      </GlassCard>
+                        </GlassCard>
+                      </button>
                     </motion.div>
                   );
                 })}
@@ -358,6 +362,11 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
           ))
         )}
       </div>
+
+      <MatchDetailsModal
+        match={selectedMatch}
+        onClose={() => setSelectedMatch(null)}
+      />
     </div>
   );
 };

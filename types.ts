@@ -8,8 +8,12 @@ export type Sport = 'football' | 'basketball';
 export interface Match {
   id: string;
   league: string;
+  leagueId?: number;
+  seasonId?: number;
   homeTeam: string;
+  homeTeamId?: number;
   awayTeam: string;
+  awayTeamId?: number;
   time: string;
   prediction: string; // Fallback
   prediction_en?: string;

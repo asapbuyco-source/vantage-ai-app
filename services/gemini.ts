@@ -278,8 +278,12 @@ export const generateDailyPredictions = async (signal?: AbortSignal): Promise<Ma
                 const simplifiedRaw: Match[] = filteredFixtures.map(f => ({
                     id: f.fixture.id.toString(),
                     league: f.league.name,
+                    leagueId: f.league.id,
+                    seasonId: f.league.season,
                     homeTeam: f.teams.home.name,
+                    homeTeamId: f.teams.home.id,
                     awayTeam: f.teams.away.name,
+                    awayTeamId: f.teams.away.id,
                     time: new Date(f.fixture.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     prediction: '',
                     confidence: 0,
