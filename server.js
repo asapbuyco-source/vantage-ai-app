@@ -4,6 +4,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { GoogleGenAI } from '@google/genai';
 
 // Load environment variables from .env.local if available (for local dev)
 const __filename = fileURLToPath(import.meta.url);
@@ -69,6 +70,54 @@ app.use('/api/sportmonks', createProxyMiddleware({
         res.status(500).json({ error: 'Proxy implementation error', details: err.message });
     }
 }));
+
+// ══════════════════════════════════════════════════════════════════════
+// GEMINI API PROXY
+// ══════════════════════════════════════════════════════════════════════
+// We need to parse JSON bodies for the Gemini POST requests
+app.use(express.json({ limit: '5mb' }));
+
+const GOOGLE_GENAI_API_KEY = process.env.VITE_GOOGLE_GENAI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+
+if (!GOOGLE_GENAI_API_KEY) {
+    console.error("❌ CRTICAL ERROR: GOOGLE_GENAI_API_KEY environment variable is not set!");
+}
+
+app.post('/api/gemini/generate', async (req, res) => {
+    try {
+        if (!GOOGLE_GENAI_API_KEY) {
+            return res.status(500).json({ error: "API Key missing on server" });
+        }
+
+        const { model, contents, config } = req.body;
+
+        if (!model || !contents) {
+            return res.status(400).json({ error: "Missing required fields: model or contents" });
+        }
+
+        const ai = new GoogleGenAI({ apiKey: GOOGLE_GENAI_API_KEY });
+
+        // Execute the call
+        const response = await ai.models.generateContent({
+            model,
+            contents,
+            config
+        });
+
+        res.json({ text: response.text });
+
+    } catch (error) {
+        console.error('Gemini Proxy Error:', error);
+
+        // Pass through the status code if it exists on the error, otherwise 500
+        const status = error.status || 500;
+        res.status(status).json({
+            error: 'Gemini request failed',
+            details: error.message,
+            status: status
+        });
+    }
+});
 
 // Start server
 app.listen(PORT, () => {

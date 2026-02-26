@@ -26,21 +26,27 @@ export const setGeminiModel = (model: string) => {
 
 export const getGeminiModel = () => currentModel;
 
-/**
- * Helper to get API Key exclusively from Environment Variables.
- * Throws a descriptive error in production if the key is missing.
- */
-const getApiKey = () => {
-    const envKey = import.meta.env?.VITE_GOOGLE_GENAI_API_KEY;
-    if (envKey && envKey.trim() !== "") {
-        return envKey;
-    }
-    throw new Error(
-        "Missing VITE_GOOGLE_GENAI_API_KEY. Add it to your .env.local file.\n" +
-        "Get a key at: https://aistudio.google.com/app/apikey"
-    );
-};
+const BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || "http://localhost:3000";
 
+/**
+ * Hits the backend proxy instead of exposing the API key to the browser.
+ */
+async function backendGenerateContent(model: string, contents: string, config: any = {}) {
+    const res = await fetch(`${BACKEND_URL}/api/gemini/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, contents, config })
+    });
+
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const error: any = new Error(errData.details || errData.error || `HTTP error ${res.status}`);
+        error.status = res.status;
+        throw error;
+    }
+
+    return await res.json(); // returns { text: '...' }
+}
 
 /**
  * Helper: Retry mechanism with exponential backoff
@@ -80,21 +86,13 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Pr
 export const testGeminiConnection = async (): Promise<{ status: 'OK' | 'ERROR'; latency: number; message: string }> => {
     const start = performance.now();
     try {
-        const apiKey = getApiKey();
-        if (!apiKey) throw new Error("API Key is missing.");
-
-        const ai = new GoogleGenAI({ apiKey });
-
         console.log(`[Gemini Test] Using model: ${currentModel}`);
 
-        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: currentModel,
-            contents: "Search for today's football matches. Are there any big games? Answer in 1 short sentence.",
-            config: {
-                temperature: 0.1,
-                tools: [{ googleSearch: {} }]
-            }
-        }));
+        const response = await withRetry<any>(() => backendGenerateContent(
+            currentModel,
+            "Search for today's football matches. Are there any big games? Answer in 1 short sentence.",
+            { temperature: 0.1, tools: [{ googleSearch: {} }] }
+        ));
 
         const latency = Math.round(performance.now() - start);
         const text = response.text || "No response text";
@@ -108,12 +106,10 @@ export const testGeminiConnection = async (): Promise<{ status: 'OK' | 'ERROR'; 
         if (msg.includes('403')) {
             // Fallback test without search to see if key works at all
             try {
-                const apiKey = getApiKey();
-                const ai = new GoogleGenAI({ apiKey });
-                await ai.models.generateContent({
-                    model: 'gemini-3-pro', // Try fallback model
-                    contents: "Hello"
-                });
+                await backendGenerateContent(
+                    'gemini-3-pro', // Try fallback model
+                    "Hello"
+                );
                 return { status: 'OK', latency, message: "Search Denied (403), but AI is active. Simulation Mode enabled." };
             } catch (innerE) {
                 msg = "Permission Denied (403). API Key invalid.";
@@ -133,9 +129,6 @@ export const gradeYesterdayPredictions = async (): Promise<{ total: number, grad
     // Note: Grading strictly requires search to be accurate. 
     // If search is 403, we can't really grade. 
     const yesterday = getGlobalYesterdayKey();
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error("API Key missing");
-    const ai = new GoogleGenAI({ apiKey });
 
     const existingMatches = await getPredictionsForDate(yesterday);
     if (!existingMatches || existingMatches.length === 0) {
@@ -166,11 +159,11 @@ export const gradeYesterdayPredictions = async (): Promise<{ total: number, grad
     try {
         // Attempt with Search
         const searchPrompt = `Find final scores for ${yesterday}: ${JSON.stringify(simplifiedList)}`;
-        const searchResponse = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: currentModel,
-            contents: searchPrompt,
-            config: { temperature: 0.1, tools: [{ googleSearch: {} }] }
-        }));
+        const searchResponse = await withRetry<any>(() => backendGenerateContent(
+            currentModel,
+            searchPrompt,
+            { temperature: 0.1, tools: [{ googleSearch: {} }] }
+        ));
 
         const rawScores = searchResponse.text;
 
@@ -254,11 +247,11 @@ GRADING RULES (apply strictly — COMPREHENSIVE):
 Return a JSON array with id, score ("2-1" format), and status ("won"|"lost"|"void") for each match.
     `;
 
-        const formatResponse = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: currentModel,
-            contents: parsePrompt,
-            config: { responseMimeType: "application/json", responseSchema: gradingSchema }
-        }));
+        const formatResponse = await withRetry<any>(() => backendGenerateContent(
+            currentModel,
+            parsePrompt,
+            { responseMimeType: "application/json", responseSchema: gradingSchema }
+        ));
 
         gradedResults = JSON.parse(formatResponse.text || "[]");
 
@@ -317,11 +310,7 @@ const matchesSchema = {
 export const generateDailyPredictions = async (signal?: AbortSignal): Promise<Match[]> => {
     try {
         const todayStr = getGlobalTodayKey();
-        const apiKey = getApiKey();
-        if (!apiKey) throw new Error("API Key missing.");
-
         console.log(`[Gemini Pipeline] Starting Analysis for ${todayStr} using ${currentModel}...`);
-        const ai = new GoogleGenAI({ apiKey });
 
         // (matchesSchema is defined at module scope above)
 
@@ -431,16 +420,16 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
 - Output JSON only — no prose.
         `;
 
-            const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-                model: currentModel,
-                contents: searchPrompt,
-                config: {
+            const response = await withRetry<any>(() => backendGenerateContent(
+                currentModel,
+                searchPrompt,
+                {
                     temperature: 0.1, // Low temperature for strict adherence
                     tools: [{ googleSearch: {} }],
                     responseMimeType: "application/json",
                     responseSchema: matchesSchema
                 }
-            }));
+            ));
 
             if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
@@ -491,15 +480,15 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
                     // Use 'gemini-3.0-flash' as it is more stable than experimental models
                     const fallbackModel = 'gemini-3.0-flash';
 
-                    const response = await ai.models.generateContent({
-                        model: fallbackModel,
-                        contents: simulationPrompt,
-                        config: {
+                    const response = await backendGenerateContent(
+                        fallbackModel,
+                        simulationPrompt,
+                        {
                             temperature: 0.7,
                             responseMimeType: "application/json",
                             responseSchema: matchesSchema
                         }
-                    });
+                    );
 
                     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
@@ -550,9 +539,6 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
     }
 
     try {
-        const apiKey = getApiKey();
-        if (!apiKey) throw new Error("API Key missing.");
-        const ai = new GoogleGenAI({ apiKey });
 
         const simplifiedMatches = eligibleMatches.map(m => ({
             id: m.id,
@@ -620,15 +606,15 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
             required: ["safe", "medium", "high"]
         };
 
-        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: currentModel,
-            contents: prompt,
-            config: {
+        const response = await withRetry<any>(() => backendGenerateContent(
+            currentModel,
+            prompt,
+            {
                 responseMimeType: "application/json",
                 responseSchema: schema,
-                temperature: 0.1 // Strictly determinisic
+                temperature: 0.1 // Strictly deterministic
             }
-        }));
+        ));
 
         const result = JSON.parse(response.text || "{}");
         return {
@@ -836,8 +822,6 @@ async function generateLocalFallbackMatches(): Promise<Match[]> {
  * Generates basketball predictions (NBA / EuroLeague) using Gemini + Google Search Grounding.
  */
 export const generateBasketballPredictions = async (signal?: AbortSignal): Promise<Match[]> => {
-    const apiKey = getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
     const todayKey = getGlobalTodayKey();
 
     const prompt = `
@@ -872,18 +856,16 @@ Rules:
 `;
 
     try {
-        const response = await withRetry<GenerateContentResponse>(() =>
-            ai.models.generateContent({
-                model: currentModel,
-                contents: prompt,
-                config: {
-                    temperature: 0.3,
-                    tools: [{ googleSearch: {} }],
-                    responseMimeType: "application/json",
-                    responseSchema: matchesSchema
-                }
-            })
-        );
+        const response = await withRetry<any>(() => backendGenerateContent(
+            currentModel,
+            prompt,
+            {
+                temperature: 0.3,
+                tools: [{ googleSearch: {} }],
+                responseMimeType: "application/json",
+                responseSchema: matchesSchema
+            }
+        ));
 
         if (signal?.aborted) return [];
 
