@@ -11,4 +11,4 @@ restartPolicyType = "ON_FAILURE"
 
 [env]
 # Railway will dynamically assign a PORT, but we set a default fallback
-PORT = "3000"
+PORT = "8080"

@@ -26,7 +26,7 @@ export const setGeminiModel = (model: string) => {
 
 export const getGeminiModel = () => currentModel;
 
-const BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || "http://localhost:3000";
+const BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || "http://localhost:8080";
 
 /**
  * Hits the backend proxy instead of exposing the API key to the browser.

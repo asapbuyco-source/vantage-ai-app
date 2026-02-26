@@ -3,7 +3,7 @@
 // We now route all Sportmonks requests through our Express backend
 // This solves CORS and hides the API key from the frontend.
 // ══════════════════════════════════════════════════════════════════════
-const BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || "http://localhost:3000";
+const BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || "http://localhost:8080";
 const API_BASE = `${BACKEND_URL}/api/sportmonks`;
 
 // The API token is securely appended by the backend proxy.
@@ -133,7 +133,7 @@ export interface InjuryReport {
 // ── Safe API fetch helper ───────────────────────────────────────────────────
 async function apiFetch<T>(path: string): Promise<T | null> {
     try {
-        const fullUrl = `${API_BASE}${buildParams(path)}`;
+        const fullUrl = buildParams(path);
         const res = await fetch(fullUrl, { method: 'GET' });
         if (!res.ok) {
             console.warn(`Sportmonks API Error (${res.status}) on ${path}`);
