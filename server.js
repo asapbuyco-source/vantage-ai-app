@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,13 +22,17 @@ const allowedOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'https://vantageaiafrica.netlify.app',
-    process.env.FRONTEND_URL
+    process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, "") : null
 ].filter(Boolean); // Remove undefined values
 
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
+        // Allow requests with no origin only in local development, not in production
+        if (!origin) {
+            if (process.env.NODE_ENV === 'development') return callback(null, true);
+            const msg = `The CORS policy for this site does not allow access from the specified Origin: no origin provided.`;
+            return callback(new Error(msg), false);
+        }
 
         if (allowedOrigins.indexOf(origin) === -1) {
             const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
@@ -53,7 +58,16 @@ if (!SPORTMONKS_API_TOKEN) {
     console.error("❌ CRTICAL ERROR: SPORTMONKS_API_TOKEN environment variable is not set!");
 }
 
-app.use('/api/sportmonks', createProxyMiddleware({
+// 100 requests per 15 minutes per IP for Sportmonks
+const sportmonksLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many requests to Sportmonks API from this IP, please try again after 15 minutes' }
+});
+
+app.use('/api/sportmonks', sportmonksLimiter, createProxyMiddleware({
     target: 'https://api.sportmonks.com/v3/football',
     changeOrigin: true,
     pathRewrite: {
@@ -83,7 +97,16 @@ if (!GOOGLE_GENAI_API_KEY) {
     console.error("❌ CRTICAL ERROR: GOOGLE_GENAI_API_KEY environment variable is not set!");
 }
 
-app.post('/api/gemini/generate', async (req, res) => {
+// 50 requests per 15 minutes per IP for Gemini
+const geminiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 50,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many requests to Gemini API from this IP, please try again after 15 minutes' }
+});
+
+app.post('/api/gemini/generate', geminiLimiter, async (req, res) => {
     try {
         if (!GOOGLE_GENAI_API_KEY) {
             return res.status(500).json({ error: "API Key missing on server" });
