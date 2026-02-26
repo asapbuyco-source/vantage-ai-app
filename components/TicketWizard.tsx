@@ -12,8 +12,9 @@ import { TeamLogo } from './TeamLogo';
 import { Match } from '../types';
 
 export const TicketWizard: React.FC = () => {
-    const { t } = useAppContext();
-    const { predictions, basketballPredictions, toggleSavedPick, isPickSaved } = useData();
+    const { t, language } = useAppContext();
+    const { predictions, basketballPredictions } = useData();
+    const { toggleSavedPick, isPickSaved } = useAppContext();
 
     // Safety check for missing translations
     if (!t || !t.concierge) {
@@ -161,7 +162,7 @@ export const TicketWizard: React.FC = () => {
                             onClick={() => setStep(2)}
                             className="w-full py-4 bg-vantage-purple hover:bg-purple-600 text-white font-bold rounded-2xl shadow-xl shadow-vantage-purple/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                         >
-                            <span>{t.home.performance}</span>
+                            <span>{language === 'fr' ? 'Suivant' : 'Next'}</span>
                             <ChevronRight size={20} />
                         </button>
                     </motion.div>

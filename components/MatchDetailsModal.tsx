@@ -29,22 +29,24 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose }) => {
         let isMounted = true;
         setLoading(true);
 
+        // Lock body scroll while modal is open
+        document.body.style.overflow = 'hidden';
+
         const fetchDetails = async () => {
             try {
                 const homeId = match.homeTeamId || 0;
                 const awayId = match.awayTeamId || 0;
                 const leagueId = match.leagueId || 0;
                 const seasonId = match.seasonId || 2024;
-                const fixtureId = parseInt(match.id, 10) || 0;
 
                 // Fetch all data in parallel
                 const [hf, af, h2, od, hi, ai] = await Promise.all([
                     homeId && leagueId ? getTeamForm(homeId, leagueId, seasonId) : null,
                     awayId && leagueId ? getTeamForm(awayId, leagueId, seasonId) : null,
                     homeId && awayId ? getH2H(homeId, awayId) : null,
-                    fixtureId ? getMatchOdds(fixtureId) : null,
-                    homeId && fixtureId ? getTeamInjuries(homeId, fixtureId) : null,
-                    awayId && fixtureId ? getTeamInjuries(awayId, fixtureId) : null,
+                    getMatchOdds(parseInt(match.id, 10) || 0),
+                    homeId ? getTeamInjuries(homeId) : null,
+                    awayId ? getTeamInjuries(awayId) : null,
                 ]);
 
                 if (isMounted) {
@@ -64,7 +66,10 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose }) => {
 
         fetchDetails();
 
-        return () => { isMounted = false; };
+        return () => {
+            isMounted = false;
+            document.body.style.overflow = '';
+        };
     }, [match]);
 
     if (!match) return null;

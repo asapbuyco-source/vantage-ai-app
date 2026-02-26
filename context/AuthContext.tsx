@@ -111,6 +111,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         }
                     }
                 }
+            } else {
+                // Profile document doesn't exist yet (race condition on new signup).
+                // createProfile() will write it. Return early to avoid setUserProfile(undefined).
+                return;
             }
 
             // Bootstrap: if the env-configured admin email matches, grant isAdmin on first setup

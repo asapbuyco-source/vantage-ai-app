@@ -313,7 +313,7 @@ export const getMatchOdds = async (fixtureId: number): Promise<MatchOdds | null>
 /**
  * Fetches active injury list via Sportmonks.
  */
-export const getTeamInjuries = async (teamId: number, fixtureId: number): Promise<InjuryReport | null> => {
+export const getTeamInjuries = async (teamId: number): Promise<InjuryReport | null> => {
     const data: any[] | null = await apiFetch(`/sidelined/teams/${teamId}?include=player;type`);
     if (!data) return null;
 
@@ -343,8 +343,8 @@ export const enrichFixtures = async (fixtures: Fixture[], season: number = 2024)
                 getTeamForm(awayId, leagueId, season),
                 getH2H(homeId, awayId),
                 getMatchOdds(fixtureId),
-                getTeamInjuries(homeId, fixtureId),
-                getTeamInjuries(awayId, fixtureId),
+                getTeamInjuries(homeId),
+                getTeamInjuries(awayId),
             ]);
 
             return {

@@ -223,7 +223,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!authLoading && user) {
             // Fix: Allow data generation if missing, regardless of admin status
             // The generation logic itself (generateDailyPredictions) handles Firestore checks to avoid duplicates
-            fetchOrGenerate(false, true);
+            fetchOrGenerate(false, false);
             refreshWinRates();
         } else if (!authLoading && !user) {
             setPredictions([]);

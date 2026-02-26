@@ -54,7 +54,7 @@ export interface UserProfile {
   isAdmin?: boolean;
   isBlocked?: boolean;
   vipExpiry?: string;
-  vipPlan?: 'daily' | 'weekly' | 'monthly';
+  vipPlan?: 'daily' | 'weekly' | 'monthly' | 'annual';
   totalPaid?: number;
   createdAt?: string;
   // Referral System
