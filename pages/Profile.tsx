@@ -1,13 +1,12 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, CreditCard, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, Coins, Wallet, History } from 'lucide-react';
+import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, CreditCard, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, Coins, Wallet } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LegalDoc } from '../components/LegalDoc';
-import { HistoryModal } from '../components/HistoryModal';
 import { ensureReferralCode } from '../services/db';
 
 interface ProfileProps {
@@ -36,8 +35,6 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
     const [payoutAmount, setPayoutAmount] = useState('');
     const [payoutLoading, setPayoutLoading] = useState(false);
 
-    // History State
-    const [showHistoryModal, setShowHistoryModal] = useState(false);
 
     // Sync initial mode prop with internal state & Check for Saved Referral
     useEffect(() => {
@@ -539,27 +536,6 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
                 {/* Decor */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-vantage-cyan/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
             </GlassCard>
-
-            {/* NEW: Performance History Button */}
-            <GlassCard className="border-vantage-cyan/30 bg-vantage-cyan/5 !p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-vantage-cyan/20 rounded-lg text-vantage-cyan">
-                        <History size={24} />
-                    </div>
-                    <div>
-                        <h3 className="text-sm font-bold text-white">{language === 'fr' ? 'Résultats d\'Hier' : 'Yesterday\'s Results'}</h3>
-                        <p className="text-xs text-gray-400">{language === 'fr' ? 'Voir la performance de l\'IA' : 'Check AI Performance'}</p>
-                    </div>
-                </div>
-                <button
-                    onClick={() => setShowHistoryModal(true)}
-                    className="px-4 py-2 bg-vantage-cyan hover:bg-cyan-400 text-slate-900 font-bold rounded-lg text-xs"
-                >
-                    View
-                </button>
-            </GlassCard>
-
-            <HistoryModal isOpen={showHistoryModal} onClose={() => setShowHistoryModal(false)} />
 
             {/* Referral Program Section */}
             <GlassCard className="border-vantage-purple/20 bg-vantage-purple/5">

@@ -4,9 +4,8 @@ import { getGlobalTodayKey, saveTodaysPredictions, getGlobalYesterdayKey, getPre
 import { getTodaysFixtures, filterGlobalFixtures, enrichFixtures, formatFixtureContext } from "./sportsData";
 
 // Dynamic Model Management
-// Dynamic Model Management
-// Switched to 2.0 Flash for balanced performance and speed.
-const DEFAULT_MODEL = 'gemini-2.0-flash-exp';
+// Switched to 3.0 Flash for balanced performance and speed.
+const DEFAULT_MODEL = 'gemini-3-flash';
 let currentModel = localStorage.getItem('vantage_gemini_model') || DEFAULT_MODEL;
 
 export const setGeminiModel = (model: string) => {
@@ -17,9 +16,9 @@ export const setGeminiModel = (model: string) => {
 export const getGeminiModel = () => currentModel;
 
 export const AVAILABLE_MODELS = [
-    { id: 'gemini-2.0-flash-exp', name: 'Vantage AI 2.0 Flash (Fastest)' },
-    { id: 'gemini-1.5-flash', name: 'Vantage AI 1.5 Flash (Stable)' },
-    { id: 'gemini-1.5-pro', name: 'Vantage AI 1.5 Pro (Deep Reasoning)' }
+    { id: 'gemini-3-flash', name: 'Vantage AI 3.0 Flash (Ultra-Fast)' },
+    { id: 'gemini-3-pro', name: 'Vantage AI 3.0 Pro (Quantum Logic)' },
+    { id: 'gemini-2.5-pro', name: 'Vantage AI 2.5 Pro (High Fidelity)' }
 ];
 
 /**
@@ -107,7 +106,7 @@ export const testGeminiConnection = async (): Promise<{ status: 'OK' | 'ERROR'; 
                 const apiKey = getApiKey();
                 const ai = new GoogleGenAI({ apiKey });
                 await ai.models.generateContent({
-                    model: 'gemini-3-flash-preview', // Try fallback model
+                    model: 'gemini-3-pro', // Try fallback model
                     contents: "Hello"
                 });
                 return { status: 'OK', latency, message: "Search Denied (403), but AI is active. Simulation Mode enabled." };
