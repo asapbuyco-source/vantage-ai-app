@@ -7,6 +7,10 @@ let BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || "http://localhost:8080";
 if (BACKEND_URL && !BACKEND_URL.startsWith('http')) {
     BACKEND_URL = `https://${BACKEND_URL}`;
 }
+// Fix common Railway domain typo: railwayapp -> railway.app
+if (BACKEND_URL.includes('railwayapp') && !BACKEND_URL.includes('railway.app')) {
+    BACKEND_URL = BACKEND_URL.replace('railwayapp', 'railway.app');
+}
 // Remove trailing slash if present
 BACKEND_URL = BACKEND_URL.replace(/\/$/, "");
 const API_BASE = `${BACKEND_URL}/api/sportmonks`;
