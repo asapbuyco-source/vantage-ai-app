@@ -1,0 +1,10 @@
+[[redirects]]
+  from = "/api/sportmonks/*"
+  to = "https://api.sportmonks.com/v3/football/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

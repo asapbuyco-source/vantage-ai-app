@@ -5,8 +5,19 @@ import { getTodaysFixtures, filterGlobalFixtures, enrichFixtures, formatFixtureC
 
 // Dynamic Model Management
 // Switched to 3.0 Flash for balanced performance and speed.
-const DEFAULT_MODEL = 'gemini-2.0-flash';
-let currentModel = localStorage.getItem('vantage_gemini_model') || DEFAULT_MODEL;
+const DEFAULT_MODEL = 'gemini-3.0-flash';
+
+export const AVAILABLE_MODELS = [
+    { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro (Complex Tasks & Engineering)' },
+    { id: 'gemini-3.0-deep-think', name: 'Gemini 3 Deep Think (Research & Logic)' },
+    { id: 'gemini-3.0-flash', name: 'Gemini 3 Flash (Ultra-Fast & Efficient)' },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Complex Reasoning)' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Versatile)' }
+];
+
+const savedModel = localStorage.getItem('vantage_gemini_model');
+const isValidModel = savedModel && AVAILABLE_MODELS.some(m => m.id === savedModel);
+let currentModel = isValidModel ? savedModel : DEFAULT_MODEL;
 
 export const setGeminiModel = (model: string) => {
     currentModel = model;
@@ -14,12 +25,6 @@ export const setGeminiModel = (model: string) => {
 };
 
 export const getGeminiModel = () => currentModel;
-
-export const AVAILABLE_MODELS = [
-    { id: 'gemini-2.0-flash', name: 'Vantage AI Flash (Ultra-Fast)' },
-    { id: 'gemini-2.5-pro-exp-03-25', name: 'Vantage AI 2.5 Pro (High Fidelity)' },
-    { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'Vantage AI Thinking (Deep Analysis)' }
-];
 
 /**
  * Helper to get API Key exclusively from Environment Variables.
@@ -404,8 +409,8 @@ Using the enriched fixture data above AND Google Search for additional matches t
                 `;
 
                     // Call without tools, and force a generally available model to avoid cascading 403s
-                    // Use 'gemini-3-flash-preview' as it is more stable than experimental models
-                    const fallbackModel = 'gemini-2.0-flash';
+                    // Use 'gemini-3.0-flash' as it is more stable than experimental models
+                    const fallbackModel = 'gemini-3.0-flash';
 
                     const response = await ai.models.generateContent({
                         model: fallbackModel,

@@ -557,14 +557,17 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
 
             {/* Trust Signals */}
             <div className="pt-4 flex flex-col items-center space-y-3">
-              <div className="flex items-center gap-4 opacity-60 grayscale hover:grayscale-0 transition-all">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/MTN_Logo.svg/1024px-MTN_Logo.svg.png" alt="MTN" className="h-6 object-contain" />
-                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Orange_logo.svg/1200px-Orange_logo.svg.png" alt="Orange" className="h-6 object-contain" />
+              <div className="flex items-center justify-center gap-4 opacity-70 grayscale hover:grayscale-0 transition-all flex-wrap">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/3/3f/MTN-logo.jpg" alt="MTN" className="h-6 object-contain rounded-sm" />
+                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg" alt="Orange" className="h-6 object-contain" />
+                <div className="bg-white px-2 py-0.5 rounded flex items-center justify-center h-6">
+                  <img src="https://selar.co/images/logo.png" alt="Selar" className="h-4 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement!.innerHTML = '<span class="text-black font-bold text-xs tracking-tight">Selar</span>'; }} />
+                </div>
               </div>
 
-              <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                <ShieldCheck size={12} className="text-green-500" />
-                <span>Secure Payment via Fapshi • Instant Activation</span>
+              <div className="flex items-center gap-1 text-[10px] text-gray-500 text-center">
+                <ShieldCheck size={12} className="text-green-500 shrink-0" />
+                <span>Secure Payment via Fapshi & Selar • Instant Activation</span>
               </div>
 
               {/* Manual Verification Button */}

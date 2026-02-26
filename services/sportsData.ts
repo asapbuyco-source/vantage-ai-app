@@ -1,5 +1,6 @@
-
-const API_BASE = "https://api.sportmonks.com/v3/football";
+const API_BASE = import.meta.env.PROD
+    ? "/api/sportmonks"
+    : "https://api.sportmonks.com/v3/football";
 const API_KEY = import.meta.env?.VITE_SPORTMONKS_API_TOKEN || "";
 
 // African league IDs + top European competition IDs to prioritise
