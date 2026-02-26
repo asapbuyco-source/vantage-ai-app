@@ -1,7 +1,13 @@
-const API_BASE = import.meta.env.PROD
-    ? "/api/sportmonks"
-    : "https://api.sportmonks.com/v3/football";
-const API_KEY = import.meta.env?.VITE_SPORTMONKS_API_TOKEN || "";
+// ══════════════════════════════════════════════════════════════════════
+// BACKEND PROXY INTEGRATION
+// We now route all Sportmonks requests through our Express backend
+// This solves CORS and hides the API key from the frontend.
+// ══════════════════════════════════════════════════════════════════════
+const BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || "http://localhost:3000";
+const API_BASE = `${BACKEND_URL}/api/sportmonks`;
+
+// The API token is securely appended by the backend proxy.
+// No longer needed on the frontend.
 
 // ══════════════════════════════════════════════════════════════════════
 // LEAGUE PRIORITY TIERS — Ordered by actual African betting volume
@@ -68,8 +74,7 @@ const PRIORITY_COUNTRIES = new Set([
 ]);
 
 const buildParams = (path: string) => {
-    const separator = path.includes('?') ? '&' : '?';
-    return `${path}${separator}api_token=${API_KEY}`;
+    return `${API_BASE}${path}`;
 };
 
 export interface Fixture {
@@ -127,7 +132,6 @@ export interface InjuryReport {
 
 // ── Safe API fetch helper ───────────────────────────────────────────────────
 async function apiFetch<T>(path: string): Promise<T | null> {
-    if (!API_KEY) return null;
     try {
         const fullUrl = `${API_BASE}${buildParams(path)}`;
         const res = await fetch(fullUrl, { method: 'GET' });
@@ -147,15 +151,10 @@ async function apiFetch<T>(path: string): Promise<T | null> {
  * Fetches today's fixtures from Sportmonks.
  */
 export const getTodaysFixtures = async (): Promise<Fixture[]> => {
-    if (!API_KEY) {
-        console.warn("Sportmonks API Token is missing. Fixture data will be empty.");
-        return [];
-    }
-
-    const todayDate = new Date().toISOString().split('T')[0];
+    // API_KEY is no longer needed on the frontend, as it's handled by the backend proxy.
 
     // Fetch fixtures by date, including league, participants (teams), and scores
-    const data: any[] | null = await apiFetch(`/fixtures/date/${todayDate}?include=league;participants;scores`);
+    const data: any[] | null = await apiFetch(`/livescores?include=league;participants;scores`);
     if (!data) return [];
 
     // Map Sportmonks response to our existing Fixture interface

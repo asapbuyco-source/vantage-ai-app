@@ -17,6 +17,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
   readonly VITE_SUPABASE_ANON_KEY: string
   readonly VITE_ADMIN_EMAIL: string
+  readonly VITE_BACKEND_URL?: string
   readonly VITE_SELAR_DAILY_LINK: string
   readonly VITE_SELAR_WEEKLY_LINK: string
   readonly VITE_SELAR_MONTHLY_LINK: string
