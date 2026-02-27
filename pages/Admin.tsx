@@ -553,6 +553,59 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                         </div>
                     </GlassCard>
 
+                    {/* Manual Generation Controls */}
+                    <GlassCard className="border-orange-500/30 bg-orange-500/5">
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-sm font-bold text-orange-500 uppercase flex items-center gap-2">
+                                <Activity size={16} /> Manual Data Generation
+                            </h3>
+                        </div>
+                        <p className="text-xs text-gray-400 mb-4">
+                            Manually trigger data generation for today. Note: The Railway backend auto-runs these schedules daily.
+                        </p>
+
+                        <div className="space-y-3">
+                            {/* Clear Data */}
+                            <button
+                                onClick={handleClearData}
+                                className="w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg text-xs font-bold border border-red-500/20 flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
+                            >
+                                <Trash2 size={14} /> Clear Today's Data
+                            </button>
+
+                            <div className="flex gap-2">
+                                {/* Football */}
+                                <button
+                                    onClick={handleGenerateData}
+                                    disabled={isSystemGenerating || isBasketballGenerating}
+                                    className="flex-1 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-lg text-xs font-bold border border-orange-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                                >
+                                    {isSystemGenerating ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
+                                    {isSystemGenerating ? "Generating..." : "Gen Football"}
+                                </button>
+
+                                {/* Basketball */}
+                                <button
+                                    onClick={handleGenerateBasketball}
+                                    disabled={isSystemGenerating || isBasketballGenerating}
+                                    className="flex-1 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-lg text-xs font-bold border border-orange-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                                >
+                                    {isBasketballGenerating ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
+                                    {isBasketballGenerating ? "Generating..." : "Gen Basketball"}
+                                </button>
+                            </div>
+
+                            {/* Accumulators */}
+                            <button
+                                onClick={handleGenerateAccas}
+                                disabled={isSystemGenerating || isBasketballGenerating}
+                                className="w-full py-2 bg-vantage-cyan/10 hover:bg-vantage-cyan/20 text-vantage-cyan rounded-lg text-xs font-bold border border-vantage-cyan/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                            >
+                                <Layers size={14} /> Generate Smart Accumulators
+                            </button>
+                        </div>
+                    </GlassCard>
+
                     {/* Vantage Intelligence Unit */}
                     <GlassCard className="border-vantage-cyan/30 bg-vantage-cyan/5">
                         <div className="flex justify-between items-center mb-4">

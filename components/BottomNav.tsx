@@ -45,16 +45,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
               className={`flex flex-col md:flex-row items-center justify-center md:justify-start w-full h-full md:h-14 space-y-0.5 md:space-y-0 md:space-x-4 transition-all duration-200 relative md:rounded-xl md:px-4 ${isActive && 'md:bg-vantage-cyan/10'
                 }`}
             >
-              {isActive && (
-                // @ts-ignore
-                <motion.div
-                  layoutId="nav-pill"
-                  className="absolute top-1 left-1/2 -translate-x-1/2 w-10 h-10 rounded-xl bg-vantage-cyan/15 md:hidden"
-                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                />
-              )}
               <div className={`relative z-10 p-2 md:p-0 rounded-xl transition-all duration-200 flex items-center justify-center ${isActive ? 'text-vantage-cyan -translate-y-0.5 md:translate-y-0 md:scale-110' : 'text-gray-400 dark:text-gray-500 md:hover:text-vantage-cyan/70'}`}>
-                <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} className="md:w-5 md:h-5" />
+                {isActive && (
+                  // @ts-ignore
+                  <motion.div
+                    layoutId="nav-pill"
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-vantage-cyan/15 rounded-xl md:hidden"
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} className="relative z-10 md:w-5 md:h-5" />
               </div>
               <span className={`relative z-10 text-[9px] md:text-sm font-semibold tracking-wide transition-colors ${isActive ? 'text-vantage-cyan md:font-bold' : 'text-gray-400 dark:text-gray-500 md:font-medium'}`}>
                 {item.label}
