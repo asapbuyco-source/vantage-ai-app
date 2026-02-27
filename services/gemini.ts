@@ -434,9 +434,7 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
                 searchPrompt,
                 {
                     temperature: 0.1, // Low temperature for strict adherence
-                    tools: [{ googleSearch: {} }],
-                    responseMimeType: "application/json",
-                    responseSchema: matchesSchema
+                    tools: [{ googleSearch: {} }]
                 }
             ));
 

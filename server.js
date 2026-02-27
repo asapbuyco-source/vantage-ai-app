@@ -75,9 +75,9 @@ app.use('/api/sportmonks', sportmonksLimiter, createProxyMiddleware({
     },
     onProxyReq: (proxyReq, req, res) => {
         // Append the API token to the query string securely on the backend
-        const url = new URL(proxyReq.path, 'http://localhost');
-        url.searchParams.append('api_token', SPORTMONKS_API_TOKEN);
-        proxyReq.path = url.pathname + url.search;
+        const token = SPORTMONKS_API_TOKEN || '';
+        const separator = proxyReq.path.includes('?') ? '&' : '?';
+        proxyReq.path = `${proxyReq.path}${separator}api_token=${token}`;
     },
     onError: (err, req, res) => {
         console.error('Proxy Error:', err);
