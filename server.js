@@ -15,6 +15,15 @@ dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Trust the reverse proxy (Render, Railway, etc.) so express-rate-limit can get the real client IP.
+// This resolves the ERR_ERL_UNEXPECTED_X_FORWARDED_FOR error.
+app.set('trust proxy', 1);
+
+// Basic health check endpoint for Render/Railway (Needs to be above CORS so it isn't blocked by missing origin)
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Enable CORS
 // During local dev, allow localhost:5173.
 // In production, allow the Netlify frontend URL.
@@ -43,11 +52,6 @@ app.use(cors({
     methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true
 }));
-
-// Basic health check endpoint for Render
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 // ══════════════════════════════════════════════════════════════════════
 // SPORTMONKS API PROXY
