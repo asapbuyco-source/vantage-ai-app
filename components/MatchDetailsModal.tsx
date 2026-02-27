@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Activity, Scale, ShieldAlert, Zap, Loader2, Trophy, Crosshair, Target } from 'lucide-react';
-import { Match } from '../types';
+import { NavigationTab, Match } from '../types';
 import { getTeamForm, getH2H, getMatchOdds, getTeamInjuries, TeamForm, H2HRecord, MatchOdds, InjuryReport } from '../services/sportsData';
 import { TeamLogo } from './TeamLogo';
 import { useAppContext } from '../context/AppContext';
@@ -9,9 +9,10 @@ import { useAppContext } from '../context/AppContext';
 interface Props {
     match: Match | null;
     onClose: () => void;
+    setTab?: (tab: NavigationTab) => void;
 }
 
-export const MatchDetailsModal: React.FC<Props> = ({ match, onClose }) => {
+export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) => {
     const { language } = useAppContext();
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'overview' | 'h2h' | 'injuries'>('overview');
@@ -34,17 +35,18 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose }) => {
 
         const fetchDetails = async () => {
             try {
-                const homeId = match.homeTeamId || 0;
-                const awayId = match.awayTeamId || 0;
-                const leagueId = match.leagueId || 0;
-                const seasonId = match.seasonId || 2024;
+                const homeId = Number(match.homeTeamId) || 0;
+                const awayId = Number(match.awayTeamId) || 0;
+                const leagueId = Number(match.leagueId) || 0;
+                const seasonId = Number(match.seasonId) || 2024;
+                const fixtureId = Number(match.id) || 0;
 
                 // Fetch all data in parallel
                 const [hf, af, h2, od, hi, ai] = await Promise.all([
                     homeId && leagueId ? getTeamForm(homeId, leagueId, seasonId) : null,
                     awayId && leagueId ? getTeamForm(awayId, leagueId, seasonId) : null,
                     homeId && awayId ? getH2H(homeId, awayId) : null,
-                    getMatchOdds(parseInt(match.id, 10) || 0),
+                    fixtureId ? getMatchOdds(fixtureId) : null,
                     homeId ? getTeamInjuries(homeId) : null,
                     awayId ? getTeamInjuries(awayId) : null,
                 ]);
@@ -333,6 +335,22 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose }) => {
                             </AnimatePresence>
                         )}
                     </div>
+
+                    {/* VIP CTA Footer */}
+                    {setTab && (
+                        <div className="p-4 border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5 shrink-0">
+                            <button
+                                onClick={() => {
+                                    onClose();
+                                    setTab('vip');
+                                }}
+                                className="w-full flex items-center justify-center gap-2 py-3 bg-vantage-purple hover:bg-purple-600 text-white rounded-xl font-bold shadow-lg shadow-vantage-purple/20 transition-all active:scale-95"
+                            >
+                                <Zap size={16} className="text-yellow-400 fill-yellow-400" />
+                                {language === 'fr' ? 'Voir la Prédiction de l\'IA' : 'Unlock AI Prediction (VIP)'}
+                            </button>
+                        </div>
+                    )}
                 </motion.div>
             </div>
         </AnimatePresence>

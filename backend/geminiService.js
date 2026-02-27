@@ -2,7 +2,13 @@ import { GoogleGenAI, Type } from "@google/genai";
 import admin from 'firebase-admin';
 
 // Reusing same models and context generation flow from the frontend
-const DEFAULT_MODEL = 'gemini-3-flash-preview';
+const AVAILABLE_MODELS = [
+    { id: 'gemini-3-flash-preview', name: 'Vantage AI 3.0 Flash (Stable)' },
+    { id: 'gemini-2.0-flash-exp', name: 'Vantage AI 2.0 Flash (Experimental)' },
+    { id: 'gemini-3-pro-preview', name: 'Vantage AI 3.0 Pro (Reasoning)' },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Complex Reasoning)' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Versatile)' }
+];
 
 /** Helper to get a date key for N days ago */
 const getDateKeyDaysAgo = (daysAgo) => {
@@ -188,32 +194,55 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
         }
 
         const ai = new GoogleGenAI({ apiKey: process.env.VITE_GOOGLE_GENAI_API_KEY || process.env.GOOGLE_GENAI_API_KEY });
-        const response = await ai.models.generateContent({
-            model: DEFAULT_MODEL,
-            contents: searchPrompt,
-            config: {
-                temperature: 0.1,
-                tools: [{ googleSearch: {} }],
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            id: { type: Type.STRING },
-                            prediction_en: { type: Type.STRING },
-                            prediction_fr: { type: Type.STRING },
-                            confidence: { type: Type.NUMBER },
-                            odds: { type: Type.NUMBER },
-                            category: { type: Type.STRING },
-                            analysis_en: { type: Type.STRING },
-                            analysis_fr: { type: Type.STRING }
-                        },
-                        required: ["id", "prediction_en", "confidence", "odds", "analysis_en", "category"]
+        let response = null;
+        let usedModel = null;
+        let lastError = null;
+
+        // Fallback Logic: Try models sequentially if one fails due to quota or server errors
+        for (const modelDef of AVAILABLE_MODELS) {
+            try {
+                console.log(`[Backend] Attempting generation with model: ${modelDef.id}...`);
+                response = await ai.models.generateContent({
+                    model: modelDef.id,
+                    contents: searchPrompt,
+                    config: {
+                        temperature: 0.1,
+                        tools: [{ googleSearch: {} }],
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    id: { type: Type.STRING },
+                                    prediction_en: { type: Type.STRING },
+                                    prediction_fr: { type: Type.STRING },
+                                    confidence: { type: Type.NUMBER },
+                                    odds: { type: Type.NUMBER },
+                                    category: { type: Type.STRING },
+                                    analysis_en: { type: Type.STRING },
+                                    analysis_fr: { type: Type.STRING }
+                                },
+                                required: ["id", "prediction_en", "confidence", "odds", "analysis_en", "category"]
+                            }
+                        }
                     }
-                }
+                });
+
+                // If we get here without throwing, the model succeeded
+                usedModel = modelDef.id;
+                console.log(`[Backend] ✅ Generation successful using ${usedModel}`);
+                break; // Exit the fallback loop
+            } catch (apiError) {
+                lastError = apiError;
+                console.warn(`[Backend] ⚠️ Model ${modelDef.id} failed: ${apiError.message}. Trying next model...`);
+                // Continue to the next iteration of the loop
             }
-        });
+        }
+
+        if (!response) {
+            throw new Error(`All available Gemini models failed. Last error: ${lastError?.message}`);
+        }
 
         const predictions = JSON.parse(response.text || "[]");
 

@@ -7,7 +7,7 @@ import { UserProfile, NavigationTab, Match, PayoutRequest, TeamAsset } from '../
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
 import { testGeminiConnection, setGeminiModel, getGeminiModel, AVAILABLE_MODELS, gradeYesterdayPredictions } from '../services/gemini';
-import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, getPredictionsForDate, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount } from '../services/db';
+import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, getPredictionsForDate, saveTodaysPredictions, savePredictionsForDate, getTeamAssetsMap, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount } from '../services/db';
 import { TeamLogo } from '../components/TeamLogo';
 
 interface AdminProps {
@@ -17,7 +17,7 @@ interface AdminProps {
 export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const { t } = useAppContext();
     const { getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, getPayoutRequests, processPayout } = useAuth();
-    const { clearData, generateData, generateAccumulators, generateBasketballData, isSystemGenerating, isBasketballGenerating, cancelAnalysis, systemError, predictions } = useData();
+    const { clearData, generateData, generateAccumulators, generateBasketballData, isSystemGenerating, setIsSystemGenerating, isBasketballGenerating, setIsBasketballGenerating, cancelAnalysis, systemError, predictions } = useData();
 
     const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'payouts' | 'assets' | 'bots'>('users');
     const [users, setUsers] = useState<UserProfile[]>([]);
@@ -268,7 +268,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
             if (existingPredictions.length > 0) {
                 if (window.confirm("Predictions for today already exist. Are you sure you want to overwrite them?")) {
-                    await saveDailyPredictions(todayKey, []); // Clear them out
+                    await saveTodaysPredictions([]); // Clear them out
                 } else {
                     return;
                 }
@@ -663,66 +663,6 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                 </motion.div>
                             )}
                         </AnimatePresence>
-                    </GlassCard>
-
-                    {/* System Actions */}
-                    <GlassCard className="border-orange-500/30 bg-orange-500/5">
-                        <h3 className="text-sm font-bold text-orange-500 uppercase mb-3 flex items-center gap-2">
-                            <ShieldAlert size={16} /> Flow Control
-                        </h3>
-
-                        <div className="flex flex-col gap-2">
-                            {/* Row 1: Football + Basketball */}
-                            <div className="flex space-x-2">
-                                <button
-                                    onClick={handleGenerateData}
-                                    disabled={isSystemGenerating || isBasketballGenerating}
-                                    className="flex-1 py-3 bg-vantage-purple hover:bg-purple-600 text-white font-bold rounded-xl shadow-lg shadow-vantage-purple/20 flex items-center justify-center space-x-2 disabled:opacity-50 transition-all active:scale-95"
-                                >
-                                    {isSystemGenerating ? <RefreshCw className="animate-spin" size={16} /> : <span>⚽</span>}
-                                    <span>{isSystemGenerating ? 'Generating...' : 'Football'}</span>
-                                </button>
-                                <button
-                                    onClick={handleGenerateBasketball}
-                                    disabled={isSystemGenerating || isBasketballGenerating}
-                                    className="flex-1 py-3 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 font-bold rounded-xl shadow-lg flex items-center justify-center space-x-2 disabled:opacity-50 transition-all active:scale-95"
-                                >
-                                    {isBasketballGenerating ? <RefreshCw className="animate-spin" size={16} /> : <span>🏀</span>}
-                                    <span>{isBasketballGenerating ? 'Generating...' : 'Basketball'}</span>
-                                </button>
-                            </div>
-                            {/* Row 2: Smart Accas */}
-                            <button
-                                onClick={handleGenerateAccas}
-                                disabled={isSystemGenerating || isBasketballGenerating}
-                                className="w-full py-3 bg-vantage-cyan/20 hover:bg-vantage-cyan/30 text-vantage-cyan border border-vantage-cyan/30 font-bold rounded-xl shadow-lg flex items-center justify-center space-x-2 disabled:opacity-50 transition-all active:scale-95"
-                            >
-                                <Layers size={18} />
-                                <span>Generate Smart Accumulators</span>
-                            </button>
-
-                            {/* Bottom Row: Danger */}
-                            <div className="flex space-x-2">
-                                {isSystemGenerating ? (
-                                    <button
-                                        onClick={cancelAnalysis}
-                                        className="flex-1 py-3 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center space-x-2"
-                                    >
-                                        <StopCircle size={18} />
-                                        <span>Stop Analysis</span>
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={handleClearData}
-                                        className="flex-1 py-3 bg-red-500/80 hover:bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-500/10 flex items-center justify-center space-x-2 border border-red-500/50"
-                                    >
-                                        <Trash2 size={18} />
-                                        <span>Clear Today's DB</span>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                        {isSystemGenerating && <p className="text-xs text-orange-500 mt-2 text-center animate-pulse">Vantage AI is currently searching and analyzing...</p>}
                     </GlassCard>
 
                     {/* Auto-Scheduler Settings */}

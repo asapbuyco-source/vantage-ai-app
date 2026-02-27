@@ -139,8 +139,20 @@ export interface InjuryReport {
     injured: string[];      // ["Mbappe (thigh)", "Bellingham (ankle)"]
 }
 
+// ── Simple In-memory Cache ──────────────────────────────────────────────────
+const apiCache = new Map<string, { data: any, timestamp: number }>();
+const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 // ── Safe API fetch helper ───────────────────────────────────────────────────
-async function apiFetch<T>(path: string): Promise<T | null> {
+async function apiFetch<T>(path: string, skipCache = false): Promise<T | null> {
+    if (!skipCache) {
+        const cached = apiCache.get(path);
+        if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
+            console.log(`[Cache Hit] ${path}`);
+            return cached.data;
+        }
+    }
+
     try {
         const fullUrl = buildParams(path);
         const res = await fetch(fullUrl, { method: 'GET' });
@@ -149,7 +161,13 @@ async function apiFetch<T>(path: string): Promise<T | null> {
             return null;
         }
         const data = await res.json();
-        return data.data ?? null; // Sportmonks wraps responses in 'data'
+        const finalData = data.data ?? null; // Sportmonks wraps responses in 'data'
+
+        if (finalData) {
+            apiCache.set(path, { data: finalData, timestamp: Date.now() });
+        }
+
+        return finalData;
     } catch (e) {
         console.warn(`Fetch catch error on ${path}`, e);
         return null;
@@ -164,7 +182,8 @@ export const getTodaysFixtures = async (dateStr?: string): Promise<Fixture[]> =>
     const dateToFetch = dateStr || new Date().toISOString().split('T')[0];
 
     // Fetch fixtures by date, including league, participants (teams), and scores
-    const data: any[] | null = await apiFetch(`/fixtures/date/${dateToFetch}?include=league;participants;scores`);
+    // We intentionally skip cache for today's fixtures so they stay slightly more fresh
+    const data: any[] | null = await apiFetch(`/fixtures/date/${dateToFetch}?include=league;participants;scores`, true);
     if (!data) return [];
 
     // Map Sportmonks response to our existing Fixture interface

@@ -10,7 +10,9 @@ const DEFAULT_MODEL = 'gemini-3-flash-preview';
 export const AVAILABLE_MODELS = [
     { id: 'gemini-3-flash-preview', name: 'Vantage AI 3.0 Flash (Stable)' },
     { id: 'gemini-2.0-flash-exp', name: 'Vantage AI 2.0 Flash (Experimental)' },
-    { id: 'gemini-3-pro-preview', name: 'Vantage AI 3.0 Pro (Reasoning)' }
+    { id: 'gemini-3-pro-preview', name: 'Vantage AI 3.0 Pro (Reasoning)' },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Complex Reasoning)' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Versatile)' }
 ];
 
 const savedModel = localStorage.getItem('vantage_gemini_model');

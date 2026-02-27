@@ -20,7 +20,7 @@ type SortKey = 'time' | 'league';
 export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const { t, language, setLanguage, theme, toggleTheme } = useAppContext();
   const { userProfile, isAdmin } = useAuth();
-  const { rawFixtures, basketballPredictions, winRateStats, loading, isSystemGenerating, systemError } = useData();
+  const { predictions, rawFixtures, basketballPredictions, winRateStats, loading, isSystemGenerating, systemError } = useData();
 
   const isVip = userProfile?.isVip || isAdmin;
 
@@ -350,6 +350,12 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                               </div>
                             </div>
 
+                            {/* VIP Teaser / Analytics CTA */}
+                            <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/5 flex justify-center">
+                              <span className="text-[10px] font-bold text-gray-400 group-hover:text-vantage-cyan transition-colors flex items-center gap-1">
+                                <Activity size={12} /> {language === 'fr' ? 'Voir l\'Analyse du Match' : 'View Match Details'}
+                              </span>
+                            </div>
 
                           </div>
                         </GlassCard>
@@ -366,6 +372,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
       <MatchDetailsModal
         match={selectedMatch}
         onClose={() => setSelectedMatch(null)}
+        setTab={setTab}
       />
     </div>
   );
