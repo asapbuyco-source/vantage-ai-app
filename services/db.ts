@@ -376,6 +376,8 @@ export interface AppSettings {
     annualPlanEnabled?: boolean;
     footballGenTime?: string;
     basketballGenTime?: string;
+    blogGenTime?: string; // Daily time to generate AI SEO blog
+    googleSiteVerificationTag?: string; // GSC Meta tag for injection
     gradingTime?: string;
     updatedAt?: string;
 }

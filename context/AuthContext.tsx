@@ -247,7 +247,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 isVip: true,
                 vipExpiry: expiry.toISOString(),
                 vipPlan: plan,
-                totalPaid: (userProfile?.totalPaid || 0) + planCost
+                totalPaid: increment(planCost)
             });
 
             if (userProfile?.referredBy) {
@@ -279,7 +279,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const currentBalance = userSnap.data().referralEarnings || 0;
                 if (amount > currentBalance) throw new Error("Insufficient balance");
 
-                const payoutRef = doc(collection(db, "payouts"));
+                const payoutRef = doc(collection(db, "payout_requests"));
                 transaction.update(userRef, { referralEarnings: increment(-amount) });
                 transaction.set(payoutRef, {
                     userId: user.uid,
@@ -301,7 +301,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getPayoutRequests = async (): Promise<PayoutRequest[]> => {
         if (!isAdmin) return [];
         try {
-            const q = query(collection(db, "payouts"), orderBy("date", "desc"));
+            const q = query(collection(db, "payout_requests"), orderBy("date", "desc"));
             const snapshot = await getDocs(q);
             const requests: PayoutRequest[] = [];
             snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() } as PayoutRequest));
@@ -388,7 +388,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const tokenSnap = await getDoc(doc(db, 'selar_pending', selarRef));
                 if (!tokenSnap.exists()) return false;
                 const data = tokenSnap.data();
-                const plan: 'daily' | 'weekly' | 'monthly' = data.plan || 'daily';
+                const plan: 'daily' | 'weekly' | 'monthly' | 'annual' = data.plan || 'daily';
                 await upgradeToVip(plan);
                 localStorage.removeItem('pendingVipPlan');
                 return true;

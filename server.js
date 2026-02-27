@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import admin from 'firebase-admin';
+import fs from 'fs';
 import { initScheduler } from './backend/scheduler.js';
 import { generateDailyPredictionsServerSide } from './backend/geminiService.js';
 
@@ -80,7 +81,7 @@ app.use(cors({
 const SPORTMONKS_API_TOKEN = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
 
 if (!SPORTMONKS_API_TOKEN) {
-    console.error("❌ CRTICAL ERROR: SPORTMONKS_API_TOKEN environment variable is not set!");
+    console.error("❌ CRITICAL ERROR: SPORTMONKS_API_TOKEN environment variable is not set!");
 }
 
 // 100 requests per 15 minutes per IP for Sportmonks
@@ -119,7 +120,7 @@ app.use(express.json({ limit: '5mb' }));
 const GOOGLE_GENAI_API_KEY = process.env.VITE_GOOGLE_GENAI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
 
 if (!GOOGLE_GENAI_API_KEY) {
-    console.error("❌ CRTICAL ERROR: GOOGLE_GENAI_API_KEY environment variable is not set!");
+    console.error("❌ CRITICAL ERROR: GOOGLE_GENAI_API_KEY environment variable is not set!");
 }
 
 // 50 requests per 15 minutes per IP for Gemini
@@ -171,7 +172,21 @@ app.post('/api/gemini/generate', geminiLimiter, async (req, res) => {
 // ADMIN TRIGGER ENDPOINTS
 // ══════════════════════════════════════════════════════════════════════
 
-app.post('/api/admin/generate-football', geminiLimiter, async (req, res) => {
+// Admin authentication middleware — requires x-admin-token header matching ADMIN_API_SECRET env var.
+const adminAuth = (req, res, next) => {
+    const token = req.headers['x-admin-token'];
+    const secret = process.env.ADMIN_API_SECRET;
+    if (!secret) {
+        console.warn('[AdminAuth] ADMIN_API_SECRET not set — admin endpoints are unprotected!');
+        return next(); // fail-open only if secret is not configured (dev mode)
+    }
+    if (!token || token !== secret) {
+        return res.status(401).json({ error: 'Unauthorized — missing or invalid x-admin-token header' });
+    }
+    next();
+};
+
+app.post('/api/admin/generate-football', adminAuth, geminiLimiter, async (req, res) => {
     try {
         console.log('[API] Manual Football Generation Triggered via Admin');
         const result = await generateDailyPredictionsServerSide();
@@ -182,12 +197,163 @@ app.post('/api/admin/generate-football', geminiLimiter, async (req, res) => {
     }
 });
 
-app.post('/api/admin/generate-basketball', geminiLimiter, async (req, res) => {
+app.post('/api/admin/generate-basketball', adminAuth, geminiLimiter, async (req, res) => {
     res.json({ status: 'success', message: 'Basketball generation not fully implemented on backend yet.' });
 });
 
-app.post('/api/admin/grade-yesterday', geminiLimiter, async (req, res) => {
+app.post('/api/admin/grade-yesterday', adminAuth, geminiLimiter, async (req, res) => {
     res.json({ status: 'success', message: 'Grading not fully implemented on backend yet.' });
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// SERVER-SIDE RENDERING & SEO (Static + Dynamic Routes)
+// ══════════════════════════════════════════════════════════════════════
+
+// 1. Serve static files from the React dist directory FIRST (except index.html)
+const distPath = path.join(__dirname, '..', 'dist');
+app.use(express.static(distPath, { index: false }));
+
+// 2. Dynamic Sitemap Generator
+app.get('/sitemap.xml', async (req, res) => {
+    try {
+        res.header('Content-Type', 'application/xml');
+
+        const baseUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, "") : 'https://vantageaiafrica.netlify.app';
+        let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+        xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+
+        // Add static routes
+        const staticRoutes = ['/', '/VIP', '/FreePicks', '/Kelly', '/Guide'];
+        staticRoutes.forEach(route => {
+            xml += `  <url>\n    <loc>${baseUrl}${route}</loc>\n    <changefreq>daily</changefreq>\n    <priority>${route === '/' ? '1.0' : '0.8'}</priority>\n  </url>\n`;
+        });
+
+        // Add dynamic predictions routes
+        if (admin.apps.length > 0) {
+            // Get up to 60 most recent prediction days
+            const snapshot = await admin.firestore()
+                .collection('daily_predictions')
+                .orderBy('updatedAt', 'desc')
+                .limit(60)
+                .get();
+
+            snapshot.forEach(doc => {
+                const dateKey = doc.id;
+                // Ensure it's a valid date key format YYYY-MM-DD
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+                    xml += `  <url>\n    <loc>${baseUrl}/predictions/${dateKey}</loc>\n    <changefreq>never</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
+                }
+            });
+        }
+
+        xml += '</urlset>';
+        res.send(xml);
+    } catch (err) {
+        console.error('Sitemap generation error:', err);
+        res.status(500).end();
+    }
+});
+
+// 3. Catch-all for rendering HTML
+app.get('*', async (req, res) => {
+    try {
+        const indexPath = path.join(distPath, 'index.html');
+        // Check if dist exists (important for dev environments before build)
+        if (!fs.existsSync(indexPath)) {
+            return res.status(404).send('Vantage AI Frontend build not found. Please run npm run build.');
+        }
+
+        let html = fs.readFileSync(indexPath, 'utf-8');
+
+        // Fetch Admin Settings for Google Site Verification
+        let googleTag = '';
+        try {
+            if (admin.apps.length > 0) {
+                const settingsDoc = await admin.firestore().collection('settings').doc('app').get();
+                if (settingsDoc.exists) {
+                    googleTag = settingsDoc.data()?.googleSiteVerificationTag || '';
+                }
+            }
+        } catch (dbErr) {
+            console.warn('Could not fetch app settings for GSC tag:', dbErr.message);
+        }
+
+        // Inject GSC Verification Tag globally
+        if (googleTag) {
+            html = html.replace('<!-- GOOGLE_VERIFICATION -->', googleTag);
+        } else {
+            html = html.replace('<!-- GOOGLE_VERIFICATION -->', ''); // Clean up
+        }
+
+        // --- SPECIFIC ROUTE: /predictions/:date ---
+        const predictionsMatch = req.path.match(/^\/predictions\/(\d{4}-\d{2}-\d{2})$/);
+
+        if (predictionsMatch && admin.apps.length > 0) {
+            const dateKey = predictionsMatch[1];
+
+            // Try to fetch predictions and blog for this date
+            const [predDoc, blogDoc] = await Promise.all([
+                admin.firestore().collection('daily_predictions').doc(dateKey).get(),
+                admin.firestore().collection('daily_blogs').doc(dateKey).get()
+            ]);
+
+            if (predDoc.exists) {
+                const matchCount = predDoc.data()?.matches?.length || 0;
+                const matches = predDoc.data()?.matches || [];
+
+                // Construct a dynamic title and description
+                const title = `Pronostics Football ${dateKey} | Vantage AI (${matchCount} Matchs Analysés)`;
+
+                // Use the explicit AI Blog excerpt if available, otherwise fallback to generic text
+                let description = `Découvrez nos ${matchCount} pronostics exclusifs de football et de basketball pour le ${dateKey}, générés par le modèle exclusif de Vantage AI.`;
+                let blogContent = '';
+
+                if (blogDoc.exists) {
+                    description = blogDoc.data().excerpt || description;
+                    blogContent = blogDoc.data().content || '';
+                }
+
+                // Inject SEO Tags
+                const seoTags = `
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:url" content="https://vantageaiafrica.netlify.app/predictions/${dateKey}" />
+                `;
+
+                // Replace the default title and placeholders
+                html = html.replace(/<title>.*?<\/title>/, seoTags);
+
+                // Inject the raw HTML blog into a hidden NOSCRIPT or hidden div so crawlers index it 
+                // but React can mount cleanly around it (React replaces the root div content anyway).
+                // We must put it OUTSIDE of `<div id="root"></div>` to prevent React hydration errors.
+                if (blogContent) {
+                    // M-7: Sanitize AI-generated blog content to prevent XSS.
+                    // Only allow safe formatting tags — strip all script/event-handler/iframe tags.
+                    const allowedTags = ['p','h2','h3','ul','ol','li','strong','em','b','i','br','span','a'];
+                    const sanitized = blogContent
+                        .replace(/<script[\s\S]*?<\/script>/gi, '')
+                        .replace(/on\w+="[^"]*"/gi, '')
+                        .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+                        .replace(/<object[\s\S]*?<\/object>/gi, '')
+                        .replace(/<embed[\s\S]*?>/gi, '');
+                    const blogInjection = `
+                    <div id="vantage-seo-content" style="display:none;" aria-hidden="true">
+                        ${sanitized}
+                    </div>
+                    <!-- REACT_ROOT -->
+                    `;
+                    html = html.replace('<!-- REACT_ROOT -->', blogInjection);
+                }
+            }
+        }
+
+        res.send(html);
+    } catch (err) {
+        console.error('SSR Error:', err);
+        res.status(500).send('Server Error rendering page.');
+    }
 });
 
 // Start server

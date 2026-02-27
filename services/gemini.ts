@@ -4,15 +4,14 @@ import { getGlobalTodayKey, saveTodaysPredictions, saveDailyFixtures, getGlobalY
 import { getTodaysFixtures, filterGlobalFixtures, enrichFixtures, formatFixtureContext } from "./sportsData";
 
 // Dynamic Model Management
-// Switched to 3.0 Flash for balanced performance and speed.
-const DEFAULT_MODEL = 'gemini-3-flash-preview';
+// Switched to 2.5 Flash for balanced performance and speed.
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 export const AVAILABLE_MODELS = [
-    { id: 'gemini-3-flash-preview', name: 'Vantage AI 3.0 Flash (Stable)' },
-    { id: 'gemini-2.0-flash-exp', name: 'Vantage AI 2.0 Flash (Experimental)' },
-    { id: 'gemini-3-pro-preview', name: 'Vantage AI 3.0 Pro (Reasoning)' },
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Complex Reasoning)' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Versatile)' }
+    { id: 'gemini-2.5-flash', name: 'Vantage AI 2.5 Flash (Default)' },
+    { id: 'gemini-2.0-flash', name: 'Vantage AI 2.0 Flash (Fast)' },
+    { id: 'gemini-2.5-pro', name: 'Vantage AI 2.5 Pro (Reasoning)' },
+    { id: 'gemini-2.0-flash-exp', name: 'Vantage AI 2.0 Flash Exp (Experimental)' },
 ];
 
 const savedModel = localStorage.getItem('vantage_gemini_model');
@@ -116,7 +115,7 @@ export const testGeminiConnection = async (): Promise<{ status: 'OK' | 'ERROR'; 
             // Fallback test without search to see if key works at all
             try {
                 await backendGenerateContent(
-                    'gemini-3-pro', // Try fallback model
+                    'gemini-2.0-flash', // Try fallback model
                     "Hello"
                 );
                 return { status: 'OK', latency, message: "Search Denied (403), but AI is active. Simulation Mode enabled." };
@@ -483,9 +482,8 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
                     Use realistic team names, leagues, and times. Do not repeat a match.
                 `;
 
-                    // Call without tools, and force a generally available model to avoid cascading 403s
-                    // Use 'gemini-3.0-flash' as it is more stable than experimental models
-                    const fallbackModel = 'gemini-3.0-flash';
+                    // Call without tools, and force a stable model to avoid cascading errors
+                    const fallbackModel = 'gemini-2.0-flash';
 
                     const response = await backendGenerateContent(
                         fallbackModel,

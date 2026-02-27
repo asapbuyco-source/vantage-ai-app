@@ -10,6 +10,7 @@ import { generateDailyPredictions, generateSmartAccumulators } from '../services
 import { useAuth } from './AuthContext';
 
 interface DataContextType {
+    activeDate: string;
     predictions: Match[];
     rawFixtures: Match[];
     accumulators: AccumulatorSet | null;
@@ -33,6 +34,7 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user, loading: authLoading, isAdmin } = useAuth();
+    const [activeDate, setActiveDate] = useState<string>(getGlobalTodayKey());
     const [predictions, setPredictions] = useState<Match[]>([]);
     const [rawFixtures, setRawFixtures] = useState<Match[]>([]);
     const [accumulators, setAccumulators] = useState<AccumulatorSet | null>(null);
@@ -68,7 +70,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!user) { setLoading(false); return; }
         if (fetchPromiseRef.current && !bypassCache) return fetchPromiseRef.current;
 
-        const todayKey = getGlobalTodayKey();
+        // Check if viewing a specific date via the URL
+        let targetDate = getGlobalTodayKey();
+        const dateMatch = window.location.pathname.match(/^\/predictions\/(\d{4}-\d{2}-\d{2})$/);
+        if (dateMatch) {
+            targetDate = dateMatch[1];
+        }
+
+        setActiveDate(targetDate);
+        const isToday = targetDate === getGlobalTodayKey();
+
         if (abortControllerRef.current) abortControllerRef.current.abort();
         abortControllerRef.current = new AbortController();
         const signal = abortControllerRef.current.signal;
@@ -78,7 +89,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             try {
                 let dailyData = null;
-                if (!bypassCache) { dailyData = await getDailyData(todayKey); }
+                if (!bypassCache) { dailyData = await getDailyData(targetDate); }
 
                 if (signal.aborted) return;
 
@@ -89,12 +100,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         setAccumulators(dailyData.accumulators || null);
                         setLoading(false);
                     }
-                } else {
-                    // ─── AUTO-GENERATION LOGIC ───────────────────────────────
+                } else if (isToday) {
+                    // ─── AUTO-GENERATION LOGIC (ONLY FOR TODAY) ───────────────────────────────
                     // Any authenticated user can trigger generation (not just admin).
                     // A Firestore generation lock prevents concurrent calls.
 
-                    const lockAcquired = await acquireGenerationLock(todayKey);
+                    const lockAcquired = await acquireGenerationLock(targetDate);
 
                     if (!lockAcquired) {
                         // Another client is already generating. Poll every 5s for up to 2 min.
@@ -104,7 +115,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             await new Promise(res => setTimeout(res, 5000));
                             if (signal.aborted) return;
                             attempts++;
-                            const fresh = await getDailyData(todayKey);
+                            const fresh = await getDailyData(targetDate);
                             if (fresh && fresh.matches && fresh.matches.length > 0) {
                                 if (mountedRef.current) {
                                     setPredictions(fresh.matches);
@@ -124,7 +135,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             if (backendMatches && backendMatches.length > 0) {
                                 await saveTodaysPredictions(backendMatches);
                                 // Refresh to get both matches and the rawFixtures saved during generation
-                                const freshDaily = await getDailyData(todayKey);
+                                const freshDaily = await getDailyData(targetDate);
                                 if (mountedRef.current) {
                                     setPredictions(backendMatches);
                                     setRawFixtures(freshDaily?.rawFixtures || []);
@@ -135,14 +146,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         } catch (genError) {
                             if (mountedRef.current) setSystemError((genError as Error).message);
                         } finally {
-                            await releaseGenerationLock(todayKey);
+                            await releaseGenerationLock(targetDate);
                         }
                     }
+                } else {
+                    // It's a past date with no data
+                    setPredictions([]);
+                    setRawFixtures([]);
+                    setAccumulators(null);
                 }
 
-                // Also load basketball predictions in background
-                const bball = await getTodaysBasketballPredictions();
-                if (mountedRef.current && bball) setBasketballPredictions(bball);
+                // Also load basketball predictions in background (only if looking at today)
+                if (isToday) {
+                    const bball = await getTodaysBasketballPredictions();
+                    if (mountedRef.current && bball) setBasketballPredictions(bball);
+                } else {
+                    setBasketballPredictions([]);
+                }
 
             } catch (e) {
                 if (mountedRef.current) setSystemError((e as Error).message);
@@ -236,6 +256,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     return (
         <DataContext.Provider value={{
+            activeDate,
             predictions,
             rawFixtures,
             accumulators,
@@ -244,7 +265,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             loading,
             isSystemGenerating,
             isBasketballGenerating,
-            refreshData: () => fetchOrGenerate(false, isAdmin),
+            refreshData: () => fetchOrGenerate(false, false),
             generateData,
             generateAccumulators,
             generateBasketballData,

@@ -1,5 +1,6 @@
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../firebaseConfig";
+import { doc, setDoc, getDoc, runTransaction, serverTimestamp } from "firebase/firestore";
+import { db, auth } from "../firebaseConfig";
+
 
 /**
  * Selar Integration — Redirect-URL Method (Free, Fully Automatic)

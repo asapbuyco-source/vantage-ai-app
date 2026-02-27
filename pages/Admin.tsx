@@ -59,11 +59,16 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const [botSettingsSaved, setBotSettingsSaved] = useState(false);
 
     // Auto-scheduler Settings
+    // Scheduler & SEO Settings
     const [footballGenTime, setFootballGenTime] = useState('08:00');
     const [basketballGenTime, setBasketballGenTime] = useState('10:00');
     const [gradingTime, setGradingTime] = useState('06:00');
+    const [blogGenTime, setBlogGenTime] = useState('09:00');
+    const [googleSiteVerificationTag, setGoogleSiteVerificationTag] = useState('');
     const [savingSchedules, setSavingSchedules] = useState(false);
     const [schedulesSaved, setSchedulesSaved] = useState(false);
+    const [savingSeo, setSavingSeo] = useState(false);
+    const [seoSaved, setSeoSaved] = useState(false);
 
     useEffect(() => {
         isMounted.current = true;
@@ -76,10 +81,12 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             if (s.telegramEnabled !== undefined) setTelegramEnabled(s.telegramEnabled);
             if (s.referralRewardDays !== undefined) setReferralRewardDays(s.referralRewardDays);
 
-            // Scheduler Times
+            // Scheduler Times & SEO
             if (s.footballGenTime) setFootballGenTime(s.footballGenTime);
             if (s.basketballGenTime) setBasketballGenTime(s.basketballGenTime);
             if (s.gradingTime) setGradingTime(s.gradingTime);
+            if (s.blogGenTime) setBlogGenTime(s.blogGenTime);
+            if (s.googleSiteVerificationTag) setGoogleSiteVerificationTag(s.googleSiteVerificationTag);
         });
         return () => { isMounted.current = false; };
     }, []);
@@ -121,7 +128,8 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             await saveAppSettings({
                 footballGenTime,
                 basketballGenTime,
-                gradingTime
+                gradingTime,
+                blogGenTime
             });
             setSchedulesSaved(true);
             setTimeout(() => setSchedulesSaved(false), 3000);
@@ -129,6 +137,21 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             console.error('Failed to save scheduler settings', e);
         } finally {
             setSavingSchedules(false);
+        }
+    };
+
+    const handleSaveSeo = async () => {
+        setSavingSeo(true);
+        try {
+            await saveAppSettings({
+                googleSiteVerificationTag: googleSiteVerificationTag.trim()
+            });
+            setSeoSaved(true);
+            setTimeout(() => setSeoSaved(false), 3000);
+        } catch (e) {
+            console.error('Failed to save SEO settings', e);
+        } finally {
+            setSavingSeo(false);
         }
     };
 
@@ -756,6 +779,15 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                 />
                             </div>
                             <div className="flex flex-col bg-black/20 p-3 rounded-lg border border-white/5">
+                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">✍️ Auto-Blog Gen (Lagos)</span>
+                                <input
+                                    type="time"
+                                    value={blogGenTime}
+                                    onChange={e => setBlogGenTime(e.target.value)}
+                                    className="bg-transparent text-white text-sm outline-none font-mono"
+                                />
+                            </div>
+                            <div className="flex flex-col bg-black/20 p-3 rounded-lg border border-white/5">
                                 <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">📊 Grading Check (Lagos)</span>
                                 <input
                                     type="time"
@@ -764,6 +796,32 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                     className="bg-transparent text-white text-sm outline-none font-mono"
                                 />
                             </div>
+                        </div>
+                    </GlassCard>
+
+                    {/* SEO Configurator */}
+                    <GlassCard className="border-indigo-500/30 bg-indigo-500/5">
+                        <h3 className="text-sm font-bold text-indigo-500 uppercase mb-3 flex items-center gap-2">
+                            <Search size={16} /> SEO & Tracking Configurations
+                        </h3>
+                        <p className="text-xs text-gray-400 mb-3">
+                            Paste your Google Search Console Verification ID here. E.g. <code>content="YOUR_VERIFICATION_CODE"</code> (Just paste the code string inside)
+                        </p>
+                        <div className="flex gap-2 mb-2">
+                            <input
+                                type="text"
+                                placeholder="Verification hash string only..."
+                                value={googleSiteVerificationTag}
+                                onChange={(e) => setGoogleSiteVerificationTag(e.target.value)}
+                                className="flex-1 bg-slate-200 dark:bg-black/40 border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white"
+                            />
+                            <button
+                                onClick={handleSaveSeo}
+                                disabled={savingSeo}
+                                className={`px-4 font-bold rounded-lg text-sm transition-colors disabled:opacity-50 ${seoSaved ? 'bg-indigo-500 text-white' : 'bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-500 border border-indigo-500/30'}`}
+                            >
+                                {savingSeo ? <RefreshCw size={14} className="animate-spin" /> : seoSaved ? '✓ Saved' : 'Save Config'}
+                            </button>
                         </div>
                     </GlassCard>
 

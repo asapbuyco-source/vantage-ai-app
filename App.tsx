@@ -136,6 +136,9 @@ function AppContent() {
           );
           setActiveTab('vip');
         } else if (urlParams.get('selar_ref')) {
+          // Also clear any stale pendingSelarRef from localStorage on failure
+          localStorage.removeItem('pendingSelarRef');
+          localStorage.removeItem('pendingVipPlan');
           showToast(
             language === 'fr' ? 'Vérification Selar échouée. Contactez le support.' : 'Selar verification failed. Please contact support.',
             'error'

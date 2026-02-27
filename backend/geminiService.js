@@ -270,3 +270,104 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
         return { status: "error", error: e.message };
     }
 }
+
+export const generateDailyBlogServerSide = async () => {
+    console.log('[Backend] Starting scheduled Daily SEO Blog Generation...');
+    try {
+        const todayStr = getGlobalTodayKey();
+
+        // 1. Fetch today's generated predictions from Firestore
+        const docSnap = await admin.firestore().collection('daily_predictions').doc(todayStr).get();
+        if (!docSnap.exists) {
+            console.warn(`[Backend] No predictions found for ${todayStr}. Cannot generate blog.`);
+            return { status: "skipped", reason: "no_predictions" };
+        }
+
+        const data = docSnap.data();
+        const matches = data.matches || [];
+
+        if (matches.length === 0) {
+            console.warn(`[Backend] Predictions array is empty for ${todayStr}. Cannot generate blog.`);
+            return { status: "skipped", reason: "empty_predictions" };
+        }
+
+        // We only want to feed Gemini the best 5-10 matches to keep the blog focused
+        const topMatches = matches
+            .sort((a, b) => b.confidence - a.confidence)
+            .slice(0, 8);
+
+        const blogPrompt = `
+You are the Chief Editor for Vantage AI, a leading sports betting predictions platform in Africa (specifically targeting Cameroon, using 1xBet and Premier Bet).
+
+Today is ${todayStr}. Our quantitative AI model has just analyzed the daily sports schedule and identified these top fixtures:
+
+${JSON.stringify(topMatches, null, 2)}
+
+═══════════════════════════════════════════════
+YOUR OBJECTIVE
+═══════════════════════════════════════════════
+Write an engaging, SEO-optimized daily sports betting blog post in French analyzing today's top picks.
+This post will be injected directly into the HTML of our site to attract search engine traffic.
+
+REQUIREMENTS:
+1. Title: Create a catchy, click-worthy H1 title incorporating keywords like "Pronostics", "1xBet", "Cameroun", "Coupon du jour", or the names of the biggest teams playing today.
+2. Introduction: A brief hype intro (2-3 sentences) about today's football schedule.
+3. Top Picks Breakdown: Choose 3-4 of the most interesting matches from the JSON above. For each, write a short paragraph explaining *why* the prediction was made (e.g., team form, injuries, historical dominance). Use H2 tags for the match names.
+4. Accumulator Idea: Propose a "Coupon du Jour" (Accumulator of the Day) combining a few safe picks with their combined odds.
+5. Formatting: Use proper HTML tags (<h1>, <h2>, <p>, <ul>, <li>, <strong>). DO NOT use Markdown backticks (\`\`\`html) around your response. Return pure HTML.
+6. Tone: Confident, expert, and encouraging. Remind users to bet responsibly at the end.
+        `;
+
+        if (!process.env.GOOGLE_GENAI_API_KEY && !process.env.VITE_GOOGLE_GENAI_API_KEY) {
+            throw new Error("Missing Google Gen AI API Key on server");
+        }
+
+        const ai = new GoogleGenAI({ apiKey: process.env.VITE_GOOGLE_GENAI_API_KEY || process.env.GOOGLE_GENAI_API_KEY });
+        let response = null;
+        let lastError = null;
+
+        for (const modelDef of AVAILABLE_MODELS) {
+            try {
+                console.log(`[Backend] Attempting Blog Gen with model: ${modelDef.id}...`);
+                response = await ai.models.generateContent({
+                    model: modelDef.id,
+                    contents: blogPrompt,
+                    config: {
+                        temperature: 0.7, // slightly more creative for a blog
+                        responseMimeType: "text/plain",
+                    }
+                });
+                console.log(`[Backend] ✅ Blog Generation successful using ${modelDef.id}`);
+                break;
+            } catch (apiError) {
+                lastError = apiError;
+                console.warn(`[Backend] ⚠️ Model ${modelDef.id} failed: ${apiError.message}. Trying next...`);
+            }
+        }
+
+        if (!response || !response.text) {
+            throw new Error(`All available Gemini models failed for Blog Gen. Last error: ${lastError?.message}`);
+        }
+
+        const blogHtml = response.text;
+
+        // Extract a short description for the <meta description> tag by stripping HTML
+        const strippedText = blogHtml.replace(/<[^>]+>/g, '');
+        const excerpt = strippedText.substring(0, 150).trim() + '...';
+
+        // Save to Firebase
+        await admin.firestore().collection('daily_blogs').doc(todayStr).set({
+            content: blogHtml,
+            excerpt: excerpt,
+            updatedAt: new Date().toISOString()
+        });
+
+        console.log(`[Backend] ✅ Daily Blog saved successfully for ${todayStr}.`);
+        return { status: "success", generatedLength: blogHtml.length };
+
+    } catch (e) {
+        console.error('[Backend] Blog generation error:', e);
+        return { status: "error", error: e.message };
+    }
+}
+
