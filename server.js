@@ -255,7 +255,8 @@ app.get('/sitemap.xml', async (req, res) => {
 });
 
 // 3. Catch-all for rendering HTML
-app.get('(.*)', async (req, res) => {
+app.use(async (req, res, next) => {
+    if (req.method !== 'GET') return next();
     try {
         const indexPath = path.join(distPath, 'index.html');
         // Check if dist exists (important for dev environments before build)
