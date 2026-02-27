@@ -255,7 +255,7 @@ app.get('/sitemap.xml', async (req, res) => {
 });
 
 // 3. Catch-all for rendering HTML
-app.get('*', async (req, res) => {
+app.get('(.*)', async (req, res) => {
     try {
         const indexPath = path.join(distPath, 'index.html');
         // Check if dist exists (important for dev environments before build)
@@ -331,7 +331,7 @@ app.get('*', async (req, res) => {
                 if (blogContent) {
                     // M-7: Sanitize AI-generated blog content to prevent XSS.
                     // Only allow safe formatting tags — strip all script/event-handler/iframe tags.
-                    const allowedTags = ['p','h2','h3','ul','ol','li','strong','em','b','i','br','span','a'];
+                    const allowedTags = ['p', 'h2', 'h3', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'br', 'span', 'a'];
                     const sanitized = blogContent
                         .replace(/<script[\s\S]*?<\/script>/gi, '')
                         .replace(/on\w+="[^"]*"/gi, '')
