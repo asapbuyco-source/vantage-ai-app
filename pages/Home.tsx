@@ -296,7 +296,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
           </GlassCard>
         ) : (
           Object.keys(groupedMatches).map(groupKey => (
-            <div key={groupKey} className="space-y-3">
+            <div key={groupKey} className="space-y-4">
               {groupKey !== 'All Matches' && (
                 <div className="sticky top-0 z-10 py-2 bg-gradient-to-b from-vantage-lightBg/95 to-vantage-lightBg/50 dark:from-vantage-bg/95 dark:to-vantage-bg/50 backdrop-blur-md">
                   <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-slate-200/50 dark:bg-white/10 border border-slate-300 dark:border-white/10">
@@ -306,64 +306,67 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                 </div>
               )}
 
-              <AnimatePresence>
-                {groupedMatches[groupKey].map((match, idx) => {
-                  return (
-                    // @ts-ignore
-                    <motion.div
-                      key={match.id}
-                      layout
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.96 }}
-                      transition={{ delay: idx * 0.04 }}
-                    >
-                      <button
-                        onClick={() => setSelectedMatch(match)}
-                        className="w-full text-left"
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <AnimatePresence>
+                  {groupedMatches[groupKey].map((match, idx) => {
+                    return (
+                      // @ts-ignore
+                      <motion.div
+                        key={match.id}
+                        layout
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.96 }}
+                        transition={{ delay: idx * 0.04 }}
                       >
-                        <GlassCard className="!p-0 overflow-hidden relative group border border-slate-200 dark:border-white/10 hover:border-vantage-cyan/40 transition-colors">
-                          <div className="p-4 pt-10 relative z-10">
-                            {/* Time + League */}
-                            <div className="flex justify-center mb-3">
-                              <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full">
-                                <Clock size={10} /> {match.time} · {match.league}
-                              </span>
-                            </div>
+                        <button
+                          onClick={() => setSelectedMatch(match)}
+                          className="w-full text-left"
+                        >
+                          <GlassCard className="!p-0 overflow-hidden relative group border border-slate-200 dark:border-white/10 hover:border-vantage-cyan/40 transition-colors">
+                            <div className="p-4 pt-10 relative z-10">
+                              {/* Time + League */}
+                              <div className="flex justify-center mb-3">
+                                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full">
+                                  <Clock size={10} /> {match.time} · {match.league}
+                                </span>
+                              </div>
 
-                            {/* Teams */}
-                            <div className="flex justify-between items-start">
-                              <div className="flex flex-col items-center w-2/5 space-y-2">
-                                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 p-2 flex items-center justify-center border border-slate-200 dark:border-white/10">
-                                  <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-full h-full" />
+                              {/* Teams */}
+                              <div className="flex justify-between items-start">
+                                <div className="flex flex-col items-center w-2/5 space-y-2">
+                                  <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 p-2 flex items-center justify-center border border-slate-200 dark:border-white/10">
+                                    <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-full h-full" />
+                                  </div>
+                                  <span className="text-xs font-bold text-center text-slate-900 dark:text-white leading-tight line-clamp-2 min-h-[2.5em] flex items-center justify-center">{match.homeTeam}</span>
                                 </div>
-                                <span className="text-xs font-bold text-center text-slate-900 dark:text-white leading-tight line-clamp-2 min-h-[2.5em] flex items-center justify-center">{match.homeTeam}</span>
-                              </div>
-                              <div className="flex flex-col items-center justify-center w-1/5 pt-3">
-                                <span className="text-lg font-bold font-orbitron text-vantage-cyan/40">VS</span>
-                              </div>
-                              <div className="flex flex-col items-center w-2/5 space-y-2">
-                                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 p-2 flex items-center justify-center border border-slate-200 dark:border-white/10">
-                                  <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-full h-full" />
+                                <div className="flex flex-col items-center justify-center w-1/5 pt-3">
+                                  <span className="text-lg font-bold font-orbitron text-vantage-cyan/40">VS</span>
                                 </div>
-                                <span className="text-xs font-bold text-center text-slate-900 dark:text-white leading-tight line-clamp-2 min-h-[2.5em] flex items-center justify-center">{match.awayTeam}</span>
+                                <div className="flex flex-col items-center w-2/5 space-y-2">
+                                  <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 p-2 flex items-center justify-center border border-slate-200 dark:border-white/10">
+                                    <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-full h-full" />
+                                  </div>
+                                  <span className="text-xs font-bold text-center text-slate-900 dark:text-white leading-tight line-clamp-2 min-h-[2.5em] flex items-center justify-center">{match.awayTeam}</span>
+                                </div>
                               </div>
-                            </div>
 
-                            {/* VIP Teaser / Analytics CTA */}
-                            <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/5 flex justify-center">
-                              <span className="text-[10px] font-bold text-gray-400 group-hover:text-vantage-cyan transition-colors flex items-center gap-1">
-                                <Activity size={12} /> {language === 'fr' ? 'Voir l\'Analyse du Match' : 'View Match Details'}
-                              </span>
-                            </div>
+                              {/* VIP Teaser / Analytics CTA */}
+                              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/5 flex justify-center">
+                                <span className="text-[10px] font-bold text-slate-500 dark:text-gray-400 group-hover:text-vantage-cyan transition-colors flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 px-3 py-1.5 rounded-full">
+                                  <Activity size={12} className="group-hover:animate-pulse" />
+                                  {language === 'fr' ? 'Voir l\'Analyse du Match' : 'View Match Details'}
+                                </span>
+                              </div>
 
-                          </div>
-                        </GlassCard>
-                      </button>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
+                            </div>
+                          </GlassCard>
+                        </button>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
             </div>
           ))
         )}

@@ -9,12 +9,19 @@ import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
 import { GlassCard } from './GlassCard';
 import { TeamLogo } from './TeamLogo';
-import { Match } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { Match, NavigationTab } from '../types';
 
-export const TicketWizard: React.FC = () => {
+interface TicketWizardProps {
+    setTab?: (tab: NavigationTab) => void;
+}
+
+export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
     const { t, language } = useAppContext();
     const { predictions, basketballPredictions } = useData();
     const { toggleSavedPick, isPickSaved } = useAppContext();
+    const { userProfile } = useAuth();
+    const isVip = userProfile?.isVip || false;
 
     // Safety check for missing translations - removed because t is always defined as a fallback function
 
@@ -169,7 +176,28 @@ export const TicketWizard: React.FC = () => {
                         exit={{ x: -20, opacity: 0 }}
                         className="space-y-6"
                     >
-                        <div className="space-y-3">
+                        <div className="space-y-3 relative">
+                            {!isVip && (
+                                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-100/60 dark:bg-vantage-bg/80 backdrop-blur-[2px] rounded-2xl border border-vantage-purple/20">
+                                    <div className="p-3 bg-vantage-purple/20 rounded-full mb-3">
+                                        <Wallet className="text-vantage-purple" size={24} />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
+                                        {language === 'fr' ? 'Accès VIP Requis' : 'VIP Access Required'}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mb-4 px-6 text-center">
+                                        {language === 'fr'
+                                            ? 'Le Conciergerie IA est une fonctionnalité exclusive aux membres VIP.'
+                                            : 'The AI Concierge is an exclusive feature for VIP members.'}
+                                    </p>
+                                    <button
+                                        onClick={() => setTab && setTab('vip')}
+                                        className="px-6 py-2.5 bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white text-xs font-bold rounded-full shadow-lg hover:scale-105 transition-transform"
+                                    >
+                                        {language === 'fr' ? 'Devenir VIP' : 'Upgrade to VIP'}
+                                    </button>
+                                </div>
+                            )}
                             {[
                                 { id: 'low', label: t('concierge.risk_low'), icon: ShieldCheck, color: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' },
                                 { id: 'med', label: t('concierge.risk_med'), icon: TrendingUp, color: 'text-vantage-cyan', bg: 'bg-vantage-cyan/10', border: 'border-vantage-cyan/20' },
@@ -208,7 +236,7 @@ export const TicketWizard: React.FC = () => {
                             </button>
                             <button
                                 onClick={generateTicket}
-                                disabled={isGenerating}
+                                disabled={isGenerating || !isVip}
                                 className="flex-[2] py-4 bg-vantage-purple hover:bg-purple-600 text-white font-bold rounded-2xl shadow-xl shadow-vantage-purple/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
                             >
                                 {isGenerating ? <RefreshCw className="animate-spin" size={20} /> : <Wand2 size={20} />}

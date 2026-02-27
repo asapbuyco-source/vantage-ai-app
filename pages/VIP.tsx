@@ -184,99 +184,103 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           {icon} {title}
           <span className="ml-auto text-[10px] font-normal text-gray-500">{matches.length} picks</span>
         </h3>
-        <AnimatePresence>
-          {matches.map((match, idx) => {
-            const cat = match.category as keyof typeof CAT_CONFIG;
-            const cfg = CAT_CONFIG[cat] || CAT_CONFIG.safe;
-            return (
-              <motion.div
-                key={match.id}
-                initial={{ opacity: 0, y: 20, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.35, delay: idx * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
-              >
-                <div className={`relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 ${cfg.border}`}>
 
-                  {/* Header row */}
-                  <div className="flex justify-between items-center px-4 pt-4 pb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">{match.league}</span>
-                      <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.badge}`}>
-                        {cfg.icon} {cfg.label}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
-                        <Clock size={10} />{match.time}
-                      </span>
-                      <button
-                        onClick={() => handleCopy(`${match.homeTeam} vs ${match.awayTeam} — ${getPredictionText(match)}`, match.id)}
-                        className="p-1.5 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 hover:text-vantage-cyan"
-                      >
-                        {copiedId === match.id ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
-                      </button>
-                    </div>
-                  </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-3">
+          <AnimatePresence>
+            {matches.map((match, idx) => {
+              const cat = match.category as keyof typeof CAT_CONFIG;
+              const cfg = CAT_CONFIG[cat] || CAT_CONFIG.safe;
+              return (
+                <motion.div
+                  key={match.id}
+                  initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.35, delay: idx * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  className="h-full"
+                >
+                  <div className={`relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 h-full flex flex-col ${cfg.border}`}>
 
-                  {/* Teams row */}
-                  <div className="flex justify-between items-center px-4 py-3">
-                    <div className="flex items-center gap-2.5 w-5/12 overflow-hidden">
-                      <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0 p-1">
-                        <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-7 h-7" />
+                    {/* Header row */}
+                    <div className="flex justify-between items-center px-4 pt-4 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest leading-none truncate max-w-[80px]">{match.league}</span>
+                        <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${cfg.badge}`}>
+                          {cfg.icon} {cfg.label}
+                        </span>
                       </div>
-                      <span className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">{match.homeTeam}</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1 shrink-0 px-1">
-                      <span className="text-[10px] font-orbitron text-gray-400">VS</span>
-                      {match.odds > 1 && (
-                        <span className="text-[10px] font-bold bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">{match.odds.toFixed(2)}x</span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-end gap-2.5 w-5/12 overflow-hidden">
-                      <span className="text-sm font-bold text-slate-900 dark:text-white text-right truncate leading-tight">{match.awayTeam}</span>
-                      <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0 p-1">
-                        <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-7 h-7" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Prediction + confidence row */}
-                  <div className="relative mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 overflow-hidden">
-                    <ConfidenceBar pct={match.confidence} />
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col flex-1 mr-3 min-w-0">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">{t('free.pred_label')}</span>
-                        <span className="text-sm font-bold text-vantage-cyan leading-tight break-words">{getPredictionText(match)}</span>
-                      </div>
-                      <div className="flex flex-col items-center shrink-0">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">{t('free.prob_label')}</span>
-                        <motion.span
-                          className="text-lg font-bold font-orbitron text-green-500 dark:text-green-400"
-                          initial={{ scale: 0.5, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ delay: idx * 0.07 + 0.4, type: 'spring', stiffness: 300 }}
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                          <Clock size={10} />{match.time}
+                        </span>
+                        <button
+                          onClick={() => handleCopy(`${match.homeTeam} vs ${match.awayTeam} — ${getPredictionText(match)}`, match.id)}
+                          className="p-1.5 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 hover:text-vantage-cyan shrink-0"
                         >
-                          {match.confidence}%
-                        </motion.span>
+                          {copiedId === match.id ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
+                        </button>
                       </div>
                     </div>
-                  </div>
 
-                  {/* AI Reasoning */}
-                  <div className="mx-4 mb-4 p-3 rounded-xl bg-gradient-to-r from-vantage-purple/5 to-transparent border border-vantage-purple/15">
-                    <div className="flex items-start gap-2">
-                      <BrainCircuit size={13} className="text-vantage-purple mt-0.5 shrink-0" />
-                      <div>
-                        <span className="text-[10px] text-vantage-purple font-bold uppercase tracking-wide">AI Analysis</span>
-                        <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed mt-0.5">{getAnalysisText(match)}</p>
+                    {/* Teams row */}
+                    <div className="flex justify-between items-center px-4 py-3">
+                      <div className="flex items-center gap-2.5 w-5/12 overflow-hidden">
+                        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0 p-1">
+                          <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-7 h-7" />
+                        </div>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">{match.homeTeam}</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1 shrink-0 px-1">
+                        <span className="text-[10px] font-orbitron text-gray-400">VS</span>
+                        {match.odds > 1 && (
+                          <span className="text-[10px] font-bold bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">{match.odds.toFixed(2)}x</span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-end gap-2.5 w-5/12 overflow-hidden">
+                        <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white text-right truncate leading-tight">{match.awayTeam}</span>
+                        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0 p-1">
+                          <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-7 h-7" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Prediction + confidence row */}
+                    <div className="relative mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 overflow-hidden mt-auto">
+                      <ConfidenceBar pct={match.confidence} />
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col flex-1 mr-3 min-w-0">
+                          <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">{t('free.pred_label')}</span>
+                          <span className="text-xs sm:text-sm font-bold text-vantage-cyan leading-tight break-words line-clamp-2" title={getPredictionText(match)}>{getPredictionText(match)}</span>
+                        </div>
+                        <div className="flex flex-col items-center shrink-0">
+                          <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">{t('free.prob_label')}</span>
+                          <motion.span
+                            className="text-lg font-bold font-orbitron text-green-500 dark:text-green-400"
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ delay: idx * 0.07 + 0.4, type: 'spring', stiffness: 300 }}
+                          >
+                            {match.confidence}%
+                          </motion.span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* AI Reasoning */}
+                    <div className="mx-4 mb-4 p-3 rounded-xl bg-gradient-to-r from-vantage-purple/5 to-transparent border border-vantage-purple/15">
+                      <div className="flex items-start gap-2">
+                        <BrainCircuit size={13} className="text-vantage-purple mt-0.5 shrink-0" />
+                        <div>
+                          <span className="text-[10px] text-vantage-purple font-bold uppercase tracking-wide">AI Analysis</span>
+                          <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed mt-0.5 line-clamp-3" title={getAnalysisText(match)}>{getAnalysisText(match)}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       </div>
     );
   };

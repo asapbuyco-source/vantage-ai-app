@@ -234,12 +234,12 @@ function AppContent() {
 
   // Authenticated app
   return (
-    <div className="min-h-screen overflow-x-hidden selection:bg-vantage-cyan/30 font-sans transition-colors duration-300">
+    <div className="min-h-screen overflow-x-hidden selection:bg-vantage-cyan/30 font-sans transition-colors duration-300 md:flex">
 
       {/* Ambient Background */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-lg h-64 blur-[100px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-cyan/5' : 'bg-blue-200/40'}`} />
-        <div className={`absolute bottom-0 right-0 w-64 h-64 blur-[100px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-purple/5' : 'bg-purple-200/40'}`} />
+        <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 blur-[120px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-cyan/5' : 'bg-blue-200/40'}`} />
+        <div className={`absolute bottom-0 right-0 w-96 h-96 blur-[120px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-purple/5' : 'bg-purple-200/40'}`} />
       </div>
 
       {/* VIP Renewal Reminder Banner */}
@@ -282,7 +282,7 @@ function AppContent() {
         )}
       </AnimatePresence>
 
-      <main className="relative z-10 container mx-auto max-w-md px-4 pt-6 min-h-screen pb-24" style={{ paddingTop: showRenewalBanner ? '4rem' : undefined }}>
+      <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 pt-6 min-h-screen pb-24 md:pb-6" style={{ paddingTop: showRenewalBanner ? '4rem' : undefined }}>
         <AnimatePresence mode="wait">
           {
             // @ts-ignore
@@ -302,7 +302,7 @@ function AppContent() {
                 {activeTab === 'profile' && <Profile />}
                 {activeTab === 'admin' && <Admin setTab={setActiveTab} />}
                 {activeTab === 'kelly' && <Kelly setTab={setActiveTab} />}
-                {activeTab === 'concierge' && <TicketWizard />}
+                {activeTab === 'concierge' && <TicketWizard setTab={setActiveTab} />}
                 {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
                 {activeTab === 'results' && <Results />}
               </ErrorBoundary>

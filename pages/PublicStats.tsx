@@ -17,6 +17,7 @@ export const PublicStats: React.FC<PublicStatsProps> = ({ setTab }) => {
     const [memberCount, setMemberCount] = useState<{ total: number; vip: number } | null>(null);
     const [totalWins, setTotalWins] = useState<number | null>(null);
     const [loadingCounts, setLoadingCounts] = useState(true);
+    const [localStats, setLocalStats] = useState<any>(null);
 
     useEffect(() => {
         (async () => {
@@ -27,6 +28,7 @@ export const PublicStats: React.FC<PublicStatsProps> = ({ setTab }) => {
                     getWinRateStats(),
                 ]);
                 setMemberCount(counts);
+                setLocalStats(stats);
                 // Estimate total wins from monthly win rate × graded matches
                 const guessedTotal = Math.round((stats.monthly / 100) * 30 * 8);
                 setTotalWins(guessedTotal > 0 ? guessedTotal : null);
@@ -36,8 +38,9 @@ export const PublicStats: React.FC<PublicStatsProps> = ({ setTab }) => {
         })();
     }, []);
 
-    const streak = winRateStats?.streak ?? 0;
-    const monthlyRate = winRateStats?.monthly ?? 0;
+    const displayStats = localStats || winRateStats;
+    const streak = displayStats?.streak ?? 0;
+    const monthlyRate = displayStats?.monthly ?? 0;
     const vipCount = memberCount?.vip ?? 0;
     const totalCount = memberCount?.total ?? 0;
 
@@ -120,9 +123,9 @@ export const PublicStats: React.FC<PublicStatsProps> = ({ setTab }) => {
                 </div>
                 <div className="flex gap-4">
                     {[
-                        { label: language === 'fr' ? "Aujourd'hui" : 'Today', value: winRateStats?.daily ?? 0 },
-                        { label: language === 'fr' ? '7 Jours' : '7 Days', value: winRateStats?.weekly ?? 0 },
-                        { label: language === 'fr' ? '30 Jours' : '30 Days', value: winRateStats?.monthly ?? 0 },
+                        { label: language === 'fr' ? "Aujourd'hui" : 'Today', value: displayStats?.daily ?? 0 },
+                        { label: language === 'fr' ? '7 Jours' : '7 Days', value: displayStats?.weekly ?? 0 },
+                        { label: language === 'fr' ? '30 Jours' : '30 Days', value: displayStats?.monthly ?? 0 },
                     ].map((r, i) => (
                         <div key={i} className="flex-1 flex flex-col items-center gap-2">
                             <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-1.5 overflow-hidden">
