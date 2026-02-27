@@ -341,7 +341,10 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                       transition={{ delay: idx * 0.03 }}
                     >
                       <button
-                        onClick={() => setSelectedMatch(match)}
+                        onClick={() => {
+                          window.scrollTo({ top: 0, behavior: 'instant' });
+                          setSelectedMatch(match);
+                        }}
                         className="w-full text-left group"
                       >
                         <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-[#1a1d26] hover:border-vantage-cyan/40 hover:bg-[#1e2230] transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-vantage-cyan/5 group-hover:ring-1 group-hover:ring-vantage-cyan/10">
@@ -428,25 +431,22 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         )}
       </div>
 
-      {/* ─── STICKY VIP CTA ─── */}
+      {/* ─── VIP CTA  ─── */}
       {/* @ts-ignore */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md z-40 md:relative md:bottom-auto md:left-auto md:translate-x-0 md:max-w-full"
+        className="w-full"
       >
         <button
           onClick={() => setTab('vip')}
           className="w-full relative overflow-hidden rounded-2xl py-4 px-5 flex items-center justify-between group shadow-xl shadow-vantage-purple/30"
           style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #06b6d4 100%)' }}
         >
-          {/* Animated glow */}
           <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="absolute -inset-px rounded-2xl bg-gradient-to-r from-vantage-purple via-indigo-500 to-vantage-cyan opacity-0 group-hover:opacity-30 transition-opacity blur-sm" />
-
           <div className="relative flex items-center gap-3">
-            <div className="p-2 bg-white/20 rounded-lg">
+            <div className="p-2 bg-white/20 rounded-lg shrink-0">
               <Zap size={18} className="text-yellow-300 fill-yellow-300" />
             </div>
             <div className="text-left">
@@ -458,10 +458,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
               </div>
             </div>
           </div>
-          <div className="relative flex items-center gap-1.5">
-            <span className="hidden sm:block text-xs font-bold text-white/80">VIP</span>
-            <ArrowRight size={20} className="text-white group-hover:translate-x-1 transition-transform" />
-          </div>
+          <ArrowRight size={20} className="relative text-white shrink-0 group-hover:translate-x-1 transition-transform" />
         </button>
       </motion.div>
 
