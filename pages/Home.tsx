@@ -187,8 +187,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
               key={sport}
               onClick={() => setActiveSport(sport)}
               className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${activeSport === sport
-                  ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white'
-                  : 'text-gray-500'
+                ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white'
+                : 'text-gray-500'
                 }`}
             >
               {sport === 'football' ? '⚽' : '🏀'}
@@ -344,7 +344,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                         onClick={() => setSelectedMatch(match)}
                         className="w-full text-left group"
                       >
-                        <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-white/8 bg-white/90 dark:bg-white/3 hover:border-vantage-cyan/50 dark:hover:border-vantage-cyan/40 hover:bg-slate-50 dark:hover:bg-white/6 transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-vantage-cyan/5">
+                        <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-[#1a1d26] hover:border-vantage-cyan/40 hover:bg-[#1e2230] transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-vantage-cyan/5 group-hover:ring-1 group-hover:ring-vantage-cyan/10">
 
                           {/* Subtle gradient glow top edge */}
                           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-vantage-cyan/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -396,23 +396,18 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                               </div>
                             </div>
 
-                            {/* Bottom row — odds / confidence / CTA */}
-                            <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-white/5 pt-3">
+                            {/* Bottom row — confidence / CTA */}
+                            <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/5 pt-3">
                               <div className="flex items-center gap-2">
-                                {hasOdds && (
-                                  <span className="text-[10px] font-bold text-vantage-cyan bg-vantage-cyan/10 border border-vantage-cyan/20 px-2 py-0.5 rounded-full">
-                                    {language === 'fr' ? 'Cote' : 'Odds'} {match.odds?.toFixed(2)}
-                                  </span>
-                                )}
                                 {hasConfidence && (
                                   <span className="text-[10px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded-full flex items-center gap-1">
                                     <BarChart3 size={9} />
                                     {match.confidence}%
                                   </span>
                                 )}
-                                {!hasOdds && !hasConfidence && (
-                                  <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                                    <Activity size={10} /> {language === 'fr' ? 'Analyse disponible' : 'Analysis available'}
+                                {!hasConfidence && (
+                                  <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                                    <Activity size={10} /> {language === 'fr' ? 'Analyse IA' : 'AI Analysis'}
                                   </span>
                                 )}
                               </div>
