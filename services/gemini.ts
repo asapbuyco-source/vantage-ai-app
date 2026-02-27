@@ -5,14 +5,12 @@ import { getTodaysFixtures, filterGlobalFixtures, enrichFixtures, formatFixtureC
 
 // Dynamic Model Management
 // Switched to 3.0 Flash for balanced performance and speed.
-const DEFAULT_MODEL = 'gemini-3.0-flash';
+const DEFAULT_MODEL = 'gemini-3-flash-preview';
 
 export const AVAILABLE_MODELS = [
-    { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro (Complex Tasks & Engineering)' },
-    { id: 'gemini-3.0-deep-think', name: 'Gemini 3 Deep Think (Research & Logic)' },
-    { id: 'gemini-3.0-flash', name: 'Gemini 3 Flash (Ultra-Fast & Efficient)' },
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Complex Reasoning)' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Versatile)' }
+    { id: 'gemini-3-flash-preview', name: 'Vantage AI 3.0 Flash (Stable)' },
+    { id: 'gemini-2.0-flash-exp', name: 'Vantage AI 2.0 Flash (Experimental)' },
+    { id: 'gemini-3-pro-preview', name: 'Vantage AI 3.0 Pro (Reasoning)' }
 ];
 
 const savedModel = localStorage.getItem('vantage_gemini_model');
@@ -327,7 +325,7 @@ export const generateDailyPredictions = async (signal?: AbortSignal): Promise<Ma
         // ATTEMPT 1: REAL DATA (API-Football enriched context + Search Grounding)
         // -------------------------------------------------------------------------
         try {
-            const rawFixtures = await getTodaysFixtures();
+            const rawFixtures = await getTodaysFixtures(todayStr);
             const filteredFixtures = filterGlobalFixtures(rawFixtures);
 
             if (filteredFixtures.length > 0) {

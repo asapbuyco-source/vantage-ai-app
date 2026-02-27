@@ -374,6 +374,9 @@ export interface AppSettings {
     telegramEnabled?: boolean;
     referralRewardDays?: number; // Free VIP days granted per successful referral
     annualPlanEnabled?: boolean;
+    footballGenTime?: string;
+    basketballGenTime?: string;
+    gradingTime?: string;
     updatedAt?: string;
 }
 

@@ -6,6 +6,9 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import admin from 'firebase-admin';
+import { initScheduler } from './backend/scheduler.js';
+import { generateDailyPredictionsServerSide } from './backend/geminiService.js';
 
 // Load environment variables from .env.local if available (for local dev)
 const __filename = fileURLToPath(import.meta.url);
@@ -14,6 +17,24 @@ dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+
+// Initialize Firebase Admin (Required for write access by the backend tasks)
+try {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount)
+        });
+        console.log('✅ Firebase Admin UI Initialized successfully');
+
+        // Start the automated cron scheduler now that Admin is ready
+        initScheduler();
+    } else {
+        console.warn('⚠️ FIREBASE_SERVICE_ACCOUNT not found. Auto-generation scheduler will not work.');
+    }
+} catch (error) {
+    console.error('❌ Failed to initialize Firebase Admin:', error.message);
+}
 
 // Trust the reverse proxy (Render, Railway, etc.) so express-rate-limit can get the real client IP.
 // This resolves the ERR_ERL_UNEXPECTED_X_FORWARDED_FOR error.
@@ -144,6 +165,29 @@ app.post('/api/gemini/generate', geminiLimiter, async (req, res) => {
             status: status
         });
     }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// ADMIN TRIGGER ENDPOINTS
+// ══════════════════════════════════════════════════════════════════════
+
+app.post('/api/admin/generate-football', geminiLimiter, async (req, res) => {
+    try {
+        console.log('[API] Manual Football Generation Triggered via Admin');
+        const result = await generateDailyPredictionsServerSide();
+        res.json(result);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Generation failed', details: e.message });
+    }
+});
+
+app.post('/api/admin/generate-basketball', geminiLimiter, async (req, res) => {
+    res.json({ status: 'success', message: 'Basketball generation not fully implemented on backend yet.' });
+});
+
+app.post('/api/admin/grade-yesterday', geminiLimiter, async (req, res) => {
+    res.json({ status: 'success', message: 'Grading not fully implemented on backend yet.' });
 });
 
 // Start server

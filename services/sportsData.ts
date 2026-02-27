@@ -159,11 +159,12 @@ async function apiFetch<T>(path: string): Promise<T | null> {
 /**
  * Fetches today's fixtures from Sportmonks.
  */
-export const getTodaysFixtures = async (): Promise<Fixture[]> => {
+export const getTodaysFixtures = async (dateStr?: string): Promise<Fixture[]> => {
     // API_KEY is no longer needed on the frontend, as it's handled by the backend proxy.
+    const dateToFetch = dateStr || new Date().toISOString().split('T')[0];
 
     // Fetch fixtures by date, including league, participants (teams), and scores
-    const data: any[] | null = await apiFetch(`/livescores?include=league;participants;scores`);
+    const data: any[] | null = await apiFetch(`/fixtures/date/${dateToFetch}?include=league;participants;scores`);
     if (!data) return [];
 
     // Map Sportmonks response to our existing Fixture interface

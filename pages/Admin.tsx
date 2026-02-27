@@ -58,6 +58,13 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const [whatsappSaved, setWhatsappSaved] = useState(false);
     const [botSettingsSaved, setBotSettingsSaved] = useState(false);
 
+    // Auto-scheduler Settings
+    const [footballGenTime, setFootballGenTime] = useState('08:00');
+    const [basketballGenTime, setBasketballGenTime] = useState('10:00');
+    const [gradingTime, setGradingTime] = useState('06:00');
+    const [savingSchedules, setSavingSchedules] = useState(false);
+    const [schedulesSaved, setSchedulesSaved] = useState(false);
+
     useEffect(() => {
         isMounted.current = true;
         // Load all settings
@@ -68,6 +75,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             if (s.telegramChannelId) setTelegramChannelId(s.telegramChannelId);
             if (s.telegramEnabled !== undefined) setTelegramEnabled(s.telegramEnabled);
             if (s.referralRewardDays !== undefined) setReferralRewardDays(s.referralRewardDays);
+
+            // Scheduler Times
+            if (s.footballGenTime) setFootballGenTime(s.footballGenTime);
+            if (s.basketballGenTime) setBasketballGenTime(s.basketballGenTime);
+            if (s.gradingTime) setGradingTime(s.gradingTime);
         });
         return () => { isMounted.current = false; };
     }, []);
@@ -100,6 +112,23 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             console.error('Failed to save bot settings', e);
         } finally {
             setSavingBotSettings(false);
+        }
+    };
+
+    const handleSaveSchedules = async () => {
+        setSavingSchedules(true);
+        try {
+            await saveAppSettings({
+                footballGenTime,
+                basketballGenTime,
+                gradingTime
+            });
+            setSchedulesSaved(true);
+            setTimeout(() => setSchedulesSaved(false), 3000);
+        } catch (e) {
+            console.error('Failed to save scheduler settings', e);
+        } finally {
+            setSavingSchedules(false);
         }
     };
 
@@ -232,7 +261,43 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     };
 
     const handleGenerateData = async () => {
-        await generateData();
+        setIsSystemGenerating(true);
+        try {
+            const todayKey = getGlobalTodayKey();
+            const existingPredictions = await getPredictionsForDate(todayKey);
+
+            if (existingPredictions.length > 0) {
+                if (window.confirm("Predictions for today already exist. Are you sure you want to overwrite them?")) {
+                    await saveDailyPredictions(todayKey, []); // Clear them out
+                } else {
+                    return;
+                }
+            }
+
+            const backendUrl = import.meta.env.VITE_BACKEND_URL;
+            if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
+
+            const response = await fetch(`${backendUrl}/api/admin/generate-football`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Backend error: ${errText}`);
+            }
+
+            const result = await response.json();
+            alert(`✅ Successfully generated ${result.generated} football predictions via Backend Scheduler.`);
+
+        } catch (error: any) {
+            console.error("Error generating data:", error);
+            if (error.name !== 'AbortError') {
+                alert("Failed to generate data. Check console for details.");
+            }
+        } finally {
+            setIsSystemGenerating(false);
+        }
     };
 
     const handleGenerateAccas = async () => {
@@ -244,30 +309,52 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     };
 
     const handleGenerateBasketball = async () => {
-        await generateBasketballData();
+        setIsBasketballGenerating(true);
+        try {
+            const backendUrl = import.meta.env.VITE_BACKEND_URL;
+            if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
+
+            const response = await fetch(`${backendUrl}/api/admin/generate-basketball`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) throw new Error('Backend generation failed');
+            const result = await response.json();
+            alert(`✅ Basketball generated via backend: ${result.message}`);
+        } catch (e) {
+            alert('Failed to trigger basketball generation');
+            console.error(e);
+        } finally {
+            setIsBasketballGenerating(false);
+        }
     };
 
     const handleGradeYesterday = useCallback(async (isAuto: boolean = false) => {
         const auto = typeof isAuto === 'boolean' ? isAuto : false;
         const yesterday = getGlobalYesterdayKey();
 
-        if (!auto && !window.confirm(`Start grading for yesterday (${yesterday})?`)) return;
+        if (!auto && !window.confirm(`Start grading for yesterday (${yesterday}) via Backend?`)) return;
 
         if (isMounted.current) {
             setIsGrading(true);
-            setGradingResult(auto ? "Auto-analyzing yesterday's results..." : "Starting grading process...");
+            setGradingResult(auto ? "Auto-analyzing yesterday's results..." : "Starting grading process on Backend...");
         }
 
         try {
-            const res = await gradeYesterdayPredictions();
+            const backendUrl = import.meta.env.VITE_BACKEND_URL;
+            if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
+
+            const response = await fetch(`${backendUrl}/api/admin/grade-yesterday`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const res = await response.json();
             if (isMounted.current) {
-                if (res.graded === 0) {
-                    setGradingResult(`All matches up to date (${res.total} checked).`);
-                } else {
-                    const resultMsg = `Success: Graded ${res.graded}/${res.total} matches.`;
-                    setGradingResult(resultMsg);
-                    if (!auto) alert(resultMsg);
-                }
+                const resultMsg = `Backened response: ${res.message || 'Success'}`;
+                setGradingResult(resultMsg);
+                if (!auto) alert(resultMsg);
             }
         } catch (e: any) {
             if (isMounted.current) {
@@ -636,6 +723,55 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                             </div>
                         </div>
                         {isSystemGenerating && <p className="text-xs text-orange-500 mt-2 text-center animate-pulse">Vantage AI is currently searching and analyzing...</p>}
+                    </GlassCard>
+
+                    {/* Auto-Scheduler Settings */}
+                    <GlassCard className="border-blue-500/30 bg-blue-500/5">
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="text-sm font-bold text-blue-500 uppercase flex items-center gap-2">
+                                <Activity size={16} /> Auto-Generation Scheduler (Railway)
+                            </h3>
+                            <button
+                                onClick={handleSaveSchedules}
+                                disabled={savingSchedules}
+                                className={`text-xs px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors disabled:opacity-50 ${schedulesSaved ? 'bg-blue-500 text-white' : 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-500'}`}
+                            >
+                                {savingSchedules ? <RefreshCw size={12} className="animate-spin" /> : schedulesSaved ? '✓ Saved' : 'Save Times'}
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-400 mb-4">
+                            Set the time (HH:MM) when Railway should automatically trigger prediction fetching and grading. Ensure you've provided the Firebase Admin service account to your Railway variables.
+                        </p>
+
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="flex flex-col bg-black/20 p-3 rounded-lg border border-white/5">
+                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">⚽ Football Gen (Lagos)</span>
+                                <input
+                                    type="time"
+                                    value={footballGenTime}
+                                    onChange={e => setFootballGenTime(e.target.value)}
+                                    className="bg-transparent text-white text-sm outline-none font-mono"
+                                />
+                            </div>
+                            <div className="flex flex-col bg-black/20 p-3 rounded-lg border border-white/5">
+                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">🏀 Basketball Gen (Lagos)</span>
+                                <input
+                                    type="time"
+                                    value={basketballGenTime}
+                                    onChange={e => setBasketballGenTime(e.target.value)}
+                                    className="bg-transparent text-white text-sm outline-none font-mono"
+                                />
+                            </div>
+                            <div className="flex flex-col bg-black/20 p-3 rounded-lg border border-white/5">
+                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">📊 Grading Check (Lagos)</span>
+                                <input
+                                    type="time"
+                                    value={gradingTime}
+                                    onChange={e => setGradingTime(e.target.value)}
+                                    className="bg-transparent text-white text-sm outline-none font-mono"
+                                />
+                            </div>
+                        </div>
                     </GlassCard>
 
                     {/* WhatsApp Community */}
