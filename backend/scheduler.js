@@ -1,6 +1,11 @@
 import cron from 'node-cron';
 import admin from 'firebase-admin';
-import { generateDailyPredictionsServerSide, generateDailyBlogServerSide } from './geminiService.js';
+import {
+    generateDailyPredictionsServerSide,
+    generateDailyBlogServerSide,
+    gradeYesterdayServerSide,
+    generateBasketballPredictionsServerSide
+} from './geminiService.js';
 
 // We'll export an initialization function so server.js can start it
 export const initScheduler = () => {
@@ -33,7 +38,7 @@ export const initScheduler = () => {
             const gradingTime = config.gradingTime || '06:00';
             const blogTime = config.blogGenTime || '09:00';
 
-            // Football Scheduler
+            // ── Football Scheduler ────────────────────────────────────────────
             if (footballTime !== currentFootballTime) {
                 if (footballTask) footballTask.stop();
                 currentFootballTime = footballTime;
@@ -42,8 +47,8 @@ export const initScheduler = () => {
                 footballTask = cron.schedule(`${fMin} ${fHour} * * *`, async () => {
                     console.log(`⚽ Running scheduled Football Generation at ${footballTime}...`);
                     try {
-                        await generateDailyPredictionsServerSide();
-                        console.log('[Scheduler] Football generation completed.');
+                        const result = await generateDailyPredictionsServerSide();
+                        console.log(`[Scheduler] Football generation completed: ${result?.status} — ${result?.generated ?? 0} matches`);
                     } catch (e) {
                         console.error('[Scheduler] Error in Football gen:', e);
                     }
@@ -51,7 +56,7 @@ export const initScheduler = () => {
                 console.log(`✅ Scheduled Football Gen for ${footballTime}`);
             }
 
-            // Basketball Scheduler — H-5: wired to actual generation function
+            // ── Basketball Scheduler ──────────────────────────────────────────
             if (basketballTime !== currentBasketballTime) {
                 if (basketballTask) basketballTask.stop();
                 currentBasketballTime = basketballTime;
@@ -60,14 +65,8 @@ export const initScheduler = () => {
                 basketballTask = cron.schedule(`${bMin} ${bHour} * * *`, async () => {
                     console.log(`🏀 Running scheduled Basketball Generation at ${basketballTime}...`);
                     try {
-                        // Dynamically import basketball generation if available in geminiService
-                        const geminiModule = await import('./geminiService.js');
-                        if (typeof geminiModule.generateBasketballPredictionsServerSide === 'function') {
-                            const result = await geminiModule.generateBasketballPredictionsServerSide();
-                            console.log('[Scheduler] Basketball generation completed:', result?.status || 'done');
-                        } else {
-                            console.warn('[Scheduler] ⚠️ generateBasketballPredictionsServerSide not yet exported from geminiService.js');
-                        }
+                        const result = await generateBasketballPredictionsServerSide();
+                        console.log(`[Scheduler] Basketball generation completed: ${result?.status} — ${result?.generated ?? 0} matches`);
                     } catch (e) {
                         console.error('[Scheduler] Error in Basketball gen:', e);
                     }
@@ -75,7 +74,7 @@ export const initScheduler = () => {
                 console.log(`✅ Scheduled Basketball Gen for ${basketballTime}`);
             }
 
-            // Grading Scheduler — H-5: TODO placeholder with explicit warning
+            // ── Grading Scheduler ─────────────────────────────────────────────
             if (gradingTime !== currentGradingTime) {
                 if (gradingTask) gradingTask.stop();
                 currentGradingTime = gradingTime;
@@ -83,13 +82,17 @@ export const initScheduler = () => {
 
                 gradingTask = cron.schedule(`${gMin} ${gHour} * * *`, async () => {
                     console.log(`📊 Running scheduled Grading at ${gradingTime}...`);
-                    // TODO: Implement gradeYesterdayServerSide() in geminiService.js and call it here.
-                    console.warn('[Scheduler] ⚠️ Grading task not yet implemented. Add gradeYesterdayServerSide() to geminiService.js.');
+                    try {
+                        const result = await gradeYesterdayServerSide();
+                        console.log(`[Scheduler] Grading completed: ${result?.status} — ${result?.graded ?? 0}/${result?.total ?? 0} matches graded`);
+                    } catch (e) {
+                        console.error('[Scheduler] Error in Grading task:', e);
+                    }
                 }, { timezone: "Africa/Lagos" });
                 console.log(`✅ Scheduled Grading for ${gradingTime}`);
             }
 
-            // Blog Scheduler
+            // ── Blog Scheduler ────────────────────────────────────────────────
             if (blogTime !== currentBlogTime) {
                 if (blogTask) blogTask.stop();
                 currentBlogTime = blogTime;

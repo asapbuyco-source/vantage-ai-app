@@ -122,6 +122,48 @@ export const deleteTodaysPredictions = async (): Promise<void> => {
     }
 };
 
+// ─── BASKETBALL PREDICTIONS ──────────────────────────────────────────────────
+
+/**
+ * Reads today's basketball predictions from the 'basketball_predictions' Firestore collection.
+ * The backend generates these via generateBasketballPredictionsServerSide().
+ */
+export const getTodaysBasketballPredictions = async (): Promise<Match[]> => {
+    try {
+        const todayStr = getGlobalTodayKey();
+        const docRef = doc(db, "basketball_predictions", todayStr);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            return (data.matches as Match[]) || [];
+        }
+    } catch (e) {
+        console.warn("[DB] Error fetching basketball predictions:", e);
+    }
+    return [];
+};
+
+/**
+ * Saves basketball predictions to the 'basketball_predictions' Firestore collection.
+ * Used by the frontend admin basketball generation flow.
+ */
+export const saveBasketballPredictions = async (matches: Match[]): Promise<void> => {
+    try {
+        if (!auth.currentUser) return;
+        const todayStr = getGlobalTodayKey();
+        const docRef = doc(db, "basketball_predictions", todayStr);
+        await setDoc(docRef, {
+            matches,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log(`[DB] Basketball predictions saved for ${todayStr}.`);
+    } catch (e) {
+        console.error("[DB] Basketball predictions save error:", e);
+        throw e;
+    }
+};
+
+
 // ─── WIN RATE STATS ──────────────────────────────────────────────────────────
 
 /**
@@ -246,42 +288,6 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
     }
 };
 
-// ─── BASKETBALL PREDICTIONS ───────────────────────────────────────────────────
-
-const getBasketballKey = (dateStr: string) => `basketball_${dateStr}`;
-
-export const getTodaysBasketballPredictions = async (): Promise<Match[] | null> => {
-    try {
-        const key = getBasketballKey(getGlobalTodayKey());
-        const docRef = doc(db, "daily_predictions", key);
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-            const data = snap.data();
-            return data.matches || null;
-        }
-        return null;
-    } catch (e) {
-        console.warn("Failed to fetch basketball predictions:", e);
-        return null;
-    }
-};
-
-export const saveBasketballPredictions = async (matches: Match[]): Promise<void> => {
-    try {
-        if (!auth.currentUser) return;
-        const key = getBasketballKey(getGlobalTodayKey());
-        await setDoc(doc(db, "daily_predictions", key), {
-            matches,
-            sport: 'basketball',
-            updatedAt: new Date().toISOString(),
-            date: getGlobalTodayKey()
-        }, { merge: true });
-        console.log("Basketball predictions saved.");
-    } catch (e) {
-        console.error("Basketball save error:", e);
-        throw e;
-    }
-};
 
 // ─── TEAM ASSETS ──────────────────────────────────────────────────────────────
 

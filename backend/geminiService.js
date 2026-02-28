@@ -1,13 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import admin from 'firebase-admin';
 
-// Reusing same models and context generation flow from the frontend
+// ── Model list: VALID Gemini model IDs (verified against Google AI API) ─────────
+// Do NOT add fake model IDs here. If a model is unavailable it will fail silently
+// in the fallback loop. Keep gemini-2.0-flash first as the most stable option.
 const AVAILABLE_MODELS = [
-    { id: 'gemini-3-flash-preview', name: 'Vantage AI 3.0 Flash (Stable)' },
+    { id: 'gemini-2.0-flash', name: 'Vantage AI 2.0 Flash (Stable)' },
+    { id: 'gemini-2.5-flash', name: 'Vantage AI 2.5 Flash (Versatile)' },
     { id: 'gemini-2.0-flash-exp', name: 'Vantage AI 2.0 Flash (Experimental)' },
-    { id: 'gemini-3-pro-preview', name: 'Vantage AI 3.0 Pro (Reasoning)' },
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Complex Reasoning)' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Versatile)' }
 ];
 
 /** Helper to get a date key for N days ago */
@@ -20,7 +21,22 @@ const getDateKeyDaysAgo = (daysAgo) => {
 export const getGlobalTodayKey = () => getDateKeyDaysAgo(0);
 export const getGlobalYesterdayKey = () => getDateKeyDaysAgo(1);
 
-// Utility to fetch SportsData via local fetch passing token natively since we're Server-side
+/** Build a GoogleGenAI instance using the server-side API key */
+const getAI = () => {
+    const key = process.env.VITE_GOOGLE_GENAI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+    if (!key) throw new Error("Missing Google GenAI API Key on server");
+    return new GoogleGenAI({ apiKey: key });
+};
+
+/** Safe text extractor — handles both response.text string and response.text() function */
+const extractText = (response) => {
+    if (!response) return '';
+    if (typeof response.text === 'function') return response.text();
+    if (typeof response.text === 'string') return response.text;
+    return '';
+};
+
+// ── Sportmonks Fetch ──────────────────────────────────────────────────────────
 export const fetchSportmonksServerSide = async (path) => {
     try {
         const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
@@ -112,6 +128,7 @@ export const filterGlobalFixturesServerSide = (fixtures) => {
     return scored.filter(s => s.score > 0).map(s => s.fixture).slice(0, 50);
 };
 
+// ── Daily Football Predictions ────────────────────────────────────────────────
 export const generateDailyPredictionsServerSide = async () => {
     console.log('[Backend] Starting scheduled Daily Predictions...');
     try {
@@ -119,8 +136,11 @@ export const generateDailyPredictionsServerSide = async () => {
         const rawFixtures = await getTodaysFixturesServerSide(todayStr);
         const filteredFixtures = filterGlobalFixturesServerSide(rawFixtures);
 
+        // FIX: Define simplifiedRaw at function scope so it's always accessible below
+        let simplifiedRaw = [];
+
         if (filteredFixtures.length > 0) {
-            const simplifiedRaw = filteredFixtures.map(f => ({
+            simplifiedRaw = filteredFixtures.map(f => ({
                 id: f.fixture.id.toString(),
                 league: f.league.name,
                 leagueId: f.league.id,
@@ -138,7 +158,7 @@ export const generateDailyPredictionsServerSide = async () => {
                 status: 'pending'
             }));
 
-            // Saving raw fixtures placeholder for backend flow via admin
+            // Save raw fixtures placeholder
             await admin.firestore().collection('daily_predictions').doc(todayStr).set({
                 rawFixtures: simplifiedRaw,
                 updatedAt: new Date().toISOString()
@@ -189,11 +209,7 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
 - Output JSON array only.
         `;
 
-        if (!process.env.GOOGLE_GENAI_API_KEY && !process.env.VITE_GOOGLE_GENAI_API_KEY) {
-            throw new Error("Missing Google Gen AI API Key on server");
-        }
-
-        const ai = new GoogleGenAI({ apiKey: process.env.VITE_GOOGLE_GENAI_API_KEY || process.env.GOOGLE_GENAI_API_KEY });
+        const ai = getAI();
         let response = null;
         let usedModel = null;
         let lastError = null;
@@ -229,14 +245,12 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
                     }
                 });
 
-                // If we get here without throwing, the model succeeded
                 usedModel = modelDef.id;
                 console.log(`[Backend] ✅ Generation successful using ${usedModel}`);
-                break; // Exit the fallback loop
+                break;
             } catch (apiError) {
                 lastError = apiError;
                 console.warn(`[Backend] ⚠️ Model ${modelDef.id} failed: ${apiError.message}. Trying next model...`);
-                // Continue to the next iteration of the loop
             }
         }
 
@@ -244,7 +258,8 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
             throw new Error(`All available Gemini models failed. Last error: ${lastError?.message}`);
         }
 
-        const predictions = JSON.parse(response.text || "[]");
+        const responseText = extractText(response);
+        const predictions = JSON.parse(responseText || "[]");
 
         // Merge AI predictions back with the simplified raw matches
         const finalMatches = simplifiedRaw.map(raw => {
@@ -255,28 +270,33 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
             return raw;
         }).filter(m => m.prediction_en); // Only keep ones AI analyzed
 
-        console.log(`[Backend] Generated ${finalMatches.length} predictions successfully.`);
+        // Also add any AI-generated matches that weren't in simplifiedRaw (from Search)
+        const existingIds = new Set(simplifiedRaw.map(r => r.id));
+        const aiOnlyMatches = predictions.filter(p => !existingIds.has(p.id) && !existingIds.has(String(p.id)));
+        const allMatches = [...finalMatches, ...aiOnlyMatches];
+
+        console.log(`[Backend] Generated ${allMatches.length} predictions successfully.`);
 
         // Save to Firebase Admin
         await admin.firestore().collection('daily_predictions').doc(todayStr).set({
             status: 'completed',
-            matches: finalMatches,
+            matches: allMatches,
             updatedAt: new Date().toISOString()
         }, { merge: true });
 
-        return { status: "success", generated: finalMatches.length, matches: finalMatches };
+        return { status: "success", generated: allMatches.length, matches: allMatches };
     } catch (e) {
         console.error('Backend generation error:', e);
         return { status: "error", error: e.message };
     }
-}
+};
 
+// ── Daily Blog Generation ─────────────────────────────────────────────────────
 export const generateDailyBlogServerSide = async () => {
     console.log('[Backend] Starting scheduled Daily SEO Blog Generation...');
     try {
         const todayStr = getGlobalTodayKey();
 
-        // 1. Fetch today's generated predictions from Firestore
         const docSnap = await admin.firestore().collection('daily_predictions').doc(todayStr).get();
         if (!docSnap.exists) {
             console.warn(`[Backend] No predictions found for ${todayStr}. Cannot generate blog.`);
@@ -291,7 +311,7 @@ export const generateDailyBlogServerSide = async () => {
             return { status: "skipped", reason: "empty_predictions" };
         }
 
-        // We only want to feed Gemini the best 5-10 matches to keep the blog focused
+        // Feed Gemini the best 5-10 matches to keep the blog focused
         const topMatches = matches
             .sort((a, b) => b.confidence - a.confidence)
             .slice(0, 8);
@@ -314,15 +334,11 @@ REQUIREMENTS:
 2. Introduction: A brief hype intro (2-3 sentences) about today's football schedule.
 3. Top Picks Breakdown: Choose 3-4 of the most interesting matches from the JSON above. For each, write a short paragraph explaining *why* the prediction was made (e.g., team form, injuries, historical dominance). Use H2 tags for the match names.
 4. Accumulator Idea: Propose a "Coupon du Jour" (Accumulator of the Day) combining a few safe picks with their combined odds.
-5. Formatting: Use proper HTML tags (<h1>, <h2>, <p>, <ul>, <li>, <strong>). DO NOT use Markdown backticks (\`\`\`html) around your response. Return pure HTML.
+5. Formatting: Use proper HTML tags (<h1>, <h2>, <p>, <ul>, <li>, <strong>). DO NOT use Markdown backticks around your response. Return pure HTML.
 6. Tone: Confident, expert, and encouraging. Remind users to bet responsibly at the end.
         `;
 
-        if (!process.env.GOOGLE_GENAI_API_KEY && !process.env.VITE_GOOGLE_GENAI_API_KEY) {
-            throw new Error("Missing Google Gen AI API Key on server");
-        }
-
-        const ai = new GoogleGenAI({ apiKey: process.env.VITE_GOOGLE_GENAI_API_KEY || process.env.GOOGLE_GENAI_API_KEY });
+        const ai = getAI();
         let response = null;
         let lastError = null;
 
@@ -333,7 +349,7 @@ REQUIREMENTS:
                     model: modelDef.id,
                     contents: blogPrompt,
                     config: {
-                        temperature: 0.7, // slightly more creative for a blog
+                        temperature: 0.7,
                         responseMimeType: "text/plain",
                     }
                 });
@@ -345,17 +361,16 @@ REQUIREMENTS:
             }
         }
 
-        if (!response || !response.text) {
+        const responseText = extractText(response);
+        if (!response || !responseText) {
             throw new Error(`All available Gemini models failed for Blog Gen. Last error: ${lastError?.message}`);
         }
 
-        const blogHtml = response.text;
+        const blogHtml = responseText;
 
-        // Extract a short description for the <meta description> tag by stripping HTML
         const strippedText = blogHtml.replace(/<[^>]+>/g, '');
         const excerpt = strippedText.substring(0, 150).trim() + '...';
 
-        // Save to Firebase
         await admin.firestore().collection('daily_blogs').doc(todayStr).set({
             content: blogHtml,
             excerpt: excerpt,
@@ -369,5 +384,339 @@ REQUIREMENTS:
         console.error('[Backend] Blog generation error:', e);
         return { status: "error", error: e.message };
     }
-}
+};
 
+// ── Yesterday Grading ─────────────────────────────────────────────────────────
+/**
+ * Grades yesterday's predictions using Gemini + Google Search.
+ * Called by the scheduler and the /api/admin/grade-yesterday endpoint.
+ */
+export const gradeYesterdayServerSide = async () => {
+    console.log('[Backend] Starting scheduled Grading for yesterday...');
+    try {
+        const yesterday = getGlobalYesterdayKey();
+        const db = admin.firestore();
+
+        // 1. Fetch yesterday's predictions from Firestore
+        const docSnap = await db.collection('daily_predictions').doc(yesterday).get();
+        if (!docSnap.exists) {
+            console.warn(`[Backend Grading] No predictions document found for ${yesterday}.`);
+            return { status: "skipped", reason: "no_document", date: yesterday };
+        }
+
+        const data = docSnap.data();
+        const existingMatches = data.matches || [];
+
+        if (existingMatches.length === 0) {
+            console.warn(`[Backend Grading] No matches found for ${yesterday}.`);
+            return { status: "skipped", reason: "empty_matches", date: yesterday };
+        }
+
+        // 2. Filter to only ungraded matches
+        const matchesToGrade = existingMatches.filter(m => !m.status || m.status === 'pending');
+        if (matchesToGrade.length === 0) {
+            console.log(`[Backend Grading] All matches for ${yesterday} already graded.`);
+            return { status: "skipped", reason: "already_graded", total: existingMatches.length, date: yesterday };
+        }
+
+        console.log(`[Backend Grading] Grading ${matchesToGrade.length} matches for ${yesterday}...`);
+
+        // 3. Grading Schema
+        const gradingSchema = {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    id: { type: Type.STRING },
+                    score: { type: Type.STRING },
+                    status: { type: Type.STRING, enum: ['won', 'lost', 'void'] }
+                },
+                required: ["id", "score", "status"]
+            }
+        };
+
+        const simplifiedList = matchesToGrade.map(m => ({ id: m.id, home: m.homeTeam, away: m.awayTeam }));
+
+        let gradedResults = [];
+        const ai = getAI();
+        let lastError = null;
+
+        // 4. Step 1: Use Google Search to get real scores
+        let rawScores = '';
+        for (const modelDef of AVAILABLE_MODELS) {
+            try {
+                const searchResponse = await ai.models.generateContent({
+                    model: modelDef.id,
+                    contents: `Find the FINAL full-time scores for these football matches played on ${yesterday}. List each match with its exact score: ${JSON.stringify(simplifiedList)}`,
+                    config: {
+                        temperature: 0.1,
+                        tools: [{ googleSearch: {} }]
+                    }
+                });
+                rawScores = extractText(searchResponse);
+                console.log(`[Backend Grading] ✅ Scores fetched using ${modelDef.id}`);
+                break;
+            } catch (apiError) {
+                lastError = apiError;
+                console.warn(`[Backend Grading] ⚠️ Search model ${modelDef.id} failed: ${apiError.message}`);
+                // If it's a 403 (search permission), skip grading entirely
+                if (apiError.status === 403 || apiError.message?.includes('403')) {
+                    console.warn('[Backend Grading] Search access denied (403). Cannot grade without score data. Skipping.');
+                    return { status: "skipped", reason: "search_permission_denied", date: yesterday };
+                }
+            }
+        }
+
+        if (!rawScores) {
+            throw new Error(`Could not fetch match scores from any model. Last error: ${lastError?.message}`);
+        }
+
+        // 5. Step 2: Grade predictions against fetched scores
+        const parsePrompt = `
+Grade these football predictions using the final scores retrieved below.
+
+PREDICTIONS:
+${JSON.stringify(matchesToGrade.map(m => ({ id: m.id, home: m.homeTeam, away: m.awayTeam, prediction: m.prediction_en || m.prediction })), null, 2)}
+
+SCORES RETRIEVED:
+${rawScores}
+
+GRADING RULES (apply strictly):
+
+═══ GENERAL ═══
+- Use FULL-TIME (90 min + injury time) scores only unless specified otherwise.
+- If a match was postponed, abandoned before 90 min, or no result found → status: "void".
+
+═══ MATCH RESULT (1X2) ═══
+- "Home Win" → won if home goals > away goals at FT.
+- "Away Win" → won if away goals > home goals at FT.
+- "Draw" → won if goals are equal at FT.
+
+═══ DOUBLE CHANCE ═══
+- "Double Chance (1X)" → won if home wins OR draw.
+- "Double Chance (X2)" → won if away wins OR draw.
+- "Double Chance (12)" → won if home wins OR away wins (not a draw).
+
+═══ DRAW NO BET ═══
+- "Draw No Bet (Home)" → won if home wins; void if draw; lost if away wins.
+- "Draw No Bet (Away)" → won if away wins; void if draw; lost if home wins.
+
+═══ OVER/UNDER GOALS ═══
+- "Over 0.5 Goals" → won if total goals >= 1.
+- "Over 1.5 Goals" → won if total goals >= 2.
+- "Over 2.5 Goals" → won if total goals >= 3.
+- "Over 3.5 Goals" → won if total goals >= 4.
+- "Under 1.5 Goals" → won if total goals <= 1.
+- "Under 2.5 Goals" → won if total goals <= 2.
+- "Under 3.5 Goals" → won if total goals <= 3.
+
+═══ BOTH TEAMS TO SCORE (BTTS) ═══
+- "Both Teams Score" → won if both teams scored at least 1 goal each.
+- "Both Teams Score - No" → won if at least one team scored 0 goals.
+
+Return a JSON array with id, score ("2-1" format), and status ("won"|"lost"|"void") for each match.
+        `;
+
+        for (const modelDef of AVAILABLE_MODELS) {
+            try {
+                const formatResponse = await ai.models.generateContent({
+                    model: modelDef.id,
+                    contents: parsePrompt,
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: gradingSchema
+                    }
+                });
+                const formatText = extractText(formatResponse);
+                gradedResults = JSON.parse(formatText || "[]");
+                console.log(`[Backend Grading] ✅ Grading parse successful using ${modelDef.id}. Graded ${gradedResults.length} matches.`);
+                break;
+            } catch (apiError) {
+                lastError = apiError;
+                console.warn(`[Backend Grading] ⚠️ Parse model ${modelDef.id} failed: ${apiError.message}`);
+            }
+        }
+
+        if (gradedResults.length === 0) {
+            throw new Error(`Grading parse failed across all models. Last error: ${lastError?.message}`);
+        }
+
+        // 6. Merge grades back into full match list
+        let updatesCount = 0;
+        const updatedMatches = existingMatches.map(m => {
+            const grade = gradedResults.find(g => g.id === m.id || g.id === String(m.id));
+            if (grade) {
+                updatesCount++;
+                return { ...m, score: grade.score || "N/A", status: grade.status };
+            }
+            return m;
+        });
+
+        // 7. Save back to Firestore via Admin SDK
+        await db.collection('daily_predictions').doc(yesterday).set({
+            matches: updatedMatches,
+            gradedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        console.log(`[Backend Grading] ✅ Grading complete. Updated ${updatesCount}/${existingMatches.length} matches for ${yesterday}.`);
+        return { status: "success", total: existingMatches.length, graded: updatesCount, saved: true, date: yesterday };
+
+    } catch (e) {
+        console.error('[Backend Grading] Error:', e);
+        return { status: "error", error: e.message };
+    }
+};
+// ── Basketball Predictions ────────────────────────────────────────────────────
+/**
+ * Generates today's basketball predictions using Gemini with Google Search grounding.
+ * Targets NBA, EuroLeague, NBL, WNBA, and major African/international leagues.
+ * Saves results to Firestore collection 'basketball_predictions' (today's date key).
+ */
+export const generateBasketballPredictionsServerSide = async () => {
+    console.log('[Backend] Starting Basketball Predictions Generation...');
+    try {
+        const todayStr = getGlobalTodayKey();
+        const ai = getAI();
+        let response = null;
+        let usedModel = null;
+        let lastError = null;
+
+        const prompt = `
+You are the "Quant-Desk Basketball Engine v2.0", an elite global basketball betting model with access to real statistical data and live game schedules.
+
+DATE: ${todayStr}
+
+═══════════════════════════════════════════════
+YOUR OBJECTIVE
+═══════════════════════════════════════════════
+Use Google Search to find ALL basketball games scheduled for ${todayStr} worldwide.
+Then analyze and identify 10 to 15 high-value betting opportunities.
+
+LEAGUE PRIORITY (scan in this order — reflects African betting volume for basketball):
+1. 🏀 NBA (HIGHEST — most popular basketball league in Africa)
+2. 🏀 EuroLeague / EuroCup
+3. 🏀 WNBA, G-League (when NBA is in off-season)
+4. 🏀 NBB (Brazil), ACB (Spain), LNB Pro A (France), Bundesliga Basketball (Germany)
+5. 🌍 BAL (Basketball Africa League), FIBA World Cup / EuroBasket (when in season)
+
+═══════════════════════════════════════════════
+🧮 QUANTITATIVE RULES (NON-NEGOTIABLE)
+═══════════════════════════════════════════════
+1. EV CALCULATION: EV = (Your model probability × Decimal odds) − 1. Only pick if EV ≥ +0.06.
+2. CONFIDENCE FLOOR: ≥ 70%. Use team form (last 5 games), home/away record, injury report, and pace stats.
+3. ONE market per match. Choose from: "Home Win", "Away Win", "Over [X] Points", "Under [X] Points", "Handicap: Home -[X.5]", "Handicap: Away -[X.5]".
+4. Use total points lines commonly offered by bookmakers (e.g. "Over 220.5 Points").
+
+═══════════════════════════════════════════════
+🚨 OUTPUT FORMAT (strict JSON array)
+═══════════════════════════════════════════════
+Each object must have:
+- 'id': a unique string identifying this match, format: "bball-YYYYMMDD-HomeTeamSlug-AwayTeamSlug"
+- 'homeTeam': full team name
+- 'awayTeam': full team name
+- 'league': league name (e.g. "NBA", "EuroLeague")
+- 'time': match time in HH:MM format (local game time or UTC)
+- 'prediction_en': the market and outcome (e.g. "Home Win", "Over 224.5 Points")
+- 'prediction_fr': French translation
+- 'prediction': same as prediction_en
+- 'confidence': 0–100 integer
+- 'odds': decimal odds for the chosen market
+- 'category': "safe" (confidence >= 80), "value" (70-79), or "risky" (<70)
+- 'analysis_en': "EV: +X.X% | Edge: Y% | [max 20 words of reasoning]"
+- 'analysis_fr': French translation
+- 'homeTeamLogo': empty string ""
+- 'awayTeamLogo': empty string ""
+- 'sport': "basketball"
+- 'status': "pending"
+
+Output JSON array only. No markdown. No preamble.
+        `;
+
+        // Try models with Google Search grounding
+        for (const modelDef of AVAILABLE_MODELS) {
+            try {
+                console.log(`[Backend Basketball] Attempting with model: ${modelDef.id}...`);
+                response = await ai.models.generateContent({
+                    model: modelDef.id,
+                    contents: prompt,
+                    config: {
+                        temperature: 0.15,
+                        tools: [{ googleSearch: {} }],
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    id: { type: Type.STRING },
+                                    homeTeam: { type: Type.STRING },
+                                    awayTeam: { type: Type.STRING },
+                                    league: { type: Type.STRING },
+                                    time: { type: Type.STRING },
+                                    prediction_en: { type: Type.STRING },
+                                    prediction_fr: { type: Type.STRING },
+                                    prediction: { type: Type.STRING },
+                                    confidence: { type: Type.NUMBER },
+                                    odds: { type: Type.NUMBER },
+                                    category: { type: Type.STRING },
+                                    analysis_en: { type: Type.STRING },
+                                    analysis_fr: { type: Type.STRING },
+                                    homeTeamLogo: { type: Type.STRING },
+                                    awayTeamLogo: { type: Type.STRING },
+                                    sport: { type: Type.STRING },
+                                    status: { type: Type.STRING },
+                                },
+                                required: ["id", "homeTeam", "awayTeam", "league", "time", "prediction_en", "confidence", "odds", "category", "analysis_en"]
+                            }
+                        }
+                    }
+                });
+                usedModel = modelDef.id;
+                console.log(`[Backend Basketball] ✅ Generation successful using ${usedModel}`);
+                break;
+            } catch (apiError) {
+                lastError = apiError;
+                console.warn(`[Backend Basketball] ⚠️ Model ${modelDef.id} failed: ${apiError.message}. Trying next...`);
+            }
+        }
+
+        if (!response) {
+            throw new Error(`All Gemini models failed for basketball generation. Last error: ${lastError?.message}`);
+        }
+
+        const responseText = extractText(response);
+        const predictions = JSON.parse(responseText || "[]");
+
+        if (!Array.isArray(predictions) || predictions.length === 0) {
+            console.warn('[Backend Basketball] No predictions returned from Gemini.');
+            return { status: "skipped", reason: "no_predictions_returned" };
+        }
+
+        console.log(`[Backend Basketball] Generated ${predictions.length} basketball predictions.`);
+
+        // Normalise: ensure sport & status fields are set
+        const normalised = predictions.map(p => ({
+            ...p,
+            sport: 'basketball',
+            status: p.status || 'pending',
+            homeTeamLogo: p.homeTeamLogo || '',
+            awayTeamLogo: p.awayTeamLogo || '',
+            prediction: p.prediction || p.prediction_en,
+        }));
+
+        // Save to Firestore under a dedicated 'basketball_predictions' collection
+        await admin.firestore().collection('basketball_predictions').doc(todayStr).set({
+            matches: normalised,
+            generatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        });
+
+        console.log(`[Backend Basketball] ✅ ${normalised.length} predictions saved for ${todayStr}.`);
+        return { status: "success", generated: normalised.length, matches: normalised };
+
+    } catch (e) {
+        console.error('[Backend Basketball] Error:', e);
+        return { status: "error", error: e.message };
+    }
+};

@@ -9,7 +9,7 @@ import { GoogleGenAI } from '@google/genai';
 import admin from 'firebase-admin';
 import fs from 'fs';
 import { initScheduler } from './backend/scheduler.js';
-import { generateDailyPredictionsServerSide } from './backend/geminiService.js';
+import { generateDailyPredictionsServerSide, gradeYesterdayServerSide, generateDailyBlogServerSide, generateBasketballPredictionsServerSide } from './backend/geminiService.js';
 
 // Load environment variables from .env.local if available (for local dev)
 const __filename = fileURLToPath(import.meta.url);
@@ -198,11 +198,25 @@ app.post('/api/admin/generate-football', adminAuth, geminiLimiter, async (req, r
 });
 
 app.post('/api/admin/generate-basketball', adminAuth, geminiLimiter, async (req, res) => {
-    res.json({ status: 'success', message: 'Basketball generation not fully implemented on backend yet.' });
+    try {
+        console.log('[API] Manual Basketball Generation Triggered via Admin');
+        const result = await generateBasketballPredictionsServerSide();
+        res.json(result);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Basketball generation failed', details: e.message });
+    }
 });
 
 app.post('/api/admin/grade-yesterday', adminAuth, geminiLimiter, async (req, res) => {
-    res.json({ status: 'success', message: 'Grading not fully implemented on backend yet.' });
+    try {
+        console.log('[API] Manual Grading Triggered via Admin');
+        const result = await gradeYesterdayServerSide();
+        res.json(result);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Grading failed', details: e.message });
+    }
 });
 
 // ══════════════════════════════════════════════════════════════════════

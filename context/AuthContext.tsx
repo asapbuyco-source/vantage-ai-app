@@ -314,7 +314,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const processPayout = async (payoutId: string, action: 'paid' | 'rejected') => {
         if (!isAdmin) return;
         try {
-            const payoutRef = doc(db, "payouts", payoutId);
+            const payoutRef = doc(db, "payout_requests", payoutId); // fixed: was 'payouts', mismatched with requestPayout which writes to 'payout_requests'
             await runTransaction(db, async (transaction) => {
                 const payoutSnap = await transaction.get(payoutRef);
                 if (!payoutSnap.exists()) throw new Error("Payout request not found");

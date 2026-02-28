@@ -25,6 +25,7 @@ interface ImportMetaEnv {
   readonly VITE_FOOTBALL_API_KEY: string
   readonly VITE_SPORTMONKS_API_TOKEN: string
   readonly VITE_FIREBASE_VAPID_KEY: string
+  readonly VITE_ADMIN_API_SECRET?: string
 }
 
 interface ImportMeta {

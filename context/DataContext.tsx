@@ -19,6 +19,8 @@ interface DataContextType {
     loading: boolean;
     isSystemGenerating: boolean;
     isBasketballGenerating: boolean;
+    setIsSystemGenerating: (val: boolean) => void;
+    setIsBasketballGenerating: (val: boolean) => void;
     refreshData: () => Promise<void>;
     generateData: () => Promise<void>;
     generateAccumulators: () => Promise<void>;
@@ -265,6 +267,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             loading,
             isSystemGenerating,
             isBasketballGenerating,
+            setIsSystemGenerating,
+            setIsBasketballGenerating,
             refreshData: () => fetchOrGenerate(false, false),
             generateData,
             generateAccumulators,

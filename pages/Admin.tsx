@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserProfile, NavigationTab, Match, PayoutRequest, TeamAsset } from '../types';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
-import { testGeminiConnection, setGeminiModel, getGeminiModel, AVAILABLE_MODELS, gradeYesterdayPredictions } from '../services/gemini';
+import { testGeminiConnection, setGeminiModel, getGeminiModel, AVAILABLE_MODELS } from '../services/gemini';
 import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, getPredictionsForDate, saveTodaysPredictions, savePredictionsForDate, getTeamAssetsMap, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount } from '../services/db';
 import { TeamLogo } from '../components/TeamLogo';
 
@@ -299,10 +299,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
             const backendUrl = import.meta.env.VITE_BACKEND_URL;
             if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
+            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
 
             const response = await fetch(`${backendUrl}/api/admin/generate-football`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
             });
 
             if (!response.ok) {
@@ -336,10 +337,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         try {
             const backendUrl = import.meta.env.VITE_BACKEND_URL;
             if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
+            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
 
             const response = await fetch(`${backendUrl}/api/admin/generate-basketball`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
             });
 
             if (!response.ok) throw new Error('Backend generation failed');
@@ -367,15 +369,18 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         try {
             const backendUrl = import.meta.env.VITE_BACKEND_URL;
             if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
+            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
 
             const response = await fetch(`${backendUrl}/api/admin/grade-yesterday`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
             });
 
             const res = await response.json();
             if (isMounted.current) {
-                const resultMsg = `Backened response: ${res.message || 'Success'}`;
+                const resultMsg = res.status === 'success' || res.graded !== undefined
+                    ? `✅ Graded ${res.graded ?? 0}/${res.total ?? 0} matches (${res.status})`
+                    : `Backend response: ${res.message || res.error || JSON.stringify(res)}`;
                 setGradingResult(resultMsg);
                 if (!auto) alert(resultMsg);
             }

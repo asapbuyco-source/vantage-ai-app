@@ -624,6 +624,18 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
                                             required
                                         />
                                     </div>
+                                    <div>
+                                        <input
+                                            type="number"
+                                            placeholder={language === 'fr' ? 'Montant (min 1000 FCFA)' : 'Amount (min 1000 FCFA)'}
+                                            value={payoutAmount}
+                                            onChange={(e) => setPayoutAmount(e.target.value)}
+                                            min={1000}
+                                            max={userProfile?.referralEarnings || 0}
+                                            className="w-full p-3 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-vantage-purple outline-none"
+                                            required
+                                        />
+                                    </div>
                                     <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-lg text-sm flex justify-between">
                                         <span className="text-gray-500">{t('profile.earnings')}:</span>
                                         <span className="font-bold text-vantage-purple">{userProfile?.referralEarnings} FCFA</span>
