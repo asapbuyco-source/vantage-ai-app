@@ -25,9 +25,9 @@ import { db, auth } from "../firebaseConfig";
 // In Selar dashboard: Products → Create Product → get the product link
 const SELAR_PRODUCTS: Record<string, string> = {
     daily: import.meta.env.VITE_SELAR_DAILY_LINK || 'https://selar.com/1b1uj5r75t',
-    weekly: import.meta.env.VITE_SELAR_WEEKLY_LINK || 'https://selar.com/1b1uj5r75t',
-    monthly: import.meta.env.VITE_SELAR_MONTHLY_LINK || 'https://selar.com/1b1uj5r75t',
-    annual: import.meta.env.VITE_SELAR_ANNUAL_LINK || 'https://selar.com/1b1uj5r75t',
+    weekly: import.meta.env.VITE_SELAR_WEEKLY_LINK || 'https://selar.com/25337pw2i1',
+    monthly: import.meta.env.VITE_SELAR_MONTHLY_LINK || 'https://selar.com/2n77893707',
+    annual: import.meta.env.VITE_SELAR_ANNUAL_LINK || 'https://selar.com/l63p29n451',
 };
 
 export interface SelarInitResponse {
