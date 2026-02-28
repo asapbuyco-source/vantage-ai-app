@@ -13,10 +13,20 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId || isAdmin();
     }
     
-    // Daily Predictions: Publicly readable. Writes are admin-only (server uses Admin SDK).
-    // The client-side generation lock system only READS/DELETES locks — predictions are
-    // saved server-side. Non-admin clients can write ONLY generation_locks, not predictions.
+    // Daily Predictions: Publicly readable. Writes are admin-only (via Admin SDK).
     match /daily_predictions/{dateStr} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Basketball Predictions: Same pattern as daily_predictions.
+    match /basketball_predictions/{dateStr} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Daily Blogs: Publicly readable. Written by backend only.
+    match /daily_blogs/{dateStr} {
       allow read: if true;
       allow write: if isAdmin();
     }
@@ -38,8 +48,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
-    // Payouts: Users can request, admins can process. Collection name matches AuthContext.
+    // Payouts (legacy collection, kept for backwards compat)
     match /payouts/{reqId} {
+       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+       allow read, update: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
+    }
+
+    // Payout Requests (actual collection used by AuthContext)
+    match /payout_requests/{reqId} {
        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
        allow read, update: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
     }

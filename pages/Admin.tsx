@@ -346,7 +346,13 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
             if (!response.ok) throw new Error('Backend generation failed');
             const result = await response.json();
-            alert(`✅ Basketball generated via backend: ${result.message}`);
+            if (result.status === 'success') {
+                alert(`✅ Basketball generated via backend: ${result.generated} predictions saved.`);
+            } else if (result.status === 'skipped') {
+                alert(`⚠️ Basketball generation skipped: ${result.reason || result.message || 'no matches found today.'}`);
+            } else {
+                alert(`❌ Basketball generation error: ${result.error || result.message || 'Unknown error'}`);
+            }
         } catch (e) {
             alert('Failed to trigger basketball generation');
             console.error(e);
