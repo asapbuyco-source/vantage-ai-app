@@ -15,7 +15,7 @@ interface Props {
 export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) => {
     const { language } = useAppContext();
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'overview' | 'stats' | 'h2h' | 'injuries'>('overview');
+    const [activeTab, setActiveTab] = useState<'prediction' | 'overview' | 'stats' | 'h2h' | 'injuries'>('prediction');
 
     const [homeForm, setHomeForm] = useState<TeamForm | null>(null);
     const [awayForm, setAwayForm] = useState<TeamForm | null>(null);
@@ -29,7 +29,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
         let isMounted = true;
         setLoading(true);
-        setActiveTab('overview'); // Reset to first tab on each new match
+        setActiveTab('prediction'); // Reset to Prediction tab on each new match
 
         // Lock body scroll while modal is open
         document.body.style.overflow = 'hidden';
@@ -42,7 +42,8 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                 const seasonId = Number(match.seasonId) || 2024;
                 const fixtureId = Number(match.fixtureId || match.id) || 0;
 
-                // If IDs are all zero, this is a fallback AI match — skip API calls
+                // If IDs are all zero, this is a fallback/AI-only match — skip live API calls
+                // but we still have the stored AI prediction data to show
                 if (!homeId && !awayId && !fixtureId) {
                     if (isMounted) setLoading(false);
                     return;
@@ -156,8 +157,9 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                     {/* Tabs */}
                     <div className="flex px-4 pt-4 shrink-0 overflow-x-auto no-scrollbar border-b border-slate-200 dark:border-white/5 gap-2">
                         {[
+                            { id: 'prediction', icon: Zap, label: language === 'fr' ? 'Prédiction' : 'Prediction' },
                             { id: 'overview', icon: Activity, label: language === 'fr' ? 'Aperçu' : 'Overview' },
-                            { id: 'stats', icon: BarChart3, label: language === 'fr' ? 'Stats' : 'Stats' },
+                            { id: 'stats', icon: BarChart3, label: 'Stats' },
                             { id: 'h2h', icon: Target, label: 'H2H' },
                             { id: 'injuries', icon: ShieldAlert, label: language === 'fr' ? 'Absents' : 'Injuries' },
                         ].map(tab => (
@@ -195,6 +197,97 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                     className="space-y-6"
                                 >
 
+                                    {/* ── PREDICTION TAB: always shows stored AI data ── */}
+                                    {activeTab === 'prediction' && (() => {
+                                        const prediction = match.prediction_en || match.prediction || '';
+                                        const predictionFr = match.prediction_fr || match.prediction || '';
+                                        const analysis = (language === 'fr' ? match.analysis_fr : match.analysis_en) || match.analysis || '';
+                                        const confidence = match.confidence || 0;
+                                        const odds = typeof match.odds === 'number' ? match.odds : 0;
+                                        const category = match.category || 'value';
+                                        const categoryColor = category === 'safe' ? 'text-green-400' : category === 'risky' ? 'text-red-400' : 'text-yellow-400';
+                                        const categoryBg = category === 'safe' ? 'bg-green-500/10 border-green-500/20' : category === 'risky' ? 'bg-red-500/10 border-red-500/20' : 'bg-yellow-500/10 border-yellow-500/20';
+                                        const predLabel = language === 'fr' ? predictionFr : prediction;
+
+                                        return (
+                                            <div className="space-y-5">
+                                                {/* Main prediction */}
+                                                <div className={`rounded-2xl border p-5 text-center ${categoryBg}`}>
+                                                    <span className={`text-[10px] font-bold uppercase tracking-widest mb-2 block ${categoryColor}`}>
+                                                        {category === 'safe' ? (language === 'fr' ? '🔒 Sûr' : '🔒 Safe Bet') :
+                                                            category === 'risky' ? (language === 'fr' ? '⚡ Risqué' : '⚡ Risky') :
+                                                                (language === 'fr' ? '💎 Valeur' : '💎 Value Pick')}
+                                                    </span>
+                                                    <p className={`text-xl font-bold tracking-tight ${categoryColor}`}>{predLabel || (language === 'fr' ? 'Analyse en attente' : 'Analysis Pending')}</p>
+                                                </div>
+
+                                                {/* Confidence + Odds row */}
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-4 flex flex-col items-center">
+                                                        <span className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+                                                            {language === 'fr' ? 'Confiance' : 'Confidence'}
+                                                        </span>
+                                                        <div className="relative w-16 h-16">
+                                                            <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                                                                <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-200 dark:text-white/10" />
+                                                                <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="3"
+                                                                    strokeDasharray={`${confidence} ${100 - confidence}`}
+                                                                    strokeLinecap="round"
+                                                                    className={confidence >= 80 ? 'text-green-400' : confidence >= 70 ? 'text-yellow-400' : 'text-red-400'}
+                                                                />
+                                                            </svg>
+                                                            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{confidence}%</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-4 flex flex-col items-center justify-center">
+                                                        <span className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+                                                            {language === 'fr' ? 'Cote' : 'Odds'}
+                                                        </span>
+                                                        <span className="text-2xl font-bold text-vantage-cyan">
+                                                            {odds > 0 ? odds.toFixed(2) : '—'}
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-400 mt-1">{language === 'fr' ? 'décimal' : 'decimal'}</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* AI Analysis */}
+                                                {analysis ? (
+                                                    <div className="rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-4">
+                                                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2 mb-3">
+                                                            <Crosshair size={12} /> {language === 'fr' ? 'Analyse IA' : 'AI Analysis'}
+                                                        </h4>
+                                                        <p className="text-sm leading-relaxed text-slate-700 dark:text-gray-300">{analysis}</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-6 text-gray-500 text-sm">
+                                                        <Crosshair size={28} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+                                                        <p>{language === 'fr' ? 'Analyse non disponible' : 'Analysis not yet available'}</p>
+                                                    </div>
+                                                )}
+
+                                                {/* Match meta info */}
+                                                <div className="flex flex-wrap gap-2">
+                                                    {match.league && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-white/5 text-gray-500 px-3 py-1.5 rounded-full">
+                                                            🏆 {match.league}
+                                                        </span>
+                                                    )}
+                                                    {match.time && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-white/5 text-gray-500 px-3 py-1.5 rounded-full">
+                                                            🕐 {match.time}
+                                                        </span>
+                                                    )}
+                                                    {match.sport && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-white/5 text-gray-500 px-3 py-1.5 rounded-full">
+                                                            {match.sport === 'basketball' ? '🏀' : '⚽'} {match.sport}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* ── OVERVIEW TAB: Team form + Live odds ── */}
                                     {activeTab === 'overview' && (
                                         <>
                                             {/* Form Guide */}

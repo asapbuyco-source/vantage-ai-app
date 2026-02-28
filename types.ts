@@ -10,6 +10,7 @@ export interface Match {
   league: string;
   leagueId?: number;
   seasonId?: number;
+  fixtureId?: number;
   homeTeam: string;
   homeTeamId?: number;
   awayTeam: string;
