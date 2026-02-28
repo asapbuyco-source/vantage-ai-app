@@ -24,10 +24,10 @@ import { db, auth } from "../firebaseConfig";
 // Replace these with your actual Selar product IDs after creating them.
 // In Selar dashboard: Products → Create Product → get the product link
 const SELAR_PRODUCTS: Record<string, string> = {
-    daily: import.meta.env.VITE_SELAR_DAILY_LINK || 'https://selar.co/vantage-daily',
-    weekly: import.meta.env.VITE_SELAR_WEEKLY_LINK || 'https://selar.co/vantage-weekly',
-    monthly: import.meta.env.VITE_SELAR_MONTHLY_LINK || 'https://selar.co/vantage-monthly',
-    annual: import.meta.env.VITE_SELAR_ANNUAL_LINK || 'https://selar.co/vantage-annual',
+    daily: import.meta.env.VITE_SELAR_DAILY_LINK || 'https://selar.com/878728f723',
+    weekly: import.meta.env.VITE_SELAR_WEEKLY_LINK || 'https://selar.com/878728f723',
+    monthly: import.meta.env.VITE_SELAR_MONTHLY_LINK || 'https://selar.com/878728f723',
+    annual: import.meta.env.VITE_SELAR_ANNUAL_LINK || 'https://selar.com/878728f723',
 };
 
 export interface SelarInitResponse {
