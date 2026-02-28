@@ -53,6 +53,7 @@ const allowedOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'https://vantageaiafrica.netlify.app',
+    'https://vantageai.online',
     process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, "") : null
 ].filter(Boolean); // Remove undefined values
 
@@ -219,6 +220,17 @@ app.post('/api/admin/grade-yesterday', adminAuth, geminiLimiter, async (req, res
     }
 });
 
+app.post('/api/admin/generate-blog', adminAuth, geminiLimiter, async (req, res) => {
+    try {
+        console.log('[API] Manual Blog Generation Triggered via Admin');
+        const result = await generateDailyBlogServerSide();
+        res.json(result);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Blog generation failed', details: e.message });
+    }
+});
+
 // ══════════════════════════════════════════════════════════════════════
 // SERVER-SIDE RENDERING & SEO (Static + Dynamic Routes)
 // ══════════════════════════════════════════════════════════════════════
@@ -232,30 +244,43 @@ app.get('/sitemap.xml', async (req, res) => {
     try {
         res.header('Content-Type', 'application/xml');
 
-        const baseUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, "") : 'https://vantageaiafrica.netlify.app';
+        const baseUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, "") : 'https://vantageai.online';
         let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
         xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
 
         // Add static routes
-        const staticRoutes = ['/', '/VIP', '/FreePicks', '/Kelly', '/Guide'];
+        const staticRoutes = ['/', '/blog', '/VIP', '/FreePicks', '/Kelly', '/Guide'];
         staticRoutes.forEach(route => {
-            xml += `  <url>\n    <loc>${baseUrl}${route}</loc>\n    <changefreq>daily</changefreq>\n    <priority>${route === '/' ? '1.0' : '0.8'}</priority>\n  </url>\n`;
+            xml += `  <url>\n    <loc>${baseUrl}${route}</loc>\n    <changefreq>daily</changefreq>\n    <priority>${route === '/' ? '1.0' : route === '/blog' ? '0.9' : '0.8'}</priority>\n  </url>\n`;
         });
 
-        // Add dynamic predictions routes
         if (admin.apps.length > 0) {
             // Get up to 60 most recent prediction days
-            const snapshot = await admin.firestore()
+            const predictionSnap = await admin.firestore()
                 .collection('daily_predictions')
                 .orderBy('updatedAt', 'desc')
                 .limit(60)
                 .get();
 
-            snapshot.forEach(doc => {
+            predictionSnap.forEach(doc => {
                 const dateKey = doc.id;
                 // Ensure it's a valid date key format YYYY-MM-DD
                 if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
                     xml += `  <url>\n    <loc>${baseUrl}/predictions/${dateKey}</loc>\n    <changefreq>never</changefreq>\n    <priority>0.7</priority>\n  </url>\n`;
+                }
+            });
+
+            // Get all blog posts for SEO
+            const blogSnap = await admin.firestore()
+                .collection('daily_blogs')
+                .orderBy('generatedAt', 'desc')
+                .limit(100)
+                .get();
+
+            blogSnap.forEach(doc => {
+                const dateKey = doc.id;
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+                    xml += `  <url>\n    <loc>${baseUrl}/blog/${dateKey}</loc>\n    <changefreq>never</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
                 }
             });
         }

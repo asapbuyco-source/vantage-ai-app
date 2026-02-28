@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { verifySelarOrder } from './services/selar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, X, Crown } from 'lucide-react';
@@ -19,6 +20,8 @@ import { TicketWizard } from './components/TicketWizard';
 import { LandingPage } from './pages/LandingPage';
 import { PublicStats } from './pages/PublicStats';
 import { Results } from './pages/Results';
+import { BlogIndex } from './pages/BlogIndex';
+import { BlogPost } from './pages/BlogPost';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
@@ -180,162 +183,179 @@ function AppContent() {
     );
   }
 
-  // Unauthenticated flow
+  // Unauthenticated flow — but /blog routes are always publicly accessible
   if (!user) {
     return (
-      <div className="min-h-screen overflow-x-hidden selection:bg-vantage-cyan/30 font-sans">
-        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-          <div className={`
+      <Routes>
+        <Route path="/blog" element={<BlogIndex />} />
+        <Route path="/blog/:date" element={<BlogPost />} />
+        <Route path="*" element={
+          <div className="min-h-screen overflow-x-hidden selection:bg-vantage-cyan/30 font-sans">
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+              <div className={`
                 absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-lg h-64 
                 blur-[100px] rounded-full mix-blend-screen transition-colors duration-500
                 ${theme === 'dark' ? 'bg-vantage-cyan/5' : 'bg-blue-200/40'}
                 `} />
-        </div>
-        <main className="relative z-10 container mx-auto max-w-md px-4 pt-6 min-h-screen">
-          <AnimatePresence mode="wait">
-            {authView === 'landing' ? (
-              // @ts-ignore
-              <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
-                <LandingPage
-                  onGetStarted={() => setAuthView('signup')}
-                  onLogin={() => setAuthView('login')}
-                  onShowStats={() => setAuthView('stats')}
-                />
-              </motion.div>
-            ) : authView === 'stats' ? (
-              // @ts-ignore
-              <motion.div key="stats" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
-                <div className="flex flex-col min-h-screen">
-                  <div className="flex items-center gap-2 py-4 mb-2">
-                    <button onClick={() => setAuthView('landing')} className="p-2 bg-white/5 rounded-lg text-gray-500 hover:text-vantage-cyan transition-colors">
-                      <X size={20} />
-                    </button>
-                    <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Back</span>
-                  </div>
-                  <PublicStats />
-                  <div className="mt-auto py-8">
-                    <button
-                      onClick={() => setAuthView('signup')}
-                      className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl shadow-lg"
-                    >
-                      Get Started Free
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              // @ts-ignore
-              <motion.div key="auth" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
-                <Profile initialMode={authView === 'login' ? 'login' : 'signup'} onBack={() => setAuthView('landing')} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </main>
-      </div>
+            </div>
+            <main className="relative z-10 container mx-auto max-w-md px-4 pt-6 min-h-screen">
+              <AnimatePresence mode="wait">
+                {authView === 'landing' ? (
+                  // @ts-ignore
+                  <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
+                    <LandingPage
+                      onGetStarted={() => setAuthView('signup')}
+                      onLogin={() => setAuthView('login')}
+                      onShowStats={() => setAuthView('stats')}
+                    />
+                  </motion.div>
+                ) : authView === 'stats' ? (
+                  // @ts-ignore
+                  <motion.div key="stats" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
+                    <div className="flex flex-col min-h-screen">
+                      <div className="flex items-center gap-2 py-4 mb-2">
+                        <button onClick={() => setAuthView('landing')} className="p-2 bg-white/5 rounded-lg text-gray-500 hover:text-vantage-cyan transition-colors">
+                          <X size={20} />
+                        </button>
+                        <span className="text-sm font-bold uppercase tracking-widest text-gray-400">Back</span>
+                      </div>
+                      <PublicStats />
+                      <div className="mt-auto py-8">
+                        <button
+                          onClick={() => setAuthView('signup')}
+                          className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl shadow-lg"
+                        >
+                          Get Started Free
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : (
+                  // @ts-ignore
+                  <motion.div key="auth" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
+                    <Profile initialMode={authView === 'login' ? 'login' : 'signup'} onBack={() => setAuthView('landing')} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </main>
+          </div>
+        } />
+      </Routes>
     );
   }
 
   // Authenticated app
   return (
-    <div className="min-h-screen overflow-x-hidden selection:bg-vantage-cyan/30 font-sans transition-colors duration-300 md:flex">
+    <Routes>
+      {/* ───── Public Blog Routes (NO auth required — for SEO/Google) ───── */}
+      <Route path="/blog" element={<BlogIndex />} />
+      <Route path="/blog/:date" element={<BlogPost />} />
 
-      {/* Ambient Background */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 blur-[120px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-cyan/5' : 'bg-blue-200/40'}`} />
-        <div className={`absolute bottom-0 right-0 w-96 h-96 blur-[120px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-purple/5' : 'bg-purple-200/40'}`} />
-      </div>
+      {/* ───── All other routes = main authenticated app ───── */}
+      <Route path="*" element={
+        <div className="min-h-screen overflow-x-hidden selection:bg-vantage-cyan/30 font-sans transition-colors duration-300 md:flex">
 
-      {/* VIP Renewal Reminder Banner */}
-      <AnimatePresence>
-        {showRenewalBanner && (
-          // @ts-ignore
-          <motion.div
-            initial={{ y: -60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -60, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white text-sm font-bold shadow-lg"
-          >
-            <div className="flex items-center gap-2">
-              <Crown size={16} className="shrink-0" />
-              <span>
-                {renewalDaysLeft === 0
-                  ? (language === 'fr' ? 'Votre VIP expire aujourd\'hui !' : 'Your VIP expires today!')
-                  : (language === 'fr' ? `VIP expire dans ${renewalDaysLeft}j — Renouveler` : `VIP expires in ${renewalDaysLeft}d — Renew now`)}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setActiveTab('vip')}
-                className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
+          {/* Ambient Background */}
+          <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+            <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 blur-[120px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-cyan/5' : 'bg-blue-200/40'}`} />
+            <div className={`absolute bottom-0 right-0 w-96 h-96 blur-[120px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-purple/5' : 'bg-purple-200/40'}`} />
+          </div>
+
+          {/* VIP Renewal Reminder Banner */}
+          <AnimatePresence>
+            {showRenewalBanner && (
+              // @ts-ignore
+              <motion.div
+                initial={{ y: -60, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -60, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white text-sm font-bold shadow-lg"
               >
-                {language === 'fr' ? 'Renouveler' : 'Renew'}
-              </button>
-              <button
-                onClick={() => {
-                  localStorage.setItem('vantage_renewal_dismissed', userProfile?.vipExpiry || '');
-                  setShowRenewalBanner(false);
-                }}
-                className="text-white/70 hover:text-white"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                <div className="flex items-center gap-2">
+                  <Crown size={16} className="shrink-0" />
+                  <span>
+                    {renewalDaysLeft === 0
+                      ? (language === 'fr' ? 'Votre VIP expire aujourd\'hui !' : 'Your VIP expires today!')
+                      : (language === 'fr' ? `VIP expire dans ${renewalDaysLeft}j — Renouveler` : `VIP expires in ${renewalDaysLeft}d — Renew now`)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setActiveTab('vip')}
+                    className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
+                  >
+                    {language === 'fr' ? 'Renouveler' : 'Renew'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      localStorage.setItem('vantage_renewal_dismissed', userProfile?.vipExpiry || '');
+                      setShowRenewalBanner(false);
+                    }}
+                    className="text-white/70 hover:text-white"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-      <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 pt-6 min-h-screen pb-24 md:pb-6" style={{ paddingTop: showRenewalBanner ? '4rem' : undefined }}>
-        <AnimatePresence mode="wait">
-          {
-            // @ts-ignore
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, scale: 0.98, filter: 'blur(10px)' }}
-              animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, scale: 1.02, filter: 'blur(10px)' }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="h-full"
-            >
-              <ErrorBoundary>
-                {activeTab === 'home' && <Home setTab={setActiveTab} />}
-                {activeTab === 'free' && <FreePicks />}
-                {activeTab === 'vip' && <VIP setTab={setActiveTab} />}
-                {activeTab === 'guide' && <BettingGuide />}
-                {activeTab === 'profile' && <Profile />}
-                {activeTab === 'admin' && <Admin setTab={setActiveTab} />}
-                {activeTab === 'kelly' && <Kelly setTab={setActiveTab} />}
-                {activeTab === 'concierge' && <TicketWizard setTab={setActiveTab} />}
-                {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
-                {activeTab === 'results' && <Results />}
-              </ErrorBoundary>
-            </motion.div>
-          }
-        </AnimatePresence>
-      </main>
+          <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 pt-6 min-h-screen pb-24 md:pb-6" style={{ paddingTop: showRenewalBanner ? '4rem' : undefined }}>
+            <AnimatePresence mode="wait">
+              {
+                // @ts-ignore
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, scale: 0.98, filter: 'blur(10px)' }}
+                  animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, scale: 1.02, filter: 'blur(10px)' }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="h-full"
+                >
+                  <ErrorBoundary>
+                    {activeTab === 'home' && <Home setTab={setActiveTab} />}
+                    {activeTab === 'free' && <FreePicks />}
+                    {activeTab === 'vip' && <VIP setTab={setActiveTab} />}
+                    {activeTab === 'guide' && <BettingGuide />}
+                    {activeTab === 'profile' && <Profile />}
+                    {activeTab === 'admin' && <Admin setTab={setActiveTab} />}
+                    {activeTab === 'kelly' && <Kelly setTab={setActiveTab} />}
+                    {activeTab === 'concierge' && <TicketWizard setTab={setActiveTab} />}
+                    {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
+                    {activeTab === 'results' && <Results />}
+                  </ErrorBoundary>
+                </motion.div>
+              }
+            </AnimatePresence>
+          </main>
 
-      {activeTab !== 'admin' && <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />}
+          {activeTab !== 'admin' && <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />}
 
-      {/* Global UI overlays */}
-      <BetSlip />
-      <ToastContainer />
+          {/* Global UI overlays */}
+          <BetSlip />
+          <ToastContainer />
 
-      {/* First-Launch Onboarding */}
-      <AnimatePresence>
-        {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
-      </AnimatePresence>
-    </div>
+          {/* First-Launch Onboarding */}
+          <AnimatePresence>
+            {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
+          </AnimatePresence>
+        </div>
+      } />
+    </Routes>
   );
 }
 
 export default function App() {
   return (
-    <AppProvider>
-      <AuthProvider>
-        <DataProvider>
-          <AppContent />
-        </DataProvider>
-      </AuthProvider>
-    </AppProvider>
+    <BrowserRouter>
+      <AppProvider>
+        <AuthProvider>
+          <DataProvider>
+            <AppContent />
+          </DataProvider>
+        </AuthProvider>
+      </AppProvider>
+    </BrowserRouter>
   );
 }

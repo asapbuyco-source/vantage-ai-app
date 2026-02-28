@@ -599,6 +599,30 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                         </p>
 
                         <div className="space-y-3">
+                            <button
+                                onClick={async () => {
+                                    if (!window.confirm("Are you sure you want to generate today's SEO blog? Ensure football and basketball are generated first.")) return;
+                                    setLoadingMatches(true);
+                                    try {
+                                        const res = await fetch('/api/admin/generate-blog', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' }
+                                        });
+                                        const data = await res.json();
+                                        if (!res.ok) throw new Error(data.error || 'Failed to generate blog');
+                                        alert(`Blog generated successfully! Status: ${data.status}`);
+                                    } catch (e: any) {
+                                        alert(`Blog generation error: ${e.message}`);
+                                    } finally {
+                                        setLoadingMatches(false);
+                                    }
+                                }}
+                                disabled={isSystemGenerating || isBasketballGenerating || loadingMatches}
+                                className="w-full py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 rounded-lg text-xs font-bold border border-purple-500/20 flex items-center justify-center gap-2 transition-colors active:scale-[0.98] disabled:opacity-50"
+                            >
+                                <BookCheck size={14} /> Generate SEO Blog
+                            </button>
+
                             {/* Clear Data */}
                             <button
                                 onClick={handleClearData}
