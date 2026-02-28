@@ -199,6 +199,40 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
                                     {/* ── PREDICTION TAB: always shows stored AI data ── */}
                                     {activeTab === 'prediction' && (() => {
+                                        const { user: authUser } = useAppContext();
+                                        const isVipUser = authUser?.isVip;
+
+                                        if (!isVipUser) {
+                                            return (
+                                                <div className="flex flex-col items-center justify-center py-10 px-4 text-center space-y-4">
+                                                    <div className="w-16 h-16 bg-vantage-purple/20 rounded-full flex items-center justify-center mb-2">
+                                                        <Target size={32} className="text-vantage-purple" />
+                                                    </div>
+                                                    <h3 className="text-lg font-bold">
+                                                        {language === 'fr' ? 'Prédiction VIP Exclusive' : 'Exclusive VIP Prediction'}
+                                                    </h3>
+                                                    <p className="text-sm text-gray-500 max-w-[250px] mx-auto">
+                                                        {language === 'fr'
+                                                            ? 'Débloquez cette analyse IA, la probabilité de réussite et notre pronostic exact en devenant membre VIP.'
+                                                            : 'Unlock this AI analysis, the exact success probability, and our precise prediction by becoming a VIP member.'}
+                                                    </p>
+
+                                                    {setTab && (
+                                                        <button
+                                                            onClick={() => {
+                                                                onClose();
+                                                                setTab('vip');
+                                                            }}
+                                                            className="mt-4 flex items-center gap-2 px-6 py-3 bg-vantage-purple hover:bg-purple-600 active:scale-95 transition-all text-white rounded-xl font-bold font-orbitron shadow-lg shadow-vantage-purple/20"
+                                                        >
+                                                            <Zap size={18} className="text-yellow-400 fill-yellow-400" />
+                                                            {language === 'fr' ? 'DEVENIR VIP' : 'BECOME VIP'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+
                                         const prediction = match.prediction_en || match.prediction || '';
                                         const predictionFr = match.prediction_fr || match.prediction || '';
                                         const analysis = (language === 'fr' ? match.analysis_fr : match.analysis_en) || match.analysis || '';
