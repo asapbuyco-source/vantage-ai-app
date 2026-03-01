@@ -172,7 +172,7 @@ export const saveBasketballPredictions = async (matches: Match[]): Promise<void>
 export const getWinRateStats = async (): Promise<WinRateStats> => {
     const defaultStats: WinRateStats = { daily: 0, weekly: 0, monthly: 0, streak: 0, todayWon: 0, todayTotal: 0 };
     const todayStr = getGlobalTodayKey();
-    const cacheKey = `vantage_stats_cache_${todayStr}`;
+    const cacheKey = `vantage_stats_cache_v2_${todayStr}`;
 
     // 1. Check Local Cache (0 reads)
     try {
@@ -224,7 +224,7 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
         // Also check today's results
         const todayMatches = await getPredictionsForDate(getGlobalTodayKey());
         if (todayMatches) {
-            todayMatches.filter(m => m.status && m.status !== 'pending').forEach(m => {
+            todayMatches.filter(m => m.status === 'won' || m.status === 'lost').forEach(m => {
                 todayTotal++;
                 if (m.status === 'won') todayWon++;
             });
@@ -232,7 +232,7 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
 
         allDays.forEach(({ matches }, index) => {
             if (!matches) return;
-            const graded = matches.filter(m => m.status && m.status !== 'pending');
+            const graded = matches.filter(m => m.status === 'won' || m.status === 'lost');
             if (graded.length === 0) return;
 
             const won = graded.filter(m => m.status === 'won').length;
@@ -357,7 +357,7 @@ export const getResultsHistory = async (days: number = 30): Promise<DayResult[]>
     const allDays = await Promise.all(fetchPromises);
     allDays.forEach(({ dateKey, matches }) => {
         if (!matches) return;
-        const graded = matches.filter(m => m.status && m.status !== 'pending');
+        const graded = matches.filter(m => m.status === 'won' || m.status === 'lost');
         if (graded.length === 0) return;
         results.push({
             date: dateKey,

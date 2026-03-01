@@ -211,8 +211,9 @@ app.post('/api/admin/generate-basketball', adminAuth, geminiLimiter, async (req,
 
 app.post('/api/admin/grade-yesterday', adminAuth, geminiLimiter, async (req, res) => {
     try {
-        console.log('[API] Manual Grading Triggered via Admin');
-        const result = await gradeYesterdayServerSide();
+        const { date, forceRegrade } = req.body || {};
+        console.log(`[API] Manual Grading Triggered via Admin (Date: ${date || 'yesterday'}, Force: ${!!forceRegrade})`);
+        const result = await gradeYesterdayServerSide(date || null, !!forceRegrade);
         res.json(result);
     } catch (e) {
         console.error(e);

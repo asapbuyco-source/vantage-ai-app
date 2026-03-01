@@ -361,15 +361,22 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         }
     };
 
+    const [gradingDate, setGradingDate] = useState('');
+    const [forceRegrade, setForceRegrade] = useState(false);
+
     const handleGradeYesterday = useCallback(async (isAuto: boolean = false) => {
         const auto = typeof isAuto === 'boolean' ? isAuto : false;
-        const yesterday = getGlobalYesterdayKey();
 
-        if (!auto && !window.confirm(`Start grading for yesterday (${yesterday}) via Backend?`)) return;
+        let targetDate = gradingDate;
+        if (!targetDate) {
+            targetDate = getGlobalYesterdayKey();
+        }
+
+        if (!auto && !window.confirm(`Start grading for ${targetDate} via Backend? ${forceRegrade ? '(FORCE REGRADE ENABLED)' : ''}`)) return;
 
         if (isMounted.current) {
             setIsGrading(true);
-            setGradingResult(auto ? "Auto-analyzing yesterday's results..." : "Starting grading process on Backend...");
+            setGradingResult(auto ? `Auto-analyzing ${targetDate} results...` : `Starting grading process for ${targetDate} on Backend...`);
         }
 
         try {
@@ -379,7 +386,8 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
             const response = await fetch(`${backendUrl}/api/admin/grade-yesterday`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
+                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+                body: JSON.stringify({ date: targetDate, forceRegrade })
             });
 
             const res = await response.json();
@@ -400,7 +408,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         } finally {
             if (isMounted.current) setIsGrading(false);
         }
-    }, []);
+    }, [gradingDate, forceRegrade]);
 
     const toggleAutoGrade = () => {
         const newValue = !autoGrade;
@@ -567,20 +575,40 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-3">
                             <p className="text-xs text-gray-400">
-                                Check scores for {getGlobalYesterdayKey()} and update history.
+                                Check scores for the selected date and update history. Defaults to yesterday ({getGlobalYesterdayKey()}) if empty.
                             </p>
+
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="date"
+                                    value={gradingDate}
+                                    onChange={(e) => setGradingDate(e.target.value)}
+                                    className="flex-1 bg-black/20 border border-white/10 text-white rounded-lg text-xs px-2 py-2 outline-none focus:ring-1 focus:ring-green-500 custom-date-input"
+                                />
+                                <div
+                                    onClick={() => setForceRegrade(!forceRegrade)}
+                                    className={`flex items-center gap-2 cursor-pointer px-2 py-2 rounded-lg border transition-colors ${forceRegrade ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-black/20 text-gray-400 border-white/5 hover:bg-black/30'}`}
+                                    title="If enabled, it will grade ALL matches for this day, even if already marked as Won/Lost."
+                                >
+                                    <span className="text-[10px] font-bold uppercase whitespace-nowrap">Force Regrade</span>
+                                    <div className={`w-5 h-2.5 rounded-full relative transition-colors ${forceRegrade ? 'bg-red-500' : 'bg-gray-600'}`}>
+                                        <div className={`absolute top-0.5 w-1.5 h-1.5 rounded-full bg-white transition-all ${forceRegrade ? 'left-3' : 'left-0.5'}`} />
+                                    </div>
+                                </div>
+                            </div>
+
                             <button
                                 onClick={() => handleGradeYesterday(false)}
                                 disabled={isGrading}
                                 className="w-full py-3 bg-green-500/10 hover:bg-green-500/20 text-green-500 font-bold rounded-xl border border-green-500/20 flex items-center justify-center space-x-2 disabled:opacity-50 transition-all active:scale-95"
                             >
                                 {isGrading ? <RefreshCw className="animate-spin" size={18} /> : <BookCheck size={18} />}
-                                <span>{isGrading ? "Analyzing Scores..." : "Grade Yesterday's Matches"}</span>
+                                <span>{isGrading ? "Analyzing Scores..." : "Grade Matches"}</span>
                             </button>
                             {gradingResult && (
-                                <div className={`text-xs text-center mt-2 p-2 rounded-lg font-mono ${gradingResult.startsWith('Error') ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>
+                                <div className={`text-xs text-center p-2 rounded-lg font-mono ${gradingResult.startsWith('Error') ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>
                                     {gradingResult}
                                 </div>
                             )}

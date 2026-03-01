@@ -391,10 +391,10 @@ REQUIREMENTS:
  * Grades yesterday's predictions using Gemini + Google Search.
  * Called by the scheduler and the /api/admin/grade-yesterday endpoint.
  */
-export const gradeYesterdayServerSide = async () => {
-    console.log('[Backend] Starting scheduled Grading for yesterday...');
+export const gradeYesterdayServerSide = async (customDate = null, forceRegrade = false) => {
+    console.log(`[Backend] Starting Grading for ${customDate || 'yesterday'}... (Force Regrade: ${forceRegrade})`);
     try {
-        const yesterday = getGlobalYesterdayKey();
+        const yesterday = customDate || getGlobalYesterdayKey();
         const db = admin.firestore();
 
         // 1. Fetch yesterday's predictions from Firestore
@@ -412,8 +412,11 @@ export const gradeYesterdayServerSide = async () => {
             return { status: "skipped", reason: "empty_matches", date: yesterday };
         }
 
-        // 2. Filter to only ungraded matches
-        const matchesToGrade = existingMatches.filter(m => !m.status || m.status === 'pending');
+        // 2. Filter to only ungraded matches unless forceRegrade is true
+        const matchesToGrade = forceRegrade
+            ? existingMatches
+            : existingMatches.filter(m => !m.status || m.status === 'pending');
+
         if (matchesToGrade.length === 0) {
             console.log(`[Backend Grading] All matches for ${yesterday} already graded.`);
             return { status: "skipped", reason: "already_graded", total: existingMatches.length, date: yesterday };
@@ -441,34 +444,61 @@ export const gradeYesterdayServerSide = async () => {
         const ai = getAI();
         let lastError = null;
 
-        // 4. Step 1: Use Google Search to get real scores
+        // 4. Step 1: Use Sportmonks API for accurate scores, fallback to Search
         let rawScores = '';
-        for (const modelDef of AVAILABLE_MODELS) {
-            try {
-                const searchResponse = await ai.models.generateContent({
-                    model: modelDef.id,
-                    contents: `Find the FINAL full-time scores for these football matches played on ${yesterday}. List each match with its exact score: ${JSON.stringify(simplifiedList)}`,
-                    config: {
-                        temperature: 0.1,
-                        tools: [{ googleSearch: {} }]
-                    }
-                });
-                rawScores = extractText(searchResponse);
-                console.log(`[Backend Grading] ✅ Scores fetched using ${modelDef.id}`);
-                break;
-            } catch (apiError) {
-                lastError = apiError;
-                console.warn(`[Backend Grading] ⚠️ Search model ${modelDef.id} failed: ${apiError.message}`);
-                // If it's a 403 (search permission), skip grading entirely
-                if (apiError.status === 403 || apiError.message?.includes('403')) {
-                    console.warn('[Backend Grading] Search access denied (403). Cannot grade without score data. Skipping.');
-                    return { status: "skipped", reason: "search_permission_denied", date: yesterday };
+        let missingFromSportmonks = [];
+
+        try {
+            console.log(`[Backend Grading] Fetching official Sportmonks results for ${yesterday}...`);
+            const smFixtures = await getTodaysFixturesServerSide(yesterday);
+
+            for (const m of matchesToGrade) {
+                // Try to find in Sportmonks data
+                const matchFound = smFixtures.find(f =>
+                    f.fixture.id.toString() === m.id ||
+                    (f.teams.home.name === m.homeTeam && f.teams.away.name === m.awayTeam)
+                );
+
+                if (matchFound && matchFound.score && (matchFound.fixture.status.short === 'FT' || matchFound.fixture.status.short === 'AET' || matchFound.fixture.status.short === 'PEN')) {
+                    rawScores += `Match ID: ${m.id} | ${matchFound.teams.home.name} ${matchFound.goals.home} - ${matchFound.goals.away} ${matchFound.teams.away.name}\n`;
+                } else if (matchFound && (matchFound.fixture.status.short === 'CANCL' || matchFound.fixture.status.short === 'POSTP' || matchFound.fixture.status.short === 'INT')) {
+                    rawScores += `Match ID: ${m.id} | ${m.homeTeam} vs ${m.awayTeam} | Status: Postponed/Cancelled\n`;
+                } else {
+                    missingFromSportmonks.push({ id: m.id, home: m.homeTeam, away: m.awayTeam });
                 }
             }
+        } catch (err) {
+            console.warn(`[Backend Grading] Failed to fetch Sportmonks data: ${err.message}. Falling back to AI search for all.`);
+            missingFromSportmonks = simplifiedList; // fallback everything
         }
 
-        if (!rawScores) {
-            throw new Error(`Could not fetch match scores from any model. Last error: ${lastError?.message}`);
+        if (missingFromSportmonks.length > 0) {
+            console.log(`[Backend Grading] Missing ${missingFromSportmonks.length} scores from Sportmonks. Using Gemini Search fallback...`);
+            let searchScores = '';
+            for (const modelDef of AVAILABLE_MODELS) {
+                try {
+                    const searchResponse = await ai.models.generateContent({
+                        model: modelDef.id,
+                        contents: `Find the FINAL full-time scores for these football matches played on ${yesterday}. List each match with its exact score: ${JSON.stringify(missingFromSportmonks)}`,
+                        config: {
+                            temperature: 0.1,
+                            tools: [{ googleSearch: {} }]
+                        }
+                    });
+                    searchScores = extractText(searchResponse);
+                    console.log(`[Backend Grading] ✅ Fallback Scores fetched using ${modelDef.id}`);
+                    break;
+                } catch (apiError) {
+                    lastError = apiError;
+                    console.warn(`[Backend Grading] ⚠️ Search model ${modelDef.id} failed: ${apiError.message}`);
+                }
+            }
+            if (searchScores) {
+                rawScores += `\n[FALLBACK SCORES FROM WEB]\n` + searchScores;
+            } else if (!rawScores) {
+                // If both Sportmonks AND Search failed, we can't grade
+                throw new Error(`Could not fetch match scores from API or any model. Last error: ${lastError?.message}`);
+            }
         }
 
         // 5. Step 2: Grade predictions against fetched scores
