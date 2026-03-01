@@ -40,19 +40,41 @@ const extractText = (response) => {
 export const fetchSportmonksServerSide = async (path) => {
     try {
         const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
-        const separator = path.includes('?') ? '&' : '?';
-        const url = `https://api.sportmonks.com/v3/football${path}${separator}api_token=${token}`;
 
-        const res = await fetch(url, { method: 'GET' });
-        if (!res.ok) {
-            console.warn(`[Backend] Sportmonks API Error (${res.status}) on ${path}`);
-            return null;
+        let allData = [];
+        let page = 1;
+        let hasMore = true;
+
+        while (hasMore && page <= 50) {
+            const pagePath = path.includes('?') ? `${path}&page=${page}` : `${path}?page=${page}`;
+            const separator = pagePath.includes('?') ? '&' : '?';
+            const url = `https://api.sportmonks.com/v3/football${pagePath}${separator}api_token=${token}`;
+
+            const res = await fetch(url, { method: 'GET' });
+            if (!res.ok) {
+                console.warn(`[Backend] Sportmonks API Error (${res.status}) on ${pagePath}`);
+                break;
+            }
+            const json = await res.json();
+
+            if (json.data && Array.isArray(json.data)) {
+                allData = allData.concat(json.data);
+            } else if (json.data) {
+                // Not an array response, return immediately (e.g. single item fetch)
+                return json.data;
+            }
+
+            if (json.pagination && json.pagination.has_more) {
+                page++;
+            } else {
+                hasMore = false;
+            }
         }
-        const data = await res.json();
-        return data.data ?? null;
+
+        return allData.length > 0 ? allData : null;
     } catch (e) {
         console.warn(`[Backend] Fetch catch error on ${path}`, e);
-        return null;
+        return null; // Ensure fallback triggering
     }
 };
 
