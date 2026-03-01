@@ -5,6 +5,7 @@ import { NavigationTab, Match } from '../types';
 import { getTeamForm, getH2H, getMatchOdds, getTeamInjuries, TeamForm, H2HRecord, MatchOdds, InjuryReport } from '../services/sportsData';
 import { TeamLogo } from './TeamLogo';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 interface Props {
     match: Match | null;
@@ -17,59 +18,30 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'prediction' | 'overview' | 'stats' | 'h2h' | 'injuries'>('prediction');
 
-    const [homeForm, setHomeForm] = useState<TeamForm | null>(null);
-    const [awayForm, setAwayForm] = useState<TeamForm | null>(null);
-    const [h2h, setH2h] = useState<H2HRecord | null>(null);
     const [odds, setOdds] = useState<MatchOdds | null>(null);
-    const [homeInjuries, setHomeInjuries] = useState<InjuryReport | null>(null);
-    const [awayInjuries, setAwayInjuries] = useState<InjuryReport | null>(null);
 
     useEffect(() => {
         if (!match) return;
 
         let isMounted = true;
         setLoading(true);
-        setActiveTab('prediction'); // Reset to Prediction tab on each new match
+        setActiveTab('prediction');
 
-        // Lock body scroll while modal is open
         document.body.style.overflow = 'hidden';
 
         const fetchDetails = async () => {
             try {
-                const homeId = Number(match.homeTeamId) || 0;
-                const awayId = Number(match.awayTeamId) || 0;
-                const leagueId = Number(match.leagueId) || 0;
-                const seasonId = Number(match.seasonId) || 2024;
                 const fixtureId = Number(match.fixtureId || match.id) || 0;
 
-                // If IDs are all zero, this is a fallback/AI-only match — skip live API calls
-                // but we still have the stored AI prediction data to show
-                if (!homeId && !awayId && !fixtureId) {
-                    if (isMounted) setLoading(false);
-                    return;
+                // Only fetch live odds, use AI generated data for everything else
+                if (fixtureId) {
+                    const od = await getMatchOdds(fixtureId);
+                    if (isMounted) setOdds(od);
                 }
 
-                // Fetch all data in parallel
-                const [hf, af, h2, od, hi, ai] = await Promise.all([
-                    homeId && leagueId ? getTeamForm(homeId, leagueId, seasonId) : null,
-                    awayId && leagueId ? getTeamForm(awayId, leagueId, seasonId) : null,
-                    homeId && awayId ? getH2H(homeId, awayId) : null,
-                    fixtureId ? getMatchOdds(fixtureId) : null,
-                    homeId ? getTeamInjuries(homeId) : null,
-                    awayId ? getTeamInjuries(awayId) : null,
-                ]);
-
-                if (isMounted) {
-                    setHomeForm(hf);
-                    setAwayForm(af);
-                    setH2h(h2);
-                    setOdds(od);
-                    setHomeInjuries(hi);
-                    setAwayInjuries(ai);
-                    setLoading(false);
-                }
+                if (isMounted) setLoading(false);
             } catch (e) {
-                console.error("Error fetching match details:", e);
+                console.error("Error fetching match odds:", e);
                 if (isMounted) setLoading(false);
             }
         };
@@ -199,7 +171,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
                                     {/* ── PREDICTION TAB: always shows stored AI data ── */}
                                     {activeTab === 'prediction' && (() => {
-                                        const { user: authUser } = useAppContext();
+                                        const { user: authUser } = useAuth();
                                         const isVipUser = authUser?.isVip;
 
                                         if (!isVipUser) {
@@ -325,17 +297,17 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                     {activeTab === 'overview' && (
                                         <>
                                             {/* Form Guide */}
-                                            {(homeForm || awayForm) && (
+                                            {(match.homeForm || match.awayForm) && (
                                                 <div className="space-y-4">
                                                     <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
                                                         <Activity size={12} /> {language === 'fr' ? 'État de Forme (5 Derniers)' : 'Form Guide (Last 5)'}
                                                     </h4>
                                                     <div className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5">
-                                                        {homeForm && (
+                                                        {match.homeForm && (
                                                             <div className="flex justify-between items-center mb-3">
                                                                 <span className="text-xs font-bold">{match.homeTeam}</span>
                                                                 <div className="flex gap-1">
-                                                                    {homeForm.last5.split(' ').map((res, i) => (
+                                                                    {match.homeForm.split(' ').map((res, i) => (
                                                                         <span key={i} className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold ${res === 'W' ? 'bg-green-500/20 text-green-500' :
                                                                             res === 'L' ? 'bg-red-500/20 text-red-500' :
                                                                                 res === 'D' ? 'bg-gray-500/20 text-gray-500' : 'bg-slate-200 dark:bg-white/10 text-gray-500'
@@ -344,11 +316,11 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        {awayForm && (
+                                                        {match.awayForm && (
                                                             <div className="flex justify-between items-center">
                                                                 <span className="text-xs font-bold">{match.awayTeam}</span>
                                                                 <div className="flex gap-1">
-                                                                    {awayForm.last5.split(' ').map((res, i) => (
+                                                                    {match.awayForm.split(' ').map((res, i) => (
                                                                         <span key={i} className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-bold ${res === 'W' ? 'bg-green-500/20 text-green-500' :
                                                                             res === 'L' ? 'bg-red-500/20 text-red-500' :
                                                                                 res === 'D' ? 'bg-gray-500/20 text-gray-500' : 'bg-slate-200 dark:bg-white/10 text-gray-500'
@@ -391,31 +363,24 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
                                     {activeTab === 'stats' && (
                                         <div className="space-y-5">
-                                            {(homeForm || awayForm) ? (
+                                            {(match.homeWinRate !== undefined || match.awayWinRate !== undefined) ? (
                                                 <>
                                                     <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider mb-1 text-gray-500">
                                                         <span>{match.homeTeam}</span>
                                                         <span>{match.awayTeam}</span>
                                                     </div>
-                                                    {homeForm && awayForm && (
-                                                        <>
-                                                            {renderStatBar(language === 'fr' ? 'Victoires (dom/ext)' : 'Win Rate %', homeForm.homeWinRate, awayForm.awayWinRate, true)}
-                                                            {renderStatBar(language === 'fr' ? 'Buts marqués (moy)' : 'Avg Goals Scored', homeForm.avgGoalsScored, awayForm.avgGoalsScored, false)}
-                                                            {renderStatBar(language === 'fr' ? 'Buts concédés (moy)' : 'Avg Goals Conceded', homeForm.avgGoalsConceded, awayForm.avgGoalsConceded, false)}
-                                                            {renderStatBar(language === 'fr' ? 'Clean sheets %' : 'Clean Sheets %', homeForm.cleanSheetRate, awayForm.cleanSheetRate, true)}
-                                                        </>
-                                                    )}
-                                                    {(!homeForm || !awayForm) && (
-                                                        <p className="text-xs text-gray-500 text-center py-4">
-                                                            {language === 'fr' ? 'Stats partielles disponibles.' : 'Partial stats available for one side only.'}
-                                                        </p>
-                                                    )}
+                                                    <>
+                                                        {match.homeWinRate !== undefined && renderStatBar(language === 'fr' ? 'Victoires %' : 'Win Rate %', match.homeWinRate || 0, match.awayWinRate || 0, true)}
+                                                        {match.homeAvgScored !== undefined && renderStatBar(language === 'fr' ? 'Buts marqués (moy)' : 'Avg Goals Scored', match.homeAvgScored || 0, match.awayAvgScored || 0, false)}
+                                                        {match.homeAvgConceded !== undefined && renderStatBar(language === 'fr' ? 'Buts concédés (moy)' : 'Avg Goals Conceded', match.homeAvgConceded || 0, match.awayAvgConceded || 0, false)}
+                                                        {match.homeCleanSheetRate !== undefined && renderStatBar(language === 'fr' ? 'Clean sheets %' : 'Clean Sheets %', match.homeCleanSheetRate || 0, match.awayCleanSheetRate || 0, true)}
+                                                    </>
                                                 </>
                                             ) : (
                                                 <div className="text-center py-10 text-gray-500 text-sm">
                                                     <BarChart3 size={32} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
                                                     <p>{language === 'fr' ? 'Statistiques non disponibles' : 'Stats not available for this match'}</p>
-                                                    <p className="text-xs mt-1 text-gray-400">{language === 'fr' ? '(Match sans données API en temps réel)' : '(No live API data for this fixture)'}</p>
+                                                    <p className="text-xs mt-1 text-gray-400">{language === 'fr' ? '(Match sans données générées par l\'IA)' : '(No AI-generated stats for this fixture)'}</p>
                                                 </div>
                                             )}
                                         </div>
@@ -423,7 +388,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
                                     {activeTab === 'h2h' && (
                                         <div className="space-y-6">
-                                            {h2h ? (
+                                            {(match.h2hHomeWins !== undefined) ? (
                                                 <>
                                                     <div className="p-6 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 text-center">
                                                         <Trophy size={24} className="text-yellow-500 mx-auto mb-3" />
@@ -431,29 +396,28 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
                                                         <div className="flex justify-center items-center gap-6">
                                                             <div className="flex flex-col items-center">
-                                                                <span className="text-2xl font-bold text-vantage-cyan mb-1">{h2h.homeTeamWins}</span>
+                                                                <span className="text-2xl font-bold text-vantage-cyan mb-1">{match.h2hHomeWins}</span>
                                                                 <span className="text-[10px] text-gray-500 uppercase">{match.homeTeam}</span>
                                                             </div>
                                                             <div className="flex flex-col items-center">
-                                                                <span className="text-lg font-bold text-gray-400 mb-1">{h2h.draws}</span>
+                                                                <span className="text-lg font-bold text-gray-400 mb-1">{match.h2hDraws}</span>
                                                                 <span className="text-[10px] text-gray-500 uppercase">Draws</span>
                                                             </div>
                                                             <div className="flex flex-col items-center">
-                                                                <span className="text-2xl font-bold text-vantage-purple mb-1">{h2h.awayTeamWins}</span>
+                                                                <span className="text-2xl font-bold text-vantage-purple mb-1">{match.h2hAwayWins}</span>
                                                                 <span className="text-[10px] text-gray-500 uppercase">{match.awayTeam}</span>
                                                             </div>
                                                         </div>
-                                                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10 text-xs text-gray-500">
-                                                            Scores: {h2h.last5Goals || 'N/A'}
+                                                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10 text-xs text-gray-500 truncate px-2">
+                                                            Scores: {match.h2hLast5Goals || 'N/A'}
                                                         </div>
                                                     </div>
 
-                                                    {(homeForm && awayForm) && (
+                                                    {(match.homeWinRate !== undefined) && (
                                                         <div className="pt-2">
-                                                            {renderStatBar("Win Rate", homeForm.homeWinRate, awayForm.awayWinRate, true)}
-                                                            {renderStatBar("Avg Scored", homeForm.avgGoalsScored, awayForm.avgGoalsScored, false)}
-                                                            {renderStatBar("Avg Conceded", homeForm.avgGoalsConceded, awayForm.avgGoalsConceded, false)}
-                                                            {renderStatBar("Clean Sheets", homeForm.cleanSheetRate, awayForm.cleanSheetRate, true)}
+                                                            {renderStatBar("Win Rate", match.homeWinRate || 0, match.awayWinRate || 0, true)}
+                                                            {renderStatBar("Avg Scored", match.homeAvgScored || 0, match.awayAvgScored || 0, false)}
+                                                            {renderStatBar("Avg Conceded", match.homeAvgConceded || 0, match.awayAvgConceded || 0, false)}
                                                         </div>
                                                     )}
                                                 </>
@@ -470,8 +434,8 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="space-y-2">
                                                     <h4 className="text-xs font-bold text-center border-b border-slate-200 dark:border-white/10 pb-2">{match.homeTeam}</h4>
-                                                    {homeInjuries?.injured.length ? (
-                                                        homeInjuries.injured.map((inj, i) => (
+                                                    {match.homeInjured?.length ? (
+                                                        match.homeInjured.map((inj, i) => (
                                                             <div key={i} className="flex gap-2 p-2 rounded bg-red-500/5 border border-red-500/10 text-xs">
                                                                 <ShieldAlert size={14} className="text-red-500 shrink-0" />
                                                                 <span className="text-slate-700 dark:text-gray-300">{inj}</span>
@@ -483,8 +447,8 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                 </div>
                                                 <div className="space-y-2">
                                                     <h4 className="text-xs font-bold text-center border-b border-slate-200 dark:border-white/10 pb-2">{match.awayTeam}</h4>
-                                                    {awayInjuries?.injured.length ? (
-                                                        awayInjuries.injured.map((inj, i) => (
+                                                    {match.awayInjured?.length ? (
+                                                        match.awayInjured.map((inj, i) => (
                                                             <div key={i} className="flex gap-2 p-2 rounded bg-red-500/5 border border-red-500/10 text-xs">
                                                                 <ShieldAlert size={14} className="text-red-500 shrink-0" />
                                                                 <span className="text-slate-700 dark:text-gray-300">{inj}</span>

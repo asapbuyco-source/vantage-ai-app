@@ -32,6 +32,23 @@ export interface Match {
   // Grading Fields
   status?: 'won' | 'lost' | 'void' | 'pending';
   score?: string; // e.g. "2-1"
+  // Match Details / AI Generated Stats
+  homeForm?: string;
+  awayForm?: string;
+  homeWinRate?: number;
+  awayWinRate?: number;
+  homeAvgScored?: number;
+  awayAvgScored?: number;
+  homeAvgConceded?: number;
+  awayAvgConceded?: number;
+  homeCleanSheetRate?: number;
+  awayCleanSheetRate?: number;
+  h2hHomeWins?: number;
+  h2hAwayWins?: number;
+  h2hDraws?: number;
+  h2hLast5Goals?: string;
+  homeInjured?: string[];
+  awayInjured?: string[];
 }
 
 export interface AccumulatorSet {

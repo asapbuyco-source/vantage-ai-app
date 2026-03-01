@@ -6,6 +6,7 @@ import {
     gradeYesterdayServerSide,
     generateBasketballPredictionsServerSide
 } from './geminiService.js';
+import { checkRecentSelarEmails } from './gmailListener.js';
 
 // We'll export an initialization function so server.js can start it
 export const initScheduler = () => {
@@ -115,5 +116,16 @@ export const initScheduler = () => {
         }
     });
 
+    // ── Selar Payment Email Listener ──────────────────────────────────────────
+    // Runs every 30 seconds to check for new VIP purchases
+    cron.schedule('*/30 * * * * *', async () => {
+        try {
+            await checkRecentSelarEmails();
+        } catch (e) {
+            console.error('[Scheduler] Error in Selar Gmail Listener:', e);
+        }
+    });
+
     console.log('⏳ Scheduler initialized. Config sync runs every 5 minutes (first sync in <5 min).');
+    console.log('📧 Setup Selar Gmail listener to poll every 2 minutes.');
 };

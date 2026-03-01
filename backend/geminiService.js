@@ -220,7 +220,7 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
 3. ONE Market Per Match (safest one). Choose from: "Home Win", "Away Win", "Draw", "Double Chance (1X)", "Double Chance (X2)", "Double Chance (12)", "Draw No Bet (Home)", "Draw No Bet (Away)", "Over 1.5 Goals", "Over 2.5 Goals", "Both Teams Score", "Both Teams Score - No".
 
 ═══════════════════════════════════════════════
-🚨 OUTPUT FORMAT
+🚨 OUTPUT FORMAT & ADDITIONAL DATA REQUIREMENTS (Strict JSON)
 ═══════════════════════════════════════════════
 - 'id': Use the exact ID provided in the JSON payload.
 - 'prediction_en' / 'prediction_fr': Localized prediction label.
@@ -228,6 +228,15 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
 - 'analysis_fr': French translation of analysis.
 - 'confidence': 0–100 integer.
 - 'odds': Real bookmaker decimal odds for your chosen market.
+- 'category': "safe" (confidence >= 80), "value" (70-79), or "risky" (<70)
+- 'homeForm' / 'awayForm': Last 5 games form mapping e.g., "W W D L W" (String).
+- 'homeWinRate' / 'awayWinRate': 0-100 integer representing win rate percentage.
+- 'homeAvgScored' / 'awayAvgScored': Float, avg goals scored per game.
+- 'homeAvgConceded' / 'awayAvgConceded': Float, avg goals conceded per game.
+- 'homeCleanSheetRate' / 'awayCleanSheetRate': 0-100 integer.
+- 'h2hHomeWins' / 'h2hAwayWins' / 'h2hDraws': Integer count of last 5 H2H results.
+- 'h2hLast5Goals': String of recent H2H scores e.g., "2-1, 1-1, 0-0".
+- 'homeInjured' / 'awayInjured': Array of strings representing key injured players, e.g., ["Saka", "Odegaard"]. Empty array if none.
 - Output JSON array only.
         `;
 
@@ -259,7 +268,23 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
                                     odds: { type: Type.NUMBER },
                                     category: { type: Type.STRING },
                                     analysis_en: { type: Type.STRING },
-                                    analysis_fr: { type: Type.STRING }
+                                    analysis_fr: { type: Type.STRING },
+                                    homeForm: { type: Type.STRING },
+                                    awayForm: { type: Type.STRING },
+                                    homeWinRate: { type: Type.NUMBER },
+                                    awayWinRate: { type: Type.NUMBER },
+                                    homeAvgScored: { type: Type.NUMBER },
+                                    awayAvgScored: { type: Type.NUMBER },
+                                    homeAvgConceded: { type: Type.NUMBER },
+                                    awayAvgConceded: { type: Type.NUMBER },
+                                    homeCleanSheetRate: { type: Type.NUMBER },
+                                    awayCleanSheetRate: { type: Type.NUMBER },
+                                    h2hHomeWins: { type: Type.NUMBER },
+                                    h2hAwayWins: { type: Type.NUMBER },
+                                    h2hDraws: { type: Type.NUMBER },
+                                    h2hLast5Goals: { type: Type.STRING },
+                                    homeInjured: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    awayInjured: { type: Type.ARRAY, items: { type: Type.STRING } }
                                 },
                                 required: ["id", "prediction_en", "confidence", "odds", "analysis_en", "category"]
                             }
@@ -661,7 +686,7 @@ LEAGUE PRIORITY (scan in this order — reflects African betting volume for bask
 4. Use total points lines commonly offered by bookmakers (e.g. "Over 220.5 Points").
 
 ═══════════════════════════════════════════════
-🚨 OUTPUT FORMAT (strict JSON array)
+🚨 OUTPUT FORMAT & ADDITIONAL DATA REQUIREMENTS (Strict JSON)
 ═══════════════════════════════════════════════
 Each object must have:
 - 'id': a unique string identifying this match, format: "bball-YYYYMMDD-HomeTeamSlug-AwayTeamSlug"
@@ -677,6 +702,14 @@ Each object must have:
 - 'category': "safe" (confidence >= 80), "value" (70-79), or "risky" (<70)
 - 'analysis_en': "EV: +X.X% | Edge: Y% | [max 20 words of reasoning]"
 - 'analysis_fr': French translation
+- 'homeForm' / 'awayForm': Last 5 games form mapping e.g., "W W L L W" (String).
+- 'homeWinRate' / 'awayWinRate': 0-100 integer representing win rate percentage.
+- 'homeAvgScored' / 'awayAvgScored': Float, avg points scored per game.
+- 'homeAvgConceded' / 'awayAvgConceded': Float, avg points conceded per game.
+- 'homeCleanSheetRate' / 'awayCleanSheetRate': 0-100 integer (usually 0 for basketball, but required for schema).
+- 'h2hHomeWins' / 'h2hAwayWins' / 'h2hDraws': Integer count of last 5 H2H results.
+- 'h2hLast5Goals': String of recent H2H scores e.g., "112-108, 98-105".
+- 'homeInjured' / 'awayInjured': Array of strings representing key injured players. Empty array if none.
 - 'homeTeamLogo': empty string ""
 - 'awayTeamLogo': empty string ""
 - 'sport': "basketball"
@@ -714,6 +747,22 @@ Output JSON array only. No markdown. No preamble.
                                     category: { type: Type.STRING },
                                     analysis_en: { type: Type.STRING },
                                     analysis_fr: { type: Type.STRING },
+                                    homeForm: { type: Type.STRING },
+                                    awayForm: { type: Type.STRING },
+                                    homeWinRate: { type: Type.NUMBER },
+                                    awayWinRate: { type: Type.NUMBER },
+                                    homeAvgScored: { type: Type.NUMBER },
+                                    awayAvgScored: { type: Type.NUMBER },
+                                    homeAvgConceded: { type: Type.NUMBER },
+                                    awayAvgConceded: { type: Type.NUMBER },
+                                    homeCleanSheetRate: { type: Type.NUMBER },
+                                    awayCleanSheetRate: { type: Type.NUMBER },
+                                    h2hHomeWins: { type: Type.NUMBER },
+                                    h2hAwayWins: { type: Type.NUMBER },
+                                    h2hDraws: { type: Type.NUMBER },
+                                    h2hLast5Goals: { type: Type.STRING },
+                                    homeInjured: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    awayInjured: { type: Type.ARRAY, items: { type: Type.STRING } },
                                     homeTeamLogo: { type: Type.STRING },
                                     awayTeamLogo: { type: Type.STRING },
                                     sport: { type: Type.STRING },

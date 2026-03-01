@@ -220,11 +220,14 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
         let weekWon = 0, weekTotal = 0;
         let monthWon = 0, monthTotal = 0;
         let todayWon = 0, todayTotal = 0;
+        let mostRecentDailyWon = 0, mostRecentDailyTotal = 0;
+        let foundDaily = false;
 
         // Also check today's results
         const todayMatches = await getPredictionsForDate(getGlobalTodayKey());
         if (todayMatches) {
-            todayMatches.filter(m => m.status === 'won' || m.status === 'lost').forEach(m => {
+            const gradedToday = todayMatches.filter(m => m.status === 'won' || m.status === 'lost');
+            gradedToday.forEach(m => {
                 todayTotal++;
                 if (m.status === 'won') todayWon++;
             });
@@ -232,31 +235,44 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
 
         allDays.forEach(({ matches }, index) => {
             if (!matches) return;
+
+            // Strictly get ONLY matches that are finalized as won or lost (exclude void/pending)
             const graded = matches.filter(m => m.status === 'won' || m.status === 'lost');
             if (graded.length === 0) return;
 
             const won = graded.filter(m => m.status === 'won').length;
-            const isWinDay = won / (graded.length || 1) >= 0.5;
+            const validTotal = graded.length;
+            const isWinDay = (won / validTotal) >= 0.5;
 
-            // Streak = consecutive winning days from yesterday backward
+            // Capture the first valid day with results as our "Daily" metric
+            if (!foundDaily) {
+                mostRecentDailyWon = won;
+                mostRecentDailyTotal = validTotal;
+                foundDaily = true;
+            }
+
+            // Streak = consecutive winning days from yesterday backward (ignoring empty days)
             if (streakActive && isWinDay) {
                 streak++;
             } else {
                 streakActive = false;
             }
 
+            // Week Calculation: Days 1-7 backward
             if (index < 7) {
                 weekWon += won;
-                weekTotal += graded.length;
+                weekTotal += validTotal;
             }
-            monthWon += won;
-            monthTotal += graded.length;
 
-            results.push({ won, total: graded.length });
+            // Month Calculation: Days 1-30 backward
+            monthWon += won;
+            monthTotal += validTotal;
+
+            results.push({ won, total: validTotal });
         });
 
-        const daily = results.length > 0
-            ? Math.round((results[0].won / results[0].total) * 100)
+        const daily = mostRecentDailyTotal > 0
+            ? Math.round((mostRecentDailyWon / mostRecentDailyTotal) * 100)
             : 0;
         const weekly = weekTotal > 0 ? Math.round((weekWon / weekTotal) * 100) : 0;
         const monthly = monthTotal > 0 ? Math.round((monthWon / monthTotal) * 100) : 0;

@@ -97,14 +97,14 @@ const sportmonksLimiter = rateLimit({
 app.use('/api/sportmonks', sportmonksLimiter, createProxyMiddleware({
     target: 'https://api.sportmonks.com/v3/football',
     changeOrigin: true,
-    pathRewrite: {
-        '^/api/sportmonks': '', // remove base path when forwarding
+    pathRewrite: (path, req) => {
+        const rewritten = path.replace(/^\/api\/sportmonks/, '');
+        const token = SPORTMONKS_API_TOKEN || '';
+        const separator = rewritten.includes('?') ? '&' : '?';
+        return `${rewritten}${separator}api_token=${token}`;
     },
     onProxyReq: (proxyReq, req, res) => {
-        // Append the API token to the query string securely on the backend
-        const token = SPORTMONKS_API_TOKEN || '';
-        const separator = proxyReq.path.includes('?') ? '&' : '?';
-        proxyReq.path = `${proxyReq.path}${separator}api_token=${token}`;
+        // Token is now appended via pathRewrite
     },
     onError: (err, req, res) => {
         console.error('Proxy Error:', err);
