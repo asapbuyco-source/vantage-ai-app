@@ -171,8 +171,8 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
                                     {/* ── PREDICTION TAB: always shows stored AI data ── */}
                                     {activeTab === 'prediction' && (() => {
-                                        const { user: authUser } = useAuth();
-                                        const isVipUser = authUser?.isVip;
+                                        const { userProfile } = useAuth();
+                                        const isVipUser = userProfile?.isVip;
 
                                         if (!isVipUser) {
                                             return (
