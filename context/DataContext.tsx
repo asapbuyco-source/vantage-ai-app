@@ -254,7 +254,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setWinRateStats(DEFAULT_WIN_RATES);
             setLoading(false);
         }
-    }, [authLoading, user, isAdmin]);
+    }, [authLoading, user]);
 
     return (
         <DataContext.Provider value={{

@@ -103,6 +103,7 @@ export const Results: React.FC = () => {
                     {history.map((day, i) => {
                         const dayRate = day.totalGraded > 0 ? Math.round((day.wonCount / day.totalGraded) * 100) : 0;
                         const isExpanded = expandedDay === day.date;
+                        const gradedMatches = day.matches.filter(m => m.status === 'won' || m.status === 'lost');
 
                         return (
                             // @ts-ignore
@@ -148,7 +149,7 @@ export const Results: React.FC = () => {
                                             exit={{ opacity: 0, height: 0 }}
                                             className="overflow-hidden mt-2 space-y-2 pl-2"
                                         >
-                                            {day.matches.filter(m => m.status === 'won' || m.status === 'lost').map((match) => {
+                                            {gradedMatches.map((match) => {
                                                 const won = match.status === 'won';
                                                 const pred = language === 'fr' ? (match.prediction_fr || match.prediction) : (match.prediction_en || match.prediction);
                                                 return (
@@ -178,7 +179,7 @@ export const Results: React.FC = () => {
                                                     </div>
                                                 );
                                             })}
-                                            {day.matches.filter(m => m.status === 'won' || m.status === 'lost').length === 0 && (
+                                            {gradedMatches.length === 0 && (
                                                 <div className="text-center py-4 text-xs text-gray-500">
                                                     {language === 'fr' ? 'Aucun match noté pour ce jour' : 'No graded matches for this day'}
                                                 </div>
