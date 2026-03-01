@@ -7,10 +7,26 @@ service cloud.firestore {
       return request.auth != null && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isAdmin == true;
     }
 
-    // Profiles: Users can read/write their own profile. Admins can read all.
+    // Helper: Checks that a write does NOT touch VIP or admin-sensitive fields.
+    // This prevents client-side free VIP bypass.
+    function doesNotTouchProtectedFields() {
+      let protected = ['isVip', 'vipExpiry', 'vipPlan', 'totalPaid', 'isAdmin', 'isBlocked'];
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(protected);
+    }
+
+    // Profiles: Users can read all profiles (needed for referral lookup).
+    // Users can ONLY update their own NON-protected fields.
+    // VIP/admin fields can only be written by the backend (Admin SDK bypasses all rules).
     match /profiles/{userId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId || isAdmin();
+      // Allow create (new user signup) — only if creating their own profile, isVip defaults false
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.isVip == false
+        && request.resource.data.isAdmin == false
+        && request.resource.data.isBlocked == false;
+      // Allow update only if NOT touching protected fields, or if admin
+      allow update: if (request.auth != null && request.auth.uid == userId && doesNotTouchProtectedFields())
+        || isAdmin();
     }
     
     // Daily Predictions: Publicly readable. Writes are admin-only (via Admin SDK).
@@ -60,13 +76,23 @@ service cloud.firestore {
        allow read, update: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
     }
     
-    // Selar pending tokens — owner can read/create their own token only.
-    // Marking as used (write after creation) is done via runTransaction by the authenticated owner.
+    // Selar pending tokens — owner can read and CREATE their own token only.
+    // Updates are FORBIDDEN client-side — only the backend Admin SDK can mark tokens as used.
+    // This prevents plan spoofing (changing daily→annual before payment completes).
     match /selar_pending/{refId} {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid && resource.data.used == false;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.used == false;
+      // No client-side update — backend Admin SDK handles marking as used
+      allow update: if false;
       allow delete: if false;
+    }
+
+    // Selar unmatched payments — written by backend only, admins can read for review
+    match /selar_unmatched/{docId} {
+      allow read: if isAdmin();
+      allow write: if false; // Backend only
     }
   }
 }

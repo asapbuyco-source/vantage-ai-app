@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, CreditCard, Smartphone, CheckCircle2, ShieldCheck, ArrowRight, Loader2, Globe } from 'lucide-react';
+import { X, CreditCard, Smartphone, CheckCircle2, ShieldCheck, ArrowRight, Loader2, Globe, AlertTriangle, Mail } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { initiatePayment } from '../services/fapshi';
 import { initiateSelarPayment } from '../services/selar';
@@ -25,6 +25,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
   const [loading, setLoading] = useState(false);
   const [gateway, setGateway] = useState<'fapshi' | 'selar'>('fapshi');
 
+  const userEmail = user?.email || '';
+
   const handlePayment = async () => {
     if (!user) {
       showToast(language === 'fr' ? "Veuillez vous connecter d'abord" : "Please login first", "info");
@@ -43,9 +45,20 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
         );
         window.location.href = link;
       } else {
+        // For Selar, verify the user has an email before proceeding
+        if (!user.email) {
+          showToast(
+            language === 'fr'
+              ? "Votre compte n'a pas d'email associé. Contactez le support."
+              : "Your account has no email address. Please contact support.",
+            "error"
+          );
+          setLoading(false);
+          return;
+        }
         const { checkout_url } = await initiateSelarPayment(
           plan.id,
-          user.email || 'user@vantage.ai',
+          user.email,
           user.uid
         );
         window.location.href = checkout_url;
@@ -103,7 +116,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
               </div>
 
               {/* Gateway Selection */}
-              <div className="grid grid-cols-2 gap-3 mb-6">
+              <div className="grid grid-cols-2 gap-3 mb-5">
                 <button
                   onClick={() => setGateway('fapshi')}
                   className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${gateway === 'fapshi' ? 'border-vantage-purple bg-vantage-purple/10 text-vantage-purple' : 'border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400'}`}
@@ -120,10 +133,60 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                 </button>
               </div>
 
+              {/* ── Selar Email Warning ─────────────────────────────────────────────
+                  Critical: if the user pays in Selar with a different email than
+                  their Vantage account, the server cannot match the payment to
+                  their account and VIP will not be granted automatically.
+              */}
+              {gateway === 'selar' && userEmail && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-amber-400 mb-1">
+                        {language === 'fr' ? '⚠️ Email important' : '⚠️ Important — Email Match Required'}
+                      </p>
+                      <p className="text-[11px] text-amber-300/90 leading-relaxed">
+                        {language === 'fr'
+                          ? <>Utilisez <strong className="text-amber-200">{userEmail}</strong> lors du paiement Selar. Un email différent empêchera l'activation automatique.</>
+                          : <>Use <strong className="text-amber-200">{userEmail}</strong> when paying on Selar. Using a different email will prevent automatic VIP activation.</>
+                        }
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-2 px-2 py-1 bg-amber-500/15 rounded-lg w-fit">
+                        <Mail size={10} className="text-amber-300" />
+                        <span className="text-[10px] font-mono font-bold text-amber-200">{userEmail}</span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {gateway === 'selar' && !userEmail && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-5 p-3 rounded-xl bg-red-500/10 border border-red-500/30"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle size={15} className="text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-red-300 leading-relaxed">
+                      {language === 'fr'
+                        ? 'Votre compte n\'a pas d\'email associé. Veuillez utiliser Mobile Money à la place.'
+                        : 'Your account has no email address. Please use Mobile Money instead.'
+                      }
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
               <button
                 onClick={handlePayment}
-                disabled={loading}
-                className="w-full py-4 bg-vantage-purple hover:bg-purple-600 text-white font-bold rounded-2xl transition-all shadow-lg shadow-vantage-purple/30 flex items-center justify-center space-x-2"
+                disabled={loading || (gateway === 'selar' && !userEmail)}
+                className="w-full py-4 bg-vantage-purple hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition-all shadow-lg shadow-vantage-purple/30 flex items-center justify-center space-x-2"
               >
                 {loading ? (
                   <Loader2 className="animate-spin" size={20} />

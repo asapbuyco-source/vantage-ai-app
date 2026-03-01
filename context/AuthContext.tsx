@@ -380,14 +380,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             // ── Selar (Global) ──────────────────────────────────────────────
             // App.tsx already called verifySelarOrder() which validated and
-            // marked the Firestore token as used. Here we just need to read
-            // the plan from that token and upgrade the user.
+            // marked the Firestore token as used atomically via runTransaction.
+            // Here we verify that the token IS marked used (proof of verification)
+            // and then upgrade the user. This prevents repeated re-verifications
+            // from re-granting VIP access.
             if (cleanTransId.startsWith('SELAR_')) {
                 // Strip the "SELAR_" prefix to get the original VAN_ reference
                 const selarRef = cleanTransId.replace(/^SELAR_/, '');
                 const tokenSnap = await getDoc(doc(db, 'selar_pending', selarRef));
                 if (!tokenSnap.exists()) return false;
                 const data = tokenSnap.data();
+                // Security: only upgrade if verifySelarOrder() already marked this token as used
+                // This ensures no VIP grant happens without a proper atomic verification
+                if (data.used !== true) {
+                    console.warn('[AuthContext] Selar token not yet verified (used !== true). Aborting VIP grant.');
+                    return false;
+                }
                 const plan: 'daily' | 'weekly' | 'monthly' | 'annual' = data.plan || 'daily';
                 await upgradeToVip(plan);
                 localStorage.removeItem('pendingVipPlan');

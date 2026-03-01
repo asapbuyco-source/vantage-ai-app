@@ -1,5 +1,5 @@
-import { doc, setDoc, getDoc, runTransaction, serverTimestamp } from "firebase/firestore";
-import { db, auth } from "../firebaseConfig";
+import { doc, getDoc, setDoc, runTransaction, serverTimestamp } from "firebase/firestore";
+import { db } from "../firebaseConfig";
 
 
 /**
@@ -8,26 +8,27 @@ import { db, auth } from "../firebaseConfig";
  * Flow:
  * 1. User clicks Pay → we write a pending token to Firestore + redirect to Selar product link
  * 2. Selar processes payment → redirects buyer to:
- *    https://yourapp.com/?selar_order=<ORDER_ID>&plan=<PLAN>
- * 3. App.tsx detects ?selar_order= param → calls verifySelarOrder()
- * 4. verifySelarOrder() checks Firestore for the pending token (replay-attack protection)
- *    and marks it as used → upgrades user to VIP automatically
+ *    https://yourapp.com/?selar_ref=<REF>&plan=<PLAN>
+ * 3. App.tsx detects ?selar_ref= param → calls verifySelarOrder()
+ * 4. verifySelarOrder() uses runTransaction to atomically check + mark token as used
+ *    (prevents replay attacks and double-grant race conditions)
+ *    → upgrades user to VIP automatically
  *
  * Setup required in Selar dashboard (one-time):
  *   Product → Edit → "Redirect buyers to an external URL after purchase"
- *   Set URL to: https://<YOUR_DOMAIN>/?selar_order={order_id}&plan=daily   (per plan)
+ *   Set URL to: https://<YOUR_DOMAIN>/?selar_ref={order_id}&plan=daily   (per plan)
  *
  * No backend. No Zapier. No manual approval. Completely free.
  */
 
 // ─── PRODUCT LINKS ──────────────────────────────────────────────────────────
-// Replace these with your actual Selar product IDs after creating them.
-// In Selar dashboard: Products → Create Product → get the product link
+// Uses env vars exclusively — never falls back to hardcoded links in production.
+// Set VITE_SELAR_*_LINK in your .env.local / Railway environment variables.
 const SELAR_PRODUCTS: Record<string, string> = {
-    daily: import.meta.env.VITE_SELAR_DAILY_LINK || 'https://selar.com/1b1uj5r75t',
-    weekly: import.meta.env.VITE_SELAR_WEEKLY_LINK || 'https://selar.com/25337pw2i1',
-    monthly: import.meta.env.VITE_SELAR_MONTHLY_LINK || 'https://selar.com/2n77893707',
-    annual: import.meta.env.VITE_SELAR_ANNUAL_LINK || 'https://selar.com/l63p29n451',
+    daily: import.meta.env.VITE_SELAR_DAILY_LINK || '',
+    weekly: import.meta.env.VITE_SELAR_WEEKLY_LINK || '',
+    monthly: import.meta.env.VITE_SELAR_MONTHLY_LINK || '',
+    annual: import.meta.env.VITE_SELAR_ANNUAL_LINK || '',
 };
 
 export interface SelarInitResponse {
@@ -45,11 +46,18 @@ export const initiateSelarPayment = async (
     email: string,
     userId: string,
 ): Promise<SelarInitResponse> => {
+    const productLink = SELAR_PRODUCTS[plan];
+    if (!productLink) {
+        throw new Error(`Selar product link for plan "${plan}" is not configured. Please set VITE_SELAR_${plan.toUpperCase()}_LINK in your environment variables.`);
+    }
+
     // Generate a unique reference tied to this user+session
     const reference = `VAN_${userId.slice(0, 8)}_${plan}_${Date.now()}`;
 
     // Write pending token to Firestore (expires in 2 hours — enforced on read)
     // Collection: selar_pending/{reference}
+    // NOTE: Firestore rules prevent client-side updates to this doc after creation,
+    // so the plan cannot be tampered with after this point.
     await setDoc(doc(db, 'selar_pending', reference), {
         userId,
         plan,
@@ -59,18 +67,16 @@ export const initiateSelarPayment = async (
         used: false,
     });
 
-    // Store locally too (for matching on return)
+    // Store locally too (for matching on return if user loses URL)
     localStorage.setItem('pendingSelarRef', reference);
     localStorage.setItem('pendingVipPlan', plan);
 
     // Selar appends ?order_id=... automatically when redirecting back.
     // We include our ref so we can match the pending token.
     const appReturnUrl = `${window.location.origin}/?selar_ref=${reference}&plan=${plan}`;
-    const productLink = SELAR_PRODUCTS[plan];
 
     // Note: Selar uses the redirect URL configured in the dashboard.
     // We embed the reference in the product link as a query param.
-    // Selar passes it through on most link types (via ?ref= or &ref=).
     const checkout_url = `${productLink}?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(appReturnUrl)}`;
 
     console.log(`[Selar] Redirecting to checkout for plan: ${plan} | ref: ${reference}`);
@@ -82,16 +88,18 @@ export const initiateSelarPayment = async (
  * Called by App.tsx when it detects ?selar_ref= in the URL.
  *
  * Security model:
+ * - Uses runTransaction for atomic check-and-mark to prevent double-grant race conditions
  * - Checks that the pending Firestore token exists and is NOT already used (replay protection)
  * - Checks that the token is less than 2 hours old (prevents stale link reuse)
- * - Marks token as used immediately (atomic — prevents double-grant)
+ * - Marks token as used inside the transaction before returning success
+ * - Plan is read from Firestore (not from URL), so URL tampering has no effect
  *
  * @param reference  - The VAN_... reference stored in Firestore (from ?selar_ref= param)
  * @returns { success, plan, userId } or { success: false }
  */
 export const verifySelarOrder = async (
     reference: string
-): Promise<{ success: boolean; plan?: 'daily' | 'weekly' | 'monthly'; userId?: string }> => {
+): Promise<{ success: boolean; plan?: 'daily' | 'weekly' | 'monthly' | 'annual'; userId?: string }> => {
     if (!reference || !reference.startsWith('VAN_')) {
         console.warn('[Selar] Invalid reference format:', reference);
         return { success: false };
@@ -99,43 +107,60 @@ export const verifySelarOrder = async (
 
     try {
         const tokenRef = doc(db, 'selar_pending', reference);
-        const tokenSnap = await getDoc(tokenRef);
+        let resultPlan: 'daily' | 'weekly' | 'monthly' | 'annual' | undefined;
+        let resultUserId: string | undefined;
 
-        if (!tokenSnap.exists()) {
-            console.warn('[Selar] Pending token not found:', reference);
-            return { success: false };
-        }
+        // Use runTransaction for atomic read-check-write to prevent race conditions
+        // (e.g. two browser tabs both trying to verify at the same time)
+        await runTransaction(db, async (transaction) => {
+            const tokenSnap = await transaction.get(tokenRef);
 
-        const data = tokenSnap.data();
-
-        // Replay attack: already used
-        if (data.used === true) {
-            console.warn('[Selar] Token already used:', reference);
-            return { success: false };
-        }
-
-        // Time-based expiry: reject tokens older than 2 hours
-        const createdAt = data.createdAt?.toDate?.() as Date | undefined;
-        if (createdAt) {
-            const ageMs = Date.now() - createdAt.getTime();
-            if (ageMs > 2 * 60 * 60 * 1000) {
-                console.warn('[Selar] Token expired:', reference);
-                return { success: false };
+            if (!tokenSnap.exists()) {
+                throw new Error('TOKEN_NOT_FOUND');
             }
-        }
 
-        // Mark as used atomically before granting VIP (prevents double-grant on refresh)
-        await setDoc(tokenRef, { used: true, verifiedAt: serverTimestamp() }, { merge: true });
+            const data = tokenSnap.data();
+
+            // Replay attack: already used
+            if (data.used === true) {
+                throw new Error('TOKEN_ALREADY_USED');
+            }
+
+            // Time-based expiry: reject tokens older than 2 hours
+            const createdAt = data.createdAt?.toDate?.() as Date | undefined;
+            if (createdAt) {
+                const ageMs = Date.now() - createdAt.getTime();
+                if (ageMs > 2 * 60 * 60 * 1000) {
+                    throw new Error('TOKEN_EXPIRED');
+                }
+            }
+
+            // Atomically mark as used within the same transaction
+            transaction.update(tokenRef, { used: true, verifiedAt: serverTimestamp() });
+
+            // Capture plan and userId for return value
+            resultPlan = data.plan as 'daily' | 'weekly' | 'monthly' | 'annual';
+            resultUserId = data.userId as string;
+        });
 
         // Clean up localStorage
         localStorage.removeItem('pendingSelarRef');
         localStorage.removeItem('pendingVipPlan');
 
-        console.log(`[Selar] ✅ Order verified for userId: ${data.userId}, plan: ${data.plan}`);
-        return { success: true, plan: data.plan, userId: data.userId };
+        console.log(`[Selar] ✅ Order verified for userId: ${resultUserId}, plan: ${resultPlan}`);
+        return { success: true, plan: resultPlan, userId: resultUserId };
 
-    } catch (e) {
-        console.error('[Selar] Verification error:', e);
+    } catch (e: any) {
+        const msg = e?.message || '';
+        if (msg === 'TOKEN_NOT_FOUND') {
+            console.warn('[Selar] Pending token not found:', reference);
+        } else if (msg === 'TOKEN_ALREADY_USED') {
+            console.warn('[Selar] Token already used (duplicate verification attempt):', reference);
+        } else if (msg === 'TOKEN_EXPIRED') {
+            console.warn('[Selar] Token expired (>2 hours old):', reference);
+        } else {
+            console.error('[Selar] Verification error:', e);
+        }
         return { success: false };
     }
 };
