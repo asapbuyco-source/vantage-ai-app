@@ -8,8 +8,7 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import admin from 'firebase-admin';
 import fs from 'fs';
-import { initScheduler } from './backend/scheduler.js';
-import { generateDailyPredictionsServerSide, gradeYesterdayServerSide, generateDailyBlogServerSide, generateBasketballPredictionsServerSide } from './backend/geminiService.js';
+import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGeneration } from './backend/scheduler.js';
 
 // Load environment variables from .env.local if available (for local dev)
 const __filename = fileURLToPath(import.meta.url);
@@ -189,8 +188,8 @@ const adminAuth = (req, res, next) => {
 
 app.post('/api/admin/generate-football', adminAuth, geminiLimiter, async (req, res) => {
     try {
-        console.log('[API] Manual Football Generation Triggered via Admin');
-        const result = await generateDailyPredictionsServerSide();
+        console.log('[API] Manual Football Generation Triggered via Admin (OpenAI→Gemini fallback)');
+        const result = await triggerFootballGeneration();
         res.json(result);
     } catch (e) {
         console.error(e);
@@ -200,8 +199,8 @@ app.post('/api/admin/generate-football', adminAuth, geminiLimiter, async (req, r
 
 app.post('/api/admin/generate-basketball', adminAuth, geminiLimiter, async (req, res) => {
     try {
-        console.log('[API] Manual Basketball Generation Triggered via Admin');
-        const result = await generateBasketballPredictionsServerSide();
+        console.log('[API] Manual Basketball Generation Triggered via Admin (OpenAI→Gemini fallback)');
+        const result = await triggerBasketballGeneration();
         res.json(result);
     } catch (e) {
         console.error(e);
@@ -212,8 +211,8 @@ app.post('/api/admin/generate-basketball', adminAuth, geminiLimiter, async (req,
 app.post('/api/admin/grade-yesterday', adminAuth, geminiLimiter, async (req, res) => {
     try {
         const { date, forceRegrade } = req.body || {};
-        console.log(`[API] Manual Grading Triggered via Admin (Date: ${date || 'yesterday'}, Force: ${!!forceRegrade})`);
-        const result = await gradeYesterdayServerSide(date || null, !!forceRegrade);
+        console.log(`[API] Manual Grading Triggered via Admin (Date: ${date || 'yesterday'}, Force: ${!!forceRegrade}) — OpenAI→Gemini fallback`);
+        const result = await triggerGrading(date || null, !!forceRegrade);
         res.json(result);
     } catch (e) {
         console.error(e);
@@ -223,12 +222,61 @@ app.post('/api/admin/grade-yesterday', adminAuth, geminiLimiter, async (req, res
 
 app.post('/api/admin/generate-blog', adminAuth, geminiLimiter, async (req, res) => {
     try {
-        console.log('[API] Manual Blog Generation Triggered via Admin');
-        const result = await generateDailyBlogServerSide();
+        console.log('[API] Manual Blog Generation Triggered via Admin (OpenAI→Gemini fallback)');
+        const result = await triggerBlogGeneration();
         res.json(result);
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: 'Blog generation failed', details: e.message });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// OPENAI API PROXY
+// Keeps OPENAI_API_KEY server-side only. Same pattern as Gemini proxy.
+// ══════════════════════════════════════════════════════════════════════
+import OpenAI from 'openai';
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+if (!OPENAI_API_KEY) {
+    console.warn('⚠️ OPENAI_API_KEY not set — OpenAI proxy will return 500 until configured.');
+}
+
+const openaiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many OpenAI requests from this IP, please try again in 15 minutes' }
+});
+
+app.post('/api/openai/generate', openaiLimiter, async (req, res) => {
+    try {
+        if (!OPENAI_API_KEY) return res.status(500).json({ error: 'OPENAI_API_KEY not configured on server' });
+
+        const { model = 'gpt-4o-mini', messages, prompt, temperature = 0.3, useWebSearch = false } = req.body;
+
+        const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+        // Build input: support both {messages} array and single {prompt} string
+        const input = messages || [{ role: 'user', content: prompt || '' }];
+        const tools = useWebSearch ? [{ type: 'web_search_preview' }] : undefined;
+
+        const response = await openai.responses.create({
+            model,
+            input,
+            temperature,
+            ...(tools && { tools }),
+        });
+
+        const text = response.output_text ||
+            response.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
+
+        res.json({ text });
+    } catch (error) {
+        console.error('OpenAI Proxy Error:', error.message);
+        const status = error.status || 500;
+        res.status(status).json({ error: 'OpenAI request failed', details: error.message, status });
     }
 });
 

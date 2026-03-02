@@ -1,16 +1,71 @@
 import cron from 'node-cron';
 import admin from 'firebase-admin';
+
+// ── OpenAI PRIMARY functions ──────────────────────────────────────────────────
+import {
+    generateDailyPredictionsOpenAI,
+    generateDailyBlogOpenAI,
+    gradeYesterdayOpenAI,
+    generateBasketballPredictionsOpenAI
+} from './openaiService.js';
+
+// ── Gemini FALLBACK functions ─────────────────────────────────────────────────
 import {
     generateDailyPredictionsServerSide,
     generateDailyBlogServerSide,
     gradeYesterdayServerSide,
     generateBasketballPredictionsServerSide
 } from './geminiService.js';
+
 import { checkRecentSelarEmails } from './gmailListener.js';
+
+/**
+ * Dual-Engine Wrapper
+ * Tries OpenAI first. If it fails (any error or non-success status),
+ * transparently falls back to Gemini. Zero impact on callers.
+ */
+async function withOpenAIFallback(openAIFn, geminiFn, taskName) {
+    try {
+        const result = await openAIFn();
+        if (result && result.status === 'success') {
+            console.log(`[Scheduler] ✅ ${taskName} completed via OpenAI (${result.generated ?? result.graded ?? 0} items)`);
+            return result;
+        }
+        // Non-success (but no throw) — treat as failure and fall back
+        throw new Error(result?.error || `OpenAI returned status: ${result?.status}`);
+    } catch (e) {
+        console.warn(`[Scheduler] ⚠️ ${taskName} OpenAI failed: "${e.message}". Falling back to Gemini...`);
+        try {
+            const fallbackResult = await geminiFn();
+            console.log(`[Scheduler] ✅ ${taskName} completed via Gemini fallback (${fallbackResult?.generated ?? fallbackResult?.graded ?? 0} items)`);
+            return fallbackResult;
+        } catch (fallbackErr) {
+            console.error(`[Scheduler] ❌ ${taskName} both OpenAI and Gemini failed: ${fallbackErr.message}`);
+            return { status: 'error', error: fallbackErr.message };
+        }
+    }
+}
+
+// ── Admin trigger helpers (used by server.js admin endpoints) ─────────────────
+export const triggerFootballGeneration = () =>
+    withOpenAIFallback(generateDailyPredictionsOpenAI, generateDailyPredictionsServerSide, 'Football Generation');
+
+export const triggerBasketballGeneration = () =>
+    withOpenAIFallback(generateBasketballPredictionsOpenAI, generateBasketballPredictionsServerSide, 'Basketball Generation');
+
+export const triggerGrading = (customDate, forceRegrade) =>
+    withOpenAIFallback(
+        () => gradeYesterdayOpenAI(customDate, forceRegrade),
+        () => gradeYesterdayServerSide(customDate, forceRegrade),
+        'Grading'
+    );
+
+export const triggerBlogGeneration = () =>
+    withOpenAIFallback(generateDailyBlogOpenAI, generateDailyBlogServerSide, 'Blog Generation');
 
 // We'll export an initialization function so server.js can start it
 export const initScheduler = () => {
-    console.log('🕒 Initializing Dynamic Scheduler...');
+    console.log('🕒 Initializing Dynamic Scheduler (OpenAI Primary / Gemini Fallback)...');
 
     // Track current tasks so we can destroy and recreate them if times change
     let footballTask = null;
@@ -47,14 +102,9 @@ export const initScheduler = () => {
 
                 footballTask = cron.schedule(`${fMin} ${fHour} * * *`, async () => {
                     console.log(`⚽ Running scheduled Football Generation at ${footballTime}...`);
-                    try {
-                        const result = await generateDailyPredictionsServerSide();
-                        console.log(`[Scheduler] Football generation completed: ${result?.status} — ${result?.generated ?? 0} matches`);
-                    } catch (e) {
-                        console.error('[Scheduler] Error in Football gen:', e);
-                    }
+                    await triggerFootballGeneration();
                 }, { timezone: "Africa/Lagos" });
-                console.log(`✅ Scheduled Football Gen for ${footballTime}`);
+                console.log(`✅ Scheduled Football Gen for ${footballTime} (OpenAI→Gemini fallback)`);
             }
 
             // ── Basketball Scheduler ──────────────────────────────────────────
@@ -65,14 +115,9 @@ export const initScheduler = () => {
 
                 basketballTask = cron.schedule(`${bMin} ${bHour} * * *`, async () => {
                     console.log(`🏀 Running scheduled Basketball Generation at ${basketballTime}...`);
-                    try {
-                        const result = await generateBasketballPredictionsServerSide();
-                        console.log(`[Scheduler] Basketball generation completed: ${result?.status} — ${result?.generated ?? 0} matches`);
-                    } catch (e) {
-                        console.error('[Scheduler] Error in Basketball gen:', e);
-                    }
+                    await triggerBasketballGeneration();
                 }, { timezone: "Africa/Lagos" });
-                console.log(`✅ Scheduled Basketball Gen for ${basketballTime}`);
+                console.log(`✅ Scheduled Basketball Gen for ${basketballTime} (OpenAI→Gemini fallback)`);
             }
 
             // ── Grading Scheduler ─────────────────────────────────────────────
@@ -83,14 +128,9 @@ export const initScheduler = () => {
 
                 gradingTask = cron.schedule(`${gMin} ${gHour} * * *`, async () => {
                     console.log(`📊 Running scheduled Grading at ${gradingTime}...`);
-                    try {
-                        const result = await gradeYesterdayServerSide();
-                        console.log(`[Scheduler] Grading completed: ${result?.status} — ${result?.graded ?? 0}/${result?.total ?? 0} matches graded`);
-                    } catch (e) {
-                        console.error('[Scheduler] Error in Grading task:', e);
-                    }
+                    await triggerGrading(null, false);
                 }, { timezone: "Africa/Lagos" });
-                console.log(`✅ Scheduled Grading for ${gradingTime}`);
+                console.log(`✅ Scheduled Grading for ${gradingTime} (OpenAI→Gemini fallback)`);
             }
 
             // ── Blog Scheduler ────────────────────────────────────────────────
@@ -101,14 +141,9 @@ export const initScheduler = () => {
 
                 blogTask = cron.schedule(`${blogMin} ${blogHour} * * *`, async () => {
                     console.log(`✍️ Running scheduled AI Blog Generation at ${blogTime}...`);
-                    try {
-                        const res = await generateDailyBlogServerSide();
-                        console.log(`[Scheduler] Blog generation result: ${res.status}`);
-                    } catch (e) {
-                        console.error('[Scheduler] Error in Blog gen:', e);
-                    }
+                    await triggerBlogGeneration();
                 }, { timezone: "Africa/Lagos" });
-                console.log(`✅ Scheduled AI Blog Gen for ${blogTime}`);
+                console.log(`✅ Scheduled AI Blog Gen for ${blogTime} (OpenAI→Gemini fallback)`);
             }
 
         } catch (e) {
@@ -130,6 +165,6 @@ export const initScheduler = () => {
         }
     });
 
-    console.log('⏳ Scheduler initialized. Config sync runs every 5 minutes (first sync in <5 min).');
-    console.log('📧 Setup Selar Gmail listener to poll every 2 minutes.');
+    console.log('⏳ Scheduler initialized. Config sync runs every 5 minutes.');
+    console.log('📧 Selar Gmail listener polls every 2 minutes.');
 };
