@@ -58,6 +58,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const [telegramBotToken, setTelegramBotToken] = useState('');
     const [telegramChannelId, setTelegramChannelId] = useState('');
     const [telegramEnabled, setTelegramEnabled] = useState(false);
+    const [telegramSendTime, setTelegramSendTime] = useState('08:30');
+    const [telegramLastSentAt, setTelegramLastSentAt] = useState<string | null>(null);
+    const [telegramLastSentCount, setTelegramLastSentCount] = useState<number | null>(null);
+    const [telegramActionResult, setTelegramActionResult] = useState<string | null>(null);
+    const [isTelegramActing, setIsTelegramActing] = useState(false);
     const [referralRewardDays, setReferralRewardDays] = useState(2);
     const [savingWhatsapp, setSavingWhatsapp] = useState(false);
     const [savingBotSettings, setSavingBotSettings] = useState(false);
@@ -85,6 +90,9 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             if (s.telegramBotToken) setTelegramBotToken(s.telegramBotToken);
             if (s.telegramChannelId) setTelegramChannelId(s.telegramChannelId);
             if (s.telegramEnabled !== undefined) setTelegramEnabled(s.telegramEnabled);
+            if (s.telegramSendTime) setTelegramSendTime(s.telegramSendTime);
+            if (s.telegramLastSentAt) setTelegramLastSentAt(s.telegramLastSentAt);
+            if (s.telegramLastSentCount !== undefined) setTelegramLastSentCount(s.telegramLastSentCount);
             if (s.referralRewardDays !== undefined) setReferralRewardDays(s.referralRewardDays);
 
             // Scheduler Times & SEO
@@ -117,6 +125,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                 telegramBotToken: telegramBotToken.trim(),
                 telegramChannelId: telegramChannelId.trim(),
                 telegramEnabled,
+                telegramSendTime: telegramSendTime.trim(),
                 referralRewardDays,
             });
             setBotSettingsSaved(true);
@@ -1304,10 +1313,24 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                 />
                                 <p className="text-[9px] text-gray-400 mt-1">Forward a message from your channel to @userinfobot to get the ID.</p>
                             </div>
+
+                            {/* Send Time */}
+                            <div>
+                                <label className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Daily Send Time (WAT / Lagos)</label>
+                                <input
+                                    type="time"
+                                    value={telegramSendTime}
+                                    onChange={e => setTelegramSendTime(e.target.value)}
+                                    className="w-full bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg py-2 px-3 text-sm font-mono focus:ring-1 focus:ring-blue-400 outline-none text-slate-900 dark:text-white"
+                                />
+                                <p className="text-[9px] text-gray-400 mt-1">Predictions are sent every day at this time (set after football gen time).</p>
+                            </div>
+
+                            {/* Enable toggle */}
                             <div className="flex items-center justify-between p-3 bg-white/50 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/10">
                                 <div>
                                     <p className="text-xs font-bold text-slate-900 dark:text-white">Enable Telegram</p>
-                                    <p className="text-[10px] text-gray-500">Post today's top pick automatically</p>
+                                    <p className="text-[10px] text-gray-500">Automatically post predictions daily</p>
                                 </div>
                                 <button
                                     onClick={() => setTelegramEnabled(v => !v)}
@@ -1316,13 +1339,87 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                     <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${telegramEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
                                 </button>
                             </div>
+
+                            {/* Last sent info */}
+                            {telegramLastSentAt && (
+                                <div className="text-[10px] text-gray-500 px-1">
+                                    ✅ Last sent: {new Date(telegramLastSentAt).toLocaleString()} · {telegramLastSentCount ?? 0} picks shown
+                                </div>
+                            )}
+
+                            {/* Test & Send Now */}
+                            <div className="flex gap-2">
+                                <button
+                                    disabled={isTelegramActing}
+                                    onClick={async () => {
+                                        setIsTelegramActing(true);
+                                        setTelegramActionResult(null);
+                                        try {
+                                            const backendUrl = import.meta.env.VITE_BACKEND_URL;
+                                            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
+                                            const res = await fetch(`${backendUrl}/api/admin/telegram-test`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
+                                            });
+                                            const data = await res.json();
+                                            setTelegramActionResult(data.status === 'success' ? '✅ Test message sent!' : `❌ ${data.error}`);
+                                        } catch (e: any) {
+                                            setTelegramActionResult(`❌ ${e.message}`);
+                                        } finally {
+                                            setIsTelegramActing(false);
+                                        }
+                                    }}
+                                    className="flex-1 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-bold border border-blue-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                                >
+                                    <Send size={12} /> Test Bot
+                                </button>
+                                <button
+                                    disabled={isTelegramActing}
+                                    onClick={async () => {
+                                        if (!window.confirm("Send today's predictions to Telegram right now?")) return;
+                                        setIsTelegramActing(true);
+                                        setTelegramActionResult(null);
+                                        try {
+                                            const backendUrl = import.meta.env.VITE_BACKEND_URL;
+                                            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
+                                            const res = await fetch(`${backendUrl}/api/admin/telegram-broadcast`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
+                                            });
+                                            const data = await res.json();
+                                            if (data.status === 'success') {
+                                                setTelegramActionResult(`✅ Sent ${data.sent} picks!`);
+                                                setTelegramLastSentAt(new Date().toISOString());
+                                                setTelegramLastSentCount(data.sent);
+                                            } else {
+                                                setTelegramActionResult(`⚠️ ${data.reason || data.error}`);
+                                            }
+                                        } catch (e: any) {
+                                            setTelegramActionResult(`❌ ${e.message}`);
+                                        } finally {
+                                            setIsTelegramActing(false);
+                                        }
+                                    }}
+                                    className="flex-1 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg text-xs font-bold border border-green-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                                >
+                                    <Send size={12} /> Send Now
+                                </button>
+                            </div>
+
+                            {telegramActionResult && (
+                                <div className={`text-xs font-mono text-center p-2 rounded-lg ${telegramActionResult.startsWith('✅') ? 'bg-green-500/10 text-green-400 border border-green-500/20' : telegramActionResult.startsWith('⚠️') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                    {telegramActionResult}
+                                </div>
+                            )}
+
                             <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-[10px] text-yellow-700 dark:text-yellow-400 space-y-1">
                                 <p className="font-bold">📋 Setup Instructions:</p>
                                 <ol className="list-decimal pl-3 space-y-0.5">
                                     <li>Create a bot via @BotFather → /newbot</li>
                                     <li>Add the bot as admin to your channel</li>
                                     <li>Paste the token and channel ID above</li>
-                                    <li>The bot will post automatically when you generate predictions</li>
+                                    <li>Set the send time, enable, and Save Settings</li>
+                                    <li>Use "Test Bot" to verify the connection works</li>
                                 </ol>
                             </div>
                         </div>

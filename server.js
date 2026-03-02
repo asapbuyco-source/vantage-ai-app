@@ -8,7 +8,8 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import admin from 'firebase-admin';
 import fs from 'fs';
-import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGeneration, triggerAccumulatorGeneration } from './backend/scheduler.js';
+import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGeneration, triggerAccumulatorGeneration, triggerTelegramBroadcast } from './backend/scheduler.js';
+import { sendTelegramTestMessage } from './backend/telegramService.js';
 
 // Load environment variables from .env.local if available (for local dev)
 const __filename = fileURLToPath(import.meta.url);
@@ -239,6 +240,28 @@ app.post('/api/admin/generate-accumulators', adminAuth, geminiLimiter, async (re
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: 'Accumulator generation failed', details: e.message });
+    }
+});
+
+app.post('/api/admin/telegram-broadcast', adminAuth, async (req, res) => {
+    try {
+        console.log('[API] Manual Telegram Broadcast Triggered via Admin');
+        const result = await triggerTelegramBroadcast();
+        res.json(result);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Telegram broadcast failed', details: e.message });
+    }
+});
+
+app.post('/api/admin/telegram-test', adminAuth, async (req, res) => {
+    try {
+        console.log('[API] Telegram Test Message Triggered via Admin');
+        const result = await sendTelegramTestMessage();
+        res.json(result);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Telegram test failed', details: e.message });
     }
 });
 

@@ -19,6 +19,7 @@ import {
 } from './geminiService.js';
 
 import { checkRecentSelarEmails } from './gmailListener.js';
+import { sendDailyPredictionsToTelegram } from './telegramService.js';
 
 /**
  * Dual-Engine Wrapper
@@ -104,6 +105,24 @@ export const triggerGrading = (customDate, forceRegrade) =>
 export const triggerBlogGeneration = () =>
     withOpenAIFallback(generateDailyBlogOpenAI, generateDailyBlogServerSide, 'Blog Generation');
 
+/** Sends today's predictions to the configured Telegram group/channel */
+export const triggerTelegramBroadcast = async () => {
+    try {
+        const result = await sendDailyPredictionsToTelegram();
+        if (result.status === 'success') {
+            console.log(`[Scheduler] ✅ Telegram broadcast sent (${result.sent} picks shown, ${result.total} total)`);
+        } else if (result.status === 'skipped') {
+            console.log(`[Scheduler] ⏭️ Telegram broadcast skipped: ${result.reason}`);
+        } else {
+            console.error(`[Scheduler] ❌ Telegram broadcast error: ${result.error}`);
+        }
+        return result;
+    } catch (e) {
+        console.error('[Scheduler] Telegram broadcast error:', e.message);
+        return { status: 'error', error: e.message };
+    }
+};
+
 // We'll export an initialization function so server.js can start it
 export const initScheduler = () => {
     console.log('🕒 Initializing Dynamic Scheduler (OpenAI Primary / Gemini Fallback)...');
@@ -113,11 +132,13 @@ export const initScheduler = () => {
     let basketballTask = null;
     let gradingTask = null;
     let blogTask = null;
+    let telegramTask = null;
 
     let currentFootballTime = null;
     let currentBasketballTime = null;
     let currentGradingTime = null;
     let currentBlogTime = null;
+    let currentTelegramTime = null;
 
     // Function to check for updated times in Firestore
     const syncSchedules = async () => {
@@ -137,6 +158,7 @@ export const initScheduler = () => {
             const basketballTime = safeTime(config.basketballGenTime, '10:00');
             const gradingTime = safeTime(config.gradingTime, '06:00');
             const blogTime = safeTime(config.blogGenTime, '09:00');
+            const telegramTime = safeTime(config.telegramSendTime, '08:30');
 
             // ── Football Scheduler ────────────────────────────────────────────
             if (footballTime !== currentFootballTime) {
@@ -188,6 +210,19 @@ export const initScheduler = () => {
                     await triggerBlogGeneration();
                 }, { timezone: "Africa/Lagos" });
                 console.log(`✅ Scheduled AI Blog Gen for ${blogTime} (OpenAI→Gemini fallback)`);
+            }
+
+            // ── Telegram Broadcast Scheduler ─────────────────────────────────
+            if (telegramTime !== currentTelegramTime) {
+                if (telegramTask) telegramTask.stop();
+                currentTelegramTime = telegramTime;
+                const [tHour, tMin] = telegramTime.split(':');
+
+                telegramTask = cron.schedule(`${tMin} ${tHour} * * *`, async () => {
+                    console.log(`📨 Running scheduled Telegram Broadcast at ${telegramTime}...`);
+                    await triggerTelegramBroadcast();
+                }, { timezone: "Africa/Lagos" });
+                console.log(`✅ Scheduled Telegram Broadcast for ${telegramTime}`);
             }
 
         } catch (e) {

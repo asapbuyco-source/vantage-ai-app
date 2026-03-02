@@ -394,6 +394,9 @@ export interface AppSettings {
     telegramBotToken?: string;
     telegramChannelId?: string;
     telegramEnabled?: boolean;
+    telegramSendTime?: string;      // HH:MM — time for daily predictions broadcast
+    telegramLastSentAt?: string;    // ISO timestamp of last successful send
+    telegramLastSentCount?: number; // Number of picks shown in last send
     referralRewardDays?: number; // Free VIP days granted per successful referral
     annualPlanEnabled?: boolean;
     footballGenTime?: string;
