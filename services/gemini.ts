@@ -439,8 +439,9 @@ export const generateDailyPredictions = async (signal?: AbortSignal): Promise<Ma
             const rawFixtures = await getTodaysFixtures(todayStr);
             const filteredFixtures = filterGlobalFixtures(rawFixtures);
 
+            let simplifiedRaw: Match[] = [];
             if (filteredFixtures.length > 0) {
-                const simplifiedRaw: Match[] = filteredFixtures.map(f => ({
+                simplifiedRaw = filteredFixtures.map(f => ({
                     id: f.fixture.id.toString(),
                     league: f.league.name,
                     leagueId: f.league.id,
@@ -551,7 +552,10 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
 
             const jsonText = response.text;
             if (jsonText) {
-                return parseAndEnhanceMatches(jsonText);
+                // Build fixtureMap to merge real team names/logos from SportMonks into AI predictions
+                const fixtureMap = new Map<string, any>();
+                simplifiedRaw.forEach(f => fixtureMap.set(f.id, f));
+                return parseAndEnhanceMatches(jsonText, fixtureMap);
             }
 
         } catch (e: any) {
@@ -769,8 +773,13 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
 
 /**
  * Shared Helper to parse JSON and add Custom Logos
+ * @param jsonText   - Raw JSON text from AI
+ * @param fixtureMap - Optional map of fixtureId -> fixture (from SportMonks), used to fill in real team names/logos
  */
-async function parseAndEnhanceMatches(jsonText: string): Promise<Match[]> {
+async function parseAndEnhanceMatches(
+    jsonText: string,
+    fixtureMap: Map<string, any> = new Map()
+): Promise<Match[]> {
     try {
         // Sanitize: Remove Markdown code blocks if present
         let cleanText = jsonText.trim();
@@ -796,41 +805,51 @@ async function parseAndEnhanceMatches(jsonText: string): Promise<Match[]> {
             if (conf <= 1 && conf > 0) conf = Math.round(conf * 100);
             if (isNaN(conf)) conf = 50;
 
-            const homeKey = (p.homeTeam || "").toLowerCase().trim();
-            const awayKey = (p.awayTeam || "").toLowerCase().trim();
+            // ── Merge real fixture data first (SportMonks is ground truth for names) ──
+            const fixtureBase = fixtureMap.get(p.id) || fixtureMap.get(String(p.id)) || {};
 
-            // Image Logic: Prefer DB asset, then AI result
-            let hLogo = assetsMap[homeKey];
-            let aLogo = assetsMap[awayKey];
+            // Real team names: prefer fixture (SportMonks) over AI output (AI may hallucinate)
+            const homeTeamName = (fixtureBase.homeTeam || p.homeTeam || '').trim();
+            const awayTeamName = (fixtureBase.awayTeam || p.awayTeam || '').trim();
+            const leagueName = (fixtureBase.league || p.league || '').trim();
+            const matchTime = fixtureBase.time || p.time || '20:00';
 
-            // If DB missed it but AI found a valid URL, use it AND save it for future
-            if (!hLogo && p.homeTeamLogo && p.homeTeamLogo.startsWith("http")) {
-                hLogo = p.homeTeamLogo;
-                saveTeamAsset(p.homeTeam, p.homeTeamLogo).catch(e => console.warn("Asset Save Fail (Home)", e));
+            const homeKey = homeTeamName.toLowerCase();
+            const awayKey = awayTeamName.toLowerCase();
+
+            // Image Logic: Prefer DB asset, then fixture logo, then AI result
+            let hLogo = assetsMap[homeKey]
+                || fixtureBase.homeTeamLogo
+                || (p.homeTeamLogo?.startsWith('http') ? p.homeTeamLogo : '');
+            let aLogo = assetsMap[awayKey]
+                || fixtureBase.awayTeamLogo
+                || (p.awayTeamLogo?.startsWith('http') ? p.awayTeamLogo : '');
+
+            // Save new AI-found logos back to DB for future use
+            if (!assetsMap[homeKey] && !fixtureBase.homeTeamLogo && p.homeTeamLogo?.startsWith('http')) {
+                saveTeamAsset(homeTeamName, p.homeTeamLogo).catch(e => console.warn('Asset Save Fail (Home)', e));
             }
-
-            if (!aLogo && p.awayTeamLogo && p.awayTeamLogo.startsWith("http")) {
-                aLogo = p.awayTeamLogo;
-                saveTeamAsset(p.awayTeam, p.awayTeamLogo).catch(e => console.warn("Asset Save Fail (Away)", e));
+            if (!assetsMap[awayKey] && !fixtureBase.awayTeamLogo && p.awayTeamLogo?.startsWith('http')) {
+                saveTeamAsset(awayTeamName, p.awayTeamLogo).catch(e => console.warn('Asset Save Fail (Away)', e));
             }
 
             return {
                 id: p.id || `gm-${index}-${Date.now()}`,
-                league: p.league || "Simulated League",
-                homeTeam: p.homeTeam || "Team A",
-                awayTeam: p.awayTeam || "Team B",
-                time: p.time || "20:00",
-                prediction: p.prediction_en || "N/A",
-                prediction_en: p.prediction_en || "N/A",
-                prediction_fr: p.prediction_fr || p.prediction_en || "N/A",
+                league: leagueName || 'Unknown League',
+                homeTeam: homeTeamName || 'Home',
+                awayTeam: awayTeamName || 'Away',
+                time: matchTime,
+                prediction: p.prediction_en || 'N/A',
+                prediction_en: p.prediction_en || 'N/A',
+                prediction_fr: p.prediction_fr || p.prediction_en || 'N/A',
                 confidence: conf,
                 odds: Number(p.odds) || 1.50,
                 category: (['safe', 'value', 'risky'].includes(p.category) ? p.category : 'value') as any,
-                analysis: p.analysis_en || "Market Analysis Pending",
-                analysis_en: p.analysis_en || "Market Analysis Pending",
-                analysis_fr: p.analysis_fr || "Analyse de marché en attente",
-                homeTeamLogo: hLogo || "",
-                awayTeamLogo: aLogo || "",
+                analysis: p.analysis_en || 'Market Analysis Pending',
+                analysis_en: p.analysis_en || 'Market Analysis Pending',
+                analysis_fr: p.analysis_fr || 'Analyse de marché en attente',
+                homeTeamLogo: hLogo || '',
+                awayTeamLogo: aLogo || '',
                 status: 'pending' as const
             };
         });

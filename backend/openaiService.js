@@ -172,8 +172,8 @@ Search for additional matches today. Identify and analyze 15–20 high-quality b
                 status: 'pending',
                 homeTeamLogo: '',
                 awayTeamLogo: '',
-                ...fixture,
                 ...pred,
+                ...fixture, // Fixture names (SportMonks) MUST override AI output
                 prediction: pred.prediction_en || pred.prediction,
                 generatedBy: 'openai',
             };
