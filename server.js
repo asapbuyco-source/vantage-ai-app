@@ -178,8 +178,11 @@ const adminAuth = (req, res, next) => {
     const token = req.headers['x-admin-token'];
     const secret = process.env.ADMIN_API_SECRET;
     if (!secret) {
-        console.warn('[AdminAuth] ADMIN_API_SECRET not set — admin endpoints are unprotected!');
-        return next(); // fail-open only if secret is not configured (dev mode)
+        console.warn('[AdminAuth] ADMIN_API_SECRET not set!');
+        if (process.env.NODE_ENV !== 'development') {
+            return res.status(401).json({ error: 'Unauthorized — Admin secret not configured in production.' });
+        }
+        return next(); // fail-open only if dev mode
     }
     if (!token || token !== secret) {
         return res.status(401).json({ error: 'Unauthorized — missing or invalid x-admin-token header' });

@@ -479,7 +479,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         setEnrichResult('Enriching stats via Gemini + Google Search...');
         try {
             const enriched = await enrichMatchStats(existing);
-            await import('../services/db').then(({ saveTodaysPredictions }) => saveTodaysPredictions(enriched));
+            await saveTodaysPredictions(enriched);
             if (isMounted.current) setEnrichResult(`✅ Enriched ${enriched.length} matches with H2H & team stats.`);
         } catch (e: any) {
             if (isMounted.current) setEnrichResult(`❌ Enrichment failed: ${e.message}`);

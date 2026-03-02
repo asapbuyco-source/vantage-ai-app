@@ -6,7 +6,7 @@ import {
     getDailyData, getWinRateStats, getTodaysBasketballPredictions, saveBasketballPredictions,
     acquireGenerationLock, releaseGenerationLock,
 } from '../services/db';
-import { generateDailyPredictions, generateSmartAccumulators } from '../services/gemini';
+import { generateDailyPredictions, generateSmartAccumulators, generateBasketballPredictions } from '../services/gemini';
 import { useAuth } from './AuthContext';
 
 interface DataContextType {
@@ -215,8 +215,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!isAdmin) return;
         if (mountedRef.current) setIsBasketballGenerating(true);
         try {
-            // Dynamically import to avoid circular deps
-            const { generateBasketballPredictions } = await import('../services/gemini');
             const matches = await generateBasketballPredictions();
             if (matches && matches.length > 0) {
                 await saveBasketballPredictions(matches);
