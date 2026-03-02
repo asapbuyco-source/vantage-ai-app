@@ -231,6 +231,38 @@ app.post('/api/admin/generate-blog', adminAuth, geminiLimiter, async (req, res) 
     }
 });
 
+// Test OpenAI connection — used by the Admin panel "Test OpenAI" button
+app.post('/api/admin/test-openai', adminAuth, async (req, res) => {
+    const start = Date.now();
+    try {
+        if (!OPENAI_API_KEY) {
+            return res.status(200).json({ status: 'error', latency: 0, model: 'gpt-4o-mini', message: 'OPENAI_API_KEY is not configured on the server.' });
+        }
+
+        const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+        const response = await openai.responses.create({
+            model: 'gpt-4o-mini',
+            input: [{ role: 'user', content: 'Say "OpenAI connection OK" and nothing else.' }],
+            temperature: 0,
+        });
+
+        const latency = Date.now() - start;
+        const text = response.output_text ||
+            response.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || 'Response received';
+
+        res.json({ status: 'success', latency, model: 'gpt-4o-mini', message: text.trim() });
+    } catch (error) {
+        const latency = Date.now() - start;
+        console.error('[API test-openai] Error:', error.message);
+        let msg = error.message || 'Unknown error';
+        if (error.status === 401) msg = 'Unauthorized (401) — Invalid API Key';
+        else if (error.status === 429) msg = 'Rate Limited (429) — Quota exceeded';
+        res.json({ status: 'error', latency, model: 'gpt-4o-mini', message: msg });
+    }
+});
+
+
 // ══════════════════════════════════════════════════════════════════════
 // OPENAI API PROXY
 // Keeps OPENAI_API_KEY server-side only. Same pattern as Gemini proxy.

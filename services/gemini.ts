@@ -131,6 +131,116 @@ export const testGeminiConnection = async (): Promise<{ status: 'OK' | 'ERROR'; 
 };
 
 /**
+ * Enriches existing matches with H2H records, team form, stats, and injuries using Gemini + Google Search.
+ * Merges new data back into each match object and returns the enriched array.
+ */
+export const enrichMatchStats = async (matches: Match[]): Promise<Match[]> => {
+    if (!matches || matches.length === 0) return [];
+
+    const statsSchema = {
+        type: Type.ARRAY,
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                id: { type: Type.STRING },
+                homeForm: { type: Type.STRING },
+                awayForm: { type: Type.STRING },
+                homeWinRate: { type: Type.NUMBER },
+                awayWinRate: { type: Type.NUMBER },
+                homeAvgScored: { type: Type.NUMBER },
+                awayAvgScored: { type: Type.NUMBER },
+                homeAvgConceded: { type: Type.NUMBER },
+                awayAvgConceded: { type: Type.NUMBER },
+                homeCleanSheetRate: { type: Type.NUMBER },
+                awayCleanSheetRate: { type: Type.NUMBER },
+                h2hHomeWins: { type: Type.NUMBER },
+                h2hAwayWins: { type: Type.NUMBER },
+                h2hDraws: { type: Type.NUMBER },
+                h2hLast5Goals: { type: Type.STRING },
+                homeInjured: { type: Type.ARRAY, items: { type: Type.STRING } },
+                awayInjured: { type: Type.ARRAY, items: { type: Type.STRING } },
+            },
+            required: ["id", "homeForm", "awayForm", "homeWinRate", "awayWinRate",
+                "homeAvgScored", "awayAvgScored", "homeAvgConceded", "awayAvgConceded",
+                "h2hHomeWins", "h2hAwayWins", "h2hDraws"]
+        }
+    };
+
+    // Keep batches small to stay within token limits
+    const BATCH_SIZE = 8;
+    const enrichedMap = new Map<string, any>();
+
+    for (let i = 0; i < matches.length; i += BATCH_SIZE) {
+        const batch = matches.slice(i, i + BATCH_SIZE);
+        const simplified = batch.map(m => ({ id: m.id, home: m.homeTeam, away: m.awayTeam, league: m.league }));
+
+        const prompt = `You are a football data analyst with access to real-time web search.
+
+For each of these matches, use Google Search to retrieve the most current available data:
+
+MATCHES:
+${JSON.stringify(simplified, null, 2)}
+
+For EACH match, return:
+- 'id': exact match id provided above
+- 'homeForm' / 'awayForm': last 5 results as space-separated letters, e.g. "W D W W L"
+- 'homeWinRate' / 'awayWinRate': integer 0-100 (% of last 20 games won)
+- 'homeAvgScored' / 'awayAvgScored': float, average goals scored per game (season)
+- 'homeAvgConceded' / 'awayAvgConceded': float, average goals conceded per game (season)
+- 'homeCleanSheetRate' / 'awayCleanSheetRate': integer 0-100 (% of clean sheets)
+- 'h2hHomeWins' / 'h2hAwayWins' / 'h2hDraws': win counts in last 5 head-to-head matches
+- 'h2hLast5Goals': string of last 5 H2H scorelines e.g. "2-1, 0-0, 3-1, 1-1, 2-0"
+- 'homeInjured' / 'awayInjured': array of key injured player names (empty array if none known)
+
+Return ONLY a JSON array — no prose, no markdown.`;
+
+        try {
+            const response = await withRetry<any>(() => backendGenerateContent(
+                currentModel,
+                prompt,
+                {
+                    temperature: 0.1,
+                    tools: [{ googleSearch: {} }],
+                    responseMimeType: "application/json",
+                    responseSchema: statsSchema
+                }
+            ));
+
+            const batchResult: any[] = JSON.parse(response.text || "[]");
+            batchResult.forEach((r: any) => enrichedMap.set(r.id, r));
+        } catch (e) {
+            console.warn(`[EnrichStats] Batch ${i / BATCH_SIZE + 1} failed:`, e);
+            // Continue with next batch even if this one fails
+        }
+    }
+
+    // Merge enriched data back into original matches
+    return matches.map(m => {
+        const extra = enrichedMap.get(m.id);
+        if (!extra) return m;
+        return {
+            ...m,
+            homeForm: extra.homeForm ?? m.homeForm,
+            awayForm: extra.awayForm ?? m.awayForm,
+            homeWinRate: extra.homeWinRate ?? m.homeWinRate,
+            awayWinRate: extra.awayWinRate ?? m.awayWinRate,
+            homeAvgScored: extra.homeAvgScored ?? m.homeAvgScored,
+            awayAvgScored: extra.awayAvgScored ?? m.awayAvgScored,
+            homeAvgConceded: extra.homeAvgConceded ?? m.homeAvgConceded,
+            awayAvgConceded: extra.awayAvgConceded ?? m.awayAvgConceded,
+            homeCleanSheetRate: extra.homeCleanSheetRate ?? m.homeCleanSheetRate,
+            awayCleanSheetRate: extra.awayCleanSheetRate ?? m.awayCleanSheetRate,
+            h2hHomeWins: extra.h2hHomeWins ?? m.h2hHomeWins,
+            h2hAwayWins: extra.h2hAwayWins ?? m.h2hAwayWins,
+            h2hDraws: extra.h2hDraws ?? m.h2hDraws,
+            h2hLast5Goals: extra.h2hLast5Goals ?? m.h2hLast5Goals,
+            homeInjured: extra.homeInjured ?? m.homeInjured,
+            awayInjured: extra.awayInjured ?? m.awayInjured,
+        };
+    });
+};
+
+/**
  * GRADES YESTERDAY'S MATCHES
  */
 export const gradeYesterdayPredictions = async (): Promise<{ total: number, graded: number, saved: boolean }> => {

@@ -223,6 +223,9 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
 🚨 OUTPUT FORMAT & ADDITIONAL DATA REQUIREMENTS (Strict JSON)
 ═══════════════════════════════════════════════
 - 'id': Use the exact ID provided in the JSON payload.
+- 'homeTeam' / 'awayTeam': team names.
+- 'league': league name.
+- 'time': match time.
 - 'prediction_en' / 'prediction_fr': Localized prediction label.
 - 'analysis_en' format: "EV: +X.X% | Edge: Y% | [max 20 words of reasoning]"
 - 'analysis_fr': French translation of analysis.
@@ -262,6 +265,10 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
                                 type: Type.OBJECT,
                                 properties: {
                                     id: { type: Type.STRING },
+                                    homeTeam: { type: Type.STRING },
+                                    awayTeam: { type: Type.STRING },
+                                    league: { type: Type.STRING },
+                                    time: { type: Type.STRING },
                                     prediction_en: { type: Type.STRING },
                                     prediction_fr: { type: Type.STRING },
                                     confidence: { type: Type.NUMBER },

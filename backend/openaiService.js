@@ -120,7 +120,7 @@ RULES (NON-NEGOTIABLE):
 5. 'analysis_en' format: "EV: +X.X% | Edge: Y% | [max 20 words of reasoning]"
 
 Output ONLY a valid JSON array. No markdown, no preamble. Each object must have exactly these fields:
-id, prediction_en, prediction_fr, confidence, odds, category, analysis_en, analysis_fr,
+id, homeTeam, awayTeam, league, time, prediction_en, prediction_fr, confidence, odds, category, analysis_en, analysis_fr,
 homeForm, awayForm, homeWinRate, awayWinRate, homeAvgScored, awayAvgScored,
 homeAvgConceded, awayAvgConceded, homeCleanSheetRate, awayCleanSheetRate,
 h2hHomeWins, h2hAwayWins, h2hDraws, h2hLast5Goals, homeInjured, awayInjured`;

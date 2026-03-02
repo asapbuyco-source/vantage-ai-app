@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Users, Crown, Search, RefreshCw, ChevronLeft, CheckCircle2, XCircle, ShieldAlert, Trash2, StopCircle, Ban, Lock, AlertTriangle, Database, Activity, Server, Zap, Globe, Cpu, ChevronDown, ChevronUp, Play, Coins, Wallet, BookCheck, ImagePlus, Link, Layers, Send, Bell, Gift, Save } from 'lucide-react';
+import { Shield, Users, Crown, Search, RefreshCw, ChevronLeft, CheckCircle2, XCircle, ShieldAlert, Trash2, StopCircle, Ban, Lock, AlertTriangle, Database, Activity, Server, Zap, Globe, Cpu, ChevronDown, ChevronUp, Play, Coins, Wallet, BookCheck, ImagePlus, Link, Layers, Send, Bell, Gift, Save, BarChart3 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile, NavigationTab, Match, PayoutRequest, TeamAsset } from '../types';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
-import { testGeminiConnection, setGeminiModel, getGeminiModel, AVAILABLE_MODELS } from '../services/gemini';
+import { testGeminiConnection, enrichMatchStats, setGeminiModel, getGeminiModel, AVAILABLE_MODELS } from '../services/gemini';
 import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, getPredictionsForDate, saveTodaysPredictions, savePredictionsForDate, getTeamAssetsMap, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount } from '../services/db';
 import { TeamLogo } from '../components/TeamLogo';
 
@@ -37,6 +37,12 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const [savedMatches, setSavedMatches] = useState<Match[] | null>(null);
     const [loadingMatches, setLoadingMatches] = useState(false);
     const [showDbInspector, setShowDbInspector] = useState(false);
+    // OpenAI Test State
+    const [openAITest, setOpenAITest] = useState<{ status: 'success' | 'error'; latency: number; model: string; message: string } | null>(null);
+    const [testingOpenAI, setTestingOpenAI] = useState(false);
+    // Enrich Stats State
+    const [isEnrichingStats, setIsEnrichingStats] = useState(false);
+    const [enrichResult, setEnrichResult] = useState<string | null>(null);
 
     // Grading State
     const [isGrading, setIsGrading] = useState(false);
@@ -434,6 +440,45 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         }
     };
 
+    const runOpenAITest = async () => {
+        setTestingOpenAI(true);
+        try {
+            const backendUrl = import.meta.env.VITE_BACKEND_URL;
+            if (!backendUrl) throw new Error('VITE_BACKEND_URL not set');
+            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
+            const res = await fetch(`${backendUrl}/api/admin/test-openai`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
+            });
+            const data = await res.json();
+            if (isMounted.current) setOpenAITest(data);
+        } catch (e: any) {
+            if (isMounted.current) setOpenAITest({ status: 'error', latency: 0, model: 'gpt-4o-mini', message: e.message });
+        } finally {
+            if (isMounted.current) setTestingOpenAI(false);
+        }
+    };
+
+    const handleEnrichStats = async () => {
+        const todayKey = getGlobalTodayKey();
+        const existing = await getFirestorePredictionsOnly();
+        if (!existing || existing.length === 0) {
+            alert('No predictions found for today. Generate football predictions first.');
+            return;
+        }
+        setIsEnrichingStats(true);
+        setEnrichResult('Enriching stats via Gemini + Google Search...');
+        try {
+            const enriched = await enrichMatchStats(existing);
+            await import('../services/db').then(({ saveTodaysPredictions }) => saveTodaysPredictions(enriched));
+            if (isMounted.current) setEnrichResult(`✅ Enriched ${enriched.length} matches with H2H & team stats.`);
+        } catch (e: any) {
+            if (isMounted.current) setEnrichResult(`❌ Enrichment failed: ${e.message}`);
+        } finally {
+            if (isMounted.current) setIsEnrichingStats(false);
+        }
+    };
+
     const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const newModel = e.target.value;
         setSelectedModel(newModel);
@@ -689,6 +734,21 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                             >
                                 <Layers size={14} /> Generate Smart Accumulators
                             </button>
+
+                            {/* Enrich H2H & Stats */}
+                            <button
+                                onClick={handleEnrichStats}
+                                disabled={isSystemGenerating || isBasketballGenerating || isEnrichingStats}
+                                className="w-full py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-bold border border-blue-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                            >
+                                {isEnrichingStats ? <RefreshCw size={14} className="animate-spin" /> : <BarChart3 size={14} />}
+                                {isEnrichingStats ? 'Enriching Stats...' : 'Enrich H2H & Team Stats'}
+                            </button>
+                            {enrichResult && (
+                                <div className={`text-xs text-center p-2 rounded-lg font-mono ${enrichResult.startsWith('❌') ? 'bg-red-500/10 text-red-400 border border-red-500/20' : enrichResult.startsWith('✅') ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-slate-500/10 text-gray-400 border border-white/10'}`}>
+                                    {enrichResult}
+                                </div>
+                            )}
                         </div>
                     </GlassCard>
 
@@ -698,20 +758,30 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                             <h3 className="text-sm font-bold text-vantage-cyan uppercase flex items-center gap-2">
                                 <Zap size={16} /> Vantage AI Engine
                             </h3>
-                            <button
-                                onClick={runGeminiTest}
-                                disabled={testingGemini}
-                                className="text-xs bg-vantage-cyan/20 hover:bg-vantage-cyan/30 text-vantage-cyan px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors disabled:opacity-50"
-                            >
-                                <Globe size={12} className={testingGemini ? "animate-spin" : ""} />
-                                {testingGemini ? "Probing..." : "Test Connection"}
-                            </button>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={runGeminiTest}
+                                    disabled={testingGemini || testingOpenAI}
+                                    className="text-xs bg-vantage-cyan/20 hover:bg-vantage-cyan/30 text-vantage-cyan px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors disabled:opacity-50"
+                                >
+                                    <Globe size={12} className={testingGemini ? "animate-spin" : ""} />
+                                    {testingGemini ? "Probing..." : "Test Gemini"}
+                                </button>
+                                <button
+                                    onClick={runOpenAITest}
+                                    disabled={testingGemini || testingOpenAI}
+                                    className="text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors disabled:opacity-50"
+                                >
+                                    <Zap size={12} className={testingOpenAI ? "animate-spin" : ""} />
+                                    {testingOpenAI ? "Probing..." : "Test OpenAI"}
+                                </button>
+                            </div>
                         </div>
 
                         <div className="mb-4 bg-white/50 dark:bg-black/20 p-3 rounded-xl border border-white/10 flex items-center justify-between">
                             <div className="flex items-center gap-2 text-slate-700 dark:text-gray-300">
                                 <Cpu size={16} />
-                                <span className="text-xs font-bold uppercase">Active Model</span>
+                                <span className="text-xs font-bold uppercase">Gemini Model</span>
                             </div>
                             <select
                                 value={selectedModel}
@@ -724,17 +794,35 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                             </select>
                         </div>
 
+                        {/* Gemini Test Result */}
                         {geminiTest && (
-                            <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5">
+                            <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5 mb-2">
                                 <div className="flex items-center gap-3">
-                                    {geminiTest.status === 'OK' ? <CheckCircle2 size={20} className="text-green-500" /> : <XCircle size={20} className="text-red-500" />}
+                                    {geminiTest.status === 'OK' ? <CheckCircle2 size={18} className="text-green-500" /> : <XCircle size={18} className="text-red-500" />}
                                     <div className="flex flex-col">
-                                        <span className="text-xs font-bold text-slate-200">Grounding Status: {geminiTest.status}</span>
-                                        <span className="text-[10px] text-gray-400 font-mono">"{geminiTest.message}"</span>
+                                        <span className="text-xs font-bold text-slate-200">Gemini: {geminiTest.status}</span>
+                                        <span className="text-[10px] text-gray-400 font-mono truncate max-w-[180px]">"{geminiTest.message}"</span>
                                     </div>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-right shrink-0">
                                     <div className="text-xs font-bold text-vantage-cyan">{geminiTest.latency}ms</div>
+                                    <div className="text-[9px] text-gray-500">Latency</div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* OpenAI Test Result */}
+                        {openAITest && (
+                            <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/5">
+                                <div className="flex items-center gap-3">
+                                    {openAITest.status === 'success' ? <CheckCircle2 size={18} className="text-green-500" /> : <XCircle size={18} className="text-red-500" />}
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-slate-200">OpenAI ({openAITest.model}): {openAITest.status === 'success' ? 'OK' : 'ERROR'}</span>
+                                        <span className="text-[10px] text-gray-400 font-mono truncate max-w-[180px]">"{openAITest.message}"</span>
+                                    </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <div className="text-xs font-bold text-green-400">{openAITest.latency}ms</div>
                                     <div className="text-[9px] text-gray-500">Latency</div>
                                 </div>
                             </div>
