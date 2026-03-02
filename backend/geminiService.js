@@ -7,9 +7,29 @@ import admin from 'firebase-admin';
 const AVAILABLE_MODELS = [
     { id: 'gemini-2.0-flash', name: 'Vantage AI 2.0 Flash (Stable)' },
     { id: 'gemini-2.5-flash', name: 'Vantage AI 2.5 Flash (Versatile)' },
-    { id: 'gemini-2.0-flash-exp', name: 'Vantage AI 2.0 Flash (Experimental)' },
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Complex Reasoning)' },
 ];
+
+/**
+ * Extracts a JSON array from a text response that may be wrapped in a markdown code block.
+ * Used when googleSearch grounding is active and responseMimeType: application/json cannot be used.
+ */
+const extractJsonFromText = (text) => {
+    if (!text) return null;
+    // Try to extract from ```json ... ``` block
+    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+        try { return JSON.parse(codeBlockMatch[1].trim()); } catch (_) { }
+    }
+    // Try to find a raw JSON array in the text
+    const arrayMatch = text.match(/(\[\s*\{[\s\S]*?\}\s*\])/s);
+    if (arrayMatch) {
+        try { return JSON.parse(arrayMatch[1].trim()); } catch (_) { }
+    }
+    // Last resort: attempt full text parse
+    try { return JSON.parse(text.trim()); } catch (_) { }
+    return null;
+};
 
 /** Helper to get a date key for N days ago */
 const getDateKeyDaysAgo = (daysAgo) => {
@@ -249,6 +269,8 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
         let lastError = null;
 
         // Fallback Logic: Try models sequentially if one fails due to quota or server errors
+        // NOTE: googleSearch grounding is incompatible with responseMimeType: "application/json".
+        // We use plain text output and parse the JSON array from the text response.
         for (const modelDef of AVAILABLE_MODELS) {
             try {
                 console.log(`[Backend] Attempting generation with model: ${modelDef.id}...`);
@@ -258,44 +280,6 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
                     config: {
                         temperature: 0.1,
                         tools: [{ googleSearch: {} }],
-                        responseMimeType: "application/json",
-                        responseSchema: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    id: { type: Type.STRING },
-                                    homeTeam: { type: Type.STRING },
-                                    awayTeam: { type: Type.STRING },
-                                    league: { type: Type.STRING },
-                                    time: { type: Type.STRING },
-                                    prediction_en: { type: Type.STRING },
-                                    prediction_fr: { type: Type.STRING },
-                                    confidence: { type: Type.NUMBER },
-                                    odds: { type: Type.NUMBER },
-                                    category: { type: Type.STRING },
-                                    analysis_en: { type: Type.STRING },
-                                    analysis_fr: { type: Type.STRING },
-                                    homeForm: { type: Type.STRING },
-                                    awayForm: { type: Type.STRING },
-                                    homeWinRate: { type: Type.NUMBER },
-                                    awayWinRate: { type: Type.NUMBER },
-                                    homeAvgScored: { type: Type.NUMBER },
-                                    awayAvgScored: { type: Type.NUMBER },
-                                    homeAvgConceded: { type: Type.NUMBER },
-                                    awayAvgConceded: { type: Type.NUMBER },
-                                    homeCleanSheetRate: { type: Type.NUMBER },
-                                    awayCleanSheetRate: { type: Type.NUMBER },
-                                    h2hHomeWins: { type: Type.NUMBER },
-                                    h2hAwayWins: { type: Type.NUMBER },
-                                    h2hDraws: { type: Type.NUMBER },
-                                    h2hLast5Goals: { type: Type.STRING },
-                                    homeInjured: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    awayInjured: { type: Type.ARRAY, items: { type: Type.STRING } }
-                                },
-                                required: ["id", "prediction_en", "confidence", "odds", "analysis_en", "category"]
-                            }
-                        }
                     }
                 });
 
@@ -313,7 +297,7 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
         }
 
         const responseText = extractText(response);
-        const predictions = JSON.parse(responseText || "[]");
+        const predictions = extractJsonFromText(responseText) || [];
 
         // Merge AI predictions back with the simplified raw matches
         const finalMatches = simplifiedRaw.map(raw => {
@@ -350,31 +334,57 @@ export const generateDailyBlogServerSide = async () => {
     console.log('[Backend] Starting scheduled Daily SEO Blog Generation...');
     try {
         const todayStr = getGlobalTodayKey();
+        const db = admin.firestore();
 
-        const docSnap = await admin.firestore().collection('daily_predictions').doc(todayStr).get();
-        if (!docSnap.exists) {
-            console.warn(`[Backend] No predictions found for ${todayStr}. Cannot generate blog.`);
-            return { status: "skipped", reason: "no_predictions" };
+        // ── Step 1: Load from BOTH collections in parallel ────────────────────
+        const [footballSnap, basketballSnap] = await Promise.all([
+            db.collection('daily_predictions').doc(todayStr).get(),
+            db.collection('basketball_predictions').doc(todayStr).get(),
+        ]);
+
+        const footballMatches = (footballSnap.exists && footballSnap.data()?.matches) || [];
+        const basketballMatches = (basketballSnap.exists && basketballSnap.data()?.matches) || [];
+
+        const hasFootball = footballMatches.length > 0;
+        const hasBasketball = basketballMatches.length > 0;
+
+        if (!hasFootball && !hasBasketball) {
+            console.warn(`[Backend Blog] No football or basketball predictions found for ${todayStr}. Skipping blog generation.`);
+            return { status: 'skipped', reason: 'no_predictions_available' };
         }
 
-        const data = docSnap.data();
-        const matches = data.matches || [];
+        // ── Step 2: Pick the best matches from each sport ─────────────────────
+        const topFootball = footballMatches
+            .filter(m => m.prediction_en)
+            .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+            .slice(0, 5)
+            .map(m => ({ ...m, sport: 'football' }));
 
-        if (matches.length === 0) {
-            console.warn(`[Backend] Predictions array is empty for ${todayStr}. Cannot generate blog.`);
-            return { status: "skipped", reason: "empty_predictions" };
+        const topBasketball = basketballMatches
+            .filter(m => m.prediction_en)
+            .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+            .slice(0, 3)
+            .map(m => ({ ...m, sport: 'basketball' }));
+
+        const topMatches = [...topFootball, ...topBasketball];
+
+        if (topMatches.length === 0) {
+            console.warn(`[Backend Blog] Predictions exist for ${todayStr} but none have AI analysis yet. Skipping.`);
+            return { status: 'skipped', reason: 'predictions_pending_analysis' };
         }
 
-        // Feed Gemini the best 5-10 matches to keep the blog focused
-        const topMatches = matches
-            .sort((a, b) => b.confidence - a.confidence)
-            .slice(0, 8);
+        // ── Step 3: Build a sport-aware prompt ────────────────────────────────
+        const sportsAvailable = [
+            hasFootball && topFootball.length > 0 ? 'Football' : null,
+            hasBasketball && topBasketball.length > 0 ? 'Basketball' : null,
+        ].filter(Boolean).join(' & ');
 
         const blogPrompt = `
 You are the Chief Editor for Vantage AI, a leading sports betting predictions platform in Africa (specifically targeting Cameroon, using 1xBet and Premier Bet).
 
-Today is ${todayStr}. Our quantitative AI model has just analyzed the daily sports schedule and identified these top fixtures:
+Today is ${todayStr}. Our quantitative AI model has analyzed the daily sports schedule for: ${sportsAvailable}.
 
+Top picks for today (JSON):
 ${JSON.stringify(topMatches, null, 2)}
 
 ═══════════════════════════════════════════════
@@ -384,61 +394,85 @@ Write an engaging, SEO-optimized daily sports betting blog post in French analyz
 This post will be injected directly into the HTML of our site to attract search engine traffic.
 
 REQUIREMENTS:
-1. Title: Create a catchy, click-worthy H1 title incorporating keywords like "Pronostics", "1xBet", "Cameroun", "Coupon du jour", or the names of the biggest teams playing today.
-2. Introduction: A brief hype intro (2-3 sentences) about today's football schedule.
-3. Top Picks Breakdown: Choose 3-4 of the most interesting matches from the JSON above. For each, write a short paragraph explaining *why* the prediction was made (e.g., team form, injuries, historical dominance). Use H2 tags for the match names.
-4. Accumulator Idea: Propose a "Coupon du Jour" (Accumulator of the Day) combining a few safe picks with their combined odds.
-5. Formatting: Use proper HTML tags (<h1>, <h2>, <p>, <ul>, <li>, <strong>). DO NOT use Markdown backticks around your response. Return pure HTML.
-6. Tone: Confident, expert, and encouraging. Remind users to bet responsibly at the end.
+1. Title: Create a catchy, click-worthy H1 title incorporating keywords like "Pronostics", "1xBet", "Cameroun", "Coupon du jour", or the biggest team/league names from the JSON above. Cover the sports available today (${sportsAvailable}).
+2. Introduction: A brief 2-3 sentence hype intro about today's betting schedule.
+3. Top Picks Breakdown: Choose 3-5 of the most interesting matches from the JSON. For each, write a short paragraph explaining *why* the prediction was made (form, injuries, head-to-head dominance, pace stats for basketball). Use H2 tags for each match name. Label each pick clearly by sport (⚽ Football or 🏀 Basketball).
+4. Accumulator Idea: Propose a "Coupon du Jour" combining 2-3 safe picks with their combined odds.
+5. Formatting: Use proper HTML tags (<h1>, <h2>, <p>, <ul>, <li>, <strong>). DO NOT use Markdown backticks. Return pure HTML only. Start directly with the <h1> tag.
+6. Tone: Confident, expert, encouraging. Remind readers to bet responsibly at the end.
         `;
 
+        // ── Step 4: Generate with model fallback ──────────────────────────────
         const ai = getAI();
         let response = null;
         let lastError = null;
 
         for (const modelDef of AVAILABLE_MODELS) {
             try {
-                console.log(`[Backend] Attempting Blog Gen with model: ${modelDef.id}...`);
+                console.log(`[Backend Blog] Attempting Blog Gen with model: ${modelDef.id}...`);
                 response = await ai.models.generateContent({
                     model: modelDef.id,
                     contents: blogPrompt,
                     config: {
                         temperature: 0.7,
-                        responseMimeType: "text/plain",
+                        responseMimeType: 'text/plain',
                     }
                 });
-                console.log(`[Backend] ✅ Blog Generation successful using ${modelDef.id}`);
+                console.log(`[Backend Blog] ✅ Blog Generation successful using ${modelDef.id}`);
                 break;
             } catch (apiError) {
                 lastError = apiError;
-                console.warn(`[Backend] ⚠️ Model ${modelDef.id} failed: ${apiError.message}. Trying next...`);
+                console.warn(`[Backend Blog] ⚠️ Model ${modelDef.id} failed: ${apiError.message}. Trying next...`);
             }
         }
 
         const responseText = extractText(response);
         if (!response || !responseText) {
-            throw new Error(`All available Gemini models failed for Blog Gen. Last error: ${lastError?.message}`);
+            throw new Error(`All Gemini models failed for Blog Gen. Last error: ${lastError?.message}`);
         }
 
-        const blogHtml = responseText;
+        const blogHtml = responseText.replace(/^```html?\s*/i, '').replace(/\s*```$/, '').trim();
+
+        // ── Step 5: Extract title from <h1> tag, fallback to generic ──────────
+        const titleMatch = blogHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+        const title = titleMatch
+            ? titleMatch[1].replace(/<[^>]+>/g, '').trim()
+            : `Pronostics ${sportsAvailable} du ${todayStr} | Vantage AI`;
 
         const strippedText = blogHtml.replace(/<[^>]+>/g, '');
-        const excerpt = strippedText.substring(0, 150).trim() + '...';
+        const excerpt = strippedText.substring(0, 160).trim() + '...';
 
-        await admin.firestore().collection('daily_blogs').doc(todayStr).set({
+        // ── Step 6: Save to Firestore ─────────────────────────────────────────
+        await db.collection('daily_blogs').doc(todayStr).set({
+            title,
             content: blogHtml,
-            excerpt: excerpt,
-            updatedAt: new Date().toISOString()
+            excerpt,
+            tags: [
+                hasFootball ? 'football' : null,
+                hasBasketball ? 'basketball' : null,
+                'pronostics', 'cameroun', '1xbet',
+            ].filter(Boolean),
+            generatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            footballCount: topFootball.length,
+            basketballCount: topBasketball.length,
         });
 
-        console.log(`[Backend] ✅ Daily Blog saved successfully for ${todayStr}.`);
-        return { status: "success", generatedLength: blogHtml.length };
+        console.log(`[Backend Blog] ✅ Blog saved for ${todayStr} (${topFootball.length} football + ${topBasketball.length} basketball picks).`);
+        return {
+            status: 'success',
+            title,
+            generatedLength: blogHtml.length,
+            footballPicks: topFootball.length,
+            basketballPicks: topBasketball.length,
+        };
 
     } catch (e) {
-        console.error('[Backend] Blog generation error:', e);
-        return { status: "error", error: e.message };
+        console.error('[Backend Blog] Error:', e);
+        return { status: 'error', error: e.message };
     }
 };
+
 
 // ── Yesterday Grading ─────────────────────────────────────────────────────────
 /**
@@ -726,6 +760,8 @@ Output JSON array only. No markdown. No preamble.
         `;
 
         // Try models with Google Search grounding
+        // NOTE: googleSearch grounding is incompatible with responseMimeType: "application/json".
+        // We use plain text output and parse the JSON array from the text response.
         for (const modelDef of AVAILABLE_MODELS) {
             try {
                 console.log(`[Backend Basketball] Attempting with model: ${modelDef.id}...`);
@@ -735,49 +771,6 @@ Output JSON array only. No markdown. No preamble.
                     config: {
                         temperature: 0.15,
                         tools: [{ googleSearch: {} }],
-                        responseMimeType: "application/json",
-                        responseSchema: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    id: { type: Type.STRING },
-                                    homeTeam: { type: Type.STRING },
-                                    awayTeam: { type: Type.STRING },
-                                    league: { type: Type.STRING },
-                                    time: { type: Type.STRING },
-                                    prediction_en: { type: Type.STRING },
-                                    prediction_fr: { type: Type.STRING },
-                                    prediction: { type: Type.STRING },
-                                    confidence: { type: Type.NUMBER },
-                                    odds: { type: Type.NUMBER },
-                                    category: { type: Type.STRING },
-                                    analysis_en: { type: Type.STRING },
-                                    analysis_fr: { type: Type.STRING },
-                                    homeForm: { type: Type.STRING },
-                                    awayForm: { type: Type.STRING },
-                                    homeWinRate: { type: Type.NUMBER },
-                                    awayWinRate: { type: Type.NUMBER },
-                                    homeAvgScored: { type: Type.NUMBER },
-                                    awayAvgScored: { type: Type.NUMBER },
-                                    homeAvgConceded: { type: Type.NUMBER },
-                                    awayAvgConceded: { type: Type.NUMBER },
-                                    homeCleanSheetRate: { type: Type.NUMBER },
-                                    awayCleanSheetRate: { type: Type.NUMBER },
-                                    h2hHomeWins: { type: Type.NUMBER },
-                                    h2hAwayWins: { type: Type.NUMBER },
-                                    h2hDraws: { type: Type.NUMBER },
-                                    h2hLast5Goals: { type: Type.STRING },
-                                    homeInjured: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    awayInjured: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    homeTeamLogo: { type: Type.STRING },
-                                    awayTeamLogo: { type: Type.STRING },
-                                    sport: { type: Type.STRING },
-                                    status: { type: Type.STRING },
-                                },
-                                required: ["id", "homeTeam", "awayTeam", "league", "time", "prediction_en", "confidence", "odds", "category", "analysis_en"]
-                            }
-                        }
                     }
                 });
                 usedModel = modelDef.id;
@@ -794,7 +787,7 @@ Output JSON array only. No markdown. No preamble.
         }
 
         const responseText = extractText(response);
-        const predictions = JSON.parse(responseText || "[]");
+        const predictions = extractJsonFromText(responseText) || [];
 
         if (!Array.isArray(predictions) || predictions.length === 0) {
             console.warn('[Backend Basketball] No predictions returned from Gemini.');

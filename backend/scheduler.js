@@ -6,7 +6,8 @@ import {
     generateDailyPredictionsOpenAI,
     generateDailyBlogOpenAI,
     gradeYesterdayOpenAI,
-    generateBasketballPredictionsOpenAI
+    generateBasketballPredictionsOpenAI,
+    generateAccumulatorsOpenAI,
 } from './openaiService.js';
 
 // ── Gemini FALLBACK functions ─────────────────────────────────────────────────
@@ -28,7 +29,14 @@ async function withOpenAIFallback(openAIFn, geminiFn, taskName) {
     try {
         const result = await openAIFn();
         if (result && result.status === 'success') {
-            console.log(`[Scheduler] ✅ ${taskName} completed via OpenAI (${result.generated ?? result.graded ?? 0} items)`);
+            // Support different result shapes: predictions (generated), grading (graded), blog (generatedLength)
+            const itemCount = result.generated ?? result.graded ?? result.generatedLength ?? result.footballPicks ?? 0;
+            console.log(`[Scheduler] ✅ ${taskName} completed via OpenAI (${itemCount} items)`);
+            return result;
+        }
+        // skipped is not an error — don't fall back for skipped (e.g. no predictions to blog yet)
+        if (result && result.status === 'skipped') {
+            console.log(`[Scheduler] ⏭️ ${taskName} skipped: ${result.reason}`);
             return result;
         }
         // Non-success (but no throw) — treat as failure and fall back
@@ -37,7 +45,8 @@ async function withOpenAIFallback(openAIFn, geminiFn, taskName) {
         console.warn(`[Scheduler] ⚠️ ${taskName} OpenAI failed: "${e.message}". Falling back to Gemini...`);
         try {
             const fallbackResult = await geminiFn();
-            console.log(`[Scheduler] ✅ ${taskName} completed via Gemini fallback (${fallbackResult?.generated ?? fallbackResult?.graded ?? 0} items)`);
+            const itemCount = fallbackResult?.generated ?? fallbackResult?.graded ?? fallbackResult?.generatedLength ?? 0;
+            console.log(`[Scheduler] ✅ ${taskName} completed via Gemini fallback (${itemCount} items)`);
             return fallbackResult;
         } catch (fallbackErr) {
             console.error(`[Scheduler] ❌ ${taskName} both OpenAI and Gemini failed: ${fallbackErr.message}`);
@@ -47,8 +56,40 @@ async function withOpenAIFallback(openAIFn, geminiFn, taskName) {
 }
 
 // ── Admin trigger helpers (used by server.js admin endpoints) ─────────────────
-export const triggerFootballGeneration = () =>
-    withOpenAIFallback(generateDailyPredictionsOpenAI, generateDailyPredictionsServerSide, 'Football Generation');
+
+/** Standalone accumulator trigger (OpenAI only — Gemini fallback via generateAccumulators in geminiService) */
+export const triggerAccumulatorGeneration = async () => {
+    try {
+        const result = await generateAccumulatorsOpenAI();
+        if (result && result.status === 'success') {
+            console.log(`[Scheduler] ✅ Accumulators generated: safe=${result.accumulators?.safe?.length}, medium=${result.accumulators?.medium?.length}, high=${result.accumulators?.high?.length}`);
+        } else {
+            console.warn(`[Scheduler] ⏭️ Accumulators skipped: ${result?.reason || result?.error}`);
+        }
+        return result;
+    } catch (e) {
+        console.error('[Scheduler] Accumulator generation error:', e.message);
+        return { status: 'error', error: e.message };
+    }
+};
+
+/**
+ * Football generation + immediate accumulator chaining.
+ * Used by both the scheduled cron and the admin endpoint.
+ */
+export const triggerFootballGeneration = async () => {
+    const result = await withOpenAIFallback(
+        generateDailyPredictionsOpenAI,
+        generateDailyPredictionsServerSide,
+        'Football Generation'
+    );
+    // Auto-generate accumulators immediately after football predictions succeed
+    if (result && (result.status === 'success' || result.matches?.length > 0)) {
+        console.log('[Scheduler] ⚽ Football done — auto-triggering Accumulator generation...');
+        await triggerAccumulatorGeneration();
+    }
+    return result;
+};
 
 export const triggerBasketballGeneration = () =>
     withOpenAIFallback(generateBasketballPredictionsOpenAI, generateBasketballPredictionsServerSide, 'Basketball Generation');
@@ -88,11 +129,14 @@ export const initScheduler = () => {
 
             const config = settingsDoc.data();
 
-            // Look for times in HH:MM format
-            const footballTime = config.footballGenTime || '08:00';
-            const basketballTime = config.basketballGenTime || '10:00';
-            const gradingTime = config.gradingTime || '06:00';
-            const blogTime = config.blogGenTime || '09:00';
+            // Helper to validate HH:MM format — falls back to default if malformed
+            const safeTime = (val, fallback) => (typeof val === 'string' && /^\d{1,2}:\d{2}$/.test(val) ? val : fallback);
+
+            // Look for times in HH:MM format (safe defaults if Firestore value is missing/malformed)
+            const footballTime = safeTime(config.footballGenTime, '08:00');
+            const basketballTime = safeTime(config.basketballGenTime, '10:00');
+            const gradingTime = safeTime(config.gradingTime, '06:00');
+            const blogTime = safeTime(config.blogGenTime, '09:00');
 
             // ── Football Scheduler ────────────────────────────────────────────
             if (footballTime !== currentFootballTime) {

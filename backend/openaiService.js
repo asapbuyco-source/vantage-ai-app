@@ -22,6 +22,7 @@ const OPENAI_PREDICTION_MODELS = ['gpt-4o', 'gpt-4o-mini'];
 const OPENAI_BLOG_MODELS = ['gpt-4o', 'gpt-4o-mini'];
 const OPENAI_GRADING_MODELS = ['gpt-4o-mini', 'gpt-4o'];
 const OPENAI_BASKETBALL_MODELS = ['gpt-4o', 'gpt-4o-mini'];
+const OPENAI_ACCUMULATOR_MODELS = ['gpt-4o', 'gpt-4o-mini'];
 
 // ── SDK instance ──────────────────────────────────────────────────────────────
 const getOpenAI = () => {
@@ -201,57 +202,117 @@ export const generateDailyBlogOpenAI = async () => {
     console.log('[OpenAI] Starting Daily Blog Generation...');
     try {
         const todayStr = getDateKey(0);
+        const db = admin.firestore();
 
-        const docSnap = await admin.firestore().collection('daily_predictions').doc(todayStr).get();
-        if (!docSnap.exists) return { status: 'skipped', reason: 'no_predictions' };
+        // ── Load from BOTH collections in parallel ────────────────────────────
+        const [footballSnap, basketballSnap] = await Promise.all([
+            db.collection('daily_predictions').doc(todayStr).get(),
+            db.collection('basketball_predictions').doc(todayStr).get(),
+        ]);
 
-        const matches = docSnap.data()?.matches || [];
-        if (matches.length === 0) return { status: 'skipped', reason: 'empty_predictions' };
+        const footballMatches = (footballSnap.exists && footballSnap.data()?.matches) || [];
+        const basketballMatches = (basketballSnap.exists && basketballSnap.data()?.matches) || [];
 
-        const topMatches = matches
+        const hasFootball = footballMatches.length > 0;
+        const hasBasketball = basketballMatches.length > 0;
+
+        if (!hasFootball && !hasBasketball) {
+            console.warn('[OpenAI Blog] No football or basketball predictions found. Skipping.');
+            return { status: 'skipped', reason: 'no_predictions_available' };
+        }
+
+        // ── Pick the best matches from each sport ─────────────────────────────
+        const topFootball = footballMatches
+            .filter(m => m.prediction_en)
             .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-            .slice(0, 8);
+            .slice(0, 5)
+            .map(m => ({ ...m, sport: 'football' }));
+
+        const topBasketball = basketballMatches
+            .filter(m => m.prediction_en)
+            .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+            .slice(0, 3)
+            .map(m => ({ ...m, sport: 'basketball' }));
+
+        const topMatches = [...topFootball, ...topBasketball];
+
+        if (topMatches.length === 0) {
+            console.warn('[OpenAI Blog] Predictions exist but none have AI analysis. Skipping.');
+            return { status: 'skipped', reason: 'predictions_pending_analysis' };
+        }
+
+        const sportsAvailable = [
+            hasFootball && topFootball.length > 0 ? 'Football' : null,
+            hasBasketball && topBasketball.length > 0 ? 'Basketball' : null,
+        ].filter(Boolean).join(' & ');
 
         const blogPrompt = `You are the Chief Editor for Vantage AI, a leading sports betting predictions platform in Africa (targeting Cameroon, Nigeria, Ghana; main platforms: 1xBet and Premier Bet).
 
-Today is ${todayStr}. Our quantitative AI model identified these top fixtures:
+Today is ${todayStr}. Our quantitative AI model identified top picks for: ${sportsAvailable}.
 
+Top picks (JSON):
 ${JSON.stringify(topMatches, null, 2)}
 
 Write an engaging, SEO-optimized daily sports betting blog post in French.
 REQUIREMENTS:
-1. H1 title: catchy, using keywords like "Pronostics", "1xBet", "Cameroun", "Coupon du jour", today's biggest teams.
-2. Brief hype introduction (2-3 sentences) about today's football schedule.
-3. Top Picks: 3-4 matches with H2 headings (match name). Each: short paragraph explaining WHY (form, injuries, historical edge).
-4. Accumulator "Coupon du Jour": combine 3 safe picks with combined odds.
+1. H1 title: catchy, using keywords like "Pronostics", "1xBet", "Cameroun", "Coupon du jour", today's biggest teams. Cover: ${sportsAvailable}.
+2. Brief 2-3 sentence hype introduction about today's betting schedule.
+3. Top Picks: 3-5 matches with H2 headings (match name). Each: short paragraph explaining WHY (form, injuries, historical edge, pace stats for basketball). Label each clearly (⚽ Football or 🏀 Basketball).
+4. Accumulator "Coupon du Jour": combine 2-3 safe picks with combined odds.
 5. Closing: responsible gambling reminder.
-6. Format: pure HTML using <h1>, <h2>, <p>, <ul>, <li>, <strong>. NO markdown. NO code fences. Return only valid HTML.`;
+6. Format: pure HTML using <h1>, <h2>, <p>, <ul>, <li>, <strong>. NO markdown. NO code fences. Start directly with the <h1> tag.`;
 
         const openai = getOpenAI();
-        const blogHtml = await tryModels(openai, OPENAI_BLOG_MODELS, async (client, model) => {
+        const rawHtml = await tryModels(openai, OPENAI_BLOG_MODELS, async (client, model) => {
             const resp = await client.responses.create({
                 model,
                 input: [{ role: 'user', content: blogPrompt }],
                 temperature: 0.7,
             });
-            const text = resp.output_text || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
+            const text = resp.output_text
+                || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text
+                || '';
             if (!text) throw new Error('Empty blog response');
             return text;
         }, 'Blog');
 
-        const excerpt = blogHtml.replace(/<[^>]+>/g, '').substring(0, 150).trim() + '...';
+        // Strip accidental markdown code fences
+        const blogHtml = rawHtml.replace(/^```html?\s*/i, '').replace(/\s*```$/i, '').trim();
 
-        await admin.firestore().collection('daily_blogs').doc(todayStr).set({
+        // Extract <h1> title for the blog index listing
+        const titleMatch = blogHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+        const title = titleMatch
+            ? titleMatch[1].replace(/<[^>]+>/g, '').trim()
+            : `Pronostics ${sportsAvailable} du ${todayStr} | Vantage AI`;
+
+        const excerpt = blogHtml.replace(/<[^>]+>/g, '').substring(0, 160).trim() + '...';
+
+        await db.collection('daily_blogs').doc(todayStr).set({
+            title,
             content: blogHtml,
             excerpt,
+            tags: [
+                hasFootball ? 'football' : null,
+                hasBasketball ? 'basketball' : null,
+                'pronostics', 'cameroun', '1xbet',
+            ].filter(Boolean),
+            generatedAt: new Date().toISOString(),
             generatedBy: 'openai',
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            footballCount: topFootball.length,
+            basketballCount: topBasketball.length,
         });
 
-        console.log(`[OpenAI] ✅ Blog saved for ${todayStr} (${blogHtml.length} chars)`);
-        return { status: 'success', generatedLength: blogHtml.length };
+        console.log(`[OpenAI Blog] ✅ Blog saved for ${todayStr} — ${topFootball.length} ⚽ + ${topBasketball.length} 🏀 picks (${blogHtml.length} chars)`);
+        return {
+            status: 'success',
+            title,
+            generatedLength: blogHtml.length,
+            footballPicks: topFootball.length,
+            basketballPicks: topBasketball.length,
+        };
     } catch (e) {
-        console.error('[OpenAI] Blog generation error:', e.message);
+        console.error('[OpenAI Blog] Error:', e.message);
         return { status: 'error', error: e.message };
     }
 };
@@ -475,6 +536,179 @@ Analyze and identify 10–15 high-value betting opportunities.
         return { status: 'success', generated: normalised.length, matches: normalised };
     } catch (e) {
         console.error('[OpenAI Basketball] Error:', e.message);
+        return { status: 'error', error: e.message };
+    }
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// 5. SMART ACCUMULATORS (Auto-runs after football predictions are saved)
+// ════════════════════════════════════════════════════════════════════════════
+/**
+ * Reads today's AI-generated football predictions from Firestore and builds
+ * 3 professionally constructed accumulator tickets (safe / medium / high).
+ *
+ * Designed like an experienced sportsbook quant:
+ *   - SAFE  : 2-3 bankers, combined odds 1.60-2.50, Double Chance / DNB priority
+ *   - MEDIUM: 3-5 balanced picks, combined odds 3.00-7.00
+ *   - HIGH  : 4-6 high-EV, high-variance plays, combined odds 10.00+
+ *
+ * Each match ID appears in EXACTLY ONE of the three portfolios (mutual exclusivity).
+ * Saved to Firestore daily_predictions doc as the `accumulators` field.
+ */
+export const generateAccumulatorsOpenAI = async () => {
+    console.log('[OpenAI Accumulators] Starting Smart Accumulator Generation...');
+    try {
+        const todayStr = getDateKey(0);
+        const db = admin.firestore();
+
+        // Load today's football predictions
+        const docSnap = await db.collection('daily_predictions').doc(todayStr).get();
+        if (!docSnap.exists) {
+            console.warn('[OpenAI Accumulators] No predictions doc found for today. Skipping.');
+            return { status: 'skipped', reason: 'no_predictions' };
+        }
+
+        const allMatches = docSnap.data()?.matches || [];
+
+        // Filter: only AI-analyzed football matches with real predictions
+        const eligible = allMatches
+            .filter(m => m.prediction_en && m.confidence >= 68 && m.sport !== 'basketball')
+            .filter(m => {
+                const analysis = (m.analysis_en || '').toLowerCase();
+                return !analysis.startsWith('uncertain') &&
+                    !analysis.includes('market mixed') &&
+                    !analysis.includes('data confidence insufficient');
+            });
+
+        if (eligible.length < 3) {
+            console.warn(`[OpenAI Accumulators] Only ${eligible.length} eligible match(es) — need at least 3. Skipping.`);
+            return { status: 'skipped', reason: 'insufficient_matches' };
+        }
+
+        // Slim down data sent to GPT — only what it needs for portfolio decisions
+        const pool = eligible.map(m => ({
+            id: m.id,
+            match: `${m.homeTeam} vs ${m.awayTeam}`,
+            league: m.league,
+            prediction: m.prediction_en,
+            confidence: m.confidence,
+            odds: m.odds,
+            category: m.category,
+            analysis: m.analysis_en,
+        }));
+
+        const systemPrompt = `You are the "Quant-Desk Senior Portfolio Manager" for Vantage AI — an elite sports betting analytics platform.
+Your job is to construct 3 mutually exclusive accumulator tickets from a pre-screened pool of AI-analyzed football picks.
+
+You think like a professional sportsbook quantitative analyst:
+- You minimize correlation risk (two teams from the same match, same league overrepresentation, etc.)
+- You prioritize capital preservation on the SAFE ticket
+- You maximize expected value on the HIGH ticket while accepting variance
+- You NEVER repeat a match ID across portfolios`;
+
+        const userPrompt = `TODAY: ${todayStr}
+
+PRE-QUALIFIED MATCH POOL (all passed confidence ≥ 68% and EV filter):
+${JSON.stringify(pool, null, 2)}
+
+═══════════════════════════════════════════════
+BUILD 3 ACCUMULATOR PORTFOLIOS
+═══════════════════════════════════════════════
+
+PORTFOLIO 1 — "SAFE" (Capital Preservation / Banker Ticket)
+• Purpose: Protect bankroll. Win rate priority over return.
+• Selection: The 2–3 HIGHEST confidence picks. Prefer Double Chance, DNB, Over 1.5 Goals markets.
+• Target combined odds: 1.60 – 2.80
+• Max 1 match per league.
+• Do NOT include any "risky" category picks.
+
+PORTFOLIO 2 — "MEDIUM" (Balanced Compounder)
+• Purpose: Steady growth. Confidence + EV balanced.
+• Selection: The next 3–5 best picks (70–79% confidence range preferred). Include one or two "value" category picks if EV is strong.
+• Target combined odds: 3.00 – 8.00
+• Max 2 matches per league.
+
+PORTFOLIO 3 — "HIGH" (High Variance / Jackpot Ticket — Smallest Stake)
+• Purpose: Maximum payout potential. Accept variance.
+• Selection: The remaining 4–6 picks with highest EV (%EV from analysis_en). Risky category allowed here.
+• Target combined odds: 10.00+
+• Diversify across at least 3 different leagues.
+
+CRITICAL RULES:
+1. MUTUAL EXCLUSIVITY: Each match ID may appear in ONLY ONE portfolio. No repeats.
+2. If a tier cannot be filled (e.g. not enough matches), return empty array [] for that tier.
+3. Return ONLY a valid JSON object — no explanation, no markdown:
+
+{
+  "safe": ["id_1", "id_2"],
+  "medium": ["id_3", "id_4", "id_5"],
+  "high": ["id_6", "id_7", "id_8", "id_9"]
+}`;
+
+        const openai = getOpenAI();
+        const responseText = await tryModels(openai, OPENAI_ACCUMULATOR_MODELS, async (client, model) => {
+            const resp = await client.responses.create({
+                model,
+                input: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userPrompt },
+                ],
+                temperature: 0.1, // Strictly deterministic portfolio construction
+            });
+            const text = resp.output_text
+                || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text
+                || '';
+            if (!text) throw new Error('Empty accumulator response');
+            return text;
+        }, 'Accumulators');
+
+        const result = safeJSON(responseText, {});
+
+        // Validate result IDs are actually in the pool
+        const validIds = new Set(eligible.map(m => m.id));
+        const filterIds = (ids) => (Array.isArray(ids) ? ids.filter(id => validIds.has(id)) : []);
+
+        const accumulators = {
+            safe: filterIds(result.safe),
+            medium: filterIds(result.medium),
+            high: filterIds(result.high),
+        };
+
+        // Enforce mutual exclusivity (remove duplicates across tiers)
+        const seen = new Set();
+        for (const tier of ['safe', 'medium', 'high']) {
+            accumulators[tier] = accumulators[tier].filter(id => {
+                if (seen.has(id)) return false;
+                seen.add(id);
+                return true;
+            });
+        }
+
+        // If GPT returned nothing useful, use confidence-sorted fallback
+        const totalPicks = accumulators.safe.length + accumulators.medium.length + accumulators.high.length;
+        if (totalPicks === 0) {
+            console.warn('[OpenAI Accumulators] GPT returned empty result — using confidence-sorted fallback.');
+            const sorted = [...eligible].sort((a, b) => b.confidence - a.confidence);
+            const usedIds = new Set();
+            const take = (n) => sorted.filter(m => !usedIds.has(m.id)).slice(0, n).map(m => { usedIds.add(m.id); return m.id; });
+            accumulators.safe = take(2);
+            accumulators.medium = take(4);
+            accumulators.high = take(5);
+        }
+
+        // Save back to the same daily_predictions doc (merged)
+        await db.collection('daily_predictions').doc(todayStr).set({
+            accumulators,
+            accumulatorsGeneratedAt: new Date().toISOString(),
+            accumulatorsGeneratedBy: 'openai',
+            updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        const total = accumulators.safe.length + accumulators.medium.length + accumulators.high.length;
+        console.log(`[OpenAI Accumulators] ✅ Saved for ${todayStr}: safe=${accumulators.safe.length}, medium=${accumulators.medium.length}, high=${accumulators.high.length}`);
+        return { status: 'success', generated: total, accumulators };
+    } catch (e) {
+        console.error('[OpenAI Accumulators] Error:', e.message);
         return { status: 'error', error: e.message };
     }
 };

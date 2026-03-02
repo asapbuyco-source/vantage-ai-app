@@ -44,10 +44,10 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
-  // Root bug fix: fall back to AI predictions if rawFixtures is empty
-  // rawFixtures = real API fixtures (preferred); predictions = AI generated (fallback)
+  // predictions = AI-analyzed matches with full data (prediction_en, confidence, analysis_en) — shown first
+  // rawFixtures = raw API fixtures with no AI analysis — only shown as a fallback if predictions are empty
   const fixturePool = activeSport === 'football'
-    ? (rawFixtures && rawFixtures.length > 0 ? rawFixtures : predictions)
+    ? (predictions.length > 0 ? predictions : rawFixtures)
     : basketballPredictions;
 
   const filteredMatches = useMemo(() => {

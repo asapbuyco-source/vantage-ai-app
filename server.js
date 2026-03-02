@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import admin from 'firebase-admin';
 import fs from 'fs';
-import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGeneration } from './backend/scheduler.js';
+import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGeneration, triggerAccumulatorGeneration } from './backend/scheduler.js';
 
 // Load environment variables from .env.local if available (for local dev)
 const __filename = fileURLToPath(import.meta.url);
@@ -228,6 +228,17 @@ app.post('/api/admin/generate-blog', adminAuth, geminiLimiter, async (req, res) 
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: 'Blog generation failed', details: e.message });
+    }
+});
+
+app.post('/api/admin/generate-accumulators', adminAuth, geminiLimiter, async (req, res) => {
+    try {
+        console.log('[API] Manual Accumulator Generation Triggered via Admin (OpenAI)');
+        const result = await triggerAccumulatorGeneration();
+        res.json(result);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Accumulator generation failed', details: e.message });
     }
 });
 
