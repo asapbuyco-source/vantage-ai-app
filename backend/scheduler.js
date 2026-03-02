@@ -23,8 +23,8 @@ export const initScheduler = () => {
     let currentGradingTime = null;
     let currentBlogTime = null;
 
-    // Function to run every 5 minutes and check for updated times in Firestore
-    cron.schedule('*/5 * * * *', async () => {
+    // Function to check for updated times in Firestore
+    const syncSchedules = async () => {
         try {
             const db = admin.firestore();
             const settingsDoc = await db.collection('settings').doc('app').get();
@@ -114,11 +114,15 @@ export const initScheduler = () => {
         } catch (e) {
             console.error('Scheduler sync error:', e);
         }
-    });
+    };
+
+    // Run every 5 minutes and also immediately on startup
+    cron.schedule('*/5 * * * *', syncSchedules);
+    syncSchedules();
 
     // ── Selar Payment Email Listener ──────────────────────────────────────────
-    // Runs every 30 seconds to check for new VIP purchases
-    cron.schedule('*/30 * * * * *', async () => {
+    // Runs every 2 minutes to check for new VIP purchases (was: every 30s which risked quota limits)
+    cron.schedule('*/2 * * * *', async () => {
         try {
             await checkRecentSelarEmails();
         } catch (e) {

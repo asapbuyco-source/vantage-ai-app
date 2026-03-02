@@ -237,7 +237,7 @@ app.post('/api/admin/generate-blog', adminAuth, geminiLimiter, async (req, res) 
 // ══════════════════════════════════════════════════════════════════════
 
 // 1. Serve static files from the React dist directory FIRST (except index.html)
-const distPath = path.join(__dirname, '..', 'dist');
+const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath, { index: false }));
 
 // 2. Dynamic Sitemap Generator
@@ -360,7 +360,7 @@ app.use(async (req, res, next) => {
     <meta name="description" content="${description}" />
     <meta property="og:title" content="${title}" />
     <meta property="og:description" content="${description}" />
-    <meta property="og:url" content="https://vantageaiafrica.netlify.app/predictions/${dateKey}" />
+    <meta property="og:url" content="${baseUrl}/predictions/${dateKey}" />
                 `;
 
                 // Replace the default title and placeholders

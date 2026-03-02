@@ -15,6 +15,9 @@ interface Props {
 
 export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) => {
     const { language } = useAppContext();
+    // useAuth MUST be called here at the component level — never inside render callbacks
+    const { userProfile, isAdmin } = useAuth();
+    const isVipUser = userProfile?.isVip === true || isAdmin;
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'prediction' | 'overview' | 'stats' | 'h2h' | 'injuries'>('prediction');
 
@@ -171,8 +174,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
                                     {/* ── PREDICTION TAB: always shows stored AI data ── */}
                                     {activeTab === 'prediction' && (() => {
-                                        const { userProfile } = useAuth();
-                                        const isVipUser = userProfile?.isVip;
+                                        // isVipUser is derived at component level (above) to avoid Rules of Hooks violation
 
                                         if (!isVipUser) {
                                             return (
