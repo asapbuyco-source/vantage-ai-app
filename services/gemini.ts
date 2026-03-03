@@ -201,7 +201,6 @@ Return ONLY a JSON array — no prose, no markdown.`;
                 {
                     temperature: 0.1,
                     tools: [{ googleSearch: {} }],
-                    responseMimeType: "application/json",
                     responseSchema: statsSchema
                 }
             ));
@@ -368,7 +367,7 @@ Return a JSON array with id, score ("2-1" format), and status ("won"|"lost"|"voi
         const formatResponse = await withRetry<any>(() => backendGenerateContent(
             currentModel,
             parsePrompt,
-            { responseMimeType: "application/json", responseSchema: gradingSchema }
+            { responseSchema: gradingSchema }
         ));
 
         gradedResults = JSON.parse(formatResponse.text || "[]");
@@ -604,7 +603,6 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
                         simulationPrompt,
                         {
                             temperature: 0.7,
-                            responseMimeType: "application/json",
                             responseSchema: matchesSchema
                         }
                     );
