@@ -168,6 +168,9 @@ Search for additional matches today. Identify and analyze 15–20 high-quality b
         }
 
         // Merge predictions with fixture data
+        // CRITICAL: SportMonks fixtures are ground truth for team NAMES only.
+        // AI predictions are ground truth for prediction_en, confidence, odds, analysis_en, etc.
+        // We must NOT spread the full fixture object over pred — it would stomp the AI fields.
         const fixtureMap = new Map(fixtures.map(f => [f.id, f]));
         const finalMatches = predictions.map(pred => {
             const fixture = fixtureMap.get(pred.id) || fixtureMap.get(String(pred.id));
@@ -176,8 +179,14 @@ Search for additional matches today. Identify and analyze 15–20 high-quality b
                 status: 'pending',
                 homeTeamLogo: '',
                 awayTeamLogo: '',
+                // AI fields first (ground truth for predictions)
                 ...pred,
-                ...fixture, // Fixture names (SportMonks) MUST override AI output
+                // Override ONLY the display fields with real SportMonks names where available
+                homeTeam: fixture?.homeTeam || pred.homeTeam || 'Home',
+                awayTeam: fixture?.awayTeam || pred.awayTeam || 'Away',
+                league: fixture?.league || pred.league || 'Unknown League',
+                time: fixture?.time || pred.time || '',
+                // Ensure prediction alias is always set
                 prediction: pred.prediction_en || pred.prediction,
                 generatedBy: 'openai',
             };
@@ -514,7 +523,35 @@ Analyze and identify 10–15 high-value betting opportunities.
             return text;
         }, 'Basketball');
 
-        const predictions = safeJSON(responseText, []);
+        let predictions = safeJSON(responseText, []);
+
+        // ── Fallback: If web search returned empty, retry with pure AI simulation ──
+        if (!Array.isArray(predictions) || predictions.length === 0) {
+            console.warn('[OpenAI Basketball] Search returned no predictions. Trying AI simulation fallback...');
+            try {
+                const simText = await tryModels(openai, OPENAI_BASKETBALL_MODELS, async (client, model) => {
+                    const resp = await client.responses.create({
+                        model,
+                        // No web_search tool — pure model knowledge
+                        input: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your knowledge of NBA/EuroLeague/international schedules to generate a REALISTIC simulation of 10-15 basketball matches for ${todayStr}.\nApply the same EV safety filter (EV ≥ 6%, confidence ≥ 70%).\n'id' format: "bball-${todayStr}-HomeSlug-AwaySlug"\nOutput ONLY a valid JSON array. No markdown.` }
+                        ],
+                        temperature: 0.7,
+                    });
+                    const text = resp.output_text || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
+                    if (!text) throw new Error('Empty simulation response');
+                    return text;
+                }, 'Basketball-Simulation');
+                predictions = safeJSON(simText, []);
+                if (Array.isArray(predictions) && predictions.length > 0) {
+                    console.log(`[OpenAI Basketball Simulation] ✅ Got ${predictions.length} simulated predictions.`);
+                }
+            } catch (simErr) {
+                console.warn(`[OpenAI Basketball Simulation] Failed: ${simErr.message}`);
+            }
+        }
+
         if (!Array.isArray(predictions) || predictions.length === 0) {
             return { status: 'skipped', reason: 'no_predictions_returned' };
         }

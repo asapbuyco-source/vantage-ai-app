@@ -337,13 +337,18 @@ export const getAllTeamAssets = async (): Promise<TeamAsset[]> => {
 };
 
 export const saveTeamAsset = async (name: string, logoUrl: string) => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || !name || typeof name !== 'string') return;
     const normalized = name.toLowerCase().trim().replace(/\s+/g, '-');
-    await setDoc(doc(db, "team_assets", normalized), {
-        name: name.trim(),
-        logoUrl: logoUrl.trim(),
-        updatedAt: new Date().toISOString()
-    });
+    if (!normalized) return;
+    try {
+        await setDoc(doc(db, "team_assets", normalized), {
+            name: name.trim(),
+            logoUrl: logoUrl ? logoUrl.trim() : '',
+            updatedAt: new Date().toISOString()
+        });
+    } catch (e) {
+        console.warn(`[DB] Failed to save team asset for ${name}:`, e);
+    }
 };
 
 export const deleteTeamAsset = async (id: string) => {

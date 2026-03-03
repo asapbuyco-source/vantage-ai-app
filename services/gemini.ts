@@ -729,7 +729,9 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
             currentModel,
             prompt,
             {
-                responseMimeType: "application/json",
+                // NOTE: responseMimeType must NOT be set when responseSchema is used.
+                // The @google/genai SDK throws 400 INVALID_ARGUMENT ("Tool use with a response
+                // mime type 'application/json' is unsupported") when both are sent together.
                 responseSchema: schema,
                 temperature: 0.1 // Strictly deterministic
             }
