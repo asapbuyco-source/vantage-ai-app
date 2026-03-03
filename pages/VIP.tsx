@@ -21,15 +21,13 @@ const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string
   'gb': { symbol: '£', rate: 0.00132, label: 'GBP' },
 };
 
-function getLocalPrice(fcfa: number): string | null {
-  const lang = navigator.language?.toLowerCase() || '';
-  for (const [code, cur] of Object.entries(CURRENCY_MAP)) {
-    if (lang.includes(`-${code}`) || lang.startsWith(code)) {
-      const converted = Math.round(fcfa * cur.rate);
-      return `≈ ${cur.symbol}${converted.toLocaleString()}`;
-    }
+function getPricingForCountry(fcfa: number, countryCode: string = 'other') {
+  if (CURRENCY_MAP[countryCode]) {
+    const cur = CURRENCY_MAP[countryCode];
+    const converted = Math.round(fcfa * cur.rate);
+    return { amount: converted, symbol: cur.symbol, code: cur.label, isConverted: true, originalValue: fcfa };
   }
-  return null;
+  return { amount: fcfa, symbol: '', code: 'FCFA', isConverted: false, originalValue: fcfa };
 }
 
 interface VIPProps {
@@ -512,59 +510,62 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
               </div>
             </div>
 
-            {/* HIGH CONVERSION PRICING CARDS */}
             <div className="flex flex-col gap-4">
-              {plans.map((plan) => (
-                <motion.button
-                  key={plan.id}
-                  onClick={() => handlePlanClick(plan.id as any)}
-                  whileTap={{ scale: 0.98 }}
-                  className={`
+              {plans.map((plan) => {
+                const countryCode = userProfile?.country || 'other';
+                const pricing = getPricingForCountry(Number(plan.price), countryCode);
+                const origPricing = plan.originalPrice ? getPricingForCountry(Number(plan.originalPrice), countryCode) : null;
+
+                return (
+                  <motion.button
+                    key={plan.id}
+                    onClick={() => handlePlanClick(plan.id as any)}
+                    whileTap={{ scale: 0.98 }}
+                    className={`
                             relative w-full text-left p-0 rounded-2xl border transition-all duration-300 overflow-hidden group
                             ${plan.color}
                             ${selectedPlanId === plan.id ? 'ring-2 ring-vantage-purple ring-offset-2 ring-offset-black' : ''}
                         `}
-                >
-                  {/* Popular Badge */}
-                  {plan.badge && (
-                    <div className="absolute top-0 right-0 bg-gradient-to-l from-vantage-purple to-purple-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-lg flex items-center gap-1 z-10">
-                      {plan.badge === 'MOST POPULAR' && <Crown size={10} fill="currentColor" />}
-                      {plan.badge}
-                    </div>
-                  )}
+                  >
+                    {/* Popular Badge */}
+                    {plan.badge && (
+                      <div className="absolute top-0 right-0 bg-gradient-to-l from-vantage-purple to-purple-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-lg flex items-center gap-1 z-10">
+                        {plan.badge === 'MOST POPULAR' && <Crown size={10} fill="currentColor" />}
+                        {plan.badge}
+                      </div>
+                    )}
 
-                  <div className="p-5 flex justify-between items-center relative z-0">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-bold text-slate-300 uppercase tracking-wide">{plan.label}</span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-bold font-orbitron text-white">{plan.price} <span className="text-sm text-gray-400 font-sans">FCFA</span></span>
-                        {plan.originalPrice && (
-                          <span className="text-xs text-gray-500 line-through decoration-red-500 decoration-2">{plan.originalPrice}</span>
+                    <div className="p-5 flex justify-between items-center relative z-0">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-bold text-slate-300 uppercase tracking-wide">{plan.label}</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl font-bold font-orbitron text-white">{pricing.symbol}{pricing.amount.toLocaleString()} <span className="text-sm text-gray-400 font-sans">{pricing.code}</span></span>
+                          {origPricing && (
+                            <span className="text-xs text-gray-500 line-through decoration-red-500 decoration-2">{origPricing.symbol}{origPricing.amount.toLocaleString()}</span>
+                          )}
+                        </div>
+                        {pricing.isConverted && (
+                          <span className="text-[10px] text-gray-500">Base: {plan.price} FCFA</span>
                         )}
+                        <div className="flex items-center gap-2 mt-2">
+                          {plan.features.map((feat, idx) => (
+                            <span key={idx} className="text-[10px] flex items-center text-gray-400 bg-black/20 px-2 py-0.5 rounded-full">
+                              <Check size={8} className="mr-1 text-vantage-cyan" /> {feat}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      {(() => {
-                        const local = getLocalPrice(Number(plan.price)); return local ? (
-                          <span className="text-[10px] text-vantage-cyan/70 font-mono">{local}</span>
-                        ) : null;
-                      })()}
-                      <div className="flex items-center gap-2 mt-2">
-                        {plan.features.map((feat, idx) => (
-                          <span key={idx} className="text-[10px] flex items-center text-gray-400 bg-black/20 px-2 py-0.5 rounded-full">
-                            <Check size={8} className="mr-1 text-vantage-cyan" /> {feat}
-                          </span>
-                        ))}
+
+                      <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-vantage-purple group-hover:text-white transition-colors text-gray-400">
+                        <ArrowRight size={20} />
                       </div>
                     </div>
 
-                    <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-vantage-purple group-hover:text-white transition-colors text-gray-400">
-                      <ArrowRight size={20} />
-                    </div>
-                  </div>
-
-                  {/* Hover Effect */}
-                  <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                </motion.button>
-              ))}
+                    {/* Hover Effect */}
+                    <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                  </motion.button>
+                )
+              })}
             </div>
 
             {/* Trust Signals */}

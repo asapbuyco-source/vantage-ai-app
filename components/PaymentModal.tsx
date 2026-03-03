@@ -7,6 +7,22 @@ import { initiateSelarPayment } from '../services/selar';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
+const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string }> = {
+  'ng': { symbol: '₦', rate: 0.85, label: 'NGN' },
+  'ke': { symbol: 'KSh', rate: 13.0, label: 'KES' },
+  'gh': { symbol: 'GH₵', rate: 0.13, label: 'GHS' },
+  'za': { symbol: 'R', rate: 0.22, label: 'ZAR' }
+};
+
+function getPricingForCountry(fcfa: number, countryCode: string = 'other') {
+  if (CURRENCY_MAP[countryCode]) {
+    const cur = CURRENCY_MAP[countryCode];
+    const converted = Math.round(fcfa * cur.rate);
+    return { amount: converted, symbol: cur.symbol, code: cur.label };
+  }
+  return { amount: fcfa, symbol: '', code: 'FCFA' };
+}
+
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -26,6 +42,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
   const [gateway, setGateway] = useState<'fapshi' | 'selar'>('fapshi');
 
   const userEmail = user?.email || '';
+
+  React.useEffect(() => {
+    if (isOpen && userProfile) {
+      if (userProfile.country && !['cm', 'ci', 'sn', 'other'].includes(userProfile.country)) {
+        setGateway('selar');
+      } else {
+        setGateway('fapshi');
+      }
+    }
+  }, [isOpen, userProfile]);
+
+  const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
 
   const handlePayment = async () => {
     if (!user) {
@@ -103,7 +131,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
               <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/10 mb-6">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm text-gray-500">{plan.label}</span>
-                  <span className="text-lg font-bold text-vantage-purple">{plan.price} FCFA</span>
+                  <span className="text-lg font-bold text-vantage-purple">{pricing.symbol}{pricing.amount.toLocaleString()} {pricing.code}</span>
                 </div>
                 <div className="space-y-1">
                   {plan.features.slice(0, 2).map((feat, i) => (

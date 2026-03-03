@@ -71,6 +71,7 @@ export interface UserProfile {
   isVip: boolean;
   isAdmin?: boolean;
   isBlocked?: boolean;
+  country?: string;
   vipExpiry?: string;
   vipPlan?: 'daily' | 'weekly' | 'monthly' | 'annual';
   totalPaid?: number;

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Crown, Gift, ArrowRight, X, Bot } from 'lucide-react';
+import { Zap, Crown, Gift, ArrowRight, X, Bot, Globe } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 interface OnboardingProps {
     onComplete: () => void;
@@ -31,6 +32,17 @@ const slides = [
         desc_fr: 'Chaque jour, notre IA analyse les données réelles de football et basketball, calcule les probabilités et classe les pronostics par confiance.',
     },
     {
+        id: 'country',
+        icon: Globe,
+        color: 'text-blue-400',
+        bg: 'from-blue-400/20 via-vantage-purple/10 to-transparent',
+        badge: 'Local Experience',
+        title_en: 'Where are you\nbetting from?',
+        title_fr: 'D\'où pariez-vous ?',
+        desc_en: 'Select your country to see local pricing and the best payment methods for your region.',
+        desc_fr: 'Sélectionnez votre pays pour voir les prix locaux et les meilleures méthodes de paiement.',
+    },
+    {
         id: 'vip',
         icon: Crown,
         color: 'text-yellow-400',
@@ -55,16 +67,36 @@ const slides = [
 ];
 
 export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
-    const { language } = useAppContext();
+    const { language, showToast } = useAppContext();
+    const { updateUserCountry } = useAuth();
     const [step, setStep] = useState(0);
     const [direction, setDirection] = useState(1);
+    const [selectedCountry, setSelectedCountry] = useState<string>('other');
 
     const current = slides[step];
     const isLast = step === slides.length - 1;
+    const isLoading = false; // Add real loading state if needed for API calls
+
+    const countries = [
+        { code: 'cm', label_en: 'Cameroon (FCFA)', label_fr: 'Cameroun (FCFA)', flag: '🇨🇲' },
+        { code: 'ci', label_en: 'Ivory Coast (FCFA)', label_fr: 'Côte d\'Ivoire (FCFA)', flag: '🇨🇮' },
+        { code: 'sn', label_en: 'Senegal (FCFA)', label_fr: 'Sénégal (FCFA)', flag: '🇸🇳' },
+        { code: 'ng', label_en: 'Nigeria (NGN)', label_fr: 'Nigéria (NGN)', flag: '🇳🇬' },
+        { code: 'ke', label_en: 'Kenya (KES)', label_fr: 'Kenya (KES)', flag: '🇰🇪' },
+        { code: 'gh', label_en: 'Ghana (GHS)', label_fr: 'Ghana (GHS)', flag: '🇬🇭' },
+        { code: 'za', label_en: 'South Africa (ZAR)', label_fr: 'Afrique du Sud (ZAR)', flag: '🇿🇦' },
+        { code: 'other', label_en: 'Other / Default', label_fr: 'Autre / Par défaut', flag: '🌍' }
+    ];
+
     const Icon = current.icon;
 
-    const next = () => {
+    const next = async () => {
         if (isLast) {
+            if (slides.some(s => s.id === 'country')) {
+                await updateUserCountry(selectedCountry).catch(e => {
+                    console.error("Failed to save country", e);
+                });
+            }
             onComplete();
             return;
         }
@@ -127,9 +159,27 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         </h1>
 
                         {/* Description */}
-                        <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
+                        <p className="text-gray-400 text-sm leading-relaxed max-w-xs mb-6">
                             {language === 'fr' ? current.desc_fr : current.desc_en}
                         </p>
+
+                        {current.id === 'country' && (
+                            <div className="w-full max-w-xs flex flex-col gap-2 mt-4 overflow-y-auto max-h-[40vh] pb-4 custom-scrollbar">
+                                {countries.map(c => (
+                                    <button
+                                        key={c.code}
+                                        onClick={() => setSelectedCountry(c.code)}
+                                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedCountry === c.code ? 'border-blue-400 bg-blue-400/20 text-white' : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                                    >
+                                        <span className="text-2xl">{c.flag}</span>
+                                        <span className="font-bold text-sm flex-1">{language === 'fr' ? c.label_fr : c.label_en}</span>
+                                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedCountry === c.code ? 'border-blue-400' : 'border-gray-500'}`}>
+                                            {selectedCountry === c.code && <div className="w-2 h-2 rounded-full bg-blue-400" />}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </motion.div>
                 </AnimatePresence>
             </div>
