@@ -181,7 +181,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                       <p className="text-[11px] text-amber-300/90 leading-relaxed">
                         {language === 'fr'
                           ? <>Utilisez <strong className="text-amber-200">{userEmail}</strong> lors du paiement Selar. Un email différent empêchera l'activation automatique.</>
-                          : <>Use <strong className="text-amber-200">{userEmail}</strong> when paying on Selar. Using a different email will prevent automatic VIP activation.</>
+                          : <>Use <strong className="text-amber-200">{userEmail}</strong> when paying on Selar. Using a different email will prevent automatic VIP activation. Also after payment wait for atleast 2 min for the system to confirm your payment and activate your VIP</>
                         }
                       </p>
                       <div className="flex items-center gap-1.5 mt-2 px-2 py-1 bg-amber-500/15 rounded-lg w-fit">
