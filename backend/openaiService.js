@@ -160,7 +160,11 @@ Search for additional matches today. Identify and analyze 15–20 high-quality b
         const predictions = safeJSON(responseText, []);
 
         if (!Array.isArray(predictions) || predictions.length === 0) {
-            throw new Error('OpenAI returned empty predictions array');
+            // OpenAI returned no qualifying predictions (e.g. no games today, EV filter eliminated all).
+            // Return 'skipped' so the scheduler does NOT trigger a wasteful Gemini fallback,
+            // and the frontend receives a safe, consistent response instead of undefined.
+            console.warn('[OpenAI] Football predictions array is empty. Treating as skipped, not an error.');
+            return { status: 'skipped', reason: 'no_predictions_returned', generated: 0, matches: [] };
         }
 
         // Merge predictions with fixture data

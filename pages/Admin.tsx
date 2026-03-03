@@ -304,7 +304,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             const todayKey = getGlobalTodayKey();
             const existingPredictions = await getPredictionsForDate(todayKey);
 
-            if (existingPredictions.length > 0) {
+            if (existingPredictions && existingPredictions.length > 0) {
                 if (window.confirm("Predictions for today already exist. Are you sure you want to overwrite them?")) {
                     await saveTodaysPredictions([]); // Clear them out
                 } else {
@@ -327,7 +327,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             }
 
             const result = await response.json();
-            alert(`✅ Successfully generated ${result.generated} football predictions via Backend Scheduler.`);
+            if (result.status === 'skipped') {
+                alert(`⚠️ Football generation skipped: ${result.reason || 'No qualifying predictions found for today.'}`)
+            } else {
+                alert(`✅ Successfully generated ${result.generated ?? 0} football predictions via Backend Scheduler.`);
+            }
 
         } catch (error: any) {
             console.error("Error generating data:", error);

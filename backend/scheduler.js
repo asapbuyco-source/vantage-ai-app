@@ -84,8 +84,8 @@ export const triggerFootballGeneration = async () => {
         generateDailyPredictionsServerSide,
         'Football Generation'
     );
-    // Auto-generate accumulators immediately after football predictions succeed
-    if (result && (result.status === 'success' || result.matches?.length > 0)) {
+    // Auto-generate accumulators immediately after football predictions succeed and has actual predictions
+    if (result && result.status === 'success' && (result.generated ?? 0) > 0) {
         console.log('[Scheduler] ⚽ Football done — auto-triggering Accumulator generation...');
         await triggerAccumulatorGeneration();
     }

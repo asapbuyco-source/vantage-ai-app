@@ -70,58 +70,48 @@ const categoryEmoji = (category) => {
 // ── Message Formatter ─────────────────────────────────────────────────────────
 
 /**
- * Builds the Telegram HTML message from today's predictions.
- * Sends safe + value picks in the main message (max 10).
- * Telegram has a 4096 character limit for one message — we keep safe/value only.
+ * Builds the Telegram HTML message from today's FREE (safe) predictions.
+ * Only 'safe' category picks are sent — value and risky are VIP-exclusive.
+ * Max 5 picks to keep messages concise and drive app installs.
  */
 const buildPredictionsMessage = (matches, dateStr) => {
     const displayDate = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', {
         weekday: 'long', day: 'numeric', month: 'long'
     });
 
-    // Top picks: safe first, then value — max 10
-    const priority = ['safe', 'value', 'risky'];
-    const sorted = [...matches].sort((a, b) => {
-        const ca = priority.indexOf(a.category ?? 'risky');
-        const cb = priority.indexOf(b.category ?? 'risky');
-        if (ca !== cb) return ca - cb;
-        return (b.confidence ?? 0) - (a.confidence ?? 0);
-    });
-    const picks = sorted.slice(0, 10);
+    // Free tier = safe picks only, ordered by confidence descending, max 5
+    const picks = [...matches]
+        .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+        .slice(0, 5);
 
     if (picks.length === 0) {
         return null;
     }
 
-    let msg = `🤖 <b>VANTAGE AI — Daily Predictions</b>\n`;
+    let msg = `🤖 <b>VANTAGE AI — Free Daily Picks</b>\n`;
     msg += `📅 <i>${displayDate}</i>\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
 
     picks.forEach((m, i) => {
-        const cat = categoryEmoji(m.category);
         const conf = m.confidence ? `${m.confidence}%` : '';
         const odds = m.odds ? `@ ${m.odds}` : '';
         const pred = m.prediction_en || m.prediction || 'N/A';
 
-        msg += `${i + 1}. ${cat} <b>${m.homeTeam} vs ${m.awayTeam}</b>\n`;
+        msg += `${i + 1}. 🟢 <b>${m.homeTeam} vs ${m.awayTeam}</b>\n`;
         msg += `   🏆 ${m.league}\n`;
         msg += `   ✅ <b>${pred}</b>`;
         if (odds) msg += ` ${odds}`;
         if (conf) msg += ` · <i>${conf} confidence</i>`;
         msg += `\n`;
         if (m.analysis_en) {
-            // Keep analysis short for Telegram
             const shortAnalysis = m.analysis_en.split('|').map(s => s.trim()).slice(0, 2).join(' | ');
             msg += `   📊 <i>${shortAnalysis}</i>\n`;
         }
         msg += `\n`;
     });
 
-    const safeCount = picks.filter(m => m.category === 'safe').length;
-    const totalCount = matches.length;
-
     msg += `━━━━━━━━━━━━━━━━━━━━\n`;
-    msg += `📌 Showing ${picks.length} of ${totalCount} picks · ${safeCount} banker(s)\n`;
+    msg += `🔒 <b>More VIP picks (Value + Risky) available on the app</b>\n`;
     msg += `⚡ <b>Powered by Vantage AI</b> — Smart Betting Intelligence\n`;
     msg += `\n💡 <i>Bet responsibly. Past performance ≠ future results.</i>`;
 
@@ -168,15 +158,17 @@ export const sendDailyPredictionsToTelegram = async () => {
         }
 
         const allMatches = docSnap.data()?.matches || [];
-        // Only send AI-analyzed football predictions (not raw fixtures)
+        // FREE TIER ONLY: only send 'safe' category picks on Telegram.
+        // Value and risky picks are VIP-exclusive and should not appear on the public channel.
         const ready = allMatches.filter(m =>
             m.prediction_en &&
             m.confidence >= 68 &&
-            m.sport !== 'basketball'
+            m.sport !== 'basketball' &&
+            m.category === 'safe'
         );
 
         if (ready.length === 0) {
-            console.warn('[Telegram] No ready football predictions for today. Skipping.');
+            console.warn('[Telegram] No ready free (safe) predictions for today. Skipping.');
             return { status: 'skipped', reason: 'no_ready_predictions' };
         }
 
@@ -187,15 +179,15 @@ export const sendDailyPredictionsToTelegram = async () => {
         }
 
         await sendMessage(settings.token, settings.chatId, message);
-        console.log(`[Telegram] ✅ Predictions sent to ${settings.chatId} — ${ready.length} matches, top 10 shown.`);
+        console.log(`[Telegram] ✅ Free predictions sent to ${settings.chatId} — ${ready.length} safe picks, up to 5 shown.`);
 
         // 4. Record last send time in Firestore (for admin visibility)
         await db.collection('settings').doc('app').set({
             telegramLastSentAt: new Date().toISOString(),
-            telegramLastSentCount: Math.min(ready.length, 10),
+            telegramLastSentCount: Math.min(ready.length, 5),
         }, { merge: true });
 
-        return { status: 'success', sent: Math.min(ready.length, 10), total: ready.length };
+        return { status: 'success', sent: Math.min(ready.length, 5), total: ready.length };
 
     } catch (e) {
         console.error('[Telegram] Error sending predictions:', e.message);

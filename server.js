@@ -304,7 +304,6 @@ app.post('/api/admin/test-openai', adminAuth, async (req, res) => {
 // OPENAI API PROXY
 // Keeps OPENAI_API_KEY server-side only. Same pattern as Gemini proxy.
 // ══════════════════════════════════════════════════════════════════════
-import OpenAI from 'openai';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 if (!OPENAI_API_KEY) {
@@ -353,6 +352,9 @@ app.post('/api/openai/generate', openaiLimiter, async (req, res) => {
 // SERVER-SIDE RENDERING & SEO (Static + Dynamic Routes)
 // ══════════════════════════════════════════════════════════════════════
 
+// Module-level base URL — used by sitemap AND SSR handler
+const baseUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : 'https://vantageai.online';
+
 // 1. Serve static files from the React dist directory FIRST (except index.html)
 const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath, { index: false }));
@@ -362,7 +364,6 @@ app.get('/sitemap.xml', async (req, res) => {
     try {
         res.header('Content-Type', 'application/xml');
 
-        const baseUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, "") : 'https://vantageai.online';
         let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
         xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
 

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Zap, TrendingUp, ShieldCheck, PlayCircle, Star, LogIn, Loader2 } from 'lucide-react';
+import { ChevronRight, Zap, TrendingUp, ShieldCheck, PlayCircle, Star, LogIn, Loader2, BookOpen, Calendar, ArrowRight } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { TeamLogo } from '../components/TeamLogo';
 import { getFirestorePredictionsOnly } from '../services/db';
+import { getRecentBlogPosts } from '../services/blogService';
 import { Match } from '../types';
 
 interface LandingPageProps {
@@ -15,13 +16,14 @@ interface LandingPageProps {
 export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin, onShowStats }) => {
     const [liveMatch, setLiveMatch] = useState<Match | null>(null);
     const [loadingHero, setLoadingHero] = useState(true);
+    const [blogPosts, setBlogPosts] = useState<Array<{ date: string; title: string; excerpt: string; tags?: string[] }>>([]);
 
     useEffect(() => {
+        // Load today's top prediction for hero
         (async () => {
             try {
                 const predictions = await getFirestorePredictionsOnly();
                 if (predictions && predictions.length > 0) {
-                    // Pick the highest-confidence prediction as the hero
                     const top = [...predictions].sort((a, b) => b.confidence - a.confidence)[0];
                     setLiveMatch(top);
                 }
@@ -31,6 +33,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                 setLoadingHero(false);
             }
         })();
+
+        // Load recent blog posts in parallel
+        getRecentBlogPosts(3).then(posts => setBlogPosts(posts)).catch(() => { });
     }, []);
 
     // Fallback static content if no predictions available
@@ -47,6 +52,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
         odds: 2.15,
         category: 'safe' as const,
         id: 'fallback',
+    };
+
+    const formatBlogDate = (dateStr: string) => {
+        const d = new Date(dateStr + 'T12:00:00');
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
     return (
@@ -213,7 +223,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
             }
 
             {/* Feature Grid */}
-            <div className="grid grid-cols-3 gap-3 mb-12">
+            <div className="grid grid-cols-3 gap-3 mb-10">
                 <div className="flex flex-col items-center text-center space-y-2">
                     <div className="p-3 bg-blue-500/10 rounded-xl text-blue-500">
                         <PlayCircle size={20} />
@@ -233,6 +243,83 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                     <span className="text-xs font-bold text-slate-700 dark:text-gray-300">Daily<br />VIP Tips</span>
                 </div>
             </div>
+
+            {/* ── BLOG SECTION ─────────────────────────────────────────────────── */}
+            {blogPosts.length > 0 && (
+                // @ts-ignore
+                <motion.div
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="mb-10"
+                >
+                    {/* Section header */}
+                    <div className="flex items-center justify-between mb-3 px-1">
+                        <div className="flex items-center gap-2">
+                            <BookOpen size={16} className="text-vantage-cyan" />
+                            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-700 dark:text-gray-300">
+                                AI Betting Insights
+                            </h2>
+                        </div>
+                        <button
+                            onClick={onGetStarted}
+                            className="text-[10px] font-bold text-vantage-cyan flex items-center gap-1 hover:underline"
+                        >
+                            All posts <ArrowRight size={10} />
+                        </button>
+                    </div>
+
+                    <div className="space-y-3">
+                        {blogPosts.map((post, i) => (
+                            // @ts-ignore
+                            <motion.div
+                                key={post.date}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.55 + i * 0.07 }}
+                            >
+                                <GlassCard className="border-white/5 hover:border-vantage-cyan/30 transition-colors cursor-pointer group p-4"
+                                    // @ts-ignore
+                                    onClick={onGetStarted}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        {/* Date pill */}
+                                        <div className="shrink-0 flex flex-col items-center justify-center bg-vantage-purple/10 border border-vantage-purple/20 rounded-xl px-2.5 py-2 min-w-[48px]">
+                                            <Calendar size={12} className="text-vantage-purple mb-0.5" />
+                                            <span className="text-[9px] font-bold text-vantage-purple leading-tight text-center">
+                                                {formatBlogDate(post.date).split(' ').slice(0, 2).join('\n')}
+                                            </span>
+                                        </div>
+
+                                        {/* Content */}
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="text-xs font-bold text-slate-900 dark:text-white leading-snug mb-1 group-hover:text-vantage-cyan transition-colors line-clamp-2">
+                                                {post.title || `AI Football Predictions — ${formatBlogDate(post.date)}`}
+                                            </h3>
+                                            {post.excerpt && (
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
+                                                    {post.excerpt}
+                                                </p>
+                                            )}
+                                            {post.tags && post.tags.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                                    {post.tags.slice(0, 3).map(tag => (
+                                                        <span key={tag} className="text-[9px] font-bold bg-vantage-cyan/10 text-vantage-cyan px-1.5 py-0.5 rounded-full border border-vantage-cyan/20">
+                                                            {tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <ArrowRight size={14} className="text-gray-400 group-hover:text-vantage-cyan transition-colors shrink-0 mt-1" />
+                                    </div>
+                                </GlassCard>
+                            </motion.div>
+                        ))}
+                    </div>
+                </motion.div>
+            )}
 
             {/* CTA Section */}
             <div className="mt-auto space-y-3 px-2">

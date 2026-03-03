@@ -135,11 +135,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             const backendMatches = await generateDailyPredictions(signal);
                             if (signal.aborted) return;
                             if (backendMatches && backendMatches.length > 0) {
-                                await saveTodaysPredictions(backendMatches);
+                                // Only admins can write to daily_predictions from the client SDK.
+                                // Non-admin users get their predictions from the backend-generated Firestore data.
+                                // The backend itself writes matches via Admin SDK (no permission needed).
+                                if (isAdmin) {
+                                    await saveTodaysPredictions(backendMatches);
+                                }
                                 // Refresh to get both matches and the rawFixtures saved during generation
                                 const freshDaily = await getDailyData(targetDate);
                                 if (mountedRef.current) {
-                                    setPredictions(backendMatches);
+                                    setPredictions(freshDaily?.matches || backendMatches);
                                     setRawFixtures(freshDaily?.rawFixtures || []);
                                 }
                             } else {
