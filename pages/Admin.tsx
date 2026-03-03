@@ -690,9 +690,12 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                     if (!window.confirm("Are you sure you want to generate today's SEO blog? Ensure football and basketball are generated first.")) return;
                                     setLoadingMatches(true);
                                     try {
-                                        const res = await fetch('/api/admin/generate-blog', {
+                                        const backendUrl = import.meta.env.VITE_BACKEND_URL;
+                                        if (!backendUrl) throw new Error('VITE_BACKEND_URL is not defined');
+                                        const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
+                                        const res = await fetch(`${backendUrl}/api/admin/generate-blog`, {
                                             method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' }
+                                            headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
                                         });
                                         const data = await res.json();
                                         if (!res.ok) throw new Error(data.error || 'Failed to generate blog');
