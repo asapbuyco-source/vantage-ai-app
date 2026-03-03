@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Crown, Gift, ArrowRight, X, Bot, Globe } from 'lucide-react';
+import { Zap, Crown, Gift, ArrowRight, X, Bot, Globe, Check } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -72,10 +72,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const [step, setStep] = useState(0);
     const [direction, setDirection] = useState(1);
     const [selectedCountry, setSelectedCountry] = useState<string>('other');
+    const [isSaving, setIsSaving] = useState(false);
 
     const current = slides[step];
     const isLast = step === slides.length - 1;
-    const isLoading = false; // Add real loading state if needed for API calls
+    const isCountrySlide = current.id === 'country';
 
     const countries = [
         { code: 'cm', label_en: 'Cameroon (FCFA)', label_fr: 'Cameroun (FCFA)', flag: '🇨🇲' },
@@ -91,12 +92,22 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const Icon = current.icon;
 
     const next = async () => {
-        if (isLast) {
-            if (slides.some(s => s.id === 'country')) {
-                await updateUserCountry(selectedCountry).catch(e => {
-                    console.error("Failed to save country", e);
-                });
+        if (isSaving) return;
+
+        // Save country when leaving the country slide
+        if (isCountrySlide) {
+            setIsSaving(true);
+            try {
+                await updateUserCountry(selectedCountry);
+            } catch (e) {
+                console.error('Failed to save country', e);
+                // Don't block progress even if save fails
+            } finally {
+                setIsSaving(false);
             }
+        }
+
+        if (isLast) {
             onComplete();
             return;
         }
@@ -111,6 +122,13 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         setStep(idx);
     };
 
+    // Determine button label
+    const btnLabel = (() => {
+        if (isLast) return language === 'fr' ? 'Commencer ✨' : 'Get Started ✨';
+        if (isCountrySlide) return language === 'fr' ? 'Confirmer le pays' : 'Confirm Country';
+        return language === 'fr' ? 'Suivant' : 'Next';
+    })();
+
     return (
         <div className="fixed inset-0 z-[10000] flex flex-col bg-slate-950">
             {/* Background gradient */}
@@ -118,7 +136,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.06)_0%,transparent_70%)]" />
 
             {/* Skip button */}
-            <div className="relative z-10 flex justify-end p-5">
+            <div className="relative z-10 flex justify-end p-4 flex-shrink-0">
                 <button
                     onClick={skip}
                     className="text-sm text-gray-500 hover:text-white transition-colors flex items-center gap-1 px-3 py-1.5 rounded-full hover:bg-white/10"
@@ -127,8 +145,8 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 </button>
             </div>
 
-            {/* Slide Content */}
-            <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-8 -mt-8">
+            {/* Slide Content — scrollable on mobile for the country slide */}
+            <div className="relative z-10 flex-1 overflow-hidden">
                 <AnimatePresence mode="wait">
                     {/* @ts-ignore */}
                     <motion.div
@@ -137,44 +155,45 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: direction * -60 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                        className="flex flex-col items-center text-center"
+                        className={`h-full w-full flex flex-col items-center px-6 ${isCountrySlide ? 'overflow-y-auto py-4' : 'justify-center py-4'}`}
                     >
                         {/* Icon container */}
-                        <div className="relative mb-8">
-                            <div className={`w-28 h-28 rounded-[2rem] bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-sm shadow-2xl`}>
-                                <Icon className={current.color} size={52} strokeWidth={1.5} />
+                        <div className="relative mb-6 flex-shrink-0">
+                            <div className={`w-24 h-24 rounded-[2rem] bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-sm shadow-2xl`}>
+                                <Icon className={current.color} size={46} strokeWidth={1.5} />
                             </div>
                             {/* Glow */}
                             <div className={`absolute inset-0 rounded-[2rem] blur-2xl opacity-30 bg-gradient-to-br ${current.bg}`} />
                         </div>
 
                         {/* Badge */}
-                        <div className={`mb-4 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-widest ${current.color}`}>
+                        <div className={`mb-4 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-widest ${current.color} flex-shrink-0`}>
                             {current.badge}
                         </div>
 
                         {/* Title */}
-                        <h1 className="text-3xl font-black text-white font-orbitron leading-tight mb-5 whitespace-pre-line">
+                        <h1 className="text-2xl font-black text-white font-orbitron leading-tight mb-4 whitespace-pre-line text-center flex-shrink-0">
                             {language === 'fr' ? current.title_fr : current.title_en}
                         </h1>
 
                         {/* Description */}
-                        <p className="text-gray-400 text-sm leading-relaxed max-w-xs mb-6">
+                        <p className="text-gray-400 text-sm leading-relaxed max-w-xs mb-5 text-center flex-shrink-0">
                             {language === 'fr' ? current.desc_fr : current.desc_en}
                         </p>
 
-                        {current.id === 'country' && (
-                            <div className="w-full max-w-xs flex flex-col gap-2 mt-4 overflow-y-auto max-h-[40vh] pb-4 custom-scrollbar">
+                        {/* Country list — rendered inline, no separate scroll container needed */}
+                        {isCountrySlide && (
+                            <div className="w-full max-w-xs flex flex-col gap-2 flex-shrink-0 pb-4">
                                 {countries.map(c => (
                                     <button
                                         key={c.code}
                                         onClick={() => setSelectedCountry(c.code)}
-                                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedCountry === c.code ? 'border-blue-400 bg-blue-400/20 text-white' : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left w-full ${selectedCountry === c.code ? 'border-blue-400 bg-blue-400/20 text-white' : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'}`}
                                     >
                                         <span className="text-2xl">{c.flag}</span>
                                         <span className="font-bold text-sm flex-1">{language === 'fr' ? c.label_fr : c.label_en}</span>
-                                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedCountry === c.code ? 'border-blue-400' : 'border-gray-500'}`}>
-                                            {selectedCountry === c.code && <div className="w-2 h-2 rounded-full bg-blue-400" />}
+                                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedCountry === c.code ? 'border-blue-400 bg-blue-400' : 'border-gray-500'}`}>
+                                            {selectedCountry === c.code && <Check size={10} className="text-white" />}
                                         </div>
                                     </button>
                                 ))}
@@ -185,7 +204,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             </div>
 
             {/* Bottom Controls */}
-            <div className="relative z-10 px-8 pb-12 flex flex-col items-center gap-6">
+            <div className="relative z-10 px-6 pb-10 pt-4 flex flex-col items-center gap-4 flex-shrink-0 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
                 {/* Progress Dots */}
                 <div className="flex gap-2">
                     {slides.map((_, idx) => (
@@ -201,18 +220,30 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 {/* CTA Button */}
                 <button
                     onClick={next}
-                    className={`w-full max-w-xs py-4 rounded-2xl font-bold text-slate-900 flex items-center justify-center gap-2 shadow-xl transition-all active:scale-95
-            ${isLast
+                    disabled={isSaving}
+                    className={`w-full max-w-xs py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed
+                        ${isLast
                             ? 'bg-gradient-to-r from-vantage-cyan to-vantage-purple text-white'
-                            : 'bg-white'
+                            : isCountrySlide
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-white text-slate-900'
                         }
-          `}
+                    `}
                 >
-                    {isLast
-                        ? (language === 'fr' ? 'Commencer ✨' : 'Get Started ✨')
-                        : (language === 'fr' ? 'Suivant' : 'Next')
-                    }
-                    {!isLast && <ArrowRight size={18} />}
+                    {isSaving ? (
+                        <span className="flex items-center gap-2">
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                            </svg>
+                            {language === 'fr' ? 'Enregistrement...' : 'Saving...'}
+                        </span>
+                    ) : (
+                        <>
+                            {btnLabel}
+                            {!isLast && !isSaving && (isCountrySlide ? <Check size={18} /> : <ArrowRight size={18} />)}
+                        </>
+                    )}
                 </button>
             </div>
         </div>
