@@ -301,12 +301,15 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                   <Hourglass size={24} className="text-vantage-cyan" />
                 </div>
                 <h3 className="text-slate-900 dark:text-white font-bold mb-1">
-                  {language === 'fr' ? 'Analyse en cours...' : 'Daily Analysis Pending'}
+                  {language === 'fr' ? 'Pronostics en préparation' : "Predictions Pending"}
                 </h3>
                 <p className="text-xs text-gray-500 max-w-[220px] leading-relaxed">
                   {activeSport === 'basketball'
                     ? (language === 'fr' ? "Pas de pronostics basketball pour aujourd'hui." : 'No basketball predictions generated yet.')
-                    : (language === 'fr' ? "L'algorithme analyse le marché. Revenez bientôt." : 'The algorithm is analyzing the market. Check back shortly.')}
+                    : (language === 'fr'
+                      ? "Les pronostics du jour sont publiés chaque matin après 8h00. Revenez bientôt."
+                      : "Today's predictions are published each morning after 8:00 AM. Check back soon."
+                    )}
                 </p>
               </>
             )}

@@ -32,8 +32,15 @@ const getOpenAI = () => {
 };
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
+// IMPORTANT: Uses Africa/Lagos timezone to match the cron scheduler.
+// Without this, at midnight Lagos time (= 23:00 UTC), getDateKey(0)
+// would return yesterday's date and write predictions to the wrong Firestore doc.
 const getDateKey = (daysAgo = 0) => {
-    const d = new Date();
+    const now = new Date();
+    // Shift to Africa/Lagos (UTC+1, no DST)
+    const lagosOffset = 60; // minutes
+    const localMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
+    const d = new Date(localMs);
     d.setDate(d.getDate() - daysAgo);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
@@ -94,12 +101,15 @@ export const generateDailyPredictionsOpenAI = async () => {
         const fixtures = rawData.map(item => {
             const home = item.participants?.find(p => p.meta?.location === 'home') || {};
             const away = item.participants?.find(p => p.meta?.location === 'away') || {};
+            // Extract HH:MM from the ISO timestamp (e.g. "2026-03-04T14:00:00.000000Z" → "14:00")
+            const rawTime = item.starting_at || '';
+            const timeHHMM = rawTime.includes('T') ? rawTime.split('T')[1].substring(0, 5) : rawTime;
             return {
                 id: String(item.id),
                 league: item.league?.name || 'Unknown',
                 homeTeam: home.name || 'Home',
                 awayTeam: away.name || 'Away',
-                time: item.starting_at || todayStr,
+                time: timeHHMM,
             };
         });
 
@@ -157,13 +167,39 @@ Search for additional matches today. Identify and analyze 15–20 high-quality b
             return text;
         }, 'Predictions');
 
-        const predictions = safeJSON(responseText, []);
+        let predictions = safeJSON(responseText, []);
+
+        // ── Fallback: If web search returned empty, retry with pure AI simulation ──
+        if (!Array.isArray(predictions) || predictions.length === 0) {
+            console.warn('[OpenAI] Football predictions array is empty. Trying AI simulation fallback...');
+            try {
+                const openaiSim = getOpenAI();
+                const simText = await tryModels(openaiSim, OPENAI_PREDICTION_MODELS, async (client, model) => {
+                    const resp = await client.responses.create({
+                        model,
+                        // No web_search tool — use model's own knowledge of today's schedule
+                        input: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your knowledge of today's football schedule (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UCL, UEL, and major African leagues) to generate a REALISTIC prediction for 10-15 high-quality matches scheduled on ${todayStr}.\nApply the same EV filter (EV ≥ 6%, confidence ≥ 72%). For new matches, generate a unique id like "sim-home-away-date".\n${fixtures.length > 0 ? `\nConfirmed Sportmonks fixtures you can reference:\n${JSON.stringify(fixtures.slice(0, 30), null, 2)}` : ''}\nOutput ONLY a valid JSON array. No markdown, no preamble.` }
+                        ],
+                        temperature: 0.4,
+                    });
+                    const text = resp.output_text || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
+                    if (!text) throw new Error('Empty simulation response');
+                    return text;
+                }, 'Predictions-Simulation');
+                predictions = safeJSON(simText, []);
+                if (Array.isArray(predictions) && predictions.length > 0) {
+                    console.log(`[OpenAI] ✅ Simulation fallback returned ${predictions.length} football predictions.`);
+                }
+            } catch (simErr) {
+                console.warn(`[OpenAI] Simulation fallback failed: ${simErr.message}`);
+            }
+        }
 
         if (!Array.isArray(predictions) || predictions.length === 0) {
-            // OpenAI returned no qualifying predictions (e.g. no games today, EV filter eliminated all).
-            // Return 'skipped' so the scheduler does NOT trigger a wasteful Gemini fallback,
-            // and the frontend receives a safe, consistent response instead of undefined.
-            console.warn('[OpenAI] Football predictions array is empty. Treating as skipped, not an error.');
+            // Both web search and simulation returned nothing — genuine skip.
+            console.warn('[OpenAI] Football predictions array is empty after all attempts. Treating as skipped.');
             return { status: 'skipped', reason: 'no_predictions_returned', generated: 0, matches: [] };
         }
 
@@ -198,6 +234,7 @@ Search for additional matches today. Identify and analyze 15–20 high-quality b
             status: 'completed',
             matches: finalMatches,
             generatedBy: 'openai',
+            generatedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         }, { merge: true });
 

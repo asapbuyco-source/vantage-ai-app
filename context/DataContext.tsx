@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
 import { Match, AccumulatorSet, WinRateStats } from '../types';
 import {
-    getTodaysPredictions, deleteTodaysPredictions, getGlobalTodayKey,
-    saveTodaysPredictions, getAccumulatorsForDate, saveAccumulatorsForDate,
+    deleteTodaysPredictions, getGlobalTodayKey,
+    saveTodaysPredictions, saveAccumulatorsForDate,
     getDailyData, getWinRateStats, getTodaysBasketballPredictions, saveBasketballPredictions,
-    acquireGenerationLock, releaseGenerationLock,
 } from '../services/db';
-import { generateDailyPredictions, generateSmartAccumulators, generateBasketballPredictions } from '../services/gemini';
+import { generateSmartAccumulators } from '../services/gemini';
 import { useAuth } from './AuthContext';
 
 interface DataContextType {
@@ -68,7 +67,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const fetchOrGenerate = async (bypassCache = false, forceGeneration = false) => {
+    // ─── READ-ONLY DATA FETCH ─────────────────────────────────────────────────────
+    // This function only reads from Firestore. It never triggers generation.
+    // Data generation is the sole responsibility of:
+    //   1. The backend scheduler (runs at 8am Africa/Lagos time)
+    //   2. The admin manual trigger buttons in the Admin panel
+    // This prevents empty fixture fetches when users visit before 8am.
+    const fetchFromDB = async (bypassCache = false) => {
         if (!user) { setLoading(false); return; }
         if (fetchPromiseRef.current && !bypassCache) return fetchPromiseRef.current;
 
@@ -90,8 +95,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (mountedRef.current) { setLoading(true); setSystemError(null); }
 
             try {
-                let dailyData = null;
-                if (!bypassCache) { dailyData = await getDailyData(targetDate); }
+                const dailyData = await getDailyData(targetDate);
 
                 if (signal.aborted) return;
 
@@ -100,75 +104,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         setPredictions(dailyData.matches);
                         setRawFixtures(dailyData.rawFixtures || []);
                         setAccumulators(dailyData.accumulators || null);
-                        setLoading(false);
-                    }
-                } else if (isToday) {
-                    // ─── AUTO-GENERATION LOGIC (ONLY FOR TODAY) ───────────────────────────────
-                    // Any authenticated user can trigger generation (not just admin).
-                    // A Firestore generation lock prevents concurrent calls.
-
-                    const lockAcquired = await acquireGenerationLock(targetDate);
-
-                    if (!lockAcquired) {
-                        // Another client is already generating. Poll every 5s for up to 2 min.
-                        if (mountedRef.current) setIsSystemGenerating(true);
-                        let attempts = 0;
-                        while (attempts < 24) {
-                            await new Promise(res => setTimeout(res, 5000));
-                            if (signal.aborted) return;
-                            attempts++;
-                            const fresh = await getDailyData(targetDate);
-                            if (fresh && fresh.matches && fresh.matches.length > 0) {
-                                if (mountedRef.current) {
-                                    setPredictions(fresh.matches);
-                                    setRawFixtures(fresh.rawFixtures || []);
-                                    setAccumulators(fresh.accumulators || null);
-                                }
-                                break;
-                            }
-                        }
-                        if (mountedRef.current) setIsSystemGenerating(false);
-                    } else {
-                        // We hold the lock — generate predictions
-                        if (mountedRef.current) setIsSystemGenerating(true);
-                        try {
-                            const backendMatches = await generateDailyPredictions(signal);
-                            if (signal.aborted) return;
-                            if (backendMatches && backendMatches.length > 0) {
-                                // Only admins can write to daily_predictions from the client SDK.
-                                // Non-admin users get their predictions from the backend-generated Firestore data.
-                                // The backend itself writes matches via Admin SDK (no permission needed).
-                                if (isAdmin) {
-                                    await saveTodaysPredictions(backendMatches);
-                                }
-                                // Refresh to get both matches and the rawFixtures saved during generation
-                                const freshDaily = await getDailyData(targetDate);
-                                if (mountedRef.current) {
-                                    setPredictions(freshDaily?.matches || backendMatches);
-                                    setRawFixtures(freshDaily?.rawFixtures || []);
-                                }
-                            } else {
-                                if (mountedRef.current) setPredictions([]);
-                            }
-                        } catch (genError) {
-                            if (mountedRef.current) setSystemError((genError as Error).message);
-                        } finally {
-                            await releaseGenerationLock(targetDate);
-                        }
                     }
                 } else {
-                    // It's a past date with no data
-                    setPredictions([]);
-                    setRawFixtures([]);
-                    setAccumulators(null);
+                    // No data available yet — backend scheduler hasn't run (before 8am)
+                    // or it's a past date with no data. Show empty state in UI.
+                    if (mountedRef.current) {
+                        setPredictions([]);
+                        setRawFixtures([]);
+                        setAccumulators(null);
+                    }
                 }
 
-                // Also load basketball predictions in background (only if looking at today)
+                // Load basketball predictions passively (read-only)
                 if (isToday) {
                     const bball = await getTodaysBasketballPredictions();
-                    if (mountedRef.current && bball) setBasketballPredictions(bball);
+                    if (mountedRef.current) setBasketballPredictions(bball || []);
                 } else {
-                    setBasketballPredictions([]);
+                    if (mountedRef.current) setBasketballPredictions([]);
                 }
 
             } catch (e) {
@@ -176,7 +128,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             } finally {
                 if (mountedRef.current && !signal.aborted) {
                     setLoading(false);
-                    setIsSystemGenerating(false);
                 }
                 fetchPromiseRef.current = null;
             }
@@ -196,8 +147,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [user]);
 
+    // Admin-only: force a fresh DB read after triggering backend generation
     const generateData = async () => {
-        await fetchOrGenerate(true, true);
+        await fetchFromDB(true);
     };
 
     const generateAccumulators = async () => {
@@ -216,21 +168,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
+    // Basketball generation is now handled by the Admin panel calling the backend directly.
+    // The client just re-reads from DB after the backend writes.
     const generateBasketballData = async () => {
         if (!isAdmin) return;
-        if (mountedRef.current) setIsBasketballGenerating(true);
-        try {
-            const matches = await generateBasketballPredictions();
-            if (matches && matches.length > 0) {
-                await saveBasketballPredictions(matches);
-                if (mountedRef.current) setBasketballPredictions(matches);
-            }
-        } catch (e: any) {
-            console.error("Basketball generation failed:", e);
-            if (mountedRef.current) setSystemError(e.message);
-        } finally {
-            if (mountedRef.current) setIsBasketballGenerating(false);
-        }
+        await fetchFromDB(true);
     };
 
     const clearData = async () => {
@@ -246,9 +188,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     useEffect(() => {
         if (!authLoading && user) {
-            // Fix: Allow data generation if missing, regardless of admin status
-            // The generation logic itself (generateDailyPredictions) handles Firestore checks to avoid duplicates
-            fetchOrGenerate(false, false);
+            // On login: only READ from Firestore. Never trigger generation.
+            // Data comes from the backend scheduler (8am) or admin manual trigger.
+            fetchFromDB(false);
             refreshWinRates();
         } else if (!authLoading && !user) {
             setPredictions([]);
@@ -272,7 +214,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             isBasketballGenerating,
             setIsSystemGenerating,
             setIsBasketballGenerating,
-            refreshData: () => fetchOrGenerate(false, false),
+            refreshData: () => fetchFromDB(false),
             generateData,
             generateAccumulators,
             generateBasketballData,

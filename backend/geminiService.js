@@ -31,9 +31,12 @@ const extractJsonFromText = (text) => {
     return null;
 };
 
-/** Helper to get a date key for N days ago */
+/** Helper to get a date key for N days ago — uses Africa/Lagos (UTC+1) to match scheduler */
 const getDateKeyDaysAgo = (daysAgo) => {
-    const date = new Date();
+    const now = new Date();
+    const lagosOffset = 60; // Africa/Lagos is always UTC+1, no DST
+    const localMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
+    const date = new Date(localMs);
     date.setDate(date.getDate() - daysAgo);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
@@ -182,23 +185,28 @@ export const generateDailyPredictionsServerSide = async () => {
         let simplifiedRaw = [];
 
         if (filteredFixtures.length > 0) {
-            simplifiedRaw = filteredFixtures.map(f => ({
-                id: f.fixture.id.toString(),
-                league: f.league.name,
-                leagueId: f.league.id,
-                seasonId: f.league.season,
-                homeTeam: f.teams.home.name,
-                homeTeamId: f.teams.home.id,
-                awayTeam: f.teams.away.name,
-                awayTeamId: f.teams.away.id,
-                time: f.fixture.date,
-                prediction: '',
-                confidence: 0, odds: 0, category: 'safe',
-                homeTeamLogo: f.teams.home.logo,
-                awayTeamLogo: f.teams.away.logo,
-                sport: 'football',
-                status: 'pending'
-            }));
+            simplifiedRaw = filteredFixtures.map(f => {
+                // Extract HH:MM from ISO timestamp (e.g. "2026-03-04T14:00:00.000000Z" → "14:00")
+                const rawDate = f.fixture.date || '';
+                const timeHHMM = rawDate.includes('T') ? rawDate.split('T')[1].substring(0, 5) : rawDate;
+                return {
+                    id: f.fixture.id.toString(),
+                    league: f.league.name,
+                    leagueId: f.league.id,
+                    seasonId: f.league.season,
+                    homeTeam: f.teams.home.name,
+                    homeTeamId: f.teams.home.id,
+                    awayTeam: f.teams.away.name,
+                    awayTeamId: f.teams.away.id,
+                    time: timeHHMM,
+                    prediction: '',
+                    confidence: 0, odds: 0, category: 'safe',
+                    homeTeamLogo: f.teams.home.logo,
+                    awayTeamLogo: f.teams.away.logo,
+                    sport: 'football',
+                    status: 'pending'
+                };
+            });
 
             // Save raw fixtures placeholder
             await admin.firestore().collection('daily_predictions').doc(todayStr).set({
