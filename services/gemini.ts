@@ -195,17 +195,29 @@ For EACH match, return:
 Return ONLY a JSON array — no prose, no markdown.`;
 
         try {
-            const response = await withRetry<any>(() => backendGenerateContent(
+            // Step 1: Use Google Search to find real stats
+            const searchResponse = await withRetry<any>(() => backendGenerateContent(
                 currentModel,
                 prompt,
                 {
                     temperature: 0.1,
                     tools: [{ googleSearch: {} }],
-                    responseSchema: statsSchema
+                }
+            ));
+            const rawStatsText = searchResponse.text || '';
+
+            // Step 2: Parse the raw text into structured JSON using schema (no tools — avoids 400)
+            const parsePrompt = `Extract the following football stats from this text and return a JSON array matching the schema exactly:\n\n${rawStatsText}\n\nMatches to extract stats for: ${JSON.stringify(simplified)}`;
+            const parseResponse = await withRetry<any>(() => backendGenerateContent(
+                currentModel,
+                parsePrompt,
+                {
+                    temperature: 0,
+                    responseSchema: statsSchema,
                 }
             ));
 
-            const batchResult: any[] = JSON.parse(response.text || "[]");
+            const batchResult: any[] = JSON.parse(parseResponse.text || "[]");
             batchResult.forEach((r: any) => enrichedMap.set(r.id, r));
         } catch (e) {
             console.warn(`[EnrichStats] Batch ${i / BATCH_SIZE + 1} failed:`, e);
@@ -449,7 +461,7 @@ export const generateDailyPredictions = async (signal?: AbortSignal): Promise<Ma
                     homeTeamId: f.teams.home.id,
                     awayTeam: f.teams.away.name,
                     awayTeamId: f.teams.away.id,
-                    time: new Date(f.fixture.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    time: (() => { const raw = f.fixture.date || ''; return raw.includes('T') ? raw.split('T')[1].substring(0, 5) : raw; })(),
                     prediction: '',
                     confidence: 0,
                     odds: 0,
@@ -995,19 +1007,21 @@ Rules:
             prompt,
             {
                 temperature: 0.3,
+                // NOTE: Cannot use tools (googleSearch) AND responseSchema together — causes 400
+                // INVALID_ARGUMENT from the Gemini SDK. Use search grounding only and parse manually.
                 tools: [{ googleSearch: {} }],
-                responseMimeType: "application/json",
-                responseSchema: matchesSchema
             }
         ));
 
         if (signal?.aborted) return [];
 
         const text = response.text || '';
-        // With schema enforcement the response IS the JSON array directly
+        // Parse the JSON array from the text response (search grounding disables JSON mode)
         let raw: any[];
         try {
-            raw = JSON.parse(text);
+            // Strip markdown code fences if present
+            const clean = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '').trim();
+            raw = JSON.parse(clean);
             if (!Array.isArray(raw)) throw new Error('Not an array');
         } catch {
             // Fallback: try regex extract for safety

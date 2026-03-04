@@ -402,39 +402,32 @@ export const getTeamInjuries = async (teamId: number): Promise<InjuryReport | nu
 };
 
 /**
- * Enriches a batch of fixtures with form, H2H, odds, and injury data.
- * Use this to build the full context block for the Gemini prompt.
- * Runs all fetches in parallel per fixture for speed.
+ * Enriches fixtures with pre-match odds only.
+ *
+ * NOTE: getTeamForm (/teams/{id}?include=statistics), getH2H (/head-to-head/),
+ * and getTeamInjuries (/sidelined/teams/) return 403 or 404 on the current
+ * Sportmonks plan — those endpoints are premium add-ons.
+ *
+ * Team form, H2H history, and injury data are now provided by the AI engine
+ * (ChatGPT/Gemini) via web search during prediction generation. No need to
+ * pre-fetch them from the client.
  */
-export const enrichFixtures = async (fixtures: Fixture[], season: number = 2024) => {
+export const enrichFixtures = async (fixtures: Fixture[], _season: number = 2024) => {
     const enriched = await Promise.all(
         fixtures.map(async (f) => {
-            const homeId = f.teams.home.id;
-            const awayId = f.teams.away.id;
             const fixtureId = f.fixture.id;
-            const leagueId = f.league.id;
-
-            const [homeForm, awayForm, h2h, odds, homeInjuries, awayInjuries] = await Promise.all([
-                getTeamForm(homeId, leagueId, season),
-                getTeamForm(awayId, leagueId, season),
-                getH2H(homeId, awayId),
-                getMatchOdds(fixtureId),
-                getTeamInjuries(homeId),
-                getTeamInjuries(awayId),
-            ]);
-
+            const odds = await getMatchOdds(fixtureId);
             return {
                 fixture: f,
-                homeForm,
-                awayForm,
-                h2h,
+                homeForm: null,
+                awayForm: null,
+                h2h: null,
                 odds,
-                homeInjuries,
-                awayInjuries,
+                homeInjuries: null,
+                awayInjuries: null,
             };
         })
     );
-
     return enriched;
 };
 

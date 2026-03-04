@@ -74,16 +74,33 @@ async function tryModels(openai, models, requestFn, taskName) {
     throw new Error(`All OpenAI models failed for ${taskName}. Last: ${lastError?.message}`);
 }
 
-// ── Sportmonks fixtures (reused from existing geminiService pattern) ───────────
+// ── Sportmonks fixtures (paginated, same as geminiService) ────────────────────────────
 const fetchSportmonksForDate = async (dateStr) => {
     const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+    if (!token) {
+        console.warn('[OpenAI] No Sportmonks token — skipping fixture fetch');
+        return [];
+    }
     try {
-        const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateStr}?include=league;participants;scores&api_token=${token}`;
-        const res = await fetch(url);
-        if (!res.ok) return [];
-        const json = await res.json();
-        return Array.isArray(json.data) ? json.data : [];
-    } catch {
+        let allData = [];
+        let page = 1;
+        let hasMore = true;
+        while (hasMore && page <= 10) {
+            const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateStr}?include=league;participants;scores&page=${page}&api_token=${token}`;
+            const res = await fetch(url);
+            if (!res.ok) {
+                console.warn(`[OpenAI] Sportmonks fixtures error (${res.status}) page ${page}`);
+                break;
+            }
+            const json = await res.json();
+            if (Array.isArray(json.data)) allData = allData.concat(json.data);
+            hasMore = !!json.pagination?.has_more;
+            page++;
+        }
+        console.log(`[OpenAI] Fetched ${allData.length} Sportmonks fixtures for ${dateStr}`);
+        return allData;
+    } catch (e) {
+        console.warn('[OpenAI] fetchSportmonksForDate error:', e.message);
         return [];
     }
 };
@@ -226,7 +243,13 @@ Search for additional matches today. Identify and analyze 15–20 high-quality b
                 prediction: pred.prediction_en || pred.prediction,
                 generatedBy: 'openai',
             };
-        }).filter(m => m.prediction_en || m.prediction);
+        }).filter(m => {
+            // Drop matches with no recognisable team names — these would show blank cards
+            const hasHome = m.homeTeam && m.homeTeam !== 'Home' && m.homeTeam.length > 1;
+            const hasAway = m.awayTeam && m.awayTeam !== 'Away' && m.awayTeam.length > 1;
+            const hasPrediction = !!(m.prediction_en || m.prediction);
+            return hasHome && hasAway && hasPrediction;
+        });
 
         console.log(`[OpenAI] Generated ${finalMatches.length} football predictions.`);
 

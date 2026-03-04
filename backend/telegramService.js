@@ -19,9 +19,12 @@ const TELEGRAM_API = 'https://api.telegram.org/bot';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Returns today's date key YYYY-MM-DD using server local time */
+/** Returns today's date key YYYY-MM-DD using Africa/Lagos time (UTC+1, no DST) */
 const getDateKey = (offsetDays = 0) => {
-    const d = new Date();
+    const now = new Date();
+    const lagosOffset = 60; // Africa/Lagos is always UTC+1
+    const localMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
+    const d = new Date(localMs);
     d.setDate(d.getDate() + offsetDays);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
