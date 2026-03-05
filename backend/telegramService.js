@@ -82,10 +82,10 @@ const buildPredictionsMessage = (matches, dateStr) => {
         weekday: 'long', day: 'numeric', month: 'long'
     });
 
-    // Free tier = safe picks only, ordered by confidence descending, max 5
+    // Free tier = safe picks only, ordered by confidence descending, max 3
     const picks = [...matches]
         .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
-        .slice(0, 5);
+        .slice(0, 3);
 
     if (picks.length === 0) {
         return null;
@@ -114,7 +114,8 @@ const buildPredictionsMessage = (matches, dateStr) => {
     });
 
     msg += `━━━━━━━━━━━━━━━━━━━━\n`;
-    msg += `🔒 <b>More VIP picks (Value + Risky) available on the app</b>\n`;
+    msg += `🔒 <b>More VIP picks & Stats available on the app</b>\n`;
+    msg += `👉 <b><a href="https://vantageai.online">vantageai.online</a></b> 👈\n\n`;
     msg += `⚡ <b>Powered by Vantage AI</b> — Smart Betting Intelligence\n`;
     msg += `\n💡 <i>Bet responsibly. Past performance ≠ future results.</i>`;
 
@@ -182,15 +183,15 @@ export const sendDailyPredictionsToTelegram = async () => {
         }
 
         await sendMessage(settings.token, settings.chatId, message);
-        console.log(`[Telegram] ✅ Free predictions sent to ${settings.chatId} — ${ready.length} safe picks, up to 5 shown.`);
+        console.log(`[Telegram] ✅ Free predictions sent to ${settings.chatId} — ${ready.length} safe picks, up to 3 shown.`);
 
         // 4. Record last send time in Firestore (for admin visibility)
         await db.collection('settings').doc('app').set({
             telegramLastSentAt: new Date().toISOString(),
-            telegramLastSentCount: Math.min(ready.length, 5),
+            telegramLastSentCount: Math.min(ready.length, 3),
         }, { merge: true });
 
-        return { status: 'success', sent: Math.min(ready.length, 5), total: ready.length };
+        return { status: 'success', sent: Math.min(ready.length, 3), total: ready.length };
 
     } catch (e) {
         console.error('[Telegram] Error sending predictions:', e.message);
