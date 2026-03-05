@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon,
@@ -14,6 +14,7 @@ import { useData } from '../context/DataContext';
 import { NavigationTab, Match, Sport } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
+import { getAppSettings } from '../services/db';
 
 interface HomeProps {
   setTab: (tab: NavigationTab) => void;
@@ -36,6 +37,22 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   } = useData();
 
   const isVip = userProfile?.isVip || isAdmin;
+
+  // Load the scheduled football gen time from Firestore settings (for display only)
+  const [scheduledTime, setScheduledTime] = useState('08:00');
+  useEffect(() => {
+    getAppSettings().then(s => {
+      if (s.footballGenTime) setScheduledTime(s.footballGenTime);
+    }).catch(() => { }); // silently fail — display is non-critical
+  }, []);
+
+  // Format for display: '08:30' -> '08:30 AM'
+  const scheduledTimeDisplay = (() => {
+    const [h, m] = scheduledTime.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
+  })();
 
   // ─── Filters ─────────────────────────────────────────────────────────────
   const [activeSport, setActiveSport] = useState<Sport>('football');
@@ -133,7 +150,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
           <Clock size={12} />
           <span className="font-medium uppercase tracking-wide">
-            {language === 'fr' ? 'Prochain: 08:00' : 'Next: 08:00 AM'}
+            {language === 'fr' ? `Prochain: ${scheduledTime}` : `Next: ${scheduledTimeDisplay}`}
           </span>
         </div>
         <div className="flex items-center gap-1.5 text-vantage-cyan font-bold">
@@ -301,14 +318,14 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                   <Hourglass size={24} className="text-vantage-cyan" />
                 </div>
                 <h3 className="text-slate-900 dark:text-white font-bold mb-1">
-                  {language === 'fr' ? 'Pronostics en préparation' : "Predictions Pending"}
+                  {language === 'fr' ? 'Pronostics pas encore disponibles' : "Not Yet Available"}
                 </h3>
                 <p className="text-xs text-gray-500 max-w-[220px] leading-relaxed">
                   {activeSport === 'basketball'
-                    ? (language === 'fr' ? "Pas de pronostics basketball pour aujourd'hui." : 'No basketball predictions generated yet.')
+                    ? (language === 'fr' ? "Pas de pronostics basketball pour aujourd'hui. Revenez plus tard." : 'No basketball predictions yet. Come back later.')
                     : (language === 'fr'
-                      ? "Les pronostics du jour sont publiés chaque matin après 8h00. Revenez bientôt."
-                      : "Today's predictions are published each morning after 8:00 AM. Check back soon."
+                      ? `Les pronostics sont publiés chaque matin à ${scheduledTime}. Revenez bientôt.`
+                      : `Predictions are published every morning at ${scheduledTimeDisplay}. Come back then.`
                     )}
                 </p>
               </>

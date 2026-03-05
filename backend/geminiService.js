@@ -185,7 +185,7 @@ export const generateDailyPredictionsServerSide = async () => {
         let simplifiedRaw = [];
 
         if (filteredFixtures.length > 0) {
-            simplifiedRaw = filteredFixtures.map(f => {
+            const allMapped = filteredFixtures.map(f => {
                 // Extract HH:MM from ISO timestamp (e.g. "2026-03-04T14:00:00.000000Z" → "14:00")
                 const rawDate = f.fixture.date || '';
                 const timeHHMM = rawDate.includes('T') ? rawDate.split('T')[1].substring(0, 5) : rawDate;
@@ -194,9 +194,9 @@ export const generateDailyPredictionsServerSide = async () => {
                     league: f.league.name,
                     leagueId: f.league.id,
                     seasonId: f.league.season,
-                    homeTeam: f.teams.home.name,
+                    homeTeam: f.teams.home.name || '',   // empty string if missing, NOT 'Home'
                     homeTeamId: f.teams.home.id,
-                    awayTeam: f.teams.away.name,
+                    awayTeam: f.teams.away.name || '',   // empty string if missing, NOT 'Away'
                     awayTeamId: f.teams.away.id,
                     time: timeHHMM,
                     prediction: '',
@@ -207,6 +207,16 @@ export const generateDailyPredictionsServerSide = async () => {
                     status: 'pending'
                 };
             });
+
+            // CRITICAL: Only pass fixtures with real team names to AI.
+            // Skip any Sportmonks fixture missing participant data — never risk 'Home'/'Away' placeholders.
+            simplifiedRaw = allMapped.filter(f =>
+                f.homeTeam.trim().length > 1 && f.awayTeam.trim().length > 1
+            );
+
+            if (allMapped.length !== simplifiedRaw.length) {
+                console.warn(`[Gemini] Skipped ${allMapped.length - simplifiedRaw.length} Sportmonks fixtures with missing team names.`);
+            }
 
             // Save raw fixtures placeholder
             await admin.firestore().collection('daily_predictions').doc(todayStr).set({
@@ -251,7 +261,7 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
 🚨 OUTPUT FORMAT & ADDITIONAL DATA REQUIREMENTS (Strict JSON)
 ═══════════════════════════════════════════════
 - 'id': Use the exact ID provided in the JSON payload.
-- 'homeTeam' / 'awayTeam': team names.
+- 'homeTeam' / 'awayTeam': MUST be the full official club name (e.g. "Arsenal", "Real Madrid"). NEVER use "Home", "Away", or any placeholder. If you cannot find the real team name for a match via search, OMIT that match entirely.
 - 'league': league name.
 - 'time': match time.
 - 'prediction_en' / 'prediction_fr': Localized prediction label.
@@ -307,35 +317,65 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
         const responseText = extractText(response);
         const predictions = extractJsonFromText(responseText) || [];
 
+        // Helper: check a match has real team names (not AI placeholder fallbacks)
+        const hasRealTeamNames = (m) => {
+            const home = (m.homeTeam || '').trim();
+            const away = (m.awayTeam || '').trim();
+            return home.length > 1 && home !== 'Home' &&
+                away.length > 1 && away !== 'Away';
+        };
+
         // Merge AI predictions back with the simplified raw matches.
         // CRITICAL: pred (AI output) is ground truth for prediction_en/confidence/odds/analysis.
         // raw (SportMonks) is ground truth only for team NAMES and league.
         const finalMatches = simplifiedRaw.map(raw => {
             const pred = predictions.find(p => p.id === raw.id || p.id === parseInt(raw.id));
             if (pred) {
+                // Use Sportmonks name if it's real; fall back to AI name if Sportmonks was empty
+                const smHome = (raw.homeTeam || '').trim();
+                const smAway = (raw.awayTeam || '').trim();
                 return {
-                    ...pred,                                       // AI analysis fields
-                    homeTeam: raw.homeTeam || pred.homeTeam,      // SportMonks name override
-                    awayTeam: raw.awayTeam || pred.awayTeam,
+                    ...pred,
+                    homeTeam: smHome.length > 1 ? smHome : pred.homeTeam,
+                    awayTeam: smAway.length > 1 ? smAway : pred.awayTeam,
                     league: raw.league || pred.league,
                     time: raw.time || pred.time,
                     homeTeamLogo: raw.homeTeamLogo || pred.homeTeamLogo || '',
                     awayTeamLogo: raw.awayTeamLogo || pred.awayTeamLogo || '',
+                    // Ensure detailed stats are mapped to Firestore
+                    homeForm: pred.homeForm,
+                    awayForm: pred.awayForm,
+                    homeWinRate: pred.homeWinRate,
+                    awayWinRate: pred.awayWinRate,
+                    homeAvgScored: pred.homeAvgScored,
+                    awayAvgScored: pred.awayAvgScored,
+                    homeAvgConceded: pred.homeAvgConceded,
+                    awayAvgConceded: pred.awayAvgConceded,
+                    homeCleanSheetRate: pred.homeCleanSheetRate,
+                    awayCleanSheetRate: pred.awayCleanSheetRate,
+                    h2hHomeWins: pred.h2hHomeWins,
+                    h2hAwayWins: pred.h2hAwayWins,
+                    h2hDraws: pred.h2hDraws,
+                    h2hLast5Goals: pred.h2hLast5Goals,
+                    homeInjured: pred.homeInjured,
+                    awayInjured: pred.awayInjured,
                     sport: 'football',
                     status: 'pending',
                 };
             }
             return raw;
-        }).filter(m => m.prediction_en); // Only keep ones AI analyzed
+        }).filter(m => m.prediction_en && hasRealTeamNames(m)); // Only keep AI-analyzed with real names
 
         // Also add any AI-generated matches that weren't in simplifiedRaw (from Search)
+        // Filter out any with placeholder team names — these would show blank cards
         const existingIds = new Set(simplifiedRaw.map(r => r.id));
         const aiOnlyMatches = predictions
             .filter(p => !existingIds.has(p.id) && !existingIds.has(String(p.id)))
+            .filter(p => hasRealTeamNames(p)) // Drop any with 'Home'/'Away' placeholders
             .map(p => ({ ...p, sport: p.sport || 'football', status: p.status || 'pending' }));
         const allMatches = [...finalMatches, ...aiOnlyMatches];
 
-        console.log(`[Backend] Generated ${allMatches.length} predictions successfully.`);
+        console.log(`[Backend] Generated ${allMatches.length} predictions successfully (filtered out any placeholder team names).`);
 
         // Save to Firebase Admin
         await admin.firestore().collection('daily_predictions').doc(todayStr).set({

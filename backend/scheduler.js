@@ -123,6 +123,24 @@ export const triggerTelegramBroadcast = async () => {
     }
 };
 
+// ── Time-gate guard ──────────────────────────────────────────────────────────
+// Checks whether the current Africa/Lagos time is within ±10 minutes of the
+// expected schedule time (HH:MM string). This prevents generation from running
+// if the cron fires unexpectedly early/late, or if the server restarts close
+// to (but not at) the scheduled time.
+const isWithinScheduleWindow = (scheduledTime) => {
+    if (!scheduledTime) return false;
+    const [expectedH, expectedM] = scheduledTime.split(':').map(Number);
+    const now = new Date();
+    // Africa/Lagos is always UTC+1, no DST
+    const lagosMs = now.getTime() + (60 - now.getTimezoneOffset()) * 60000;
+    const lagos = new Date(lagosMs);
+    const currentMins = lagos.getUTCHours() * 60 + lagos.getUTCMinutes();
+    const scheduledMins = expectedH * 60 + expectedM;
+    const diff = Math.abs(currentMins - scheduledMins);
+    return diff <= 10; // allow ±10 minute window
+};
+
 // We'll export an initialization function so server.js can start it
 export const initScheduler = () => {
     console.log('🕒 Initializing Dynamic Scheduler (OpenAI Primary / Gemini Fallback)...');
@@ -167,6 +185,10 @@ export const initScheduler = () => {
                 const [fHour, fMin] = footballTime.split(':');
 
                 footballTask = cron.schedule(`${fMin} ${fHour} * * *`, async () => {
+                    if (!isWithinScheduleWindow(currentFootballTime)) {
+                        console.warn(`[Scheduler] ⛔ Football time-gate blocked: not within window of ${currentFootballTime}`);
+                        return;
+                    }
                     console.log(`⚽ Running scheduled Football Generation at ${footballTime}...`);
                     await triggerFootballGeneration();
                 }, { timezone: "Africa/Lagos" });
@@ -180,6 +202,10 @@ export const initScheduler = () => {
                 const [bHour, bMin] = basketballTime.split(':');
 
                 basketballTask = cron.schedule(`${bMin} ${bHour} * * *`, async () => {
+                    if (!isWithinScheduleWindow(currentBasketballTime)) {
+                        console.warn(`[Scheduler] ⛔ Basketball time-gate blocked: not within window of ${currentBasketballTime}`);
+                        return;
+                    }
                     console.log(`🏀 Running scheduled Basketball Generation at ${basketballTime}...`);
                     await triggerBasketballGeneration();
                 }, { timezone: "Africa/Lagos" });
@@ -193,6 +219,10 @@ export const initScheduler = () => {
                 const [gHour, gMin] = gradingTime.split(':');
 
                 gradingTask = cron.schedule(`${gMin} ${gHour} * * *`, async () => {
+                    if (!isWithinScheduleWindow(currentGradingTime)) {
+                        console.warn(`[Scheduler] ⛔ Grading time-gate blocked: not within window of ${currentGradingTime}`);
+                        return;
+                    }
                     console.log(`📊 Running scheduled Grading at ${gradingTime}...`);
                     await triggerGrading(null, false);
                 }, { timezone: "Africa/Lagos" });
@@ -206,6 +236,10 @@ export const initScheduler = () => {
                 const [blogHour, blogMin] = blogTime.split(':');
 
                 blogTask = cron.schedule(`${blogMin} ${blogHour} * * *`, async () => {
+                    if (!isWithinScheduleWindow(currentBlogTime)) {
+                        console.warn(`[Scheduler] ⛔ Blog time-gate blocked: not within window of ${currentBlogTime}`);
+                        return;
+                    }
                     console.log(`✍️ Running scheduled AI Blog Generation at ${blogTime}...`);
                     await triggerBlogGeneration();
                 }, { timezone: "Africa/Lagos" });
@@ -219,6 +253,10 @@ export const initScheduler = () => {
                 const [tHour, tMin] = telegramTime.split(':');
 
                 telegramTask = cron.schedule(`${tMin} ${tHour} * * *`, async () => {
+                    if (!isWithinScheduleWindow(currentTelegramTime)) {
+                        console.warn(`[Scheduler] ⛔ Telegram time-gate blocked: not within window of ${currentTelegramTime}`);
+                        return;
+                    }
                     console.log(`📨 Running scheduled Telegram Broadcast at ${telegramTime}...`);
                     await triggerTelegramBroadcast();
                 }, { timezone: "Africa/Lagos" });
@@ -230,9 +268,11 @@ export const initScheduler = () => {
         }
     };
 
-    // Run every 5 minutes and also immediately on startup
+    // syncSchedules() only READS settings from Firestore and sets up cron job schedules.
+    // It NEVER triggers generation itself — generation only happens when the cron fires
+    // at the exact scheduled time AND passes the time-gate check above.
     cron.schedule('*/5 * * * *', syncSchedules);
-    syncSchedules();
+    syncSchedules(); // On startup: reads schedule times and registers cron jobs — does NOT generate
 
     // ── Selar Payment Email Listener ──────────────────────────────────────────
     // Runs every 2 minutes to check for new VIP purchases (was: every 30s which risked quota limits)

@@ -115,7 +115,7 @@ export const generateDailyPredictionsOpenAI = async () => {
 
         // Fetch fixtures from Sportmonks for context
         const rawData = await fetchSportmonksForDate(todayStr);
-        const fixtures = rawData.map(item => {
+        const allMappedFixtures = rawData.map(item => {
             const home = item.participants?.find(p => p.meta?.location === 'home') || {};
             const away = item.participants?.find(p => p.meta?.location === 'away') || {};
             // Extract HH:MM from the ISO timestamp (e.g. "2026-03-04T14:00:00.000000Z" → "14:00")
@@ -124,11 +124,22 @@ export const generateDailyPredictionsOpenAI = async () => {
             return {
                 id: String(item.id),
                 league: item.league?.name || 'Unknown',
-                homeTeam: home.name || 'Home',
-                awayTeam: away.name || 'Away',
+                homeTeam: home.name || '',   // empty string if no name — NOT 'Home'
+                awayTeam: away.name || '',   // empty string if no name — NOT 'Away'
                 time: timeHHMM,
             };
         });
+
+        // CRITICAL: Only pass fixtures to AI that have real team names from Sportmonks.
+        // Fixtures without participant names are skipped entirely — we never want
+        // the AI to 'fill in' names and risk placeholder values like 'Home'/'Away'.
+        const fixtures = allMappedFixtures.filter(f =>
+            f.homeTeam.trim().length > 1 && f.awayTeam.trim().length > 1
+        );
+
+        if (allMappedFixtures.length !== fixtures.length) {
+            console.warn(`[OpenAI] Skipped ${allMappedFixtures.length - fixtures.length} Sportmonks fixtures with missing team names.`);
+        }
 
         // Save raw fixtures placeholder
         if (fixtures.length > 0) {
@@ -146,6 +157,7 @@ RULES (NON-NEGOTIABLE):
 3. ONE market per match. Choose from: "Home Win", "Away Win", "Draw", "Double Chance (1X)", "Double Chance (X2)", "Double Chance (12)", "Draw No Bet (Home)", "Draw No Bet (Away)", "Over 1.5 Goals", "Over 2.5 Goals", "Both Teams Score", "Both Teams Score - No".
 4. 'category': "safe" if confidence ≥ 80, "value" if 70–79, "risky" if < 70.
 5. 'analysis_en' format: "EV: +X.X% | Edge: Y% | [max 20 words of reasoning]"
+6. TEAM NAMES (CRITICAL): homeTeam and awayTeam MUST be the full official club name (e.g. "Arsenal", "Real Madrid"). NEVER use "Home", "Away", or any placeholder. If you cannot determine the real team name for a match, OMIT that match entirely.
 
 Output ONLY a valid JSON array. No markdown, no preamble. Each object must have exactly these fields:
 id, homeTeam, awayTeam, league, time, prediction_en, prediction_fr, confidence, odds, category, analysis_en, analysis_fr,
@@ -227,6 +239,11 @@ Search for additional matches today. Identify and analyze 15–20 high-quality b
         const fixtureMap = new Map(fixtures.map(f => [f.id, f]));
         const finalMatches = predictions.map(pred => {
             const fixture = fixtureMap.get(pred.id) || fixtureMap.get(String(pred.id));
+            // Use Sportmonks name if available AND it's a real name (not empty/placeholder)
+            const smHome = fixture?.homeTeam;
+            const smAway = fixture?.awayTeam;
+            const resolvedHome = (smHome && smHome.length > 1) ? smHome : pred.homeTeam;
+            const resolvedAway = (smAway && smAway.length > 1) ? smAway : pred.awayTeam;
             return {
                 sport: 'football',
                 status: 'pending',
@@ -234,13 +251,30 @@ Search for additional matches today. Identify and analyze 15–20 high-quality b
                 awayTeamLogo: '',
                 // AI fields first (ground truth for predictions)
                 ...pred,
-                // Override ONLY the display fields with real SportMonks names where available
-                homeTeam: fixture?.homeTeam || pred.homeTeam || 'Home',
-                awayTeam: fixture?.awayTeam || pred.awayTeam || 'Away',
+                // Override ONLY the display fields with resolved names
+                homeTeam: resolvedHome,
+                awayTeam: resolvedAway,
                 league: fixture?.league || pred.league || 'Unknown League',
                 time: fixture?.time || pred.time || '',
                 // Ensure prediction alias is always set
                 prediction: pred.prediction_en || pred.prediction,
+                // Ensure detailed stats are mapped to Firestore
+                homeForm: pred.homeForm,
+                awayForm: pred.awayForm,
+                homeWinRate: pred.homeWinRate,
+                awayWinRate: pred.awayWinRate,
+                homeAvgScored: pred.homeAvgScored,
+                awayAvgScored: pred.awayAvgScored,
+                homeAvgConceded: pred.homeAvgConceded,
+                awayAvgConceded: pred.awayAvgConceded,
+                homeCleanSheetRate: pred.homeCleanSheetRate,
+                awayCleanSheetRate: pred.awayCleanSheetRate,
+                h2hHomeWins: pred.h2hHomeWins,
+                h2hAwayWins: pred.h2hAwayWins,
+                h2hDraws: pred.h2hDraws,
+                h2hLast5Goals: pred.h2hLast5Goals,
+                homeInjured: pred.homeInjured,
+                awayInjured: pred.awayInjured,
                 generatedBy: 'openai',
             };
         }).filter(m => {
