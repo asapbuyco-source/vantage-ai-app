@@ -13,10 +13,10 @@ import { getAppSettings } from '../services/db';
 
 // ── Currency detection helper ──────────────────────────────────────
 const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string }> = {
-  'ng': { symbol: '₦', rate: 0.85, label: 'NGN' },
-  'ke': { symbol: 'KSh', rate: 13.0, label: 'KES' },
-  'gh': { symbol: 'GH₵', rate: 0.13, label: 'GHS' },
-  'za': { symbol: 'R', rate: 0.22, label: 'ZAR' },
+  'ng': { symbol: '₦', rate: 2.45, label: 'NGN' },
+  'ke': { symbol: 'KSh', rate: 0.23, label: 'KES' },
+  'gh': { symbol: 'GH₵', rate: 0.02, label: 'GHS' },
+  'za': { symbol: 'R', rate: 0.029, label: 'ZAR' },
   'us': { symbol: '$', rate: 0.00167, label: 'USD' },
   'gb': { symbol: '£', rate: 0.00132, label: 'GBP' },
 };
