@@ -49,10 +49,33 @@ const getDateKey = (daysAgo = 0) => {
 const safeJSON = (text, fallback = []) => {
     if (!text) return fallback;
     try {
+        // Find the first occurrence of '[' or '{' and the last occurrence of ']' or '}'
+        const startArr = text.indexOf('[');
+        const endArr = text.lastIndexOf(']');
+        const startObj = text.indexOf('{');
+        const endObj = text.lastIndexOf('}');
+
+        let startIndex = -1;
+        let endIndex = -1;
+
+        if (startArr !== -1 && endArr !== -1 && (startObj === -1 || startArr < startObj)) {
+            startIndex = startArr;
+            endIndex = endArr + 1;
+        } else if (startObj !== -1 && endObj !== -1) {
+            startIndex = startObj;
+            endIndex = endObj + 1;
+        }
+
+        if (startIndex !== -1 && endIndex !== -1) {
+            const jsonStr = text.substring(startIndex, endIndex);
+            return JSON.parse(jsonStr);
+        }
+
         // Strip markdown code fence if present
         const cleaned = text.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
         return JSON.parse(cleaned);
-    } catch {
+    } catch (e) {
+        console.warn('[OpenAI] safeJSON parse error:', e.message);
         return fallback;
     }
 };
@@ -160,7 +183,7 @@ RULES (NON-NEGOTIABLE):
 6. TEAM NAMES (CRITICAL): homeTeam and awayTeam MUST be the full official club name (e.g. "Arsenal", "Real Madrid"). NEVER use "Home", "Away", or any placeholder. If you cannot determine the real team name for a match, OMIT that match entirely.
 
 Output ONLY a valid JSON array. No markdown, no preamble. Each object must have exactly these fields:
-id, homeTeam, awayTeam, league, time, prediction_en, prediction_fr, confidence, odds, category, analysis_en, analysis_fr,
+id, homeTeam, awayTeam, homeTeamLogo, awayTeamLogo, league, time, prediction_en, prediction_fr, confidence, odds, category, analysis_en, analysis_fr,
 homeForm, awayForm, homeWinRate, awayWinRate, homeAvgScored, awayAvgScored,
 homeAvgConceded, awayAvgConceded, homeCleanSheetRate, awayCleanSheetRate,
 h2hHomeWins, h2hAwayWins, h2hDraws, h2hLast5Goals, homeInjured, awayInjured`;
@@ -177,7 +200,7 @@ LEAGUE PRIORITY (African betting volume):
 TODAY'S FIXTURES FROM SPORTMONKS (supplement with web search for more matches):
 ${JSON.stringify(fixtures.slice(0, 30), null, 2)}
 
-Search for additional matches today. Identify and analyze 15–20 high-quality betting opportunities using your quantitative model. Use the same 'id' from the fixtures above where possible; for new matches found via search, generate a unique id like "search-home-away-date".`;
+Search for additional matches today. Identify and analyze 20–25 high-quality betting opportunities using your quantitative model. Use the same 'id' from the fixtures above where possible; for new matches found via search, generate a unique id like "search-home-away-date".`;
 
         const openai = getOpenAI();
         const responseText = await tryModels(openai, OPENAI_PREDICTION_MODELS, async (client, model) => {
@@ -209,7 +232,7 @@ Search for additional matches today. Identify and analyze 15–20 high-quality b
                         // No web_search tool — use model's own knowledge of today's schedule
                         input: [
                             { role: 'system', content: systemPrompt },
-                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your knowledge of today's football schedule (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UCL, UEL, and major African leagues) to generate a REALISTIC prediction for 10-15 high-quality matches scheduled on ${todayStr}.\nApply the same EV filter (EV ≥ 6%, confidence ≥ 72%). For new matches, generate a unique id like "sim-home-away-date".\n${fixtures.length > 0 ? `\nConfirmed Sportmonks fixtures you can reference:\n${JSON.stringify(fixtures.slice(0, 30), null, 2)}` : ''}\nOutput ONLY a valid JSON array. No markdown, no preamble.` }
+                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your knowledge of today's football schedule (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UCL, UEL, and major African leagues) to generate a REALISTIC prediction for 20-25 high-quality matches scheduled on ${todayStr}.\nApply the same EV filter (EV ≥ 6%, confidence ≥ 72%). For new matches, generate a unique id like "sim-home-away-date".\n${fixtures.length > 0 ? `\nConfirmed Sportmonks fixtures you can reference:\n${JSON.stringify(fixtures.slice(0, 30), null, 2)}` : ''}\nOutput ONLY a valid JSON array. No markdown, no preamble.` }
                         ],
                         temperature: 0.4,
                     });
@@ -596,7 +619,7 @@ LEAGUE PRIORITY (African basketball betting volume):
 5. BAL (Basketball Africa League), FIBA tournaments (when in season)
 
 Use web search to find ALL basketball games scheduled for ${todayStr} worldwide.
-Analyze and identify 10–15 high-value betting opportunities.
+Analyze and identify 15–20 high-value betting opportunities.
 'id' format: "bball-YYYYMMDD-HomeTeamSlug-AwayTeamSlug"
 'sport': "basketball", 'status': "pending", homeTeamLogo/awayTeamLogo: ""
 'time': match time HH:MM format
@@ -629,7 +652,7 @@ Analyze and identify 10–15 high-value betting opportunities.
                         // No web_search tool — pure model knowledge
                         input: [
                             { role: 'system', content: systemPrompt },
-                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your knowledge of NBA/EuroLeague/international schedules to generate a REALISTIC simulation of 10-15 basketball matches for ${todayStr}.\nApply the same EV safety filter (EV ≥ 6%, confidence ≥ 70%).\n'id' format: "bball-${todayStr}-HomeSlug-AwaySlug"\nOutput ONLY a valid JSON array. No markdown.` }
+                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your knowledge of NBA/EuroLeague/international schedules to generate a REALISTIC simulation of 15-20 basketball matches for ${todayStr}.\nApply the same EV safety filter (EV ≥ 6%, confidence ≥ 70%).\n'id' format: "bball-${todayStr}-HomeSlug-AwaySlug"\nOutput ONLY a valid JSON array. No markdown.` }
                         ],
                         temperature: 0.7,
                     });
