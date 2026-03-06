@@ -66,9 +66,35 @@ const safeJSON = (text, fallback = []) => {
             endIndex = endObj + 1;
         }
 
+        // --- TRUNCATION RECOVERY ---
+        // If we found a start but no end, or if JSON.parse fails, try to close the array/object
+        if (startIndex !== -1 && endIndex === -1) {
+            const partial = text.substring(startIndex).trim();
+            const lastBrace = partial.lastIndexOf('}');
+            if (lastBrace !== -1) {
+                // If it's an array, add the closing bracket
+                const recovered = partial.substring(0, lastBrace + 1) + (startArr !== -1 ? ']' : '');
+                try {
+                    return JSON.parse(recovered);
+                } catch (recoveryErr) {
+                    console.warn('[OpenAI] safeJSON recovery failed:', recoveryErr.message);
+                }
+            }
+        }
+
         if (startIndex !== -1 && endIndex !== -1) {
             const jsonStr = text.substring(startIndex, endIndex);
-            return JSON.parse(jsonStr);
+            try {
+                return JSON.parse(jsonStr);
+            } catch (err) {
+                // If it fails, maybe the end bracket was wrong? Try recovery anyway
+                const lastBrace = jsonStr.lastIndexOf('}');
+                if (lastBrace !== -1) {
+                    const recovered = jsonStr.substring(0, lastBrace + 1) + (startArr !== -1 ? ']' : '');
+                    try { return JSON.parse(recovered); } catch (e) { }
+                }
+                throw err;
+            }
         }
 
         // Strip markdown code fence if present
@@ -76,6 +102,8 @@ const safeJSON = (text, fallback = []) => {
         return JSON.parse(cleaned);
     } catch (e) {
         console.warn('[OpenAI] safeJSON parse error:', e.message);
+        const snippet = text.length > 100 ? '...' + text.substring(text.length - 100) : text;
+        console.log('[OpenAI] Raw response tail (debug):', snippet);
         return fallback;
     }
 };
@@ -212,6 +240,7 @@ Search for additional matches today. Identify and analyze 20–25 high-quality b
                     { role: 'user', content: userPrompt }
                 ],
                 temperature: 0.1,
+                max_output_tokens: 16384,
             });
             // Extract text from response
             const text = resp.output_text || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
@@ -235,6 +264,7 @@ Search for additional matches today. Identify and analyze 20–25 high-quality b
                             { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your knowledge of today's football schedule (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UCL, UEL, and major African leagues) to generate a REALISTIC prediction for 20-25 high-quality matches scheduled on ${todayStr}.\nApply the same EV filter (EV ≥ 6%, confidence ≥ 72%). For new matches, generate a unique id like "sim-home-away-date".\n${fixtures.length > 0 ? `\nConfirmed Sportmonks fixtures you can reference:\n${JSON.stringify(fixtures.slice(0, 30), null, 2)}` : ''}\nOutput ONLY a valid JSON array. No markdown, no preamble.` }
                         ],
                         temperature: 0.4,
+                        max_output_tokens: 16384,
                     });
                     const text = resp.output_text || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
                     if (!text) throw new Error('Empty simulation response');
@@ -634,6 +664,7 @@ Analyze and identify 15–20 high-value betting opportunities.
                     { role: 'user', content: userPrompt }
                 ],
                 temperature: 0.15,
+                max_output_tokens: 16384,
             });
             const text = resp.output_text || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
             if (!text) throw new Error('Empty basketball response');
