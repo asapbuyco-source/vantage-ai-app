@@ -48,59 +48,66 @@ const getDateKey = (daysAgo = 0) => {
 // ── Helper: JSON parse with fallback ──────────────────────────────────────────
 const safeJSON = (text, fallback = []) => {
     if (!text) return fallback;
+
+    // Strip markdown code fence if present
+    let cleaned = text.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+
     try {
-        // Find the first occurrence of '[' or '{' and the last occurrence of ']' or '}'
-        const startArr = text.indexOf('[');
-        const endArr = text.lastIndexOf(']');
-        const startObj = text.indexOf('{');
-        const endObj = text.lastIndexOf('}');
-
-        let startIndex = -1;
-        let endIndex = -1;
-
-        if (startArr !== -1 && endArr !== -1 && (startObj === -1 || startArr < startObj)) {
-            startIndex = startArr;
-            endIndex = endArr + 1;
-        } else if (startObj !== -1 && endObj !== -1) {
-            startIndex = startObj;
-            endIndex = endObj + 1;
-        }
-
-        // --- TRUNCATION RECOVERY ---
-        // If we found a start but no end, or if JSON.parse fails, try to close the array/object
-        if (startIndex !== -1 && endIndex === -1) {
-            const partial = text.substring(startIndex).trim();
-            const lastBrace = partial.lastIndexOf('}');
-            if (lastBrace !== -1) {
-                // If it's an array, add the closing bracket
-                const recovered = partial.substring(0, lastBrace + 1) + (startArr !== -1 ? ']' : '');
-                try {
-                    return JSON.parse(recovered);
-                } catch (recoveryErr) {
-                    console.warn('[OpenAI] safeJSON recovery failed:', recoveryErr.message);
-                }
-            }
-        }
-
-        if (startIndex !== -1 && endIndex !== -1) {
-            const jsonStr = text.substring(startIndex, endIndex);
-            try {
-                return JSON.parse(jsonStr);
-            } catch (err) {
-                // If it fails, maybe the end bracket was wrong? Try recovery anyway
-                const lastBrace = jsonStr.lastIndexOf('}');
-                if (lastBrace !== -1) {
-                    const recovered = jsonStr.substring(0, lastBrace + 1) + (startArr !== -1 ? ']' : '');
-                    try { return JSON.parse(recovered); } catch (e) { }
-                }
-                throw err;
-            }
-        }
-
-        // Strip markdown code fence if present
-        const cleaned = text.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
         return JSON.parse(cleaned);
     } catch (e) {
+        // --- TRUNCATION RECOVERY ---
+        try {
+            const firstBracket = cleaned.indexOf('[');
+            const firstBrace = cleaned.indexOf('{');
+            let isArray = false;
+            let startIndex = -1;
+
+            if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+                isArray = true;
+                startIndex = firstBracket;
+            } else if (firstBrace !== -1) {
+                isArray = false;
+                startIndex = firstBrace;
+            }
+
+            if (startIndex !== -1) {
+                const partial = cleaned.substring(startIndex);
+                let braceDepth = 0;
+                let bracketDepth = 0;
+                let inString = false;
+                let escapeNext = false;
+                let lastValidEnd = -1;
+
+                for (let i = 0; i < partial.length; i++) {
+                    const char = partial[i];
+                    if (escapeNext) { escapeNext = false; continue; }
+                    if (char === '\\') { escapeNext = true; continue; }
+                    if (char === '"') { inString = !inString; continue; }
+
+                    if (!inString) {
+                        if (char === '{') braceDepth++;
+                        else if (char === '}') {
+                            braceDepth--;
+                            if (isArray && braceDepth === 0 && bracketDepth === 1) {
+                                lastValidEnd = i;
+                            } else if (!isArray && braceDepth === 0) {
+                                lastValidEnd = i;
+                            }
+                        }
+                        else if (char === '[') bracketDepth++;
+                        else if (char === ']') bracketDepth--;
+                    }
+                }
+
+                if (lastValidEnd !== -1) {
+                    const recovered = partial.substring(0, lastValidEnd + 1) + (isArray ? ']' : '');
+                    return JSON.parse(recovered);
+                }
+            }
+        } catch (recoveryErr) {
+            console.warn('[OpenAI] safeJSON robust recovery failed:', recoveryErr.message);
+        }
+
         console.warn('[OpenAI] safeJSON parse error:', e.message);
         const snippet = text.length > 100 ? '...' + text.substring(text.length - 100) : text;
         console.log('[OpenAI] Raw response tail (debug):', snippet);
@@ -200,6 +207,8 @@ export const generateDailyPredictionsOpenAI = async () => {
             }, { merge: true });
         }
 
+        // ── SLIM system prompt: removes logos/fr-translations/minor stats to stay within 16384 tokens ──
+        // Average of 30 fields × 20-25 matches blows past the limit. Target 15 matches, 22 fields each.
         const systemPrompt = `You are the "Quant-Desk Decision Engine v6.0", an elite global sports betting model. You have access to real-time sports data via web search.
 
 RULES (NON-NEGOTIABLE):
@@ -207,14 +216,16 @@ RULES (NON-NEGOTIABLE):
 2. CONFIDENCE FLOOR: ≥ 72%. Use current team form, H2H records, injury reports, xG, market odds.
 3. ONE market per match. Choose from: "Home Win", "Away Win", "Draw", "Double Chance (1X)", "Double Chance (X2)", "Double Chance (12)", "Draw No Bet (Home)", "Draw No Bet (Away)", "Over 1.5 Goals", "Over 2.5 Goals", "Both Teams Score", "Both Teams Score - No".
 4. 'category': "safe" if confidence ≥ 80, "value" if 70–79, "risky" if < 70.
-5. 'analysis_en' format: "EV: +X.X% | Edge: Y% | [max 20 words of reasoning]"
-6. TEAM NAMES (CRITICAL): homeTeam and awayTeam MUST be the full official club name (e.g. "Arsenal", "Real Madrid"). NEVER use "Home", "Away", or any placeholder. If you cannot determine the real team name for a match, OMIT that match entirely.
+5. 'analysis_en': "EV: +X.X% | Edge: Y% | [max 15 words]"
+6. TEAM NAMES: homeTeam and awayTeam MUST be the full official club name. NEVER use "Home", "Away", or placeholders. Omit the match if you cannot determine the real name.
 
-Output ONLY a valid JSON array. No markdown, no preamble. Each object must have exactly these fields:
-id, homeTeam, awayTeam, homeTeamLogo, awayTeamLogo, league, time, prediction_en, prediction_fr, confidence, odds, category, analysis_en, analysis_fr,
+Output ONLY a compact JSON array (no whitespace/indentation). Each object must have EXACTLY these fields:
+id, homeTeam, awayTeam, league, time, prediction_en, confidence, odds, category, analysis_en,
 homeForm, awayForm, homeWinRate, awayWinRate, homeAvgScored, awayAvgScored,
-homeAvgConceded, awayAvgConceded, homeCleanSheetRate, awayCleanSheetRate,
-h2hHomeWins, h2hAwayWins, h2hDraws, h2hLast5Goals, homeInjured, awayInjured`;
+h2hHomeWins, h2hAwayWins, h2hDraws, h2hLast5Goals, homeInjured, awayInjured
+
+DO NOT include: homeTeamLogo, awayTeamLogo, prediction_fr, analysis_fr, homeAvgConceded, awayAvgConceded, homeCleanSheetRate, awayCleanSheetRate.
+These will be added by post-processing. Keeping the output compact is CRITICAL to avoid truncation.`;
 
         const userPrompt = `DATE: ${todayStr}
 
@@ -225,10 +236,11 @@ LEAGUE PRIORITY (African betting volume):
 4. Eredivisie, Championship, Turkish Süper Lig, MLS, Brazilian Série A
 5. AFCON, CAF Champions League, big African derbies
 
-TODAY'S FIXTURES FROM SPORTMONKS (supplement with web search for more matches):
-${JSON.stringify(fixtures.slice(0, 30), null, 2)}
+TODAY'S FIXTURES FROM SPORTMONKS:
+${JSON.stringify(fixtures.slice(0, 30))}
 
-Search for additional matches today. Identify and analyze 20–25 high-quality betting opportunities using your quantitative model. Use the same 'id' from the fixtures above where possible; for new matches found via search, generate a unique id like "search-home-away-date".`;
+Search for additional matches today. Identify and analyze EXACTLY 15 high-quality betting opportunities. Use the same 'id' from the fixtures above where possible; for search-only matches use "search-home-away-date".
+Output ONLY the raw JSON array. No markdown, no preamble, no trailing text.`;
 
         const openai = getOpenAI();
         const responseText = await tryModels(openai, OPENAI_PREDICTION_MODELS, async (client, model) => {
@@ -242,15 +254,23 @@ Search for additional matches today. Identify and analyze 20–25 high-quality b
                 temperature: 0.1,
                 max_output_tokens: 16384,
             });
-            // Extract text from response
-            const text = resp.output_text || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
+            // Detect token-limit truncation: incomplete_details.reason === 'max_tokens'
+            if (resp.incomplete_details?.reason === 'max_tokens' || resp.status === 'incomplete') {
+                console.warn(`[OpenAI Predictions] ⚠️ Response truncated (max_tokens hit) with ${model}. Will attempt recovery.`);
+            }
+            // resp.output_text is a convenience property in the OpenAI SDK (newer versions).
+            // Fall back to manual traversal in case the SDK version doesn't have it.
+            const text = resp.output_text
+                || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text
+                || resp.output?.find(o => o.type === 'message')?.content?.[0]?.text
+                || '';
             if (!text) throw new Error('Empty response from OpenAI');
             return text;
         }, 'Predictions');
 
         let predictions = safeJSON(responseText, []);
 
-        // ── Fallback: If web search returned empty, retry with pure AI simulation ──
+        // ── Fallback: If web search returned empty/truncated, retry with pure AI simulation ──
         if (!Array.isArray(predictions) || predictions.length === 0) {
             console.warn('[OpenAI] Football predictions array is empty. Trying AI simulation fallback...');
             try {
@@ -258,15 +278,21 @@ Search for additional matches today. Identify and analyze 20–25 high-quality b
                 const simText = await tryModels(openaiSim, OPENAI_PREDICTION_MODELS, async (client, model) => {
                     const resp = await client.responses.create({
                         model,
-                        // No web_search tool — use model's own knowledge of today's schedule
+                        // No web_search tool — model uses its own training data about today's schedule
                         input: [
-                            { role: 'system', content: systemPrompt },
-                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your knowledge of today's football schedule (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UCL, UEL, and major African leagues) to generate a REALISTIC prediction for 20-25 high-quality matches scheduled on ${todayStr}.\nApply the same EV filter (EV ≥ 6%, confidence ≥ 72%). For new matches, generate a unique id like "sim-home-away-date".\n${fixtures.length > 0 ? `\nConfirmed Sportmonks fixtures you can reference:\n${JSON.stringify(fixtures.slice(0, 30), null, 2)}` : ''}\nOutput ONLY a valid JSON array. No markdown, no preamble.` }
+                            { role: 'system', content: systemPrompt }, // reuse slim prompt
+                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your training knowledge of today's football schedule (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UCL, UEL, and major African leagues) to generate EXACTLY 15 high-quality predictions for ${todayStr}.\nApply the same EV filter (EV ≥ 6%, confidence ≥ 72%). Use id format \"sim-HomeSlug-AwaySlug-${todayStr}\".\n${fixtures.length > 0 ? `Confirmed Sportmonks fixtures you can reference:\n${JSON.stringify(fixtures.slice(0, 20))}` : ''}\nOutput ONLY the raw compact JSON array. No markdown, no preamble.` }
                         ],
                         temperature: 0.4,
                         max_output_tokens: 16384,
                     });
-                    const text = resp.output_text || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
+                    if (resp.incomplete_details?.reason === 'max_tokens' || resp.status === 'incomplete') {
+                        console.warn(`[OpenAI Simulation] ⚠️ Simulation response truncated with ${model}. Will attempt partial recovery.`);
+                    }
+                    const text = resp.output_text
+                        || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text
+                        || resp.output?.find(o => o.type === 'message')?.content?.[0]?.text
+                        || '';
                     if (!text) throw new Error('Empty simulation response');
                     return text;
                 }, 'Predictions-Simulation');
@@ -279,10 +305,12 @@ Search for additional matches today. Identify and analyze 20–25 high-quality b
             }
         }
 
+
         if (!Array.isArray(predictions) || predictions.length === 0) {
-            // Both web search and simulation returned nothing — genuine skip.
-            console.warn('[OpenAI] Football predictions array is empty after all attempts. Treating as skipped.');
-            return { status: 'skipped', reason: 'no_predictions_returned', generated: 0, matches: [] };
+            // Both web search and simulation returned nothing.
+            // Returning an error instead of "skipped" ensures that `scheduler.js` falls back to Gemini.
+            console.warn('[OpenAI] Football predictions array is empty after all attempts. Returning error to trigger Gemini fallback.');
+            return { status: 'error', error: 'no_predictions_returned' };
         }
 
         // Merge predictions with fixture data
@@ -558,6 +586,7 @@ export const gradeYesterdayOpenAI = async (customDate = null, forceRegrade = fal
 
         // Step 3: Grade predictions using raw scores
         const gradingPrompt = `Grade these football predictions using the exact final scores below.
+You MUST return a result for EVERY prediction in the list, even if the score is unknown (use status "void" in that case).
 
 PREDICTIONS:
 ${JSON.stringify(matchesToGrade.map(m => ({ id: m.id, home: m.homeTeam, away: m.awayTeam, prediction: m.prediction_en || m.prediction })), null, 2)}
@@ -568,15 +597,22 @@ ${rawScores}
 GRADING RULES (apply strictly):
 - Use FULL-TIME (90 min + stoppage) scores only.
 - If postponed/cancelled/no result → status: "void".
+- Match by home/away team name if the ID is not found in scores.
 
 MATCH RESULT: "Home Win" → home > away. "Away Win" → away > home. "Draw" → equal.
-DOUBLE CHANCE: "1X" → home wins OR draw. "X2" → away wins OR draw. "12" → not draw.
-DRAW NO BET: "Home" → won if home wins; void if draw; lost if away wins.
-           "Away" → won if away wins; void if draw; lost if home wins.
+DOUBLE CHANCE: "Double Chance (1X)" → won if home wins OR draw. "Double Chance (X2)" → won if away wins OR draw. "Double Chance (12)" → won if home OR away wins (not draw).
+DRAW NO BET: "Draw No Bet (Home)" → won if home wins; void if draw; lost if away wins.
+             "Draw No Bet (Away)" → won if away wins; void if draw; lost if home wins.
 GOALS: "Over X.5" → total goals > X. "Under X.5" → total goals < X+1.
-BTTS: "Both Teams Score" → both scored ≥1. "Both Teams Score - No" → one team scored 0.
+BTTS: "Both Teams Score" → both scored >=1. "Both Teams Score - No" → one team scored 0.
+"BTTS & Over 2.5" → both scored AND total >= 3. "BTTS & Under 3.5" → both scored AND total <= 3.
+WIN TO NIL: "Home Win to Nil" → home wins AND away scored 0. "Away Win to Nil" → away wins AND home scored 0.
+CLEAN SHEET: "Home Clean Sheet" → away scored 0. "Away Clean Sheet" → home scored 0.
+HANDICAP: Apply handicap to team score then evaluate. E.g. "Home -1" on 2-1 → 1-1 → lost.
 
-Return ONLY a valid JSON array. Each object: { "id": string, "score": "H-A", "status": "won"|"lost"|"void" }`;
+Return ONLY a valid JSON array. Each object: { "id": string, "score": "H-A" (or "?" if unknown), "status": "won"|"lost"|"void" }.
+Do NOT skip any match — return an entry for all ${matchesToGrade.length} predictions.`;
+
 
         const openai = getOpenAI();
         const gradeText = await tryModels(openai, OPENAI_GRADING_MODELS, async (client, model) => {
@@ -592,9 +628,18 @@ Return ONLY a valid JSON array. Each object: { "id": string, "score": "H-A", "st
         if (gradedResults.length === 0) throw new Error('OpenAI returned empty grading results');
 
         // Step 4: Merge grades back
+        // Primary key: ID. Secondary key: homeTeam+awayTeam name, for AI-search matches with custom IDs.
         let updatesCount = 0;
+        const gradedMap = new Map(gradedResults.map(g => [String(g.id), g]));
+
         const updatedMatches = existingMatches.map(m => {
-            const grade = gradedResults.find(g => g.id === m.id || g.id === String(m.id));
+            let grade = gradedMap.get(String(m.id));
+            if (!grade) {
+                grade = gradedResults.find(g =>
+                    g.home?.toLowerCase() === m.homeTeam?.toLowerCase() &&
+                    g.away?.toLowerCase() === m.awayTeam?.toLowerCase()
+                );
+            }
             if (grade) { updatesCount++; return { ...m, score: grade.score || 'N/A', status: grade.status }; }
             return m;
         });
@@ -623,6 +668,7 @@ export const generateBasketballPredictionsOpenAI = async () => {
         const todayStr = getDateKey(0);
         const openai = getOpenAI();
 
+        // Slim basketball prompt — logos/fr-translations/avgConceded removed to stay within token budget
         const systemPrompt = `You are the "Quant-Desk Basketball Engine v2.0", an elite global basketball betting model with access to real-time data.
 
 RULES (NON-NEGOTIABLE):
@@ -631,13 +677,13 @@ RULES (NON-NEGOTIABLE):
 3. ONE market per match from: "Home Win", "Away Win", "Over [X] Points", "Under [X] Points", "Handicap: Home -[X.5]", "Handicap: Away -[X.5]".
 4. 'category': "safe" if confidence ≥ 80, "value" if 70–79, "risky" if < 70.
 
-Output ONLY a valid JSON array with no markdown. Each object must have:
-id, homeTeam, awayTeam, league, time, prediction_en, prediction_fr, prediction,
-confidence, odds, category, analysis_en, analysis_fr,
+Output ONLY a compact JSON array (no whitespace/indentation). Each object must have EXACTLY:
+id, homeTeam, awayTeam, league, time, prediction_en, prediction, confidence, odds, category, analysis_en,
 homeForm, awayForm, homeWinRate, awayWinRate, homeAvgScored, awayAvgScored,
-homeAvgConceded, awayAvgConceded, homeCleanSheetRate, awayCleanSheetRate,
-h2hHomeWins, h2hAwayWins, h2hDraws, h2hLast5Goals,
-homeInjured, awayInjured, homeTeamLogo, awayTeamLogo, sport, status`;
+h2hHomeWins, h2hAwayWins, h2hDraws, homeInjured, awayInjured, sport, status
+
+DO NOT include: homeTeamLogo, awayTeamLogo, prediction_fr, analysis_fr, homeAvgConceded, awayAvgConceded, homeCleanSheetRate, awayCleanSheetRate, h2hLast5Goals.
+Keeping the output compact is CRITICAL to avoid truncation.`;
 
         const userPrompt = `DATE: ${todayStr}
 
@@ -648,12 +694,12 @@ LEAGUE PRIORITY (African basketball betting volume):
 4. NBB (Brazil), ACB (Spain), LNB Pro A (France), Bundesliga Basketball
 5. BAL (Basketball Africa League), FIBA tournaments (when in season)
 
-Use web search to find ALL basketball games scheduled for ${todayStr} worldwide.
-Analyze and identify 15–20 high-value betting opportunities.
+Use web search to find basketball games scheduled for ${todayStr} worldwide.
+Analyze and identify EXACTLY 12 high-value betting opportunities.
 'id' format: "bball-YYYYMMDD-HomeTeamSlug-AwayTeamSlug"
-'sport': "basketball", 'status': "pending", homeTeamLogo/awayTeamLogo: ""
-'time': match time HH:MM format
-'analysis_en': "EV: +X.X% | Edge: Y% | [max 20 words]"`;
+'sport': "basketball", 'status': "pending"
+'analysis_en': "EV: +X.X% | Edge: Y% | [max 15 words]"
+Output ONLY the raw compact JSON array. No markdown, no preamble.`;
 
         const responseText = await tryModels(openai, OPENAI_BASKETBALL_MODELS, async (client, model) => {
             const resp = await client.responses.create({
@@ -666,14 +712,20 @@ Analyze and identify 15–20 high-value betting opportunities.
                 temperature: 0.15,
                 max_output_tokens: 16384,
             });
-            const text = resp.output_text || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
+            if (resp.incomplete_details?.reason === 'max_tokens' || resp.status === 'incomplete') {
+                console.warn(`[OpenAI Basketball] ⚠️ Response truncated (max_tokens hit) with ${model}. Will attempt recovery.`);
+            }
+            const text = resp.output_text
+                || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text
+                || resp.output?.find(o => o.type === 'message')?.content?.[0]?.text
+                || '';
             if (!text) throw new Error('Empty basketball response');
             return text;
         }, 'Basketball');
 
         let predictions = safeJSON(responseText, []);
 
-        // ── Fallback: If web search returned empty, retry with pure AI simulation ──
+        // ── Fallback: If web search returned empty/truncated, retry with pure AI simulation ──
         if (!Array.isArray(predictions) || predictions.length === 0) {
             console.warn('[OpenAI Basketball] Search returned no predictions. Trying AI simulation fallback...');
             try {
@@ -682,12 +734,19 @@ Analyze and identify 15–20 high-value betting opportunities.
                         model,
                         // No web_search tool — pure model knowledge
                         input: [
-                            { role: 'system', content: systemPrompt },
-                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your knowledge of NBA/EuroLeague/international schedules to generate a REALISTIC simulation of 15-20 basketball matches for ${todayStr}.\nApply the same EV safety filter (EV ≥ 6%, confidence ≥ 70%).\n'id' format: "bball-${todayStr}-HomeSlug-AwaySlug"\nOutput ONLY a valid JSON array. No markdown.` }
+                            { role: 'system', content: systemPrompt }, // reuse slim prompt
+                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your training knowledge of NBA/EuroLeague/international schedules to generate EXACTLY 12 basketball match predictions for ${todayStr}.\nApply the same EV safety filter (EV ≥ 6%, confidence ≥ 70%).\n'id' format: "bball-${todayStr}-HomeSlug-AwaySlug"\nOutput ONLY the raw compact JSON array. No markdown.` }
                         ],
                         temperature: 0.7,
+                        max_output_tokens: 16384,
                     });
-                    const text = resp.output_text || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text || '';
+                    if (resp.incomplete_details?.reason === 'max_tokens' || resp.status === 'incomplete') {
+                        console.warn(`[OpenAI Basketball Sim] ⚠️ Simulation truncated with ${model}. Will attempt partial recovery.`);
+                    }
+                    const text = resp.output_text
+                        || resp.output?.find(o => o.type === 'message')?.content?.find(c => c.type === 'output_text')?.text
+                        || resp.output?.find(o => o.type === 'message')?.content?.[0]?.text
+                        || '';
                     if (!text) throw new Error('Empty simulation response');
                     return text;
                 }, 'Basketball-Simulation');
@@ -701,7 +760,8 @@ Analyze and identify 15–20 high-value betting opportunities.
         }
 
         if (!Array.isArray(predictions) || predictions.length === 0) {
-            return { status: 'skipped', reason: 'no_predictions_returned' };
+            console.warn('[OpenAI Basketball] Basketball predictions array is empty. Returning error to trigger Gemini fallback.');
+            return { status: 'error', error: 'no_predictions_returned' };
         }
 
         const normalised = predictions.map(p => ({

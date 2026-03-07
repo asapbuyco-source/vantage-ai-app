@@ -14,20 +14,73 @@ const AVAILABLE_MODELS = [
  * Extracts a JSON array from a text response that may be wrapped in a markdown code block.
  * Used when googleSearch grounding is active and responseMimeType: application/json cannot be used.
  */
+/**
+ * Robustly extracts a JSON array or object from a text response.
+ * Uses a stack-based bracket parser to tolerate truncation and nested structures.
+ * This replaces a buggy regex approach that stopped at the first '}' in an array.
+ */
 const extractJsonFromText = (text) => {
     if (!text) return null;
-    // Try to extract from ```json ... ``` block
-    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch) {
-        try { return JSON.parse(codeBlockMatch[1].trim()); } catch (_) { }
-    }
-    // Try to find a raw JSON array in the text
-    const arrayMatch = text.match(/(\[\s*\{[\s\S]*?\}\s*\])/s);
-    if (arrayMatch) {
-        try { return JSON.parse(arrayMatch[1].trim()); } catch (_) { }
-    }
-    // Last resort: attempt full text parse
-    try { return JSON.parse(text.trim()); } catch (_) { }
+
+    // Strip markdown code fence if present
+    let cleaned = text.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+
+    // Attempt direct parse first (handles valid complete JSON)
+    try { return JSON.parse(cleaned); } catch (_) { }
+
+    // Stack-based truncation recovery
+    try {
+        const firstBracket = cleaned.indexOf('[');
+        const firstBrace = cleaned.indexOf('{');
+        let isArray = false;
+        let startIndex = -1;
+
+        if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+            isArray = true;
+            startIndex = firstBracket;
+        } else if (firstBrace !== -1) {
+            isArray = false;
+            startIndex = firstBrace;
+        }
+
+        if (startIndex !== -1) {
+            const partial = cleaned.substring(startIndex);
+            let braceDepth = 0;
+            let bracketDepth = 0;
+            let inString = false;
+            let escapeNext = false;
+            let lastValidEnd = -1;
+
+            for (let i = 0; i < partial.length; i++) {
+                const char = partial[i];
+                if (escapeNext) { escapeNext = false; continue; }
+                if (char === '\\') { escapeNext = true; continue; }
+                if (char === '"') { inString = !inString; continue; }
+
+                if (!inString) {
+                    if (char === '{') braceDepth++;
+                    else if (char === '}') {
+                        braceDepth--;
+                        if (isArray && braceDepth === 0 && bracketDepth === 1) {
+                            lastValidEnd = i;
+                        } else if (!isArray && braceDepth === 0) {
+                            lastValidEnd = i;
+                        }
+                    }
+                    else if (char === '[') bracketDepth++;
+                    else if (char === ']') bracketDepth--;
+                }
+            }
+
+            if (lastValidEnd !== -1) {
+                const recovered = partial.substring(0, lastValidEnd + 1) + (isArray ? ']' : '');
+                try { return JSON.parse(recovered); } catch (_) { }
+            }
+            // If no complete object boundary found, try the whole thing as-is
+            try { return JSON.parse(partial); } catch (_) { }
+        }
+    } catch (_) { }
+
     return null;
 };
 
@@ -381,6 +434,8 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
         await admin.firestore().collection('daily_predictions').doc(todayStr).set({
             status: 'completed',
             matches: allMatches,
+            generatedBy: 'gemini',
+            generatedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         }, { merge: true });
 
@@ -581,6 +636,8 @@ export const gradeYesterdayServerSide = async (customDate = null, forceRegrade =
                 type: Type.OBJECT,
                 properties: {
                     id: { type: Type.STRING },
+                    home: { type: Type.STRING },
+                    away: { type: Type.STRING },
                     score: { type: Type.STRING },
                     status: { type: Type.STRING, enum: ['won', 'lost', 'void'] }
                 },
@@ -654,6 +711,7 @@ export const gradeYesterdayServerSide = async (customDate = null, forceRegrade =
         // 5. Step 2: Grade predictions against fetched scores
         const parsePrompt = `
 Grade these football predictions using the final scores retrieved below.
+You MUST return a result for EVERY prediction in the list, even if the score is unknown (use status "void" in that case).
 
 PREDICTIONS:
 ${JSON.stringify(matchesToGrade.map(m => ({ id: m.id, home: m.homeTeam, away: m.awayTeam, prediction: m.prediction_en || m.prediction })), null, 2)}
@@ -666,6 +724,7 @@ GRADING RULES (apply strictly):
 ═══ GENERAL ═══
 - Use FULL-TIME (90 min + injury time) scores only unless specified otherwise.
 - If a match was postponed, abandoned before 90 min, or no result found → status: "void".
+- Match the prediction to the score by home/away team name if the ID is not found.
 
 ═══ MATCH RESULT (1X2) ═══
 - "Home Win" → won if home goals > away goals at FT.
@@ -693,8 +752,24 @@ GRADING RULES (apply strictly):
 ═══ BOTH TEAMS TO SCORE (BTTS) ═══
 - "Both Teams Score" → won if both teams scored at least 1 goal each.
 - "Both Teams Score - No" → won if at least one team scored 0 goals.
+- "BTTS & Over 2.5" → won if both teams scored AND total goals >= 3.
+- "BTTS & Under 3.5" → won if both teams scored AND total goals <= 3.
 
-Return a JSON array with id, score ("2-1" format), and status ("won"|"lost"|"void") for each match.
+═══ WIN TO NIL ═══
+- "Home Win to Nil" → won if home wins AND away scored 0 goals.
+- "Away Win to Nil" → won if away wins AND home scored 0 goals.
+
+═══ CLEAN SHEET ═══
+- "Home Clean Sheet" → won if away scored 0 goals (regardless of match result).
+- "Away Clean Sheet" → won if home scored 0 goals (regardless of match result).
+
+═══ HANDICAP ═══
+- "Home -1" → apply -1 to home score, then grade as Home Win. Example: 2-1 → 1-1 → lost.
+- "Home -1.5" → apply -1.5 to home score. Example: 2-0 → 0.5-0 → won.
+- "Away +1.5" → apply +1.5 to away score. Example: 1-0 → 1-1.5 → won.
+
+Return a JSON array with id, score ("2-1" format, or "?" if unknown), and status ("won"|"lost"|"void") for every prediction.
+Do NOT skip any match — return an entry for all ${matchesToGrade.length} predictions.
         `;
 
         for (const modelDef of AVAILABLE_MODELS) {
@@ -725,12 +800,26 @@ Return a JSON array with id, score ("2-1" format), and status ("won"|"lost"|"voi
         }
 
         // 6. Merge grades back into full match list
+        // Primary lookup: by ID. Secondary lookup: by homeTeam+awayTeam name (covers AI-only search matches)
         let updatesCount = 0;
+        const gradedMap = new Map(
+            gradedResults.flatMap(g => [
+                [String(g.id), g]
+            ])
+        );
+
         const updatedMatches = existingMatches.map(m => {
-            const grade = gradedResults.find(g => g.id === m.id || g.id === String(m.id));
+            let grade = gradedMap.get(String(m.id));
+            // Fallback: match by team names (case-insensitive) for AI-only matches
+            if (!grade) {
+                grade = gradedResults.find(g =>
+                    g.home?.toLowerCase() === m.homeTeam?.toLowerCase() &&
+                    g.away?.toLowerCase() === m.awayTeam?.toLowerCase()
+                );
+            }
             if (grade) {
                 updatesCount++;
-                return { ...m, score: grade.score || "N/A", status: grade.status };
+                return { ...m, score: grade.score || 'N/A', status: grade.status };
             }
             return m;
         });
