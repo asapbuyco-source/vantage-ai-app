@@ -16,6 +16,7 @@
 
 import OpenAI from 'openai';
 import admin from 'firebase-admin';
+import { enrichMatchesWithLogos, buildSportmonksLogoMap } from './logoEnricher.js';
 
 // ── Model chains ──────────────────────────────────────────────────────────────
 const OPENAI_PREDICTION_MODELS = ['gpt-4o', 'gpt-4o-mini'];
@@ -184,9 +185,14 @@ export const generateDailyPredictionsOpenAI = async () => {
                 league: item.league?.name || 'Unknown',
                 homeTeam: home.name || '',   // empty string if no name — NOT 'Home'
                 awayTeam: away.name || '',   // empty string if no name — NOT 'Away'
+                homeTeamLogo: home.image_path || '', // Sportmonks logo URL — capture now
+                awayTeamLogo: away.image_path || '',
                 time: timeHHMM,
             };
         });
+
+        // Build a team-name → logo URL map from today's Sportmonks data for later enrichment
+        const sportmonksLogoMap = buildSportmonksLogoMap(rawData);
 
         // CRITICAL: Only pass fixtures to AI that have real team names from Sportmonks.
         // Fixtures without participant names are skipped entirely — we never want
@@ -368,15 +374,18 @@ Output ONLY the raw JSON array. No markdown, no preamble, no trailing text.`;
 
         console.log(`[OpenAI] Generated ${finalMatches.length} football predictions.`);
 
+        // Enrich with logos from Sportmonks + Firestore team_assets
+        const enrichedMatches = await enrichMatchesWithLogos(finalMatches, sportmonksLogoMap);
+
         await admin.firestore().collection('daily_predictions').doc(todayStr).set({
             status: 'completed',
-            matches: finalMatches,
+            matches: enrichedMatches,
             generatedBy: 'openai',
             generatedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         }, { merge: true });
 
-        return { status: 'success', generated: finalMatches.length, matches: finalMatches };
+        return { status: 'success', generated: enrichedMatches.length, matches: enrichedMatches };
     } catch (e) {
         console.error('[OpenAI] Football prediction error:', e.message);
         return { status: 'error', error: e.message };
@@ -774,14 +783,18 @@ Output ONLY the raw compact JSON array. No markdown, no preamble.`;
             generatedBy: 'openai',
         }));
 
+        // Enrich basketball matches with logos from Firestore team_assets
+        // Basketball doesn't use Sportmonks so pass an empty logo map
+        const enrichedBasketball = await enrichMatchesWithLogos(normalised, new Map());
+
         await admin.firestore().collection('basketball_predictions').doc(todayStr).set({
-            matches: normalised,
+            matches: enrichedBasketball,
             generatedBy: 'openai',
             generatedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
 
-        console.log(`[OpenAI Basketball] ✅ ${normalised.length} predictions saved for ${todayStr}.`);
+        console.log(`[OpenAI Basketball] ✅ ${enrichedBasketball.length} predictions saved for ${todayStr}.`);
         return { status: 'success', generated: normalised.length, matches: normalised };
     } catch (e) {
         console.error('[OpenAI Basketball] Error:', e.message);

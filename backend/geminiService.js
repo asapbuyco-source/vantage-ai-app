@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import admin from 'firebase-admin';
+import { enrichMatchesWithLogos, buildSportmonksLogoMap } from './logoEnricher.js';
 
 // ── Model list: VALID Gemini model IDs (verified against Google AI API) ─────────
 // Do NOT add fake model IDs here. If a model is unavailable it will fail silently
@@ -179,8 +180,8 @@ export const getTodaysFixturesServerSide = async (dateStr) => {
                 round: item.round_id?.toString() || ''
             },
             teams: {
-                home: { id: homeTeam.id, name: homeTeam.name, logo: homeTeam.image_path, winner: item.scores?.find((s) => s.description === 'CURRENT')?.participant_id === homeTeam.id },
-                away: { id: awayTeam.id, name: awayTeam.name, logo: awayTeam.image_path, winner: item.scores?.find((s) => s.description === 'CURRENT')?.participant_id === awayTeam.id },
+                home: { id: homeTeam.id, name: homeTeam.name, logo: homeTeam.image_path || '', winner: item.scores?.find((s) => s.description === 'CURRENT')?.participant_id === homeTeam.id },
+                away: { id: awayTeam.id, name: awayTeam.name, logo: awayTeam.image_path || '', winner: item.scores?.find((s) => s.description === 'CURRENT')?.participant_id === awayTeam.id },
             },
             goals: {
                 home: item.scores?.find((s) => s.participant_id === homeTeam.id && s.description === 'CURRENT')?.score?.goals || 0,
@@ -276,6 +277,17 @@ export const generateDailyPredictionsServerSide = async () => {
                 rawFixtures: simplifiedRaw,
                 updatedAt: new Date().toISOString()
             }, { merge: true });
+        }
+
+        // Build a team-name → logo URL map from Sportmonks data for later logo enrichment
+        const sportmonksLogoMap = new Map();
+        for (const f of simplifiedRaw) {
+            if (f.homeTeam && f.homeTeamLogo) {
+                sportmonksLogoMap.set(f.homeTeam, f.homeTeamLogo);
+            }
+            if (f.awayTeam && f.awayTeamLogo) {
+                sportmonksLogoMap.set(f.awayTeam, f.awayTeamLogo);
+            }
         }
 
         const searchPrompt = `
@@ -430,16 +442,19 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
 
         console.log(`[Backend] Generated ${allMatches.length} predictions successfully (filtered out any placeholder team names).`);
 
+        // Enrich with logos from Sportmonks fixture data + Firestore team_assets
+        const enrichedMatches = await enrichMatchesWithLogos(allMatches, sportmonksLogoMap);
+
         // Save to Firebase Admin
         await admin.firestore().collection('daily_predictions').doc(todayStr).set({
             status: 'completed',
-            matches: allMatches,
+            matches: enrichedMatches,
             generatedBy: 'gemini',
             generatedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         }, { merge: true });
 
-        return { status: "success", generated: allMatches.length, matches: allMatches };
+        return { status: "success", generated: enrichedMatches.length, matches: enrichedMatches };
     } catch (e) {
         console.error('Backend generation error:', e);
         return { status: "error", error: e.message };
@@ -1010,15 +1025,18 @@ Output JSON array only. No markdown. No preamble.`;
             prediction: p.prediction || p.prediction_en,
         }));
 
+        // Enrich basketball logos from Firestore team_assets (no Sportmonks source for basketball)
+        const enrichedBasketball = await enrichMatchesWithLogos(normalised, new Map());
+
         // Save to Firestore under a dedicated 'basketball_predictions' collection
         await admin.firestore().collection('basketball_predictions').doc(todayStr).set({
-            matches: normalised,
+            matches: enrichedBasketball,
             generatedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
 
-        console.log(`[Backend Basketball] ✅ ${normalised.length} predictions saved for ${todayStr}.`);
-        return { status: "success", generated: normalised.length, matches: normalised };
+        console.log(`[Backend Basketball] ✅ ${enrichedBasketball.length} predictions saved for ${todayStr}.`);
+        return { status: "success", generated: enrichedBasketball.length, matches: enrichedBasketball };
 
     } catch (e) {
         console.error('[Backend Basketball] Error:', e);
