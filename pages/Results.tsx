@@ -195,22 +195,24 @@ export const Results: React.FC = () => {
 
             {/* Content */}
             {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <div className="flex flex-col items-center justify-center mt-20 py-10 gap-3">
                     <Loader2 className="animate-spin text-vantage-cyan" size={36} />
                     <p className="text-sm text-gray-500">{language === 'fr' ? 'Chargement des résultats...' : 'Loading results...'}</p>
                 </div>
             ) : history.length === 0 ? (
-                <GlassCard className="flex flex-col items-center py-12 text-center gap-3 border-slate-200 dark:border-white/5">
-                    <AlertCircle size={36} className="text-gray-400" />
-                    <h3 className="font-bold text-slate-900 dark:text-white">
-                        {language === 'fr' ? 'Aucun résultat archivé' : 'No archived results yet'}
-                    </h3>
-                    <p className="text-sm text-gray-500 max-w-xs">
-                        {language === 'fr'
-                            ? "Les résultats apparaissent une fois que les prédictions sont notées."
-                            : 'Results appear once predictions are graded each day.'}
-                    </p>
-                </GlassCard>
+                <div className="mt-8">
+                    <GlassCard className="flex flex-col items-center py-12 text-center gap-3 border-slate-200 dark:border-white/5">
+                        <AlertCircle size={36} className="text-gray-400" />
+                        <h3 className="font-bold text-slate-900 dark:text-white">
+                            {language === 'fr' ? 'Aucun résultat archivé' : 'No archived results yet'}
+                        </h3>
+                        <p className="text-sm text-gray-500 max-w-xs">
+                            {language === 'fr'
+                                ? "Les résultats apparaissent une fois que les prédictions sont notées."
+                                : 'Results appear once predictions are graded each day.'}
+                        </p>
+                    </GlassCard>
+                </div>
             ) : (
                 <div className="space-y-3">
                     {history.map((day, i) => {

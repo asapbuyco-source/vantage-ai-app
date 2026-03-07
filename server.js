@@ -10,6 +10,7 @@ import admin from 'firebase-admin';
 import fs from 'fs';
 import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGeneration, triggerAccumulatorGeneration, triggerTelegramBroadcast } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
+import OpenAI from 'openai';
 
 // Load environment variables from .env.local if available (for local dev)
 const __filename = fileURLToPath(import.meta.url);
@@ -59,11 +60,9 @@ const allowedOrigins = [
 
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin only in local development, not in production
+        // Allow requests with no origin (e.g., background crons, server-to-server calls)
         if (!origin) {
-            if (process.env.NODE_ENV === 'development') return callback(null, true);
-            const msg = `The CORS policy for this site does not allow access from the specified Origin: no origin provided.`;
-            return callback(new Error(msg), false);
+            return callback(null, true);
         }
 
         if (allowedOrigins.indexOf(origin) === -1) {

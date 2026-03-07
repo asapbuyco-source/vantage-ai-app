@@ -109,7 +109,7 @@ export interface DailyAnalysis {
   matches: Match[];
   rawFixtures?: Match[];
   accumulators?: AccumulatorSet;
-  generatedAt: string;
+  generatedAt?: string;
 }
 
 export interface TeamAsset {
