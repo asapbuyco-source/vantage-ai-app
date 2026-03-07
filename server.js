@@ -27,6 +27,11 @@ try {
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
         });
+
+        // Critical Fix: Instruct Firestore Admin to ignore undefined properties
+        // This prevents crashes if the AI omits optional fields like `homeForm` from its JSON output
+        admin.firestore().settings({ ignoreUndefinedProperties: true });
+
         console.log('✅ Firebase Admin UI Initialized successfully');
 
         // Start the automated cron scheduler now that Admin is ready
