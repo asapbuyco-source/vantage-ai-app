@@ -9,9 +9,9 @@ Congratulations vantage AI
 You just made a sale!🚀
  
 Summary:
-Elite Monthly Access copy x 1
+Elite Quarterly Access copy x 1
 
-CFA 0
+CFA 18000
  
 Subtotal	CFA 0
 Total	CFA 0
@@ -41,13 +41,13 @@ if (emailMatch) {
     }
 }
 
+const isAnnual = bodyText.toLowerCase().includes('annual') || bodyText.toLowerCase().includes('yearly');
+const isQuarterly = bodyText.toLowerCase().includes('quarterly');
 const isMonthly = bodyText.toLowerCase().includes('monthly');
 const isWeekly = bodyText.toLowerCase().includes('weekly');
-const isDaily = bodyText.toLowerCase().includes('daily');
-const isAnnual = bodyText.toLowerCase().includes('annual');
 
-let plan = 'monthly';
-if (isDaily) plan = 'daily';
+let plan = 'weekly';
+if (isQuarterly) plan = 'quarterly';
 if (isWeekly) plan = 'weekly';
 if (isMonthly) plan = 'monthly';
 if (isAnnual) plan = 'annual';

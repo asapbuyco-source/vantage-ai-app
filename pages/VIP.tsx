@@ -40,7 +40,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'annual'>('daily');
+  const [selectedPlanId, setSelectedPlanId] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('weekly');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -56,7 +56,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   }, []);
 
   const plans: Array<{
-    id: 'daily' | 'weekly' | 'monthly' | 'annual';
+    id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
     label: string;
     price: string;
     originalPrice: string | null;
@@ -65,44 +65,44 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     color: string;
   }> = [
       {
-        id: 'daily',
-        label: t('vip.plan_daily'),
-        price: '500',
-        originalPrice: null,
-        badge: null,
-        features: [t('vip.feat_1')],
-        color: 'border-slate-700 bg-slate-800/50'
-      },
-      {
         id: 'weekly',
         label: t('vip.plan_weekly'),
-        price: '1500',
-        originalPrice: '3500', // 500 * 7 = 3500
-        badge: 'MOST POPULAR',
-        features: [t('vip.feat_1'), 'Accumulator Access', 'Priority Support'],
-        color: 'border-vantage-purple bg-vantage-purple/10 shadow-[0_0_30px_rgba(168,85,247,0.15)]'
+        price: '2000',
+        originalPrice: null,
+        badge: null,
+        features: [t('vip.feat_1'), 'Accumulator Access'],
+        color: 'border-slate-700 bg-slate-800/50'
       },
       {
         id: 'monthly',
         label: t('vip.plan_monthly'),
-        price: '4500',
-        originalPrice: '15000', // 500 * 30 = 15000
+        price: '6500',
+        originalPrice: '8000', // 2000 * 4
+        badge: 'MOST POPULAR',
+        features: [t('vip.feat_1'), 'Accumulator Access', 'VIP WhatsApp'],
+        color: 'border-vantage-purple bg-vantage-purple/10 shadow-[0_0_30px_rgba(168,85,247,0.15)]'
+      },
+      {
+        id: 'quarterly',
+        label: t('vip.plan_quarterly'),
+        price: '18000',
+        originalPrice: '19500', // 6500 * 3
         badge: 'BEST VALUE',
-        features: ['Full Month Access', 'All Features', 'VIP WhatsApp', 'Biggest Saving'],
+        features: ['3 Months Access', 'All Features', 'VIP WhatsApp', 'Save 1500 FCFA'],
         color: 'border-vantage-cyan bg-vantage-cyan/10 shadow-[0_0_30px_rgba(34,211,238,0.15)]'
       },
       {
         id: 'annual',
-        label: language === 'fr' ? 'Annuel' : 'Annual',
-        price: '25000',
-        originalPrice: '54000', // 4500 * 12 = 54000
+        label: t('vip.plan_yearly'),
+        price: '70000',
+        originalPrice: '78000', // 6500 * 12
         badge: '🔥 BEST DEAL',
-        features: ['Full Year Access (365 days)', 'All VIP Features', 'VIP WhatsApp Group', '54% CHEAPER than monthly'],
+        features: ['Full Year Access (365 days)', 'All VIP Features', 'VIP WhatsApp Group', 'Huge Savings'],
         color: 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_30px_rgba(234,179,8,0.15)]'
       },
     ];
 
-  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'annual') => {
+  const handlePlanClick = (planId: 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
     setSelectedPlanId(planId);
     setShowPaymentModal(true);
   };

@@ -174,7 +174,15 @@ export const generateDailyPredictionsOpenAI = async () => {
 
         // Fetch fixtures from Sportmonks for context
         const rawData = await fetchSportmonksForDate(todayStr);
-        const allMappedFixtures = rawData.map(item => {
+
+        // FILTER: Keep only matches that have not yet started based on current UTC time
+        const nowMs = Date.now();
+        const upcomingData = rawData.filter(item => {
+            if (!item.starting_at) return true;
+            return new Date(item.starting_at).getTime() > nowMs;
+        });
+
+        const allMappedFixtures = upcomingData.map(item => {
             const home = item.participants?.find(p => p.meta?.location === 'home') || {};
             const away = item.participants?.find(p => p.meta?.location === 'away') || {};
             // Extract HH:MM from the ISO timestamp (e.g. "2026-03-04T14:00:00.000000Z" → "14:00")

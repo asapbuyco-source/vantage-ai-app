@@ -131,13 +131,13 @@ export const checkRecentSelarEmails = async () => {
 
             // Look for the exact plan name
             const textToLower = bodyText.toLowerCase();
-            const isAnnual = textToLower.includes('annual pro membership');
-            const isMonthly = textToLower.includes('elite monthly access');
-            const isWeekly = textToLower.includes('7-day premium plan');
-            const isDaily = textToLower.includes('24-hour premium access');
+            const isAnnual = textToLower.includes('annual') || textToLower.includes('yearly');
+            const isQuarterly = textToLower.includes('quarterly');
+            const isMonthly = textToLower.includes('monthly');
+            const isWeekly = textToLower.includes('weekly');
 
-            let plan = 'monthly'; // default fallback
-            if (isDaily) plan = 'daily';
+            let plan = 'weekly'; // default fallback
+            if (isQuarterly) plan = 'quarterly';
             if (isWeekly) plan = 'weekly';
             if (isMonthly) plan = 'monthly';
             if (isAnnual) plan = 'annual';
@@ -209,11 +209,11 @@ export const checkRecentSelarEmails = async () => {
             }
 
             // Add time based on plan
-            if (plan === 'daily') newExpiry.setDate(newExpiry.getDate() + 1);
-            else if (plan === 'weekly') newExpiry.setDate(newExpiry.getDate() + 7);
+            if (plan === 'weekly') newExpiry.setDate(newExpiry.getDate() + 7);
             else if (plan === 'monthly') newExpiry.setMonth(newExpiry.getMonth() + 1);
+            else if (plan === 'quarterly') newExpiry.setMonth(newExpiry.getMonth() + 3);
             else if (plan === 'annual') newExpiry.setFullYear(newExpiry.getFullYear() + 1);
-            else newExpiry.setMonth(newExpiry.getMonth() + 1); // fallback to 1 month
+            else newExpiry.setDate(newExpiry.getDate() + 7); // fallback to 1 week
 
             await userDoc.ref.update({
                 isVip: true,

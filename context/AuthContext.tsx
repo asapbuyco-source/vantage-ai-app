@@ -28,7 +28,7 @@ interface AuthContextType {
     logout: () => Promise<void>;
     deleteAccount: () => Promise<void>;
     clearError: () => void;
-    upgradeToVip: (plan: 'daily' | 'weekly' | 'monthly' | 'annual') => Promise<void>;
+    upgradeToVip: (plan: 'weekly' | 'monthly' | 'quarterly' | 'annual') => Promise<void>;
     getAllUsers: () => Promise<UserProfile[]>;
     toggleUserVip: (uid: string, currentStatus: boolean) => Promise<void>;
     toggleUserAdmin: (uid: string, currentStatus: boolean) => Promise<void>;
@@ -232,15 +232,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const resetPassword = async (email: string) => { await sendPasswordResetEmail(auth, email); };
 
-    const upgradeToVip = async (plan: 'daily' | 'weekly' | 'monthly' | 'annual') => {
+    const upgradeToVip = async (plan: 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
         if (!user) return;
         const now = new Date();
         let expiry = new Date();
-        if (plan === 'daily') expiry.setDate(now.getDate() + 1);
         if (plan === 'weekly') expiry.setDate(now.getDate() + 7);
         if (plan === 'monthly') expiry.setDate(now.getDate() + 30);
+        if (plan === 'quarterly') expiry.setDate(now.getDate() + 90);
         if (plan === 'annual') expiry.setDate(now.getDate() + 365);
-        const planCost = plan === 'daily' ? 500 : plan === 'weekly' ? 1500 : plan === 'monthly' ? 4500 : 25000;
+        const planCost = plan === 'weekly' ? 2000 : plan === 'monthly' ? 6500 : plan === 'quarterly' ? 18000 : 70000;
 
         try {
             const userRef = doc(db, "profiles", user.uid);
@@ -408,7 +408,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.warn('[AuthContext] Selar token not yet verified (used !== true). Aborting VIP grant.');
                     return false;
                 }
-                const plan: 'daily' | 'weekly' | 'monthly' | 'annual' = data.plan || 'daily';
+                const plan: 'weekly' | 'monthly' | 'quarterly' | 'annual' = data.plan || 'weekly';
                 await upgradeToVip(plan);
                 localStorage.removeItem('pendingVipPlan');
                 return true;
@@ -420,14 +420,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const amount = result.amount;
 
             if (isSuccess) {
-                let plan: 'daily' | 'weekly' | 'monthly' | null =
+                let plan: 'weekly' | 'monthly' | 'quarterly' | 'annual' | null =
                     localStorage.getItem('pendingVipPlan') as any;
 
                 if (!plan) {
-                    if (amount === undefined) plan = 'daily';
-                    else if (amount >= 4500) plan = 'monthly';
-                    else if (amount >= 1500) plan = 'weekly';
-                    else plan = 'daily';
+                    if (amount === undefined) plan = 'weekly';
+                    else if (amount >= 70000) plan = 'annual';
+                    else if (amount >= 18000) plan = 'quarterly';
+                    else if (amount >= 6500) plan = 'monthly';
+                    else if (amount >= 2000) plan = 'weekly';
+                    else plan = 'weekly';
                 }
 
                 await upgradeToVip(plan);

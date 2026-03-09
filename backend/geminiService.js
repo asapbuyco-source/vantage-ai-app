@@ -6,9 +6,12 @@ import { enrichMatchesWithLogos, buildSportmonksLogoMap } from './logoEnricher.j
 // Do NOT add fake model IDs here. If a model is unavailable it will fail silently
 // in the fallback loop. Keep gemini-2.0-flash first as the most stable option.
 const AVAILABLE_MODELS = [
-    { id: 'gemini-2.0-flash', name: 'Vantage AI 2.0 Flash (Stable)' },
-    { id: 'gemini-2.5-flash', name: 'Vantage AI 2.5 Flash (Versatile)' },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Fast)' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Versatile)' },
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Complex Reasoning)' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Heavy Duty)' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Fallback)' },
+    { id: 'gemini-1.5-flash-8b', name: 'Gemini 1.5 Flash-8b (Light Fallback)' }
 ];
 
 /**
@@ -233,7 +236,17 @@ export const generateDailyPredictionsServerSide = async () => {
     try {
         const todayStr = getGlobalTodayKey();
         const rawFixtures = await getTodaysFixturesServerSide(todayStr);
-        const filteredFixtures = filterGlobalFixturesServerSide(rawFixtures);
+
+        // FILTER: Keep only matches that have not yet started based on current UTC time
+        const nowMs = Date.now();
+        const upcomingFixtures = rawFixtures.filter(f => {
+            if (!f.fixture.date) return true; // keep if no time provided just in case
+            // Sportmonks provides 'starting_at' which is parsed into f.fixture.date
+            const kickOffMs = new Date(f.fixture.date).getTime();
+            return kickOffMs > nowMs;
+        });
+
+        const filteredFixtures = filterGlobalFixturesServerSide(upcomingFixtures);
 
         // FIX: Define simplifiedRaw at function scope so it's always accessible below
         let simplifiedRaw = [];
