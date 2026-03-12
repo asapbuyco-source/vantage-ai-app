@@ -66,11 +66,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
 
     try {
       if (gateway === 'fapshi') {
-        const { link } = await initiatePayment(
+        const { link, transId } = await initiatePayment(
           parseInt(plan.price),
           user.email || 'user@vantage.ai',
           user.uid
         );
+        // CRITICAL: Fapshi does NOT append transId to the redirectUrl automatically.
+        // We must store it in localStorage so App.tsx can retrieve it on return.
+        if (transId) {
+          localStorage.setItem('pendingFapshiTransId', transId);
+        }
         window.location.href = link;
       } else {
         // For Selar, verify the user has an email before proceeding

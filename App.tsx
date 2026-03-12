@@ -152,8 +152,16 @@ function AppContent() {
       }
 
       // 2️⃣  Fapshi (Cameroon MoMo) — only if Selar was not triggered
-      const transId = urlParams.get('transId');
+      let transId = urlParams.get('transId');
+      if (!transId) {
+        // Fallback: Check localStorage because Fapshi doesn't append transId to the redirect URL natively
+        const pendingFapshi = localStorage.getItem('pendingFapshiTransId');
+        if (pendingFapshi) transId = pendingFapshi;
+      }
+
       if (transId) {
+        // Only wipe the transId from storage once we're actively verifying it to prevent infinite loops
+        localStorage.removeItem('pendingFapshiTransId');
         window.history.replaceState({}, document.title, window.location.pathname);
         const success = await verifyTransaction(transId);
         if (success) {
