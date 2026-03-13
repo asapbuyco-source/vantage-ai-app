@@ -284,6 +284,152 @@ export const initScheduler = () => {
         }
     });
 
+    // ── Live Scores Poller (every 60 seconds → Firestore live_scores/current) ──
+    // We store the whole list in ONE Firestore document so frontend reads 1 doc.
+    // Uses ~1440 SportMonks API calls/day during matchdays; zero on quiet days
+    // because we skip the write if there are no live matches.
+    let liveScoreTask = cron.schedule('* * * * *', async () => {
+        try {
+            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            if (!token) return;
+            const url = `https://api.sportmonks.com/v3/football/livescores/latest?include=league;participants;scores;events;state&api_token=${token}`;
+            const res = await fetch(url);
+            if (!res.ok) return;
+            const json = await res.json();
+            const raw = json.data || [];
+
+            const matches = raw.map(item => {
+                const home = item.participants?.find(p => p.meta?.location === 'home') || {};
+                const away = item.participants?.find(p => p.meta?.location === 'away') || {};
+                const homeScore = item.scores?.find(s => s.participant_id === home.id && s.description === 'CURRENT')?.score?.goals ?? 0;
+                const awayScore = item.scores?.find(s => s.participant_id === away.id && s.description === 'CURRENT')?.score?.goals ?? 0;
+                const events = (item.events || []).map(ev => ({
+                    id: ev.id,
+                    type: ev.type?.code || ev.type?.name || 'event',
+                    name: ev.type?.name || '',
+                    playerName: ev.player?.name || '',
+                    minute: ev.minute || 0,
+                    teamId: ev.participant_id,
+                }));
+                return {
+                    id: String(item.id),
+                    homeTeam: home.name || 'Unknown',
+                    awayTeam: away.name || 'Unknown',
+                    homeTeamLogo: home.image_path || '',
+                    awayTeamLogo: away.image_path || '',
+                    homeTeamId: home.id,
+                    awayTeamId: away.id,
+                    homeScore,
+                    awayScore,
+                    league: item.league?.name || 'Unknown League',
+                    leagueId: item.league_id,
+                    stateShort: item.state?.short_name || item.state?.state || 'LIVE',
+                    stateLong: item.state?.name || 'Live',
+                    minute: item.minute || 0,
+                    events,
+                };
+            });
+
+            const db = admin.firestore();
+            await db.collection('live_scores').doc('current').set({
+                matches,
+                count: matches.length,
+                updatedAt: new Date().toISOString(),
+            });
+            if (matches.length > 0) {
+                console.log(`[Live] ⚡ Wrote ${matches.length} live matches to Firestore`);
+            }
+        } catch (e) {
+            console.warn('[Scheduler] Live scores poll error:', e.message);
+        }
+    });
+    console.log('⚡ Live scores poller started (every 60 seconds → Firestore)');
+
+    // ── Pre-Match News Fetcher (once daily at 07:30 Lagos time) ──────────────
+    // Fetches all pre-match news and stores in Firestore match_news/{dateKey}
+    // ~1 SportMonks API call per day
+    cron.schedule('30 7 * * *', async () => {
+        try {
+            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            if (!token) return;
+            const url = `https://api.sportmonks.com/v3/football/news/pre-match?api_token=${token}`;
+            const res = await fetch(url);
+            if (!res.ok) { console.warn('[News] API error:', res.status); return; }
+            const json = await res.json();
+            const raw = json.data || [];
+            const items = raw.map(n => ({
+                id: n.id,
+                fixtureId: n.fixture_id,
+                leagueId: n.league_id,
+                title: n.title || n.name || 'Match Preview',
+                type: n.type || 'preview',
+            }));
+
+            const db = admin.firestore();
+            const dateKey = new Date().toISOString().split('T')[0];
+            await db.collection('match_news').doc(dateKey).set({
+                items,
+                fetchedAt: new Date().toISOString(),
+            });
+            console.log(`[News] 📰 Stored ${items.length} news items to Firestore`);
+        } catch (e) {
+            console.warn('[Scheduler] News fetch error:', e.message);
+        }
+    }, { timezone: 'Africa/Lagos' });
+    console.log('📰 Pre-match news fetcher scheduled at 07:30 Lagos');
+
+    // ── Tomorrow's Fixture Pre-Fetch (daily at 23:00 Lagos) ─────────────────
+    // Fetches tomorrow's fixtures and stores odds for VIP tomorrow preview.
+    // ~1 API call per day
+    cron.schedule('0 23 * * *', async () => {
+        try {
+            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            if (!token) return;
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const dateKey = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+
+            const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateKey}?include=league;participants&api_token=${token}`;
+            const res = await fetch(url);
+            if (!res.ok) { console.warn('[Tomorrow] API error:', res.status); return; }
+            const json = await res.json();
+            const raw = json.data || [];
+
+            const fixtures = raw.map(item => {
+                const home = item.participants?.find(p => p.meta?.location === 'home') || {};
+                const away = item.participants?.find(p => p.meta?.location === 'away') || {};
+                // Convert starting_at to local time display
+                const kickoff = item.starting_at ? new Date(item.starting_at) : null;
+                const timeStr = kickoff ? kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' }) : 'TBD';
+                return {
+                    id: String(item.id),
+                    fixtureId: item.id,
+                    homeTeam: home.name || 'Unknown',
+                    awayTeam: away.name || 'Unknown',
+                    homeTeamLogo: home.image_path || '',
+                    awayTeamLogo: away.image_path || '',
+                    league: item.league?.name || 'Unknown League',
+                    time: timeStr,
+                    category: 'value',
+                    confidence: 0,
+                    odds: 0,
+                    prediction: '',
+                };
+            });
+
+            const db = admin.firestore();
+            await db.collection('daily_predictions').doc(dateKey).set({
+                rawFixtures: fixtures,
+                updatedAt: new Date().toISOString(),
+            }, { merge: true });
+            console.log(`[Tomorrow] 📅 Stored ${fixtures.length} fixtures for ${dateKey}`);
+        } catch (e) {
+            console.warn('[Scheduler] Tomorrow fixtures fetch error:', e.message);
+        }
+    }, { timezone: 'Africa/Lagos' });
+    console.log('📅 Tomorrow fixture pre-fetch scheduled at 23:00 Lagos');
+
     console.log('⏳ Scheduler initialized. Config sync runs every 5 minutes.');
     console.log('📧 Selar Gmail listener polls every 2 minutes.');
 };
+

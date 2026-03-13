@@ -1,9 +1,9 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon,
   Trophy, AlertTriangle, Hourglass, Search, SlidersHorizontal, ChevronDown,
-  Flame, TrendingUp, ChevronRight, Shield, BarChart3
+  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Radio
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { CircularProgress } from '../components/CircularProgress';
@@ -15,6 +15,8 @@ import { NavigationTab, Match, Sport } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
 import { getAppSettings } from '../services/db';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
 interface HomeProps {
   setTab: (tab: NavigationTab) => void;
@@ -59,6 +61,18 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const [sortKey, setSortKey] = useState<SortKey>('time');
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [liveCount, setLiveCount] = useState(0);
+
+  // Subscribe to live count from Firestore
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'live_scores', 'current'),
+      (snap) => setLiveCount(snap.exists() ? (snap.data()?.count || 0) : 0),
+      () => setLiveCount(0)
+    );
+    return () => unsub();
+  }, []);
+
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
   // predictions = AI-analyzed matches with full data (prediction_en, confidence, analysis_en) — shown first
@@ -194,6 +208,30 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
           </div>
         )}
       </GlassCard>
+
+      {/* ─── LIVE MATCHES BANNER ─── */}
+      {liveCount > 0 && (
+        <motion.button
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => setTab('live')}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-all text-left"
+        >
+          <span className="relative flex h-3 w-3 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-red-500">
+              🔴 {liveCount} {language === 'fr' ? `Match${liveCount > 1 ? 's' : ''} en Direct` : `Live Match${liveCount > 1 ? 'es' : ''} Now`}
+            </p>
+            <p className="text-[10px] text-red-400/70">
+              {language === 'fr' ? 'Voir les scores en temps réel →' : 'View live scores →'}
+            </p>
+          </div>
+          <Radio size={18} className="shrink-0 text-red-500" />
+        </motion.button>
+      )}
 
       {/* ─── SORT & FILTER TOOLBAR ─── */}
       <div className="space-y-3">

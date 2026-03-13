@@ -292,31 +292,158 @@ export const generateDailyPredictionsServerSide = async () => {
             }, { merge: true });
         }
 
+        // ── FETCH REAL SPORTMONKS FORM + H2H DATA FOR EACH FIXTURE ────────────
+        // This is the anti-hallucination layer: fetch real stats from the API,
+        // then inject them into the prompt so AI uses REAL data, not guesses.
+        const fixtureRealData = {};
+        const ENRICH_BATCH = 6; // 6 per batch = conservative token usage
+        const fixturesToEnrich = simplifiedRaw.slice(0, 36);
+
+        for (let i = 0; i < fixturesToEnrich.length; i += ENRICH_BATCH) {
+            const batch = fixturesToEnrich.slice(i, i + ENRICH_BATCH);
+            await Promise.all(batch.map(async (f) => {
+                try {
+                    const homeId = f.homeTeamId;
+                    const awayId = f.awayTeamId;
+                    if (!homeId || !awayId) return;
+
+                    // Fetch H2H (last 5 meetings)
+                    const h2hData = await fetchSportmonksServerSide(
+                        `/fixtures/head-to-head/${homeId}/${awayId}?include=participants;scores&per_page=5`
+                    );
+
+                    // Fetch last 5 finished fixtures for home + away (last 120 days)
+                    const from = getDateKeyDaysAgo(120);
+                    const [homeRecent, awayRecent] = await Promise.all([
+                        fetchSportmonksServerSide(
+                            `/fixtures/between/${from}/${todayStr}?include=participants;scores&filters=fixtureParticipants:${homeId}&per_page=5`
+                        ),
+                        fetchSportmonksServerSide(
+                            `/fixtures/between/${from}/${todayStr}?include=participants;scores&filters=fixtureParticipants:${awayId}&per_page=5`
+                        ),
+                    ]);
+
+                    // Parse H2H
+                    let h2hHomeWins = 0, h2hAwayWins = 0, h2hDraws = 0;
+                    const h2hScores = [];
+                    if (Array.isArray(h2hData)) {
+                        for (const fx of h2hData.slice(0, 5)) {
+                            const scores = fx.scores || [];
+                            const hG = scores.find(s => s.participant_id === homeId && s.description === 'CURRENT')?.score?.goals ?? null;
+                            const aG = scores.find(s => s.participant_id === awayId && s.description === 'CURRENT')?.score?.goals ?? null;
+                            if (hG !== null && aG !== null) {
+                                h2hScores.push(`${hG}-${aG}`);
+                                if (hG > aG) h2hHomeWins++;
+                                else if (aG > hG) h2hAwayWins++;
+                                else h2hDraws++;
+                            }
+                        }
+                    }
+
+                    // Parse recent form for one team
+                    const parseForm = (fixtures, teamId) => {
+                        if (!Array.isArray(fixtures) || fixtures.length === 0) {
+                            return { form: 'N/A', winRate: null, avgScored: null, avgConceded: null };
+                        }
+                        const results = [];
+                        let wins = 0, goals = 0, conc = 0;
+                        for (const fx of fixtures.slice(0, 5)) {
+                            const sc = fx.scores || [];
+                            const myG = sc.find(s => s.participant_id === teamId && s.description === 'CURRENT')?.score?.goals;
+                            const oppG = sc.find(s => s.participant_id !== teamId && s.description === 'CURRENT')?.score?.goals;
+                            if (myG !== undefined && oppG !== undefined) {
+                                goals += myG; conc += oppG;
+                                if (myG > oppG) { results.push('W'); wins++; }
+                                else if (myG < oppG) results.push('L');
+                                else results.push('D');
+                            }
+                        }
+                        const n = results.length;
+                        return {
+                            form: n > 0 ? results.join(' ') : 'N/A',
+                            winRate: n > 0 ? Math.round((wins / n) * 100) : null,
+                            avgScored: n > 0 ? Math.round((goals / n) * 100) / 100 : null,
+                            avgConceded: n > 0 ? Math.round((conc / n) * 100) / 100 : null,
+                        };
+                    };
+
+                    const homeStats = parseForm(homeRecent, homeId);
+                    const awayStats = parseForm(awayRecent, awayId);
+
+                    fixtureRealData[f.id] = {
+                        homeForm: homeStats.form,
+                        homeWinRate: homeStats.winRate,
+                        homeAvgScored: homeStats.avgScored,
+                        homeAvgConceded: homeStats.avgConceded,
+                        awayForm: awayStats.form,
+                        awayWinRate: awayStats.winRate,
+                        awayAvgScored: awayStats.avgScored,
+                        awayAvgConceded: awayStats.avgConceded,
+                        h2hHomeWins,
+                        h2hAwayWins,
+                        h2hDraws,
+                        h2hLast5Goals: h2hScores.join(', ') || 'N/A',
+                    };
+                } catch (e) {
+                    console.warn(`[Gemini] Could not enrich fixture ${f.id}: ${e.message}`);
+                }
+            }));
+        }
+
+        const enrichedCount = Object.keys(fixtureRealData).length;
+        console.log(`[Gemini] Real SportMonks data fetched for ${enrichedCount}/${fixturesToEnrich.length} fixtures.`);
+
+        // Build human-readable grounding block for the AI prompt
+        const realDataLines = simplifiedRaw
+            .filter(f => fixtureRealData[f.id])
+            .map(f => {
+                const d = fixtureRealData[f.id];
+                return [
+                    `Match ID ${f.id}: ${f.homeTeam} vs ${f.awayTeam}`,
+                    `  Home form (last 5): ${d.homeForm} | Win%: ${d.homeWinRate ?? '?'}% | Avg: ${d.homeAvgScored ?? '?'} scored / ${d.homeAvgConceded ?? '?'} conceded`,
+                    `  Away form (last 5): ${d.awayForm} | Win%: ${d.awayWinRate ?? '?'}% | Avg: ${d.awayAvgScored ?? '?'} scored / ${d.awayAvgConceded ?? '?'} conceded`,
+                    `  H2H last 5: ${f.homeTeam} ${d.h2hHomeWins}W, ${f.awayTeam} ${d.h2hAwayWins}W, ${d.h2hDraws}D | Scores: ${d.h2hLast5Goals}`,
+                ].join('\n');
+            }).join('\n\n');
+
         // Build a team-name → logo URL map from Sportmonks data for later logo enrichment
         const sportmonksLogoMap = new Map();
         for (const f of simplifiedRaw) {
-            if (f.homeTeam && f.homeTeamLogo) {
-                sportmonksLogoMap.set(f.homeTeam, f.homeTeamLogo);
-            }
-            if (f.awayTeam && f.awayTeamLogo) {
-                sportmonksLogoMap.set(f.awayTeam, f.awayTeamLogo);
-            }
+            if (f.homeTeam && f.homeTeamLogo) sportmonksLogoMap.set(f.homeTeam, f.homeTeamLogo);
+            if (f.awayTeam && f.awayTeamLogo) sportmonksLogoMap.set(f.awayTeam, f.awayTeamLogo);
         }
 
         const searchPrompt = `
-You are the "Quant-Desk Decision Engine v6.0", an elite global sports betting model with access to real statistical data.
+You are the "Quant-Desk Decision Engine v6.0", an elite global sports betting model.
 
 DATE: ${todayStr}
 
-ENRICHED FIXTURES FOR TODAY:
+═══════════════════════════════════════════════
+⚡ REAL DATA FROM SPORTMONKS API (DO NOT OVERRIDE — USE THESE NUMBERS EXACTLY)
+═══════════════════════════════════════════════
+The following form, H2H, and goal statistics were fetched directly from the SportMonks Pro API.
+These are GROUND TRUTH. Your job is to use them as-is in your output for each fixture.
+DO NOT estimate, guess, or search for different numbers for these statistics.
+
+${realDataLines || 'No real-time data available. Use Google Search to find recent form.'}
+
+═══════════════════════════════════════════════
+SPORTMONKS FIXTURES FOR TODAY (Official IDs + Team Names):
+═══════════════════════════════════════════════
 ${JSON.stringify(filteredFixtures)}
 
 ═══════════════════════════════════════════════
 YOUR OBJECTIVE
 ═══════════════════════════════════════════════
-Using the fixture data above AND Google Search for additional matches today:
-- Identify and analyze at least 15 to 20 high-quality betting opportunities.
-- Goal: Ensure the app is content-rich.
+Analyze the fixtures listed above. For fixtures where REAL SPORTMONKS DATA is provided above:
+- USE the real form, H2H, win rates, and goal averages from the SportMonks block (do NOT search for different numbers).
+- Fill in the homeForm, awayForm, homeWinRate, etc. fields with the real values provided.
+
+For fixtures NOT in the real data block (AI-only matches found via Google Search):
+- Use Google Search to find recent form, H2H, and statistics.
+- Add them to your output alongside the Sportmonks fixtures.
+
+Goal: Ensure the app has 15–20 high-quality betting opportunities.
 
 LEAGUE PRIORITY (scan in this order — this reflects actual African betting volume):
 1. 🏆 English Premier League + UEFA Champions League (HIGHEST — ~50% of bets)
@@ -336,27 +463,28 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
 3. ONE Market Per Match (safest one). Choose from: "Home Win", "Away Win", "Draw", "Double Chance (1X)", "Double Chance (X2)", "Double Chance (12)", "Draw No Bet (Home)", "Draw No Bet (Away)", "Over 1.5 Goals", "Over 2.5 Goals", "Both Teams Score", "Both Teams Score - No".
 
 ═══════════════════════════════════════════════
-🚨 OUTPUT FORMAT & ADDITIONAL DATA REQUIREMENTS (Strict JSON)
+🚨 OUTPUT FORMAT — Strict JSON
 ═══════════════════════════════════════════════
-- 'id': Use the exact ID provided in the JSON payload.
-- 'homeTeam' / 'awayTeam': MUST be the full official club name (e.g. "Arsenal", "Real Madrid"). NEVER use "Home", "Away", or any placeholder. If you cannot find the real team name for a match via search, OMIT that match entirely.
+- 'id': Use the EXACT ID from the Sportmonks fixture payload above.
+- 'homeTeam' / 'awayTeam': MUST be the full official club name. NEVER use "Home", "Away", or placeholders — omit the match entirely if unknown.
 - 'league': league name.
 - 'time': match time.
-- 'prediction_en' / 'prediction_fr': Localized prediction label.
-- 'analysis_en' format: "EV: +X.X% | Edge: Y% | [max 20 words of reasoning]"
-- 'analysis_fr': French translation of analysis.
+- 'prediction_en': Prediction label in English (e.g. "Home Win", "Over 2.5 Goals").
+- 'prediction_fr': French translation of prediction_en.
+- 'analysis_en' format: "EV: +X.X% | Edge: Y% | [max 20 words reasoning]"
+- 'analysis_fr': French translation of analysis_en.
 - 'confidence': 0–100 integer.
-- 'odds': Real bookmaker decimal odds for your chosen market.
-- 'category': "safe" (confidence >= 80), "value" (70-79), or "risky" (<70)
-- 'homeForm' / 'awayForm': Last 5 games form mapping e.g., "W W D L W" (String).
-- 'homeWinRate' / 'awayWinRate': 0-100 integer representing win rate percentage.
-- 'homeAvgScored' / 'awayAvgScored': Float, avg goals scored per game.
-- 'homeAvgConceded' / 'awayAvgConceded': Float, avg goals conceded per game.
-- 'homeCleanSheetRate' / 'awayCleanSheetRate': 0-100 integer.
-- 'h2hHomeWins' / 'h2hAwayWins' / 'h2hDraws': Integer count of last 5 H2H results.
-- 'h2hLast5Goals': String of recent H2H scores e.g., "2-1, 1-1, 0-0".
-- 'homeInjured' / 'awayInjured': Array of strings representing key injured players, e.g., ["Saka", "Odegaard"]. Empty array if none.
-- Output JSON array only.
+- 'odds': Real bookmaker decimal odds for chosen market.
+- 'category': "safe" (>= 80), "value" (70-79), or "risky" (<70).
+- 'homeForm' / 'awayForm': Last 5 games form e.g. "W W D L W". USE SPORTMONKS VALUES IF PROVIDED ABOVE.
+- 'homeWinRate' / 'awayWinRate': 0-100 int. USE SPORTMONKS VALUES IF PROVIDED ABOVE.
+- 'homeAvgScored' / 'awayAvgScored': Float. USE SPORTMONKS VALUES IF PROVIDED ABOVE.
+- 'homeAvgConceded' / 'awayAvgConceded': Float. USE SPORTMONKS VALUES IF PROVIDED ABOVE.
+- 'homeCleanSheetRate' / 'awayCleanSheetRate': 0-100 int (calculate from recent form if real data provided).
+- 'h2hHomeWins' / 'h2hAwayWins' / 'h2hDraws': Integer. USE SPORTMONKS H2H VALUES IF PROVIDED ABOVE.
+- 'h2hLast5Goals': String e.g. "2-1, 1-1, 0-0". USE SPORTMONKS VALUES IF PROVIDED ABOVE.
+- 'homeInjured' / 'awayInjured': Array of injured key players from news. Use [] if none known.
+- Output JSON array only. No markdown.
         `;
 
         const ai = getAI();
@@ -403,38 +531,42 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
                 away.length > 1 && away !== 'Away';
         };
 
-        // Merge AI predictions back with the simplified raw matches.
-        // CRITICAL: pred (AI output) is ground truth for prediction_en/confidence/odds/analysis.
-        // raw (SportMonks) is ground truth only for team NAMES and league.
+        // Merge AI predictions back with simplified raw.
+        // PRIORITY: SportMonks data is ground truth for team names, league, time, logos, form, H2H.
+        // AI is ground truth ONLY for prediction_en, confidence, odds, analysis, category.
         const finalMatches = simplifiedRaw.map(raw => {
             const pred = predictions.find(p => p.id === raw.id || p.id === parseInt(raw.id));
             if (pred) {
-                // Use Sportmonks name if it's real; fall back to AI name if Sportmonks was empty
                 const smHome = (raw.homeTeam || '').trim();
                 const smAway = (raw.awayTeam || '').trim();
+                const realD = fixtureRealData[raw.id]; // Real SportMonks stats for this fixture
                 return {
                     ...pred,
+                    // Sportmonks overrides for identity fields:
                     homeTeam: smHome.length > 1 ? smHome : pred.homeTeam,
                     awayTeam: smAway.length > 1 ? smAway : pred.awayTeam,
                     league: raw.league || pred.league,
                     time: raw.time || pred.time,
                     homeTeamLogo: raw.homeTeamLogo || pred.homeTeamLogo || '',
                     awayTeamLogo: raw.awayTeamLogo || pred.awayTeamLogo || '',
-                    // Ensure detailed stats are mapped to Firestore
-                    homeForm: pred.homeForm,
-                    awayForm: pred.awayForm,
-                    homeWinRate: pred.homeWinRate,
-                    awayWinRate: pred.awayWinRate,
-                    homeAvgScored: pred.homeAvgScored,
-                    awayAvgScored: pred.awayAvgScored,
-                    homeAvgConceded: pred.homeAvgConceded,
-                    awayAvgConceded: pred.awayAvgConceded,
+                    homeTeamId: raw.homeTeamId,
+                    awayTeamId: raw.awayTeamId,
+                    fixtureId: raw.id,
+                    // Real SportMonks stats win over AI guesses (anti-hallucination):
+                    homeForm: realD?.homeForm || pred.homeForm,
+                    awayForm: realD?.awayForm || pred.awayForm,
+                    homeWinRate: realD?.homeWinRate ?? pred.homeWinRate,
+                    awayWinRate: realD?.awayWinRate ?? pred.awayWinRate,
+                    homeAvgScored: realD?.homeAvgScored ?? pred.homeAvgScored,
+                    awayAvgScored: realD?.awayAvgScored ?? pred.awayAvgScored,
+                    homeAvgConceded: realD?.homeAvgConceded ?? pred.homeAvgConceded,
+                    awayAvgConceded: realD?.awayAvgConceded ?? pred.awayAvgConceded,
                     homeCleanSheetRate: pred.homeCleanSheetRate,
                     awayCleanSheetRate: pred.awayCleanSheetRate,
-                    h2hHomeWins: pred.h2hHomeWins,
-                    h2hAwayWins: pred.h2hAwayWins,
-                    h2hDraws: pred.h2hDraws,
-                    h2hLast5Goals: pred.h2hLast5Goals,
+                    h2hHomeWins: realD?.h2hHomeWins ?? pred.h2hHomeWins,
+                    h2hAwayWins: realD?.h2hAwayWins ?? pred.h2hAwayWins,
+                    h2hDraws: realD?.h2hDraws ?? pred.h2hDraws,
+                    h2hLast5Goals: realD?.h2hLast5Goals || pred.h2hLast5Goals,
                     homeInjured: pred.homeInjured,
                     awayInjured: pred.awayInjured,
                     sport: 'football',
@@ -442,7 +574,7 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
                 };
             }
             return raw;
-        }).filter(m => m.prediction_en && hasRealTeamNames(m)); // Only keep AI-analyzed with real names
+        }).filter(m => m.prediction_en && hasRealTeamNames(m));
 
         // Also add any AI-generated matches that weren't in simplifiedRaw (from Search)
         // Filter out any with placeholder team names — these would show blank cards
@@ -525,7 +657,7 @@ export const generateDailyBlogServerSide = async () => {
         ].filter(Boolean).join(' & ');
 
         const blogPrompt = `
-You are the Chief Editor for Vantage AI, a leading sports betting predictions platform in Africa (specifically targeting Cameroon, using 1xBet and Premier Bet).
+You are the Chief Editor for Vantage AI, a leading sports betting predictions platform.
 
 Today is ${todayStr}. Our quantitative AI model has analyzed the daily sports schedule for: ${sportsAvailable}.
 
@@ -535,16 +667,17 @@ ${JSON.stringify(topMatches, null, 2)}
 ═══════════════════════════════════════════════
 YOUR OBJECTIVE
 ═══════════════════════════════════════════════
-Write an engaging, SEO-optimized daily sports betting blog post in French analyzing today's top picks.
+Write an engaging, SEO-optimized daily sports betting blog post IN ENGLISH analyzing today's top picks.
 This post will be injected directly into the HTML of our site to attract search engine traffic.
 
 REQUIREMENTS:
-1. Title: Create a catchy, click-worthy H1 title incorporating keywords like "Pronostics", "1xBet", "Cameroun", "Coupon du jour", or the biggest team/league names from the JSON above. Cover the sports available today (${sportsAvailable}).
+1. Title: Create a catchy, click-worthy H1 title incorporating keywords like "Predictions", "Betting Tips", "Today's Picks", and the biggest team/league names from the JSON. Cover the sports available today (${sportsAvailable}).
 2. Introduction: A brief 2-3 sentence hype intro about today's betting schedule.
-3. Top Picks Breakdown: Choose 3-5 of the most interesting matches from the JSON. For each, write a short paragraph explaining *why* the prediction was made (form, injuries, head-to-head dominance, pace stats for basketball). Use H2 tags for each match name. Label each pick clearly by sport (⚽ Football or 🏀 Basketball).
-4. Accumulator Idea: Propose a "Coupon du Jour" combining 2-3 safe picks with their combined odds.
+3. Top Picks Breakdown: Choose 3-5 of the most interesting matches from the JSON. For each, write a short paragraph explaining *why* the prediction was made (form, injuries, head-to-head, pace stats for basketball). Use H2 tags for each match name. Label each pick clearly by sport (⚽ Football or 🏀 Basketball).
+4. Accumulator Idea: Propose a "Coupon of the Day" combining 2-3 safe picks with their combined odds.
 5. Formatting: Use proper HTML tags (<h1>, <h2>, <p>, <ul>, <li>, <strong>). DO NOT use Markdown backticks. Return pure HTML only. Start directly with the <h1> tag.
-6. Tone: Confident, expert, encouraging. Remind readers to bet responsibly at the end.
+6. Language: Write ENTIRELY in English. Do NOT mix in French. SEO keywords: "football predictions today", "betting tips", "soccer picks".
+7. Tone: Confident, expert, encouraging. Remind readers to bet responsibly at the end.
         `;
 
         // ── Step 4: Generate with model fallback ──────────────────────────────
@@ -582,7 +715,7 @@ REQUIREMENTS:
         const titleMatch = blogHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
         const title = titleMatch
             ? titleMatch[1].replace(/<[^>]+>/g, '').trim()
-            : `Pronostics ${sportsAvailable} du ${todayStr} | Vantage AI`;
+            : `Football & Basketball Predictions ${todayStr} | Vantage AI`;
 
         const strippedText = blogHtml.replace(/<[^>]+>/g, '');
         const excerpt = strippedText.substring(0, 160).trim() + '...';

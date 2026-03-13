@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Home, Unlock, Lock, User, Sparkles, History } from 'lucide-react';
+import { Home, Unlock, Lock, User, Sparkles, History, Radio } from 'lucide-react';
 import { NavigationTab } from '../types';
 import { useAppContext } from '../context/AppContext';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
 interface BottomNavProps {
   activeTab: NavigationTab;
@@ -11,10 +13,22 @@ interface BottomNavProps {
 
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
   const { t, language } = useAppContext();
+  const [liveCount, setLiveCount] = useState(0);
+
+  // Subscribe to live match count from Firestore (written by backend every 60s)
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'live_scores', 'current'),
+      (snap) => { setLiveCount(snap.exists() ? (snap.data()?.count || 0) : 0); },
+      () => setLiveCount(0)
+    );
+    return () => unsub();
+  }, []);
 
   const navItems = [
     { id: 'home', icon: Home, label: t('nav.home') },
     { id: 'free', icon: Unlock, label: t('nav.free') },
+    { id: 'live', icon: Radio, label: language === 'fr' ? 'Live' : 'Live', badge: liveCount > 0 ? liveCount : undefined },
     { id: 'results', icon: History, label: language === 'fr' ? 'Archive' : 'Results' },
     { id: 'vip', icon: Lock, label: t('nav.vip') },
     { id: 'concierge', icon: Sparkles, label: t('nav.concierge') },
@@ -54,8 +68,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 />
               )}
-              <div className={`relative z-10 flex items-center justify-center transition-all duration-200 ${isActive ? 'text-vantage-cyan -translate-y-0.5 md:translate-y-0 md:scale-110' : 'text-gray-400 dark:text-gray-500 md:hover:text-vantage-cyan/70'}`}>
+              <div className={`relative z-10 flex items-center justify-center transition-all duration-200 ${isActive ? 'text-vantage-cyan -translate-y-0.5 md:translate-y-0 md:scale-110' : item.id === 'live' ? 'text-red-500 md:hover:text-red-400' : 'text-gray-400 dark:text-gray-500 md:hover:text-vantage-cyan/70'}`}>
                 <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} className="md:w-5 md:h-5" />
+                {/* Live badge */}
+                {'badge' in item && item.badge !== undefined && (
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center px-0.5 leading-none">
+                    {item.badge}
+                  </span>
+                )}
               </div>
               <span className={`relative z-10 text-[9px] md:text-sm font-semibold tracking-wide transition-colors ${isActive ? 'text-vantage-cyan md:font-bold' : 'text-gray-400 dark:text-gray-500 md:font-medium'}`}>
                 {item.label}

@@ -1,5 +1,5 @@
 
-export type NavigationTab = 'home' | 'free' | 'vip' | 'guide' | 'profile' | 'admin' | 'kelly' | 'concierge' | 'stats' | 'results';
+export type NavigationTab = 'home' | 'free' | 'vip' | 'guide' | 'profile' | 'admin' | 'kelly' | 'concierge' | 'stats' | 'results' | 'live';
 
 export type Language = 'en' | 'fr';
 
@@ -49,6 +49,44 @@ export interface Match {
   h2hLast5Goals?: string;
   homeInjured?: string[];
   awayInjured?: string[];
+}
+
+// ── Live Match (from SportMonks /livescores — stored in Firestore live_scores/{date}/matches) ────
+export interface LiveEvent {
+  id: number;
+  type: string;           // e.g. 'goal', 'yellowcard', 'redcard', 'substitution'
+  name: string;
+  playerName?: string;
+  minute: number;
+  teamId?: number;
+}
+
+export interface LiveMatch {
+  id: string;             // fixture ID (string)
+  homeTeam: string;
+  awayTeam: string;
+  homeTeamLogo?: string;
+  awayTeamLogo?: string;
+  homeTeamId?: number;
+  awayTeamId?: number;
+  homeScore: number;
+  awayScore: number;
+  league: string;
+  leagueId?: number;
+  stateShort: string;     // e.g. '1H', 'HT', '2H', 'FT'
+  stateLong: string;      // e.g. 'First Half', 'Half Time'
+  minute: number;         // elapsed minutes
+  events: LiveEvent[];
+  updatedAt?: string;
+}
+
+// ── Pre-Match News (from SportMonks /news/pre-match — stored in Firestore match_news/{date}) ────
+export interface MatchNews {
+  id: number;
+  fixtureId: number;
+  leagueId?: number;
+  title: string;
+  type: string;           // e.g. 'preview', 'injury'
 }
 
 export interface AccumulatorSet {

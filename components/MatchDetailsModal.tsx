@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Activity, Scale, ShieldAlert, Zap, Loader2, Trophy, Crosshair, Target, BarChart3 } from 'lucide-react';
-import { NavigationTab, Match } from '../types';
-import { getTeamForm, getH2H, getMatchOdds, getTeamInjuries, TeamForm, H2HRecord, MatchOdds, InjuryReport } from '../services/sportsData';
+import { X, Activity, Scale, ShieldAlert, Zap, Loader2, Trophy, Crosshair, Target, BarChart3, Newspaper, Users, CheckCircle2 } from 'lucide-react';
+import { NavigationTab, Match, MatchNews } from '../types';
+import { getLiveOddsFromDB, getH2HFromDB, getMatchNewsFromDB, getFixtureLineupsFromDB, LineupPlayer, TeamForm, H2HRecord, MatchOdds, InjuryReport } from '../services/sportsData';
 import { TeamLogo } from './TeamLogo';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -19,9 +19,12 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
     const { userProfile, isAdmin } = useAuth();
     const isVipUser = userProfile?.isVip === true || isAdmin;
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'prediction' | 'overview' | 'stats' | 'h2h' | 'injuries'>('prediction');
+    const [activeTab, setActiveTab] = useState<'prediction' | 'overview' | 'stats' | 'h2h' | 'injuries' | 'news' | 'lineup'>('prediction');
 
     const [odds, setOdds] = useState<MatchOdds | null>(null);
+    const [realH2H, setRealH2H] = useState<H2HRecord | null>(null);
+    const [news, setNews] = useState<MatchNews[]>([]);
+    const [lineup, setLineup] = useState<{ home: LineupPlayer[]; away: LineupPlayer[] } | null>(null);
 
     useEffect(() => {
         if (!match) return;
@@ -29,6 +32,9 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
         let isMounted = true;
         setLoading(true);
         setActiveTab('prediction');
+        setRealH2H(null);
+        setNews([]);
+        setLineup(null);
 
         document.body.style.overflow = 'hidden';
 
@@ -36,15 +42,22 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
             try {
                 const fixtureId = Number(match.fixtureId || match.id) || 0;
 
-                // Only fetch live odds, use AI generated data for everything else
-                if (fixtureId) {
-                    const od = await getMatchOdds(fixtureId);
-                    if (isMounted) setOdds(od);
-                }
+                const [od, h2hData, newsData, lineupData] = await Promise.all([
+                    fixtureId ? getLiveOddsFromDB(fixtureId) : null,
+                    (match.homeTeamId && match.awayTeamId) ? getH2HFromDB(match.homeTeamId, match.awayTeamId) : null,
+                    fixtureId ? getMatchNewsFromDB(fixtureId) : [],
+                    fixtureId ? getFixtureLineupsFromDB(fixtureId) : null,
+                ]);
 
-                if (isMounted) setLoading(false);
+                if (isMounted) {
+                    setOdds(od);
+                    setRealH2H(h2hData);
+                    setNews(newsData);
+                    setLineup(lineupData);
+                    setLoading(false);
+                }
             } catch (e) {
-                console.error("Error fetching match odds:", e);
+                console.error("Error fetching match details:", e);
                 if (isMounted) setLoading(false);
             }
         };
@@ -137,17 +150,22 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                             { id: 'stats', icon: BarChart3, label: 'Stats' },
                             { id: 'h2h', icon: Target, label: 'H2H' },
                             { id: 'injuries', icon: ShieldAlert, label: language === 'fr' ? 'Absents' : 'Injuries' },
+                            { id: 'news', icon: Newspaper, label: language === 'fr' ? 'Actualités' : 'News', badge: news.length > 0 },
+                            { id: 'lineup', icon: Users, label: language === 'fr' ? 'Compo' : 'Lineup' },
                         ].map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
-                                className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm font-bold whitespace-nowrap transition-colors ${activeTab === tab.id
+                                className={`relative flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm font-bold whitespace-nowrap transition-colors ${activeTab === tab.id
                                     ? 'bg-vantage-cyan/10 text-vantage-cyan border-b-2 border-vantage-cyan'
                                     : 'text-gray-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
                                     }`}
                             >
                                 <tab.icon size={16} />
                                 {tab.label}
+                                {'badge' in tab && tab.badge && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-vantage-cyan" />
+                                )}
                             </button>
                         ))}
                     </div>
@@ -335,11 +353,14 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                 </div>
                                             )}
 
-                                            {/* Odds */}
+                                            {/* Odds — clearly labeled as REAL MARKET ODDS */}
                                             {odds && (
                                                 <div className="space-y-3">
                                                     <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
-                                                        <Scale size={12} /> {language === 'fr' ? 'Probabilités 1X2' : '1X2 Probabilities'}
+                                                        <Scale size={12} /> {language === 'fr' ? 'Probabilités Marché Réel' : 'Real Market Odds (1X2)'}
+                                                        <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-500 border border-green-500/30 flex items-center gap-1">
+                                                            <CheckCircle2 size={8} /> LIVE DATA
+                                                        </span>
                                                     </h4>
                                                     <div className="grid grid-cols-3 gap-2">
                                                         <div className="p-3 rounded-lg bg-vantage-cyan/10 border border-vantage-cyan/20 flex flex-col items-center">
@@ -390,44 +411,47 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
                                     {activeTab === 'h2h' && (
                                         <div className="space-y-6">
-                                            {(match.h2hHomeWins !== undefined) ? (
-                                                <>
-                                                    <div className="p-6 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 text-center">
-                                                        <Trophy size={24} className="text-yellow-500 mx-auto mb-3" />
-                                                        <h4 className="text-sm font-bold mb-4">{language === 'fr' ? 'Confrontations Directes (5 dernières)' : 'Head-to-Head (Last 5)'}</h4>
-
-                                                        <div className="flex justify-center items-center gap-6">
-                                                            <div className="flex flex-col items-center">
-                                                                <span className="text-2xl font-bold text-vantage-cyan mb-1">{match.h2hHomeWins}</span>
-                                                                <span className="text-[10px] text-gray-500 uppercase">{match.homeTeam}</span>
-                                                            </div>
-                                                            <div className="flex flex-col items-center">
-                                                                <span className="text-lg font-bold text-gray-400 mb-1">{match.h2hDraws}</span>
-                                                                <span className="text-[10px] text-gray-500 uppercase">Draws</span>
-                                                            </div>
-                                                            <div className="flex flex-col items-center">
-                                                                <span className="text-2xl font-bold text-vantage-purple mb-1">{match.h2hAwayWins}</span>
-                                                                <span className="text-[10px] text-gray-500 uppercase">{match.awayTeam}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10 text-xs text-gray-500 truncate px-2">
-                                                            Scores: {match.h2hLast5Goals || 'N/A'}
-                                                        </div>
+                                            {/* Use real H2H from API first, fall back to AI-stored data */}
+                                            {(() => {
+                                                const h2hData = realH2H || (match.h2hHomeWins !== undefined ? { homeTeamWins: match.h2hHomeWins!, awayTeamWins: match.h2hAwayWins!, draws: match.h2hDraws!, last5Goals: match.h2hLast5Goals || '' } : null);
+                                                if (!h2hData) return (
+                                                    <div className="text-center py-10 text-gray-500 text-sm">
+                                                        {language === 'fr' ? 'Données H2H non disponibles' : 'H2H data not available'}
                                                     </div>
-
-                                                    {(match.homeWinRate !== undefined) && (
-                                                        <div className="pt-2">
-                                                            {renderStatBar("Win Rate", match.homeWinRate || 0, match.awayWinRate || 0, true)}
-                                                            {renderStatBar("Avg Scored", match.homeAvgScored || 0, match.awayAvgScored || 0, false)}
-                                                            {renderStatBar("Avg Conceded", match.homeAvgConceded || 0, match.awayAvgConceded || 0, false)}
+                                                );
+                                                return (
+                                                    <>
+                                                        <div className="p-6 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 text-center">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <Trophy size={24} className="text-yellow-500" />
+                                                                {realH2H && (
+                                                                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-500 border border-green-500/30 flex items-center gap-1">
+                                                                        <CheckCircle2 size={8} /> LIVE DATA
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <h4 className="text-sm font-bold mb-4">{language === 'fr' ? 'Confrontations Directes (5 dernières)' : 'Head-to-Head (Last 5)'}</h4>
+                                                            <div className="flex justify-center items-center gap-6">
+                                                                <div className="flex flex-col items-center">
+                                                                    <span className="text-2xl font-bold text-vantage-cyan mb-1">{h2hData.homeTeamWins}</span>
+                                                                    <span className="text-[10px] text-gray-500 uppercase">{match.homeTeam}</span>
+                                                                </div>
+                                                                <div className="flex flex-col items-center">
+                                                                    <span className="text-lg font-bold text-gray-400 mb-1">{h2hData.draws}</span>
+                                                                    <span className="text-[10px] text-gray-500 uppercase">Draws</span>
+                                                                </div>
+                                                                <div className="flex flex-col items-center">
+                                                                    <span className="text-2xl font-bold text-vantage-purple mb-1">{h2hData.awayTeamWins}</span>
+                                                                    <span className="text-[10px] text-gray-500 uppercase">{match.awayTeam}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10 text-xs text-gray-500 truncate px-2">
+                                                                Scores: {h2hData.last5Goals || 'N/A'}
+                                                            </div>
                                                         </div>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <div className="text-center py-10 text-gray-500 text-sm">
-                                                    {language === 'fr' ? 'Données H2H non disponibles' : 'H2H data not available'}
-                                                </div>
-                                            )}
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                     )}
 
@@ -461,6 +485,74 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                     )}
                                                 </div>
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {/* ── NEWS TAB ── */}
+                                    {activeTab === 'news' && (
+                                        <div className="space-y-3">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+                                                <Newspaper size={12} /> {language === 'fr' ? 'Actualités Avant-Match' : 'Pre-Match News'}
+                                                <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-500 border border-green-500/30">LIVE DATA</span>
+                                            </h4>
+                                            {news.length === 0 ? (
+                                                <div className="text-center py-10">
+                                                    <Newspaper size={32} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                                                    <p className="text-sm text-gray-500">{language === 'fr' ? 'Aucune actualité disponible' : 'No news for this match yet'}</p>
+                                                    <p className="text-xs text-gray-400 mt-1">{language === 'fr' ? 'Les news seront publiées le jour du match.' : 'News is published on match day.'}</p>
+                                                </div>
+                                            ) : (
+                                                news.map((item, i) => (
+                                                    <div key={item.id || i} className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10">
+                                                        <div className="flex items-start gap-2">
+                                                            <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-vantage-cyan/15 text-vantage-cyan border border-vantage-cyan/30 shrink-0 mt-0.5">
+                                                                {item.type || 'preview'}
+                                                            </span>
+                                                            <p className="text-sm text-slate-700 dark:text-gray-200 font-medium leading-snug">{item.title}</p>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* ── LINEUP TAB ── */}
+                                    {activeTab === 'lineup' && (
+                                        <div className="space-y-4">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+                                                <Users size={12} /> {language === 'fr' ? 'Compositions Probables' : 'Expected Lineups'}
+                                                {lineup && (
+                                                    <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-500 border border-green-500/30">LIVE DATA</span>
+                                                )}
+                                            </h4>
+                                            {!lineup || (lineup.home.length === 0 && lineup.away.length === 0) ? (
+                                                <div className="text-center py-10">
+                                                    <Users size={32} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                                                    <p className="text-sm text-gray-500">{language === 'fr' ? 'Compo pas encore annoncée' : 'Lineups not yet announced'}</p>
+                                                    <p className="text-xs text-gray-400 mt-1">{language === 'fr' ? 'Disponibles ~1h avant le coup d\'envoi.' : 'Usually available ~1hr before kickoff.'}</p>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-bold text-center text-vantage-cyan pb-2 border-b border-vantage-cyan/20">{match.homeTeam}</p>
+                                                        {lineup.home.map((p, i) => (
+                                                            <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors">
+                                                                <span className="text-[9px] font-bold font-orbitron text-vantage-cyan w-5 text-center shrink-0">{p.number ?? i + 1}</span>
+                                                                <span className="text-xs text-slate-700 dark:text-gray-200 truncate">{p.name}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-[10px] font-bold text-center text-vantage-purple pb-2 border-b border-vantage-purple/20">{match.awayTeam}</p>
+                                                        {lineup.away.map((p, i) => (
+                                                            <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors">
+                                                                <span className="text-[9px] font-bold font-orbitron text-vantage-purple w-5 text-center shrink-0">{p.number ?? i + 1}</span>
+                                                                <span className="text-xs text-slate-700 dark:text-gray-200 truncate">{p.name}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 

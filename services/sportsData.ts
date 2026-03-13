@@ -15,6 +15,19 @@ if (BACKEND_URL.includes('railwayapp') && !BACKEND_URL.includes('railway.app')) 
 BACKEND_URL = BACKEND_URL.replace(/\/$/, "");
 const API_BASE = `${BACKEND_URL}/api/sportmonks`;
 
+// ── Short in-memory cache (5 min) for Firestore reads ─────────────────────────
+// Reduces DB reads when user navigates between tabs quickly.
+const _memCache = new Map<string, { data: any; ts: number }>();
+const MEM_CACHE_TTL = 5 * 60 * 1000;
+function _mcGet<T>(key: string): T | null {
+    const e = _memCache.get(key);
+    if (e && Date.now() - e.ts < MEM_CACHE_TTL) return e.data as T;
+    return null;
+}
+function _mcSet(key: string, data: any) { _memCache.set(key, { data, ts: Date.now() }); }
+
+
+
 // The API token is securely appended by the backend proxy.
 // No longer needed on the frontend.
 
@@ -319,7 +332,7 @@ export const getTeamForm = async (
  * Fetches the last 5 head-to-head meetings between two teams via Sportmonks.
  */
 export const getH2H = async (homeId: number, awayId: number): Promise<H2HRecord | null> => {
-    const data: any[] | null = await apiFetch(`/head-to-head/${homeId}/${awayId}?include=participants;scores`);
+    const data: any[] | null = await apiFetch(`/fixtures/head-to-head/${homeId}/${awayId}?include=participants;scores`);
     if (!data || data.length === 0) return null;
 
     let homeWins = 0, awayWins = 0, draws = 0;
@@ -361,17 +374,27 @@ export const getMatchOdds = async (fixtureId: number): Promise<MatchOdds | null>
     if (!data || data.length === 0) return null;
 
     try {
-        // Find 1x2 market (market_id = 1 usually)
-        const market1x2 = data.find((m: any) => m.market_id === 1);
-        if (!market1x2) return null;
+        // Real SportMonks flat structure: each record has { market_id, bookmaker_id, label, value, name }
+        // label is '1', 'X', or '2' for 1X2 market (market_id = 1)
+        const market1x2 = data.filter((m: any) => m.market_id === 1);
+        if (!market1x2.length) {
+            // Fallback: try market_id 2 or the first available market
+            return null;
+        }
 
-        const homeOdd = parseFloat(market1x2.values?.find((v: any) => v.name === '1')?.value ?? '0');
-        const drawOdd = parseFloat(market1x2.values?.find((v: any) => v.name === 'X')?.value ?? '0');
-        const awayOdd = parseFloat(market1x2.values?.find((v: any) => v.name === '2')?.value ?? '0');
+        // Average odds across bookmakers for 1X2
+        const homeEntries = market1x2.filter((m: any) => m.label === '1' || m.label === 'Home').map((m: any) => parseFloat(m.value)).filter((v: number) => v > 1);
+        const drawEntries = market1x2.filter((m: any) => m.label === 'X' || m.label === 'Draw').map((m: any) => parseFloat(m.value)).filter((v: number) => v > 1);
+        const awayEntries = market1x2.filter((m: any) => m.label === '2' || m.label === 'Away').map((m: any) => parseFloat(m.value)).filter((v: number) => v > 1);
 
-        if (!homeOdd || !drawOdd || !awayOdd) return null;
+        if (!homeEntries.length || !drawEntries.length || !awayEntries.length) return null;
 
-        // Remove overround to get true implied probabilities
+        // Use median (more robust than mean against outliers)
+        const median = (arr: number[]) => { const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+        const homeOdd = median(homeEntries);
+        const drawOdd = median(drawEntries);
+        const awayOdd = median(awayEntries);
+
         const overround = (1 / homeOdd) + (1 / drawOdd) + (1 / awayOdd);
         return {
             home: homeOdd,
@@ -467,3 +490,167 @@ export const formatFixtureContext = (enriched: Awaited<ReturnType<typeof enrichF
         return lines.join('\n');
     }).join('\n\n---\n\n');
 };
+
+// ══════════════════════════════════════════════════════════════════════
+// FIRESTORE-BASED READERS (zero SportMonks API tokens consumed)
+// The backend scheduler writes to these Firestore collections.
+// Frontend reads from Firestore — no direct API calls.
+// ══════════════════════════════════════════════════════════════════════
+
+import { db } from '../firebaseConfig';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { LiveMatch, MatchNews } from '../types';
+
+function getTodayKey() {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+}
+function getTomorrowKey() {
+    const n = new Date();
+    n.setDate(n.getDate() + 1);
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Read live scores from Firestore (written by backend every 60 seconds).
+ * Returns empty array if no live matches are written yet.
+ */
+export const getLiveMatchesFromDB = async (): Promise<LiveMatch[]> => {
+    const cacheKey = 'live_matches';
+    const cached = _mcGet<LiveMatch[]>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'live_scores', 'current'));
+        if (snap.exists()) {
+            const data = snap.data() as { matches: LiveMatch[]; updatedAt: string };
+            const result = data.matches || [];
+            _mcSet(cacheKey, result);
+            return result;
+        }
+    } catch (e) {
+        console.warn('[DB] getLiveMatchesFromDB error:', e);
+    }
+    return [];
+};
+
+/**
+ * Read today's pre-match news from Firestore (written by backend once daily).
+ */
+export const getMatchNewsFromDB = async (fixtureId?: number): Promise<MatchNews[]> => {
+    const todayKey = getTodayKey();
+    const cacheKey = `match_news_${todayKey}`;
+    const cached = _mcGet<MatchNews[]>(cacheKey);
+    const all = cached ?? await (async () => {
+        try {
+            const snap = await getDoc(doc(db, 'match_news', todayKey));
+            if (snap.exists()) {
+                const data = snap.data() as { items: MatchNews[] };
+                const items = data.items || [];
+                _mcSet(cacheKey, items);
+                return items;
+            }
+        } catch (e) {
+            console.warn('[DB] getMatchNewsFromDB error:', e);
+        }
+        return [] as MatchNews[];
+    })();
+    if (fixtureId !== undefined) return all.filter(n => n.fixtureId === fixtureId);
+    return all;
+};
+
+/**
+ * Read expected lineup for a fixture from Firestore (written by backend ~1h before KO).
+ */
+export interface LineupPlayer {
+    name: string;
+    number?: number;
+    position?: string;
+    teamId?: number;
+    teamName: string;
+    isHome: boolean;
+}
+
+export const getFixtureLineupsFromDB = async (fixtureId: number): Promise<{ home: LineupPlayer[]; away: LineupPlayer[] } | null> => {
+    const cacheKey = `lineup_${fixtureId}`;
+    const cached = _mcGet<{ home: LineupPlayer[]; away: LineupPlayer[] }>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'lineups', String(fixtureId)));
+        if (snap.exists()) {
+            const data = snap.data() as { home: LineupPlayer[]; away: LineupPlayer[] };
+            _mcSet(cacheKey, data);
+            return data;
+        }
+    } catch (e) {
+        console.warn('[DB] getFixtureLineupsFromDB error:', e);
+    }
+    return null;
+};
+
+/**
+ * Read tomorrow's scheduled fixtures from Firestore (written by backend daily).
+ */
+export const getTomorrowFixturesFromDB = async (): Promise<any[]> => {
+    const tomorrowKey = getTomorrowKey();
+    const cacheKey = `tomorrow_fixtures_${tomorrowKey}`;
+    const cached = _mcGet<any[]>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'daily_predictions', tomorrowKey));
+        if (snap.exists()) {
+            const data = snap.data() as { rawFixtures?: any[] };
+            const fixtures = data.rawFixtures || [];
+            _mcSet(cacheKey, fixtures);
+            return fixtures;
+        }
+    } catch (e) {
+        console.warn('[DB] getTomorrowFixturesFromDB error:', e);
+    }
+    return [];
+};
+
+/**
+ * Read the real 1X2 odds for a fixture from Firestore.
+ * The backend enrichment job writes these during prediction generation.
+ * Falls back to the live API proxy call for cache misses.
+ */
+export const getLiveOddsFromDB = async (fixtureId: number): Promise<MatchOdds | null> => {
+    const cacheKey = `odds_db_${fixtureId}`;
+    const cached = _mcGet<MatchOdds>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'fixture_odds', String(fixtureId)));
+        if (snap.exists()) {
+            const data = snap.data() as MatchOdds;
+            _mcSet(cacheKey, data);
+            return data;
+        }
+    } catch (e) {
+        console.warn('[DB] getLiveOddsFromDB error:', e);
+    }
+    // Fallback: fetch from backend proxy (uses 1 SportMonks API call)
+    return getMatchOdds(fixtureId);
+};
+
+/**
+ * Read real H2H data for two teams from Firestore.
+ * Falls back to the live API proxy call for cache misses.
+ */
+export const getH2HFromDB = async (homeId: number, awayId: number): Promise<H2HRecord | null> => {
+    const cacheKey = `h2h_db_${homeId}_${awayId}`;
+    const cached = _mcGet<H2HRecord>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'h2h_data', `${homeId}_${awayId}`));
+        if (snap.exists()) {
+            const data = snap.data() as H2HRecord;
+            _mcSet(cacheKey, data);
+            return data;
+        }
+    } catch (e) {
+        console.warn('[DB] getH2HFromDB error:', e);
+    }
+    // Fallback: fetch from backend proxy (uses 1 SportMonks API call)
+    return getH2H(homeId, awayId);
+};
+

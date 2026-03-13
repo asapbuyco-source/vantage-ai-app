@@ -20,6 +20,7 @@ import { TicketWizard } from './components/TicketWizard';
 import { LandingPage } from './pages/LandingPage';
 import { PublicStats } from './pages/PublicStats';
 import { Results } from './pages/Results';
+import { LiveScores } from './pages/LiveScores';
 import { BlogIndex } from './pages/BlogIndex';
 import { BlogPost } from './pages/BlogPost';
 import { AppProvider, useAppContext } from './context/AppContext';
@@ -111,22 +112,28 @@ function AppContent() {
   }, []);
 
   // ── Unified Payment Verification (Selar first, then Fapshi) ──────────────────
-  // Runs as a single sequential effect to prevent double-VIP race conditions.
+  // Runs ONCE per page load, only after auth is ready. Using a ref guard to
+  // prevent re-execution when verifyTransaction function reference changes on renders.
+  const paymentChecked = React.useRef(false);
+
   useEffect(() => {
+    // Guard: only run once per page load, and only when auth is fully resolved
+    if (authLoading || !user || paymentChecked.current) return;
+    // Don't set the flag yet — wait until we actually find something to verify
+    // (so a page load with no pending payment doesn't block future checks)
+
     const checkPayments = async () => {
-      if (authLoading || !user) return;
       const urlParams = new URLSearchParams(window.location.search);
 
       // 1️⃣  Selar (card / global payment) — check first
       let selarRef = urlParams.get('selar_ref');
       if (!selarRef) {
-        // Fallback: user may have returned in a new tab without the URL param
         const pending = localStorage.getItem('pendingSelarRef');
         if (pending) selarRef = pending;
       }
 
       if (selarRef) {
-        // Consume the ref immediately from both URL and storage
+        paymentChecked.current = true;
         window.history.replaceState({}, document.title, window.location.pathname);
         localStorage.removeItem('pendingSelarRef');
 
@@ -139,7 +146,6 @@ function AppContent() {
           );
           setActiveTab('vip');
         } else if (urlParams.get('selar_ref')) {
-          // Also clear any stale pendingSelarRef from localStorage on failure
           localStorage.removeItem('pendingSelarRef');
           localStorage.removeItem('pendingVipPlan');
           showToast(
@@ -147,7 +153,6 @@ function AppContent() {
             'error'
           );
         }
-        // Selar handled — do NOT fall through to Fapshi check
         return;
       }
 
@@ -160,7 +165,8 @@ function AppContent() {
       }
 
       if (transId) {
-        // Only wipe the transId from storage once we're actively verifying it to prevent infinite loops
+        paymentChecked.current = true;
+        // Consume transId AFTER we confirmed user is ready, to prevent premature deletion
         localStorage.removeItem('pendingFapshiTransId');
         window.history.replaceState({}, document.title, window.location.pathname);
         const success = await verifyTransaction(transId);
@@ -179,7 +185,8 @@ function AppContent() {
       }
     };
     checkPayments();
-  }, [authLoading, user, verifyTransaction, showToast, language]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user]);
 
   // Auth loading spinner
   if (authLoading) {
@@ -332,6 +339,7 @@ function AppContent() {
                     {activeTab === 'concierge' && <TicketWizard setTab={setActiveTab} />}
                     {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
                     {activeTab === 'results' && <Results />}
+                    {activeTab === 'live' && <LiveScores setTab={setActiveTab} />}
                   </ErrorBoundary>
                 </motion.div>
               }

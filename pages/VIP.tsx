@@ -10,6 +10,8 @@ import { NavigationTab, Match } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { AccumulatorModal } from '../components/AccumulatorModal';
 import { getAppSettings } from '../services/db';
+import { getTomorrowFixturesFromDB } from '../services/sportsData';
+import { Calendar } from 'lucide-react';
 
 // ── Currency detection helper ──────────────────────────────────────
 const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string }> = {
@@ -54,6 +56,19 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
       if (s.whatsappGroupUrl) setWhatsappGroupUrl(s.whatsappGroupUrl);
     });
   }, []);
+
+  const [picksDay, setPicksDay] = useState<'today' | 'tomorrow'>('today');
+  const [tomorrowFixtures, setTomorrowFixtures] = useState<Match[]>([]);
+  const [tomorrowLoading, setTomorrowLoading] = useState(false);
+
+  useEffect(() => {
+    if (picksDay === 'tomorrow') {
+      setTomorrowLoading(true);
+      getTomorrowFixturesFromDB()
+        .then(fixtures => setTomorrowFixtures(fixtures as Match[]))
+        .finally(() => setTomorrowLoading(false));
+    }
+  }, [picksDay]);
 
   const plans: Array<{
     id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
@@ -419,9 +434,81 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           </div>
         </div>
 
-        {renderMatchList(safeBets, "Sure Bets (Safe)", <ShieldCheck size={16} />, "text-green-500")}
-        {renderMatchList(valueBets, "Value Picks", <Star size={16} />, "text-vantage-cyan")}
-        {renderMatchList(riskyBets, "High Risk / High Reward", <Flame size={16} />, "text-orange-500")}
+        {/* ── TODAY / TOMORROW DATE TOGGLE ── */}
+        <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 border border-slate-200 dark:border-white/10">
+          <button
+            onClick={() => setPicksDay('today')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${picksDay === 'today' ? 'bg-white dark:bg-white/15 shadow text-vantage-cyan' : 'text-gray-500'}`}
+          >
+            <Zap size={12} /> {language === 'fr' ? "Aujourd'hui" : "Today's Picks"}
+          </button>
+          <button
+            onClick={() => setPicksDay('tomorrow')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${picksDay === 'tomorrow' ? 'bg-white dark:bg-white/15 shadow text-vantage-purple' : 'text-gray-500'}`}
+          >
+            <Calendar size={12} /> {language === 'fr' ? 'Demain' : "Tomorrow"}
+          </button>
+        </div>
+
+        {picksDay === 'tomorrow' ? (
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300">
+              <Calendar size={16} className="text-vantage-purple" />
+              {language === 'fr' ? "Matchs de Demain" : "Tomorrow's Fixtures"}
+              <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-vantage-purple/15 border border-vantage-purple/30 text-vantage-purple">LIVE DATA</span>
+            </h3>
+            {tomorrowLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-slate-200 dark:bg-white/5 animate-pulse" />)}
+              </div>
+            ) : tomorrowFixtures.length === 0 ? (
+              <div className="text-center py-10 text-gray-500 text-sm border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl">
+                <Calendar size={28} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                <p className="font-medium">{language === 'fr' ? "Aucun match prévu pour demain" : "No fixtures yet for tomorrow"}</p>
+                <p className="text-xs text-gray-400 mt-1">{language === 'fr' ? "Disponible après 23:00 Lagos" : "Available after 23:00 Lagos time"}</p>
+              </div>
+            ) : (
+              tomorrowFixtures.map((fixture, i) => (
+                <motion.div
+                  key={fixture.id || i}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase truncate max-w-[65%]">{fixture.league}</span>
+                    <span className="text-[10px] font-mono text-vantage-purple font-bold">{fixture.time}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className="w-7 h-7 shrink-0 rounded-lg bg-white/10 flex items-center justify-center">
+                        <TeamLogo src={fixture.homeTeamLogo} teamName={fixture.homeTeam} className="w-5 h-5" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white truncate">{fixture.homeTeam}</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-400 shrink-0 px-2 py-0.5 rounded bg-slate-200 dark:bg-white/10">vs</span>
+                    <div className="flex items-center gap-2 flex-1 min-w-0 flex-row-reverse">
+                      <div className="w-7 h-7 shrink-0 rounded-lg bg-white/10 flex items-center justify-center">
+                        <TeamLogo src={fixture.awayTeamLogo} teamName={fixture.awayTeam} className="w-5 h-5" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white truncate text-right">{fixture.awayTeam}</span>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-vantage-purple/15 text-vantage-purple font-bold border border-vantage-purple/30">📅 COMING TOMORROW</span>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </div>
+        ) : (
+          <>
+            {renderMatchList(safeBets, "Sure Bets (Safe)", <ShieldCheck size={16} />, "text-green-500")}
+            {renderMatchList(valueBets, "Value Picks", <Star size={16} />, "text-vantage-cyan")}
+            {renderMatchList(riskyBets, "High Risk / High Reward", <Flame size={16} />, "text-orange-500")}
+          </>
+        )}
 
         <AccumulatorModal isOpen={isAccuOpen} onClose={() => setIsAccuOpen(false)} initialRisk={accuRisk} />
       </div>
