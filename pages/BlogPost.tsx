@@ -39,11 +39,24 @@ export const BlogPost: React.FC = () => {
 
     useEffect(() => {
         fetchPost();
+        
+        // Handle dynamic SEO (Title, Meta Description, Canonical URL)
+        const canonicalUrl = `https://vantageai.online/blog/${targetDate}`;
+        let link: HTMLLinkElement | null = document.querySelector("link[rel='canonical']");
+        
+        if (!link) {
+            link = document.createElement('link');
+            link.setAttribute('rel', 'canonical');
+            document.head.appendChild(link);
+        }
+        link.setAttribute('href', canonicalUrl);
+
         return () => {
-            // Restore default title on unmount
+            // Restore default title and canonical on unmount
             document.title = 'Vantage AI Cameroun - Pronostics Foot 1xBet & Premier Bet (IA)';
+            if (link) link.setAttribute('href', 'https://vantageai.online/');
         };
-    }, [fetchPost]);
+    }, [fetchPost, targetDate]);
 
     return (
         <div className="min-h-screen bg-vantage-bg text-white pb-24">
