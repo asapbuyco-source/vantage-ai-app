@@ -18,6 +18,10 @@ oauth2Client.setCredentials({
 
 const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
+// Self-disable flag: set to true when credentials are revoked/expired
+// Prevents flooding logs with repeated invalid_grant errors.
+let _gmailDisabled = false;
+
 /**
  * Extract the full body text from a Gmail message payload.
  * Handles both simple and multipart emails.
@@ -73,6 +77,11 @@ async function logUnmatchedPayment(db, { customerEmail, plan, messageId, rawEmai
 }
 
 export const checkRecentSelarEmails = async () => {
+    // ── Skip if credentials are known-bad (prevents log spam) ─────────────────
+    if (_gmailDisabled) {
+        return; // Silently skip — error already logged at disable time
+    }
+
     try {
         console.log('[Gmail Listener] Checking for new Selar receipts...');
 
@@ -229,6 +238,18 @@ export const checkRecentSelarEmails = async () => {
         }
 
     } catch (error) {
+        // ── Detect expired/revoked OAuth token ────────────────────────────────
+        if (error.message?.includes('invalid_grant') || error.code === 'invalid_grant') {
+            _gmailDisabled = true;
+            console.error('\n[Gmail Listener] ❌ OAUTH TOKEN EXPIRED (invalid_grant)');
+            console.error('[Gmail Listener] The Gmail refresh token has been revoked or expired.');
+            console.error('[Gmail Listener] TO FIX:');
+            console.error('[Gmail Listener]   1. Run: node get-gmail-token.js');
+            console.error('[Gmail Listener]   2. Copy the new GMAIL_REFRESH_TOKEN into your .env.local / Railway env vars');
+            console.error('[Gmail Listener]   3. Restart the server');
+            console.error('[Gmail Listener] Gmail listener DISABLED until server restarts with a valid token.\n');
+            return;
+        }
         console.error('[Gmail Listener] Error:', error.message);
     }
 };
