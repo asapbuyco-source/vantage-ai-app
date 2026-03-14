@@ -1,0 +1,172 @@
+"""
+performance_tracker.py
+──────────────────────
+Tracks and computes system-wide performance metrics.
+
+Reads all graded quant_predictions from Firestore and computes:
+  - Total bets, wins, losses, voids
+  - Win rate (excluding voids)
+  - ROI (return on investment)
+  - Profit/loss in units
+  - Closing Line Value (CLV) tracking
+  - Streak (current consecutive wins)
+"""
+
+import sys
+from datetime import datetime, timezone
+from collections import defaultdict
+
+
+def _get_firestore():
+    try:
+        import firebase_admin
+        from firebase_admin import firestore as fs
+        return fs.client()
+    except Exception as e:
+        print(f"[Perf] Firestore unavailable: {e}", file=sys.stderr)
+        return None
+
+
+def _compute_period_stats(predictions: list[dict]) -> dict:
+    """Compute stats for a list of predictions."""
+    total = wins = losses = voids = 0
+    stakes = profits = 0.0
+    clv_bets = []
+
+    for pred in predictions:
+        status = pred.get("status", "pending")
+        if status == "pending":
+            continue
+        total += 1
+        kelly_stake = float(pred.get("kelly_stake", 1.0))  # % as stake units
+        stake_unit = kelly_stake / 100.0  # Convert to fractional
+
+        if status == "won":
+            wins += 1
+            odds = float(pred.get("odds", 1.0))
+            profits += stake_unit * (odds - 1.0)
+            stakes += stake_unit
+        elif status == "lost":
+            losses += 1
+            profits -= stake_unit
+            stakes += stake_unit
+        else:  # void
+            voids += 1
+
+        # CLV: if we recorded opening odds vs closing odds
+        opening_odds = pred.get("opening_odds")
+        closing_odds = pred.get("odds")  # Odds at time of pick (proxy for opening)
+        if opening_odds and closing_odds:
+            clv = (float(closing_odds) - float(opening_odds)) / float(opening_odds)
+            clv_bets.append(clv)
+
+    graded = wins + losses  # Exclude voids from win rate
+    win_rate = wins / graded if graded > 0 else 0.0
+    roi = profits / stakes if stakes > 0 else 0.0
+    avg_clv = sum(clv_bets) / len(clv_bets) if clv_bets else None
+
+    return {
+        "total_bets": total,
+        "wins": wins,
+        "losses": losses,
+        "voids": voids,
+        "win_rate": round(win_rate, 4),
+        "roi": round(roi, 4),
+        "profit_units": round(profits, 4),
+        "stakes_units": round(stakes, 4),
+        "avg_clv": round(avg_clv, 4) if avg_clv is not None else None,
+    }
+
+
+def _compute_streak(predictions: list[dict]) -> int:
+    """Compute current consecutive win streak (positive) or loss streak (negative)."""
+    graded = [p for p in predictions if p.get("status") in ("won", "lost")]
+    if not graded:
+        return 0
+    # Most recent first (assume sorted by date already)
+    graded.reverse()
+    streak = 0
+    first_status = graded[0].get("status")
+    for p in graded:
+        if p.get("status") == first_status:
+            streak += 1
+        else:
+            break
+    return streak if first_status == "won" else -streak
+
+
+def compute_and_save_performance() -> dict:
+    """
+    Main entry: compute performance across all available quant prediction dates
+    and save aggregated stats to Firestore `quant_performance/all`.
+    """
+    db = _get_firestore()
+    if not db:
+        return {"status": "error", "error": "no_firestore"}
+
+    all_preds = []
+    daily = {}
+
+    try:
+        docs = db.collection("quant_predictions").stream()
+        for doc in docs:
+            data = doc.to_dict()
+            preds = data.get("predictions", [])
+            # Annotate with date
+            for p in preds:
+                p["_date"] = doc.id
+            all_preds.extend(preds)
+            daily[doc.id] = _compute_period_stats(preds)
+    except Exception as e:
+        print(f"[Perf] Error reading quant_predictions: {e}", file=sys.stderr)
+        return {"status": "error", "error": str(e)}
+
+    if not all_preds:
+        return {"status": "skipped", "reason": "no_data"}
+
+    overall = _compute_period_stats(all_preds)
+    overall["streak"] = _compute_streak(all_preds)
+    overall["daily"] = daily
+    overall["computed_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Weekly stats (last 7 days)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    from datetime import timedelta
+    week_dates = {
+        (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(7)
+    }
+    weekly_preds = [p for p in all_preds if p.get("_date") in week_dates]
+    weekly = _compute_period_stats(weekly_preds)
+
+    # Monthly stats (last 30 days)
+    month_dates = {
+        (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(30)
+    }
+    monthly_preds = [p for p in all_preds if p.get("_date") in month_dates]
+    monthly = _compute_period_stats(monthly_preds)
+
+    result = {
+        "overall": overall,
+        "weekly": weekly,
+        "monthly": monthly,
+        "computed_at": overall["computed_at"],
+    }
+
+    try:
+        db.collection("quant_performance").document("all").set(result, merge=True)
+        print(f"[Perf] ✅ Performance saved: {overall['total_bets']} bets | WR: {overall['win_rate']:.1%} | ROI: {overall['roi']:.1%}")
+    except Exception as e:
+        print(f"[Perf] Firestore write error: {e}", file=sys.stderr)
+
+    return {"status": "success", **result}
+
+
+if __name__ == "__main__":
+    result = compute_and_save_performance()
+    if result.get("status") == "success":
+        ovr = result.get("overall", {})
+        print(f"Overall: {ovr.get('total_bets')} bets | Win Rate: {ovr.get('win_rate'):.1%} | ROI: {ovr.get('roi'):.1%}")
+    else:
+        print(result)

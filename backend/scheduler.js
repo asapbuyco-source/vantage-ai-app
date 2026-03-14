@@ -18,6 +18,9 @@ import {
     generateBasketballPredictionsServerSide
 } from './geminiService.js';
 
+// ── Quant Engine (pure statistical — no AI/LLM) ───────────────────────────────
+import { runQuantPipeline, runQuantGrading, runQuantPerformance } from './quantService.js';
+
 import { checkRecentSelarEmails } from './gmailListener.js';
 import { sendDailyPredictionsToTelegram } from './telegramService.js';
 
@@ -57,6 +60,51 @@ async function withOpenAIFallback(openAIFn, geminiFn, taskName) {
 }
 
 // ── Admin trigger helpers (used by server.js admin endpoints) ─────────────────
+
+// ── Quant Engine Triggers ─────────────────────────────────────────────────────
+
+/**
+ * Run the quantitative statistical pipeline (Poisson + Elo + Form).
+ * No AI/LLM involved — pure math models.
+ */
+export const triggerQuantPipeline = async (dateStr = null, dryRun = false) => {
+    try {
+        const result = await runQuantPipeline(dateStr, dryRun);
+        if (result && result.status === 'success') {
+            console.log(`[Scheduler] ✅ Quant Pipeline done: ${result.generated} bets from ${result.matches_analyzed} matches.`);
+        } else {
+            console.warn(`[Scheduler] ⚠️ Quant Pipeline: ${result?.status} — ${result?.reason || result?.error}`);
+        }
+        return result;
+    } catch (e) {
+        console.error('[Scheduler] Quant Pipeline error:', e.message);
+        return { status: 'error', error: e.message };
+    }
+};
+
+/** Grade yesterday's quant predictions using Sportmonks results. */
+export const triggerQuantGrading = async (dateStr = null) => {
+    try {
+        const result = await runQuantGrading(dateStr);
+        console.log(`[Scheduler] ✅ Quant Grading: ${result?.graded ?? 0} bets graded.`);
+        return result;
+    } catch (e) {
+        console.error('[Scheduler] Quant Grading error:', e.message);
+        return { status: 'error', error: e.message };
+    }
+};
+
+/** Recompute quant performance analytics (ROI, win rate, CLV). */
+export const triggerQuantPerformance = async () => {
+    try {
+        const result = await runQuantPerformance();
+        console.log('[Scheduler] ✅ Quant Performance updated.');
+        return result;
+    } catch (e) {
+        console.error('[Scheduler] Quant Performance error:', e.message);
+        return { status: 'error', error: e.message };
+    }
+};
 
 /** Standalone accumulator trigger (OpenAI only — Gemini fallback via generateAccumulators in geminiService) */
 export const triggerAccumulatorGeneration = async () => {
@@ -143,7 +191,7 @@ const isWithinScheduleWindow = (scheduledTime) => {
 
 // We'll export an initialization function so server.js can start it
 export const initScheduler = () => {
-    console.log('🕒 Initializing Dynamic Scheduler (OpenAI Primary / Gemini Fallback)...');
+    console.log('🕒 Initializing Dynamic Scheduler (OpenAI Primary / Gemini Fallback + Quant Engine)...');
 
     // Track current tasks so we can destroy and recreate them if times change
     let footballTask = null;
@@ -151,12 +199,16 @@ export const initScheduler = () => {
     let gradingTask = null;
     let blogTask = null;
     let telegramTask = null;
+    let quantTask = null;
+    let quantGradingTask = null;
 
     let currentFootballTime = null;
     let currentBasketballTime = null;
     let currentGradingTime = null;
     let currentBlogTime = null;
     let currentTelegramTime = null;
+    let currentQuantTime = null;
+    let currentQuantGradingTime = null;
 
     // Function to check for updated times in Firestore
     const syncSchedules = async () => {
@@ -261,6 +313,40 @@ export const initScheduler = () => {
                     await triggerTelegramBroadcast();
                 }, { timezone: "Africa/Lagos" });
                 console.log(`✅ Scheduled Telegram Broadcast for ${telegramTime}`);
+            }
+
+            // ── Quant Pipeline Scheduler ───────────────────────────────────────────
+            const quantTime = safeTime(config.quantGenTime, '07:00');
+            if (quantTime !== currentQuantTime) {
+                if (quantTask) quantTask.stop();
+                currentQuantTime = quantTime;
+                const [qHour, qMin] = quantTime.split(':');
+
+                quantTask = cron.schedule(`${qMin} ${qHour} * * *`, async () => {
+                    if (!isWithinScheduleWindow(currentQuantTime)) {
+                        console.warn(`[Scheduler] ⛔ Quant time-gate blocked: not within window of ${currentQuantTime}`);
+                        return;
+                    }
+                    console.log(`📊 Running scheduled Quant Pipeline at ${quantTime}...`);
+                    await triggerQuantPipeline();
+                }, { timezone: 'Africa/Lagos' });
+                console.log(`✅ Scheduled Quant Pipeline for ${quantTime} (pure statistical models)`);
+            }
+
+            // ── Quant Grading Scheduler (runs after main grading) ─────────────────
+            const quantGradingTime = safeTime(config.quantGradingTime, '06:30');
+            if (quantGradingTime !== currentQuantGradingTime) {
+                if (quantGradingTask) quantGradingTask.stop();
+                currentQuantGradingTime = quantGradingTime;
+                const [qgHour, qgMin] = quantGradingTime.split(':');
+
+                quantGradingTask = cron.schedule(`${qgMin} ${qgHour} * * *`, async () => {
+                    if (!isWithinScheduleWindow(currentQuantGradingTime)) return;
+                    console.log(`📊 Running scheduled Quant Grading at ${quantGradingTime}...`);
+                    await triggerQuantGrading();
+                    await triggerQuantPerformance();
+                }, { timezone: 'Africa/Lagos' });
+                console.log(`✅ Scheduled Quant Grading for ${quantGradingTime}`);
             }
 
         } catch (e) {

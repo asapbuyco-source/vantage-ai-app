@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useSpring, useMotionValue, useTransform } from 'framer-motion';
-import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, Trophy } from 'lucide-react';
+import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, Trophy, TrendingUp, BarChart2, Calculator, ChevronDown, ChevronUp } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
@@ -12,6 +12,8 @@ import { AccumulatorModal } from '../components/AccumulatorModal';
 import { getAppSettings } from '../services/db';
 import { getTomorrowFixturesFromDB } from '../services/sportsData';
 import { Calendar } from 'lucide-react';
+import { db } from '../firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
 
 // ── Currency detection helper ──────────────────────────────────────
 const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string }> = {
@@ -69,6 +71,61 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
         .finally(() => setTomorrowLoading(false));
     }
   }, [picksDay]);
+
+  // ── Quant Model State ──────────────────────────────────────────────────────
+  const [quantPredictions, setQuantPredictions] = useState<Match[]>([]);
+  const [quantLoading, setQuantLoading] = useState(false);
+  const [quantBetFilter, setQuantBetFilter] = useState<string>('All');
+  const [quantExpanded, setQuantExpanded] = useState(true);
+
+  useEffect(() => {
+    if (!isUnlocked) return;
+    setQuantLoading(true);
+    const loadQuant = async () => {
+      try {
+        const today = new Date();
+        const dateKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        const snap = await getDoc(doc(db, 'quant_predictions', dateKey));
+        if (snap.exists()) {
+          const data = snap.data();
+          setQuantPredictions((data.predictions || []) as Match[]);
+        }
+      } catch (e) {
+        console.warn('[VIP] Could not load quant predictions:', e);
+      } finally {
+        setQuantLoading(false);
+      }
+    };
+    loadQuant();
+  }, [isUnlocked]);
+
+  const BET_TYPE_FILTERS = ['All', 'Home Win', 'Away Win', 'Over 2.5 Goals', 'BTTS', 'Double Chance (1X)', 'Double Chance (X2)'];
+  const BET_TYPE_LABELS: Record<string, string> = {
+    'All': 'All Bets',
+    'Home Win': 'Straight Win',
+    'Away Win': 'Straight Win',
+    'Over 2.5 Goals': 'Over/Under',
+    'Under 2.5 Goals': 'Over/Under',
+    'BTTS': 'BTTS',
+    'Double Chance (1X)': 'Double Chance',
+    'Double Chance (X2)': 'Double Chance',
+    'Double Chance (12)': 'Double Chance',
+  };
+  const BET_FILTER_GROUPS: Record<string, string[]> = {
+    'All': [],
+    'Straight Win': ['Home Win', 'Away Win', 'Draw No Bet (Home)', 'Draw No Bet (Away)'],
+    'Over/Under': ['Over 1.5 Goals', 'Over 2.5 Goals', 'Under 2.5 Goals', 'Over 3.5 Goals', 'Under 3.5 Goals'],
+    'BTTS': ['BTTS', 'BTTS No'],
+    'Double Chance': ['Double Chance (1X)', 'Double Chance (X2)', 'Double Chance (12)'],
+  };
+
+  const filteredQuantPredictions = quantBetFilter === 'All'
+    ? quantPredictions
+    : quantPredictions.filter(m => {
+        const betType = m.bet_type || m.prediction || '';
+        const group = BET_FILTER_GROUPS[quantBetFilter] || [];
+        return group.some(g => betType.includes(g)) || betType === quantBetFilter;
+      });
 
   const plans: Array<{
     id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
@@ -432,6 +489,164 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
               <span className="text-[10px] text-gray-500">Big Win</span>
             </button>
           </div>
+        </div>
+
+        {/* ── QUANT MODEL PICKS SECTION ──────────────────────────────────────── */}
+        <div className="mb-6">
+          {/* Header */}
+          <button
+            onClick={() => setQuantExpanded(v => !v)}
+            className="w-full flex items-center justify-between mb-3"
+          >
+            <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300">
+              <BarChart2 size={16} className="text-emerald-500" />
+              <span>Quant Model Picks</span>
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 ml-1">STATISTICAL</span>
+              {quantPredictions.length > 0 && (
+                <span className="text-[10px] font-normal text-gray-500">{quantPredictions.length} bets</span>
+              )}
+            </h3>
+            {quantExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+          </button>
+
+          <AnimatePresence>
+          {quantExpanded && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+              {/* Bet-type filter tabs */}
+              {!quantLoading && quantPredictions.length > 0 && (
+                <div className="flex gap-1.5 flex-wrap mb-3">
+                  {['All', 'Straight Win', 'Over/Under', 'BTTS', 'Double Chance'].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setQuantBetFilter(tab)}
+                      className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                        quantBetFilter === tab
+                          ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/30'
+                          : 'bg-slate-100 dark:bg-white/5 text-gray-500 border-slate-200 dark:border-white/10 hover:border-emerald-500/50'
+                      }`}
+                    >{tab}</button>
+                  ))}
+                </div>
+              )}
+
+              {quantLoading ? (
+                <div className="space-y-2">
+                  {[1,2,3].map(i => <div key={i} className="h-24 rounded-xl bg-slate-100 dark:bg-white/5 animate-pulse" />)}
+                </div>
+              ) : filteredQuantPredictions.length === 0 ? (
+                <div className="text-center py-8 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10">
+                  <BarChart2 size={28} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+                  <p className="text-sm font-medium text-gray-500">
+                    {quantPredictions.length === 0 ? 'Quant analysis runs at 07:00 Lagos time' : 'No bets match this filter'}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Pure statistical models — no AI</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <AnimatePresence>
+                    {filteredQuantPredictions.map((match, idx) => {
+                      const ev = match.expected_value ?? 0;
+                      const kelly = match.kelly_stake ?? 0;
+                      const xgH = match.expected_goals_home ?? 0;
+                      const xgA = match.expected_goals_away ?? 0;
+                      const modelConf = match.model_confidence ?? 0;
+                      const evColor = ev >= 0.10 ? 'text-emerald-500' : ev >= 0.05 ? 'text-yellow-500' : 'text-orange-500';
+                      const category = match.category || 'value';
+                      const cfg = CAT_CONFIG[category as keyof typeof CAT_CONFIG] || CAT_CONFIG.value;
+                      return (
+                        <motion.div
+                          key={match.fixture_id || match.id}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ delay: idx * 0.05, duration: 0.3 }}
+                        >
+                          <div className={`relative overflow-hidden rounded-2xl border bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 h-full flex flex-col ${'border-l-emerald-500'} border-slate-200 dark:border-white/10`}>
+                            {/* Header */}
+                            <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+                              <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest truncate max-w-[100px]">{match.league}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">⚙ QUANT</span>
+                                <span className="text-[9px] text-gray-400 flex items-center gap-0.5"><Clock size={9}/>{match.kickoff_local || match.time}</span>
+                              </div>
+                            </div>
+
+                            {/* Teams */}
+                            <div className="flex items-center justify-between px-4 py-2">
+                              <div className="flex items-center gap-2 w-5/12 min-w-0">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0">
+                                  <TeamLogo src={match.home_team_logo || match.homeTeamLogo} teamName={match.home_team || match.homeTeam} className="w-6 h-6" />
+                                </div>
+                                <span className="text-xs font-bold text-slate-900 dark:text-white truncate">{match.home_team || match.homeTeam}</span>
+                              </div>
+                              <div className="flex flex-col items-center shrink-0">
+                                <span className="text-[9px] font-orbitron text-gray-400">VS</span>
+                                {xgH > 0 && <span className="text-[8px] text-gray-500">{xgH.toFixed(1)}-{xgA.toFixed(1)}</span>}
+                              </div>
+                              <div className="flex items-center justify-end gap-2 w-5/12 min-w-0">
+                                <span className="text-xs font-bold text-slate-900 dark:text-white text-right truncate">{match.away_team || match.awayTeam}</span>
+                                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0">
+                                  <TeamLogo src={match.away_team_logo || match.awayTeamLogo} teamName={match.away_team || match.awayTeam} className="w-6 h-6" />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Quant stats bar */}
+                            <div className="mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-[9px] text-gray-500 uppercase tracking-wide">Bet</span>
+                                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 leading-tight break-words">{match.bet_type || match.prediction}</p>
+                                </div>
+                                <div className="text-center shrink-0">
+                                  <span className="text-[9px] text-gray-500 uppercase tracking-wide">Prob</span>
+                                  <p className="text-sm font-bold font-orbitron text-green-500">{match.confidence ?? Math.round((match.probability ?? 0) * 100)}%</p>
+                                </div>
+                              </div>
+
+                              {/* EV + Kelly + Odds row */}
+                              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 ${evColor}`}>
+                                  EV: +{((match.ev_pct ?? ev * 100)).toFixed(1)}%
+                                </span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                  Kelly: {kelly.toFixed(1)}%
+                                </span>
+                                {match.odds > 1 && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
+                                    {match.odds.toFixed(2)}x
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Model agreement bar */}
+                              {modelConf > 0 && (
+                                <div className="mt-2">
+                                  <div className="flex justify-between text-[8px] text-gray-400 mb-0.5">
+                                    <span>Model Agreement</span>
+                                    <span>{Math.round(modelConf * 100)}%</span>
+                                  </div>
+                                  <div className="h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                                    <motion.div
+                                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
+                                      initial={{ width: 0 }}
+                                      animate={{ width: `${modelConf * 100}%` }}
+                                      transition={{ duration: 1, delay: idx * 0.05 + 0.3 }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
+              )}
+            </motion.div>
+          )}
+          </AnimatePresence>
         </div>
 
         {/* ── TODAY / TOMORROW DATE TOGGLE ── */}

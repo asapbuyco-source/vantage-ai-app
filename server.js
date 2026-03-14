@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import admin from 'firebase-admin';
 import fs from 'fs';
-import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGeneration, triggerAccumulatorGeneration, triggerTelegramBroadcast } from './backend/scheduler.js';
+import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGeneration, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
 import OpenAI from 'openai';
 
@@ -269,6 +269,46 @@ app.post('/api/admin/telegram-test', adminAuth, async (req, res) => {
     } catch (e) {
         console.error(e);
         res.status(500).json({ error: 'Telegram test failed', details: e.message });
+    }
+});
+
+// ── Quant Pipeline Endpoints ───────────────────────────────────────────────────
+
+/** Trigger quant statistical pipeline (no AI/LLM — pure models) */
+app.post('/api/admin/trigger-quant', adminAuth, async (req, res) => {
+    try {
+        const { date, dryRun } = req.body || {};
+        console.log(`[API] Quant Pipeline triggered (date: ${date || 'today'}, dryRun: ${!!dryRun})`);
+        const result = await triggerQuantPipeline(date || null, !!dryRun);
+        res.json(result);
+    } catch (e) {
+        console.error('[API] Quant trigger error:', e);
+        res.status(500).json({ error: 'Quant pipeline failed', details: e.message });
+    }
+});
+
+/** Grade yesterday's (or custom date) quant predictions */
+app.post('/api/admin/grade-quant', adminAuth, async (req, res) => {
+    try {
+        const { date } = req.body || {};
+        console.log(`[API] Quant Grading triggered for ${date || 'yesterday'}`);
+        const result = await triggerQuantGrading(date || null);
+        res.json(result);
+    } catch (e) {
+        console.error('[API] Quant grading error:', e);
+        res.status(500).json({ error: 'Quant grading failed', details: e.message });
+    }
+});
+
+/** Recompute and save quant performance analytics */
+app.post('/api/admin/quant-performance', adminAuth, async (req, res) => {
+    try {
+        console.log('[API] Quant Performance computation triggered');
+        const result = await triggerQuantPerformance();
+        res.json(result);
+    } catch (e) {
+        console.error('[API] Quant performance error:', e);
+        res.status(500).json({ error: 'Quant performance failed', details: e.message });
     }
 });
 

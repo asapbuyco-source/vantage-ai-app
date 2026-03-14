@@ -133,47 +133,70 @@ async function tryModels(openai, models, requestFn, taskName) {
     throw new Error(`All OpenAI models failed for ${taskName}. Last: ${lastError?.message}`);
 }
 
-// ── Sportmonks fixtures (paginated, same as geminiService) ────────────────────────────
-const fetchSportmonksForDate = async (dateStr) => {
+const fetchSportmonksServerSide = async (path) => {
     const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
     if (!token) {
-        console.warn('[OpenAI] No Sportmonks token — skipping fixture fetch');
-        return [];
+        console.warn('[OpenAI] No Sportmonks token — skipping fetch');
+        return null;
     }
     try {
         let allData = [];
         let page = 1;
         let hasMore = true;
-        while (hasMore && page <= 10) {
-            const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateStr}?include=league;participants;scores&page=${page}&api_token=${token}`;
+        while (hasMore && page <= 50) {
+            const pagePath = path.includes('?') ? `${path}&page=${page}` : `${path}?page=${page}`;
+            const separator = pagePath.includes('?') ? '&' : '?';
+            const url = `https://api.sportmonks.com/v3/football${pagePath}${separator}api_token=${token}`;
             const res = await fetch(url);
             if (!res.ok) {
-                console.warn(`[OpenAI] Sportmonks fixtures error (${res.status}) page ${page}`);
+                console.warn(`[OpenAI] Sportmonks API error (${res.status}) on ${pagePath}`);
                 break;
             }
             const json = await res.json();
-            if (Array.isArray(json.data)) allData = allData.concat(json.data);
+            if (json.data && Array.isArray(json.data)) {
+                allData = allData.concat(json.data);
+            } else if (json.data) {
+                return json.data;
+            }
             hasMore = !!json.pagination?.has_more;
             page++;
         }
-        console.log(`[OpenAI] Fetched ${allData.length} Sportmonks fixtures for ${dateStr}`);
-        return allData;
+        return allData.length > 0 ? allData : null;
     } catch (e) {
-        console.warn('[OpenAI] fetchSportmonksForDate error:', e.message);
-        return [];
+        console.warn('[OpenAI] fetchSportmonksServerSide error:', e.message);
+        return null;
     }
 };
 
-// ════════════════════════════════════════════════════════════════════════════
-// 1. DAILY FOOTBALL PREDICTIONS
-// ════════════════════════════════════════════════════════════════════════════
-export const generateDailyPredictionsOpenAI = async () => {
-    console.log('[OpenAI] Starting Daily Football Predictions...');
-    try {
-        const todayStr = getDateKey(0);
+// ── League Tiers (aligned with Livescore priority) ────────────────────────────
+const TIER_1_LEAGUE_IDS = new Set([8, 2]); // PL, UCL
+const TIER_2_LEAGUE_IDS = new Set([564, 82, 384, 5]); // La Liga, Bundesliga, Serie A, UEL
+const TIER_3_LEAGUE_IDS = new Set([301, 462, 7]); // Ligue 1, Primeira Liga, Conference
+const TIER_4_LEAGUE_IDS = new Set([72, 9, 600, 253, 325, 176]); // Eredivisie, Championship, MLS, Serie A Brazil, etc
+const TIER_5_LEAGUE_IDS = new Set([1186, 1187, 1329, 570, 392]);
+const TIER_6_LEAGUE_IDS = new Set([572, 288, 636, 406, 201, 480, 551]);
+const PRIORITY_COUNTRIES = new Set(['England', 'Spain', 'Germany', 'Italy', 'France', 'Portugal', 'Netherlands', 'Turkey', 'Brazil', 'Argentina', 'USA', 'Nigeria', 'Ghana', 'Kenya', 'South Africa', 'Egypt', 'Morocco', 'Cameroon', 'Uganda', 'Tanzania', 'Algeria', 'Tunisia']);
+
+const getPriorityScore = (fixtureInfo) => {
+    let score = 0;
+    const leagueId = fixtureInfo.leagueId;
+    const name = fixtureInfo.league?.toLowerCase() || '';
+    
+    if (TIER_1_LEAGUE_IDS.has(leagueId)) score += 150;
+    else if (TIER_2_LEAGUE_IDS.has(leagueId)) score += 120;
+    else if (TIER_3_LEAGUE_IDS.has(leagueId)) score += 100;
+    else if (TIER_4_LEAGUE_IDS.has(leagueId)) score += 80;
+    else if (TIER_5_LEAGUE_IDS.has(leagueId)) score += 60;
+    else if (TIER_6_LEAGUE_IDS.has(leagueId)) score += 40;
+    
+    // Fallback text matching just in case ID is missing or new
+    if (name.includes('world cup') || name.includes('euro') || name.includes('copa america') || name.includes('nations cup') || name.includes('afcon')) score += 90;
+    if (name.includes('premier') || name.includes('division 1') || name.includes('primera')) score += 10;
+    return score;
+};
 
         // Fetch fixtures from Sportmonks for context
-        const rawData = await fetchSportmonksForDate(todayStr);
+        const rawData = await fetchSportmonksServerSide(`/fixtures/date/${todayStr}?include=league;participants;scores`) || [];
 
         // FILTER: Keep only matches that have not yet started based on current UTC time
         const nowMs = Date.now();
@@ -185,15 +208,17 @@ export const generateDailyPredictionsOpenAI = async () => {
         const allMappedFixtures = upcomingData.map(item => {
             const home = item.participants?.find(p => p.meta?.location === 'home') || {};
             const away = item.participants?.find(p => p.meta?.location === 'away') || {};
-            // Extract HH:MM from the ISO timestamp (e.g. "2026-03-04T14:00:00.000000Z" → "14:00")
             const rawTime = item.starting_at || '';
             const timeHHMM = rawTime.includes('T') ? rawTime.split('T')[1].substring(0, 5) : rawTime;
             return {
                 id: String(item.id),
                 league: item.league?.name || 'Unknown',
-                homeTeam: home.name || '',   // empty string if no name — NOT 'Home'
-                awayTeam: away.name || '',   // empty string if no name — NOT 'Away'
-                homeTeamLogo: home.image_path || '', // Sportmonks logo URL — capture now
+                leagueId: item.league_id,
+                homeTeam: home.name || '',
+                awayTeam: away.name || '',
+                homeTeamId: home.id,
+                awayTeamId: away.id,
+                homeTeamLogo: home.image_path || '',
                 awayTeamLogo: away.image_path || '',
                 time: timeHHMM,
             };
@@ -202,16 +227,14 @@ export const generateDailyPredictionsOpenAI = async () => {
         // Build a team-name → logo URL map from today's Sportmonks data for later enrichment
         const sportmonksLogoMap = buildSportmonksLogoMap(rawData);
 
-        // CRITICAL: Only pass fixtures to AI that have real team names from Sportmonks.
-        // Fixtures without participant names are skipped entirely — we never want
-        // the AI to 'fill in' names and risk placeholder values like 'Home'/'Away'.
-        const fixtures = allMappedFixtures.filter(f =>
-            f.homeTeam.trim().length > 1 && f.awayTeam.trim().length > 1
-        );
+        // Filter valid fixtures and SORT by LiveScore league hierarchy
+        let fixtures = allMappedFixtures
+            .filter(f => f.homeTeam.trim().length > 1 && f.awayTeam.trim().length > 1)
+            .map(f => ({ ...f, priorityScore: getPriorityScore(f) }))
+            .sort((a, b) => b.priorityScore - a.priorityScore);
 
-        if (allMappedFixtures.length !== fixtures.length) {
-            console.warn(`[OpenAI] Skipped ${allMappedFixtures.length - fixtures.length} Sportmonks fixtures with missing team names.`);
-        }
+        // Keep the top 40 matches based on priority score
+        fixtures = fixtures.filter(f => f.priorityScore > 0).slice(0, 40);
 
         // Save raw fixtures placeholder
         if (fixtures.length > 0) {
@@ -221,9 +244,90 @@ export const generateDailyPredictionsOpenAI = async () => {
             }, { merge: true });
         }
 
+        // ── FETCH REAL SPORTMONKS FORM + H2H DATA FOR API INJECTION ────────────
+        const fixtureRealData = {};
+        const ENRICH_BATCH = 6;
+        const fixturesToEnrich = fixtures.slice(0, 30); // Enrich top 30
+        
+        for (let i = 0; i < fixturesToEnrich.length; i += ENRICH_BATCH) {
+            const batch = fixturesToEnrich.slice(i, i + ENRICH_BATCH);
+            await Promise.all(batch.map(async (f) => {
+                try {
+                    const homeId = f.homeTeamId;
+                    const awayId = f.awayTeamId;
+                    if (!homeId || !awayId) return;
+
+                    const h2hData = await fetchSportmonksServerSide(`/fixtures/head-to-head/${homeId}/${awayId}?include=participants;scores&per_page=5`);
+                    const from = getDateKey(120);
+                    const [homeRecent, awayRecent] = await Promise.all([
+                        fetchSportmonksServerSide(`/fixtures/between/${from}/${todayStr}?include=participants;scores&filters=fixtureParticipants:${homeId}&per_page=5`),
+                        fetchSportmonksServerSide(`/fixtures/between/${from}/${todayStr}?include=participants;scores&filters=fixtureParticipants:${awayId}&per_page=5`),
+                    ]);
+
+                    let h2hHomeWins = 0, h2hAwayWins = 0, h2hDraws = 0;
+                    const h2hScores = [];
+                    if (Array.isArray(h2hData)) {
+                        for (const fx of h2hData.slice(0, 5)) {
+                            const scores = fx.scores || [];
+                            const hG = scores.find(s => s.participant_id === homeId && s.description === 'CURRENT')?.score?.goals ?? null;
+                            const aG = scores.find(s => s.participant_id === awayId && s.description === 'CURRENT')?.score?.goals ?? null;
+                            if (hG !== null && aG !== null) {
+                                h2hScores.push(`${hG}-${aG}`);
+                                if (hG > aG) h2hHomeWins++;
+                                else if (aG > hG) h2hAwayWins++;
+                                else h2hDraws++;
+                            }
+                        }
+                    }
+
+                    const parseForm = (recentFixtures, teamId) => {
+                        if (!Array.isArray(recentFixtures) || recentFixtures.length === 0) return { form: 'N/A', winRate: null, avgScored: null, avgConceded: null };
+                        const results = [];
+                        let wins = 0, goals = 0, conc = 0;
+                        for (const fx of recentFixtures.slice(0, 5)) {
+                            const sc = fx.scores || [];
+                            const myG = sc.find(s => s.participant_id === teamId && s.description === 'CURRENT')?.score?.goals;
+                            const oppG = sc.find(s => s.participant_id !== teamId && s.description === 'CURRENT')?.score?.goals;
+                            if (myG !== undefined && oppG !== undefined) {
+                                goals += myG; conc += oppG;
+                                if (myG > oppG) { results.push('W'); wins++; }
+                                else if (myG < oppG) results.push('L');
+                                else results.push('D');
+                            }
+                        }
+                        const n = results.length;
+                        return {
+                            form: n > 0 ? results.join(' ') : 'N/A',
+                            winRate: n > 0 ? Math.round((wins / n) * 100) : null,
+                            avgScored: n > 0 ? Math.round((goals / n) * 100) / 100 : null,
+                            avgConceded: n > 0 ? Math.round((conc / n) * 100) / 100 : null,
+                        };
+                    };
+
+                    const homeStats = parseForm(homeRecent, homeId);
+                    const awayStats = parseForm(awayRecent, awayId);
+
+                    fixtureRealData[f.id] = {
+                        homeForm: homeStats.form, homeWinRate: homeStats.winRate,
+                        homeAvgScored: homeStats.avgScored, homeAvgConceded: homeStats.avgConceded,
+                        awayForm: awayStats.form, awayWinRate: awayStats.winRate,
+                        awayAvgScored: awayStats.avgScored, awayAvgConceded: awayStats.avgConceded,
+                        h2hHomeWins, h2hAwayWins, h2hDraws,
+                        h2hLast5Goals: h2hScores.join(', ') || 'N/A',
+                    };
+                } catch (e) {
+                    // silently skip
+                }
+            }));
+        }
+
+        const realDataLines = fixturesToEnrich.filter(f => fixtureRealData[f.id]).map(f => {
+            const d = fixtureRealData[f.id];
+            return `Match ID ${f.id}: ${f.homeTeam} vs ${f.awayTeam}\n  Home form: ${d.homeForm} | Win%: ${d.homeWinRate ?? '?'}% | Avg: ${d.homeAvgScored ?? '?'} scored / ${d.homeAvgConceded ?? '?'} conceded\n  Away form: ${d.awayForm} | Win%: ${d.awayWinRate ?? '?'}% | Avg: ${d.awayAvgScored ?? '?'} scored / ${d.awayAvgConceded ?? '?'} conceded\n  H2H last 5: ${f.homeTeam} ${d.h2hHomeWins}W, ${f.awayTeam} ${d.h2hAwayWins}W, ${d.h2hDraws}D | Scores: ${d.h2hLast5Goals}`;
+        }).join('\n\n');
+
         // ── SLIM system prompt: removes logos/fr-translations/minor stats to stay within 16384 tokens ──
-        // Average of 30 fields × 20-25 matches blows past the limit. Target 15 matches, 22 fields each.
-        const systemPrompt = `You are the "Quant-Desk Decision Engine v6.0", an elite global sports betting model. You have access to real-time sports data via web search.
+        const systemPrompt = `You are the "Quant-Desk Decision Engine v6.0", an elite global sports betting model. You have access to real-time sports data.
 
 RULES (NON-NEGOTIABLE):
 1. EV = (probability × decimal odds) − 1. Only pick if EV ≥ +0.06 (6% edge minimum).
@@ -231,30 +335,30 @@ RULES (NON-NEGOTIABLE):
 3. ONE market per match. Choose from: "Home Win", "Away Win", "Draw", "Double Chance (1X)", "Double Chance (X2)", "Double Chance (12)", "Draw No Bet (Home)", "Draw No Bet (Away)", "Over 1.5 Goals", "Over 2.5 Goals", "Both Teams Score", "Both Teams Score - No".
 4. 'category': "safe" if confidence ≥ 80, "value" if 70–79, "risky" if < 70.
 5. 'analysis_en': "EV: +X.X% | Edge: Y% | [max 15 words]"
-6. TEAM NAMES: homeTeam and awayTeam MUST be the full official club name. NEVER use "Home", "Away", or placeholders. Omit the match if you cannot determine the real name.
+6. USE THE REAL SPORTMONKS DATA PROVIDED BELOW for form and H2H statistics exactly as written. do NOT guess.
 
-Output ONLY a compact JSON array (no whitespace/indentation). Each object must have EXACTLY these fields:
+Output ONLY a compact JSON array. Each object must have EXACTLY these fields:
 id, homeTeam, awayTeam, league, time, prediction_en, confidence, odds, category, analysis_en,
 homeForm, awayForm, homeWinRate, awayWinRate, homeAvgScored, awayAvgScored,
-h2hHomeWins, h2hAwayWins, h2hDraws, h2hLast5Goals, homeInjured, awayInjured
-
-DO NOT include: homeTeamLogo, awayTeamLogo, prediction_fr, analysis_fr, homeAvgConceded, awayAvgConceded, homeCleanSheetRate, awayCleanSheetRate.
-These will be added by post-processing. Keeping the output compact is CRITICAL to avoid truncation.`;
+h2hHomeWins, h2hAwayWins, h2hDraws, h2hLast5Goals, homeInjured, awayInjured`;
 
         const userPrompt = `DATE: ${todayStr}
 
-LEAGUE PRIORITY (African betting volume):
-1. English Premier League + UEFA Champions League (HIGHEST)
+LEAGUE PRIORITY (African betting volume - LiveScore hierarchy):
+1. UEFA Champions League, English Premier League (HIGHEST)
 2. La Liga, Serie A, Bundesliga, UEFA Europa League
 3. Ligue 1, Primeira Liga, Conference League
-4. Eredivisie, Championship, Turkish Süper Lig, MLS, Brazilian Série A
-5. AFCON, CAF Champions League, big African derbies
+4. Eredivisie, Championship, MLS, Brasileirão
+5. AFCON, CAF Champions League, African leagues
 
-TODAY'S FIXTURES FROM SPORTMONKS:
-${JSON.stringify(fixtures.slice(0, 30))}
+⚡ REAL DATA FROM SPORTMONKS API (DO NOT OVERRIDE — USE EXACTLY AS GROUND TRUTH):
+${realDataLines || 'No real-time data API available. Use Search.'}
 
-Search for additional matches today. Identify and analyze EXACTLY 15 high-quality betting opportunities. Use the same 'id' from the fixtures above where possible; for search-only matches use "search-home-away-date".
-Output ONLY the raw JSON array. No markdown, no preamble, no trailing text.`;
+TODAY'S TOP FIXTURES:
+${JSON.stringify(fixturesToEnrich.slice(0, 15).map(f => ({ id: f.id, home: f.homeTeam, away: f.awayTeam, league: f.league, time: f.time })))}
+
+Analyze ONLY the top 15 highest priority betting opportunities from the fixtures list above. Use the real data if provided for the fixture. Combine with search data for injuries and odds.
+Output ONLY the raw JSON array. No markdown, no preamble.`;
 
         const openai = getOpenAI();
         const responseText = await tryModels(openai, OPENAI_PREDICTION_MODELS, async (client, model) => {
@@ -295,7 +399,7 @@ Output ONLY the raw JSON array. No markdown, no preamble, no trailing text.`;
                         // No web_search tool — model uses its own training data about today's schedule
                         input: [
                             { role: 'system', content: systemPrompt }, // reuse slim prompt
-                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your training knowledge of today's football schedule (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UCL, UEL, and major African leagues) to generate EXACTLY 15 high-quality predictions for ${todayStr}.\nApply the same EV filter (EV ≥ 6%, confidence ≥ 72%). Use id format \"sim-HomeSlug-AwaySlug-${todayStr}\".\n${fixtures.length > 0 ? `Confirmed Sportmonks fixtures you can reference:\n${JSON.stringify(fixtures.slice(0, 20))}` : ''}\nOutput ONLY the raw compact JSON array. No markdown, no preamble.` }
+                            { role: 'user', content: `DATE: ${todayStr}\n\nSEARCH TOOL UNAVAILABLE. Use your training knowledge of today's football schedule (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UCL, UEL, and major African leagues) to generate EXACTLY 15 high-quality predictions for ${todayStr}.\nApply the same EV filter (EV ≥ 6%, confidence ≥ 72%). Use id format \"sim-HomeSlug-AwaySlug-${todayStr}\".\n${fixturesToEnrich.length > 0 ? `Confirmed Sportmonks fixtures you can reference:\n${JSON.stringify(fixturesToEnrich.slice(0, 20).map(f => ({ id: f.id, home: f.homeTeam, away: f.awayTeam })))}` : ''}\nOutput ONLY the raw compact JSON array. No markdown, no preamble.` }
                         ],
                         temperature: 0.4,
                         max_output_tokens: 16384,
@@ -334,11 +438,14 @@ Output ONLY the raw JSON array. No markdown, no preamble, no trailing text.`;
         const fixtureMap = new Map(fixtures.map(f => [f.id, f]));
         const finalMatches = predictions.map(pred => {
             const fixture = fixtureMap.get(pred.id) || fixtureMap.get(String(pred.id));
+            const realD = fixtureRealData[pred.id] || fixtureRealData[String(pred.id)];
+            
             // Use Sportmonks name if available AND it's a real name (not empty/placeholder)
             const smHome = fixture?.homeTeam;
             const smAway = fixture?.awayTeam;
             const resolvedHome = (smHome && smHome.length > 1) ? smHome : pred.homeTeam;
             const resolvedAway = (smAway && smAway.length > 1) ? smAway : pred.awayTeam;
+            
             return {
                 sport: 'football',
                 status: 'pending',
@@ -353,21 +460,21 @@ Output ONLY the raw JSON array. No markdown, no preamble, no trailing text.`;
                 time: fixture?.time || pred.time || '',
                 // Ensure prediction alias is always set
                 prediction: pred.prediction_en || pred.prediction,
-                // Ensure detailed stats are mapped to Firestore
-                homeForm: pred.homeForm,
-                awayForm: pred.awayForm,
-                homeWinRate: pred.homeWinRate,
-                awayWinRate: pred.awayWinRate,
-                homeAvgScored: pred.homeAvgScored,
-                awayAvgScored: pred.awayAvgScored,
-                homeAvgConceded: pred.homeAvgConceded,
-                awayAvgConceded: pred.awayAvgConceded,
+                // Real Sportmonks data injected over AI guesses:
+                homeForm: realD?.homeForm || pred.homeForm,
+                awayForm: realD?.awayForm || pred.awayForm,
+                homeWinRate: realD?.homeWinRate ?? pred.homeWinRate,
+                awayWinRate: realD?.awayWinRate ?? pred.awayWinRate,
+                homeAvgScored: realD?.homeAvgScored ?? pred.homeAvgScored,
+                awayAvgScored: realD?.awayAvgScored ?? pred.awayAvgScored,
+                homeAvgConceded: realD?.homeAvgConceded ?? pred.homeAvgConceded,
+                awayAvgConceded: realD?.awayAvgConceded ?? pred.awayAvgConceded,
                 homeCleanSheetRate: pred.homeCleanSheetRate,
                 awayCleanSheetRate: pred.awayCleanSheetRate,
-                h2hHomeWins: pred.h2hHomeWins,
-                h2hAwayWins: pred.h2hAwayWins,
-                h2hDraws: pred.h2hDraws,
-                h2hLast5Goals: pred.h2hLast5Goals,
+                h2hHomeWins: realD?.h2hHomeWins ?? pred.h2hHomeWins,
+                h2hAwayWins: realD?.h2hAwayWins ?? pred.h2hAwayWins,
+                h2hDraws: realD?.h2hDraws ?? pred.h2hDraws,
+                h2hLast5Goals: realD?.h2hLast5Goals || pred.h2hLast5Goals,
                 homeInjured: pred.homeInjured,
                 awayInjured: pred.awayInjured,
                 generatedBy: 'openai',
