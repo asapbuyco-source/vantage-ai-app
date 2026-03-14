@@ -719,9 +719,17 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           </div>
         ) : (
           <>
-            {renderMatchList(safeBets, "Sure Bets (Safe)", <ShieldCheck size={16} />, "text-green-500")}
-            {renderMatchList(valueBets, "Value Picks", <Star size={16} />, "text-vantage-cyan")}
-            {renderMatchList(riskyBets, "High Risk / High Reward", <Flame size={16} />, "text-orange-500")}
+            {/* AI predictions replaced by Quant Engine — show notice only if no quant picks loaded yet */}
+            {quantPredictions.length === 0 && !quantLoading && (
+              <div className="text-center py-10 rounded-2xl border-2 border-dashed border-emerald-500/30 bg-emerald-500/5">
+                <BarChart2 size={28} className="mx-auto mb-2 text-emerald-500 opacity-60" />
+                <p className="text-sm font-bold text-slate-700 dark:text-gray-300">Quant Model picks appear above</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  The AI prediction engine has been replaced by a pure statistical model (Poisson · Elo · Form).
+                  <br />Picks are generated daily at <span className="font-semibold text-emerald-600">07:00 Lagos time</span>.
+                </p>
+              </div>
+            )}
           </>
         )}
 

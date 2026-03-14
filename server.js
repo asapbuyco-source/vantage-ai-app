@@ -194,38 +194,31 @@ const adminAuth = (req, res, next) => {
     next();
 };
 
-app.post('/api/admin/generate-football', adminAuth, geminiLimiter, async (req, res) => {
-    try {
-        console.log('[API] Manual Football Generation Triggered via Admin (OpenAI→Gemini fallback)');
-        const result = await triggerFootballGeneration();
-        res.json(result);
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'Generation failed', details: e.message });
-    }
+// ⛔ AI Football prediction endpoint is DISABLED — system now uses the Quant Engine.
+// To re-enable: restore the original handler below.
+app.post('/api/admin/generate-football', adminAuth, async (req, res) => {
+    res.status(410).json({
+        error: 'DISABLED',
+        message: 'AI football predictions are disabled. The Quant Engine (statistical models) is now the sole prediction source.',
+        alternative: 'POST /api/admin/trigger-quant'
+    });
 });
 
-app.post('/api/admin/generate-basketball', adminAuth, geminiLimiter, async (req, res) => {
-    try {
-        console.log('[API] Manual Basketball Generation Triggered via Admin (OpenAI→Gemini fallback)');
-        const result = await triggerBasketballGeneration();
-        res.json(result);
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'Basketball generation failed', details: e.message });
-    }
+// ⛔ AI Basketball prediction endpoint is DISABLED.
+app.post('/api/admin/generate-basketball', adminAuth, async (req, res) => {
+    res.status(410).json({
+        error: 'DISABLED',
+        message: 'AI basketball predictions are disabled. The Quant Engine handles all predictions.',
+    });
 });
 
-app.post('/api/admin/grade-yesterday', adminAuth, geminiLimiter, async (req, res) => {
-    try {
-        const { date, forceRegrade } = req.body || {};
-        console.log(`[API] Manual Grading Triggered via Admin (Date: ${date || 'yesterday'}, Force: ${!!forceRegrade}) — OpenAI→Gemini fallback`);
-        const result = await triggerGrading(date || null, !!forceRegrade);
-        res.json(result);
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: 'Grading failed', details: e.message });
-    }
+// ⛔ AI Grading endpoint is DISABLED — quant grading replaces it.
+app.post('/api/admin/grade-yesterday', adminAuth, async (req, res) => {
+    res.status(410).json({
+        error: 'DISABLED',
+        message: 'AI grading is disabled. Use the Quant Grading endpoint instead.',
+        alternative: 'POST /api/admin/grade-quant'
+    });
 });
 
 app.post('/api/admin/generate-blog', adminAuth, geminiLimiter, async (req, res) => {

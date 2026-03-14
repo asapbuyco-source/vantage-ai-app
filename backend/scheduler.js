@@ -191,7 +191,7 @@ const isWithinScheduleWindow = (scheduledTime) => {
 
 // We'll export an initialization function so server.js can start it
 export const initScheduler = () => {
-    console.log('🕒 Initializing Dynamic Scheduler (OpenAI Primary / Gemini Fallback + Quant Engine)...');
+    console.log('🕒 Initializing Scheduler (Quant Engine ACTIVE | AI Predictions DISABLED | Blog + Telegram active)...');
 
     // Track current tasks so we can destroy and recreate them if times change
     let footballTask = null;
@@ -230,7 +230,12 @@ export const initScheduler = () => {
             const blogTime = safeTime(config.blogGenTime, '09:00');
             const telegramTime = safeTime(config.telegramSendTime, '08:30');
 
-            // ── Football Scheduler ────────────────────────────────────────────
+            // ══════════════════════════════════════════════════════════════════
+            // ⛔ AI FOOTBALL PREDICTION PIPELINE — DISABLED
+            // Replaced by the Quant Engine (pure statistical models).
+            // To re-enable: remove the block comment below.
+            // ══════════════════════════════════════════════════════════════════
+            /*
             if (footballTime !== currentFootballTime) {
                 if (footballTask) footballTask.stop();
                 currentFootballTime = footballTime;
@@ -246,8 +251,13 @@ export const initScheduler = () => {
                 }, { timezone: "Africa/Lagos" });
                 console.log(`✅ Scheduled Football Gen for ${footballTime} (OpenAI→Gemini fallback)`);
             }
+            */
 
-            // ── Basketball Scheduler ──────────────────────────────────────────
+            // ══════════════════════════════════════════════════════════════════
+            // ⛔ AI BASKETBALL PREDICTION PIPELINE — DISABLED
+            // To re-enable: remove the block comment below.
+            // ══════════════════════════════════════════════════════════════════
+            /*
             if (basketballTime !== currentBasketballTime) {
                 if (basketballTask) basketballTask.stop();
                 currentBasketballTime = basketballTime;
@@ -263,8 +273,13 @@ export const initScheduler = () => {
                 }, { timezone: "Africa/Lagos" });
                 console.log(`✅ Scheduled Basketball Gen for ${basketballTime} (OpenAI→Gemini fallback)`);
             }
+            */
 
-            // ── Grading Scheduler ─────────────────────────────────────────────
+            // ══════════════════════════════════════════════════════════════════
+            // ⛔ AI GRADING — DISABLED (replaced by Quant Grading @ 06:30)
+            // To re-enable: remove the block comment below.
+            // ══════════════════════════════════════════════════════════════════
+            /*
             if (gradingTime !== currentGradingTime) {
                 if (gradingTask) gradingTask.stop();
                 currentGradingTime = gradingTime;
@@ -280,6 +295,7 @@ export const initScheduler = () => {
                 }, { timezone: "Africa/Lagos" });
                 console.log(`✅ Scheduled Grading for ${gradingTime} (OpenAI→Gemini fallback)`);
             }
+            */
 
             // ── Blog Scheduler ────────────────────────────────────────────────
             if (blogTime !== currentBlogTime) {
