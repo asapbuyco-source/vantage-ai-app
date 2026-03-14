@@ -195,6 +195,10 @@ const getPriorityScore = (fixtureInfo) => {
     return score;
 };
 
+export const generateDailyPredictionsOpenAI = async () => {
+    console.log('[OpenAI] Starting Daily Football Predictions...');
+    try {
+        const todayStr = getDateKey(0);
         // Fetch fixtures from Sportmonks for context
         const rawData = await fetchSportmonksServerSide(`/fixtures/date/${todayStr}?include=league;participants;scores`) || [];
 
