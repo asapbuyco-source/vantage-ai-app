@@ -11,7 +11,8 @@ from dataclasses import dataclass
 
 
 # ── Score grid config ─────────────────────────────────────────────────────────
-MAX_GOALS = 6  # Scores 0–5 (6 values per side)
+MAX_GOALS = 8          # Fix #8: raised from 6 — correctly prices Over 3.5 in EPL/Bundesliga
+DIXON_COLES_RHO = -0.13  # Fix #4: rho for low-score bias correction (empirical football value)
 
 
 @dataclass
@@ -42,15 +43,42 @@ def _poisson_pmf(k: int, mu: float) -> float:
     return (mu ** k) * math.exp(-mu) / math.factorial(k)
 
 
+def _tau(h: int, a: int, mu_h: float, mu_a: float, rho: float) -> float:
+    """
+    Dixon-Coles correction factor tau for low-scoring scorelines.
+    Only applied to scores (0,0), (1,0), (0,1), (1,1).
+    rho < 0 means these 4 scorelines get adjusted (0-0 and 1-1 boosted,
+    1-0 and 0-1 reduced) to match empirical football distributions.
+    """
+    if h == 0 and a == 0:
+        return 1 - mu_h * mu_a * rho
+    elif h == 1 and a == 0:
+        return 1 + mu_a * rho
+    elif h == 0 and a == 1:
+        return 1 + mu_h * rho
+    elif h == 1 and a == 1:
+        return 1 - rho
+    return 1.0
+
+
 def compute_score_grid(mu_home: float, mu_away: float) -> dict[tuple[int, int], float]:
     """
-    Build a (MAX_GOALS x MAX_GOALS) dictionary of score probabilities.
-    Key: (home_goals, away_goals), Value: probability.
+    Build a (MAX_GOALS+1 x MAX_GOALS+1) dictionary of score probabilities
+    with Dixon-Coles rho correction applied to the four low-score cells.
+    Key: (home_goals, away_goals), Value: corrected probability.
+    Grid is re-normalized so all probabilities sum to 1.0.
     """
     grid: dict[tuple[int, int], float] = {}
-    for h in range(MAX_GOALS):
-        for a in range(MAX_GOALS):
-            grid[(h, a)] = _poisson_pmf(h, mu_home) * _poisson_pmf(a, mu_away)
+    for h in range(MAX_GOALS + 1):
+        for a in range(MAX_GOALS + 1):
+            raw = _poisson_pmf(h, mu_home) * _poisson_pmf(a, mu_away)
+            correction = _tau(h, a, mu_home, mu_away, DIXON_COLES_RHO)
+            grid[(h, a)] = raw * correction
+
+    # Re-normalize to handle the correction disturbing the sum
+    total = sum(grid.values())
+    if total > 0:
+        grid = {k: v / total for k, v in grid.items()}
     return grid
 
 

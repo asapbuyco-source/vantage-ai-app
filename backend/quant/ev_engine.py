@@ -6,7 +6,12 @@ Expected Value engine + market inefficiency detection.
 EV = (model_probability × decimal_odds) − 1
 Flag a bet if:
   EV ≥ 0.05  (5% minimum edge)
-  model_prob - market_implied_prob ≥ 0.06  (6% inefficiency)
+  model_prob - devigged_market_prob ≥ 0.06  (6% inefficiency)
+
+Vig removal: We use the standard devig formula across the 1X2 market
+  p_devig(outcome) = (1/odds) / sum(1/all_market_odds)
+This removes the bookmaker's overround before comparing to model probability,
+preventing the system from overstating its edge by 5-8%.
 """
 
 from dataclasses import dataclass
@@ -71,8 +76,36 @@ class ValueBet:
     is_value: bool          # Passes all filters
 
 
+def devig_1x2(home_odds: float, draw_odds: float, away_odds: float) -> tuple[float, float, float]:
+    """
+    Remove the bookmaker's vig from 1X2 odds using the standard normalization method.
+    Returns (p_home, p_draw, p_away) summing to 1.0.
+    """
+    if home_odds <= 1.0 or draw_odds <= 1.0 or away_odds <= 1.0:
+        # Fallback: raw implied probs
+        raw = [1/o if o > 1 else 0 for o in [home_odds, draw_odds, away_odds]]
+        total = sum(raw) or 1.0
+        return tuple(r / total for r in raw)  # type: ignore
+    overround = (1/home_odds) + (1/draw_odds) + (1/away_odds)
+    return (1/home_odds)/overround, (1/draw_odds)/overround, (1/away_odds)/overround
+
+
+def devig_ouright(odds: float, market_odds: list[float]) -> float:
+    """
+    Remove vig for any market given a list of all selection odds for that market.
+    E.g. for BTTS: market_odds = [btts_yes_odds, btts_no_odds]
+    """
+    valid = [o for o in market_odds if o > 1.0]
+    if not valid:
+        return 1.0 / odds if odds > 1.0 else 0.0
+    overround = sum(1/o for o in valid)
+    if overround <= 0:
+        return 0.0
+    return (1/odds) / overround
+
+
 def implied_prob(odds: float) -> float:
-    """Convert decimal odds to implied probability (with vig removed simply)."""
+    """Raw implied probability (with vig, used as fallback only)."""
     if odds <= 1.0:
         return 1.0
     return 1.0 / odds
@@ -83,29 +116,68 @@ def compute_ev(model_prob: float, odds: float) -> float:
     return (model_prob * odds) - 1.0
 
 
+# Markets that require dedicated odds (not approximated from 1X2)
+# If these odds are not explicitly available from the bookmaker, skip them.
+DEDICATED_ODDS_REQUIRED = {
+    "Double Chance (1X)",
+    "Double Chance (X2)",
+    "Double Chance (12)",
+    "Draw No Bet (Home)",
+    "Draw No Bet (Away)",
+}
+
+
 def evaluate_all_markets(
-    probs: CombinedProbabilities,
-    odds: OddsData,
+    probs: 'CombinedProbabilities',
+    odds: 'OddsData',
 ) -> list[ValueBet]:
     """
     Evaluate all available markets and return all ValueBet objects.
-    Only markets with odds > 1.05 are evaluated.
+    Uses devigged implied probabilities for market comparison.
+    Skips DC/DNB markets unless dedicated odds are available.
     """
     results: list[ValueBet] = []
 
+    # Compute devigged 1X2 probs once (used for BTTS and O/U devig too)
+    home_dv, draw_dv, away_dv = devig_1x2(
+        odds.home_odds, odds.draw_odds, odds.away_odds
+    ) if (odds.home_odds > 1.0 and odds.draw_odds > 1.0 and odds.away_odds > 1.0) else (0.0, 0.0, 0.0)
+
+    # Build per-market devigged probabilities
+    market_devig: dict[str, float] = {}
+    if odds.home_odds > 1.0:
+        market_devig["Home Win"] = home_dv
+        market_devig["Draw"] = draw_dv
+        market_devig["Away Win"] = away_dv
+    if odds.over25_odds > 1.0 and odds.under25_odds > 1.0:
+        ov_dv = devig_ouright(odds.over25_odds, [odds.over25_odds, odds.under25_odds])
+        un_dv = devig_ouright(odds.under25_odds, [odds.over25_odds, odds.under25_odds])
+        market_devig["Over 2.5 Goals"] = ov_dv
+        market_devig["Under 2.5 Goals"] = un_dv
+        # Use same odds for 1.5 / 3.5 (best available proxy)
+        market_devig["Over 1.5 Goals"] = ov_dv
+        market_devig["Over 3.5 Goals"] = devig_ouright(odds.over25_odds, [odds.over25_odds, odds.under25_odds])
+        market_devig["Under 3.5 Goals"] = un_dv
+    if odds.btts_yes_odds > 1.0 and odds.btts_no_odds > 1.0:
+        market_devig["BTTS"] = devig_ouright(odds.btts_yes_odds, [odds.btts_yes_odds, odds.btts_no_odds])
+        market_devig["BTTS No"] = devig_ouright(odds.btts_no_odds, [odds.btts_yes_odds, odds.btts_no_odds])
+
     for market, prob_attr in MARKET_TO_PROB.items():
+        # Skip DC/DNB — we don't have dedicated bookmaker odds for these markets
+        if market in DEDICATED_ODDS_REQUIRED:
+            continue
+
         model_prob = getattr(probs, prob_attr, None)
         if model_prob is None:
             continue
 
         odds_attr = MARKET_TO_ODDS_FIELD.get(market, "")
         market_odds = getattr(odds, odds_attr, 0.0) if odds_attr else 0.0
-
-        # Skip if no market odds
         if market_odds <= 1.05:
             continue
 
-        mkt_prob = implied_prob(market_odds)
+        # Use devigged market probability (preferred) falling back to raw implied
+        mkt_prob = market_devig.get(market, implied_prob(market_odds))
         ev = compute_ev(model_prob, market_odds)
         inefficiency = model_prob - mkt_prob
 
@@ -122,7 +194,6 @@ def evaluate_all_markets(
             is_value=is_value,
         ))
 
-    # Sort by EV descending
     results.sort(key=lambda x: x.expected_value, reverse=True)
     return results
 

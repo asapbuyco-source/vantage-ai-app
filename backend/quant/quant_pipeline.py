@@ -157,9 +157,12 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
             home_id = match.home_team_id
             away_id = match.away_team_id
 
-            # Combine models
+            # Combine models (Poisson + Elo + Form + H2H)
             probs: CombinedProbabilities = compute_combined(
-                mu_home, mu_away, home_id, away_id, home_form, away_form
+                mu_home, mu_away, home_id, away_id, home_form, away_form,
+                h2h_home_wins=match.h2h_home_wins,   # Fix #5: H2H now wired
+                h2h_away_wins=match.h2h_away_wins,
+                h2h_draws=match.h2h_draws,
             )
 
             # Evaluate all markets for EV
@@ -196,6 +199,9 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                 "probability": round(best_bet.model_prob, 4),
                 "confidence": round(best_bet.model_prob * 100, 1),  # % for frontend
                 "odds": best_bet.odds,
+                # Fix #9: Store odds at pick-time for CLV calculation after match closes
+                "pick_time_odds": best_bet.odds,
+                "clv_tracked": True,  # Flag for performance_tracker to diff vs closing line
                 "expected_value": best_bet.expected_value,
                 "ev_pct": round(best_bet.expected_value * 100, 2),  # % display
                 "market_implied_prob": best_bet.market_prob,
@@ -205,6 +211,9 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                 "expected_goals_away": round(mu_away, 2),
                 "home_form": home_form,
                 "away_form": away_form,
+                "h2h_home_wins": match.h2h_home_wins,
+                "h2h_away_wins": match.h2h_away_wins,
+                "h2h_draws": match.h2h_draws,
                 "home_win_prob": round(probs.home_win, 4),
                 "draw_prob": round(probs.draw, 4),
                 "away_win_prob": round(probs.away_win, 4),

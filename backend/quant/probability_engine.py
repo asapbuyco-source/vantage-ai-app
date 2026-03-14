@@ -57,9 +57,13 @@ def compute_combined(
     away_team_id: int,
     home_form: str,
     away_form: str,
+    h2h_home_wins: int = 0,
+    h2h_away_wins: int = 0,
+    h2h_draws: int = 0,
 ) -> CombinedProbabilities:
     """
-    Combine Poisson + Elo + Form into final probabilities.
+    Combine Poisson + Elo + Form + H2H into final probabilities.
+    Fix #5: H2H historical win/draw/loss rates now contribute 5% of the 1X2 probability.
 
     Args:
         mu_home: Expected goals for home team (from data_pipeline)
@@ -68,6 +72,9 @@ def compute_combined(
         away_team_id:
         home_form: Form string like "W D W W L"
         away_form: Form string like "L W D L W"
+        h2h_home_wins: Number of H2H wins for home team (last 8 meetings)
+        h2h_away_wins: Number of H2H wins for away team
+        h2h_draws: Number of H2H draws
 
     Returns:
         CombinedProbabilities with all markets filled.
@@ -81,10 +88,25 @@ def compute_combined(
     # ── Model 3: Form ──────────────────────────────────────────────────────
     form: FormProbabilities = compute_form_probabilities(home_form, away_form)
 
+    # ── Model 4: H2H (Fix #5) ─────────────────────────────────────────────
+    h2h_total = h2h_home_wins + h2h_away_wins + h2h_draws
+    if h2h_total >= 3:  # Only use H2H signal if sufficient samples
+        h2h_p_home = h2h_home_wins / h2h_total
+        h2h_p_draw = h2h_draws / h2h_total
+        h2h_p_away = h2h_away_wins / h2h_total
+    else:
+        # Insufficient H2H data — fall back to Poisson (neutral contribution)
+        h2h_p_home = poisson.home_win
+        h2h_p_draw = poisson.draw
+        h2h_p_away = poisson.away_win
+
     # ── Weighted combination of 1x2 probabilities ──────────────────────────
-    p_home = W_POISSON * poisson.home_win + W_ELO * elo["home_win"] + W_FORM * form.home_win
-    p_draw = W_POISSON * poisson.draw + W_ELO * elo["draw"] + W_FORM * form.draw
-    p_away = W_POISSON * poisson.away_win + W_ELO * elo["away_win"] + W_FORM * form.away_win
+    p_home = (W_POISSON * poisson.home_win + W_ELO * elo["home_win"]
+              + W_FORM * form.home_win + W_H2H * h2h_p_home)
+    p_draw = (W_POISSON * poisson.draw + W_ELO * elo["draw"]
+              + W_FORM * form.draw + W_H2H * h2h_p_draw)
+    p_away = (W_POISSON * poisson.away_win + W_ELO * elo["away_win"]
+              + W_FORM * form.away_win + W_H2H * h2h_p_away)
 
     p_home, p_draw, p_away = _normalize(p_home, p_draw, p_away)
 

@@ -17,6 +17,36 @@ K_FACTOR = 32.0          # Adjustment magnitude per match
 HOME_ADVANTAGE = 60.0    # Elo points added to home team
 DRAW_PROB_BASE = 0.26    # Base draw probability correction
 
+# ── Fix #6: Pre-seed Elo ratings for top clubs ────────────────────────────────
+# Sportmonks team IDs → approximate Elo (based on 2024/25 perf + UEFA coefficient)
+# Prevents cold-start. Real graded Firestore values will override these seeds.
+PRE_SEED_ELO: dict[int, float] = {
+    214: 1870,  # Real Madrid
+    631: 1855,  # Manchester City
+    8:   1830,  # Bayern Munich
+    5:   1820,  # Arsenal
+    9:   1815,  # Liverpool
+    593: 1810,  # Barcelona
+    232: 1805,  # PSG
+    82:  1800,  # Atletico Madrid
+    7:   1790,  # Chelsea
+    2:   1785,  # Bayer Leverkusen
+    3:   1780,  # Inter Milan
+    6:   1775,  # Borussia Dortmund
+    1:   1770,  # Juventus
+    10:  1765,  # Napoli
+    52:  1760,  # Aston Villa
+    29:  1755,  # Manchester United
+    45:  1750,  # Tottenham
+    251: 1740,  # Porto
+    267: 1730,  # Benfica
+    62:  1720,  # Celtic
+    72:  1715,  # Ajax
+    3468: 1620, # Wydad
+    3479: 1610, # Al Ahly
+    3481: 1605, # Esperance
+}
+
 # ── In-memory cache (populated from Firestore at startup) ─────────────────────
 _elo_cache: dict[int, float] = {}
 _dirty: set[int] = set()   # Teams whose rating changed and need saving
@@ -33,10 +63,19 @@ def _get_firestore():
 
 
 def load_ratings_from_firestore():
-    """Load all Elo ratings from Firestore into memory cache."""
+    """Load all Elo ratings from Firestore into memory cache.
+    Fix #6: Pre-seeds unknown teams from PRE_SEED_ELO before loading real values.
+    Real Firestore values overwrite seeds for any team with recorded match history.
+    """
+    # Apply pre-seeds for teams not yet in cache (won't overwrite real values)
+    for team_id, seed_rating in PRE_SEED_ELO.items():
+        if team_id not in _elo_cache:
+            _elo_cache[team_id] = seed_rating
+    print(f"[Elo] Pre-seeded {len(PRE_SEED_ELO)} elite club ratings.")
+
     db = _get_firestore()
     if not db:
-        print("[Elo] No Firestore — using default ratings.")
+        print("[Elo] No Firestore — using pre-seeded ratings only.")
         return
     try:
         docs = db.collection("elo_ratings").stream()
@@ -44,9 +83,9 @@ def load_ratings_from_firestore():
         for doc in docs:
             data = doc.to_dict()
             team_id = int(doc.id)
-            _elo_cache[team_id] = float(data.get("rating", DEFAULT_ELO))
+            _elo_cache[team_id] = float(data.get("rating", DEFAULT_ELO))  # Real value overrides seed
             count += 1
-        print(f"[Elo] Loaded {count} Elo ratings from Firestore.")
+        print(f"[Elo] Loaded {count} Elo ratings from Firestore (overrides pre-seeds where applicable).")
     except Exception as e:
         print(f"[Elo] Firestore load error: {e}")
 

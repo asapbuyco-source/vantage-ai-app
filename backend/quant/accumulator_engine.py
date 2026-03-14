@@ -16,7 +16,7 @@ from ev_engine import ValueBet
 
 
 # ── Accumulator config ─────────────────────────────────────────────────────────
-MAX_LEGS = 4
+MAX_LEGS = 3           # Fix #10: capped at 3 — 4-leg accas have unvalidated correlation risk
 MIN_COMBINED_ODDS_SAFE = 2.00
 MIN_COMBINED_ODDS_VALUE = 3.50
 MIN_COMBINED_ODDS_HIGH = 5.00
