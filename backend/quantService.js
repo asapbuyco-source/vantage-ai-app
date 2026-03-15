@@ -10,13 +10,30 @@
  * { status, generated, predictions } object.
  */
 
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import admin from 'firebase-admin';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const QUANT_SCRIPT = path.join(__dirname, 'quant', 'quant_pipeline.py');
+
+// Resolve the correct Python binary name (python3 preferred, fall back to python)
+function resolvePythonBin() {
+    for (const candidate of ['python3', 'python']) {
+        try {
+            const result = spawnSync(candidate, ['--version'], { encoding: 'utf8' });
+            if (result.status === 0) {
+                console.log(`[QuantService] Using Python binary: ${candidate} (${result.stdout.trim() || result.stderr.trim()})`);
+                return candidate;
+            }
+        } catch (_) { /* not found */ }
+    }
+    console.warn('[QuantService] WARNING: No Python binary found. Pipeline will fail.');
+    return 'python3'; // default — will surface a clear error at runtime
+}
+
+const PYTHON_BIN = resolvePythonBin();
 
 // ── Env forward to Python process ─────────────────────────────────────────────
 function buildPythonEnv() {
@@ -36,9 +53,9 @@ async function spawnPythonPipeline(dateStr = null, dryRun = false) {
         if (dateStr) args.push(dateStr);
         if (dryRun) args.push('--dry-run');
 
-        console.log(`[QuantService] Spawning Python pipeline: python ${args.join(' ')}`);
+        console.log(`[QuantService] Spawning Python pipeline: ${PYTHON_BIN} ${args.join(' ')}`);
 
-        const py = spawn('python', args, {
+        const py = spawn(PYTHON_BIN, args, {
             cwd: path.join(__dirname, 'quant'),
             env: buildPythonEnv(),
         });
@@ -140,7 +157,7 @@ export const runQuantGrading = async (dateStr = null) => {
         if (dateStr) args.push(dateStr);
 
         const result = await new Promise((resolve, reject) => {
-            const py = spawn('python', args, {
+            const py = spawn(PYTHON_BIN, args, {
                 cwd: path.join(__dirname, 'quant'),
                 env: buildPythonEnv(),
             });
@@ -171,7 +188,7 @@ export const runQuantPerformance = async () => {
     console.log('[QuantService] Computing quant performance metrics...');
     try {
         await new Promise((resolve, reject) => {
-            const py = spawn('python', ['performance_tracker.py'], {
+            const py = spawn(PYTHON_BIN, ['performance_tracker.py'], {
                 cwd: path.join(__dirname, 'quant'),
                 env: buildPythonEnv(),
             });
