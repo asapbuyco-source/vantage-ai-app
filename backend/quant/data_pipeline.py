@@ -229,30 +229,33 @@ def _parse_odds(odds_list: list) -> OddsData:
     od = OddsData()
     if not odds_list:
         return od
-    for bookmaker in odds_list[:5]:
-        markets = bookmaker.get("markets", []) or bookmaker.get("data", [])
-        for market in markets:
-            name = (market.get("name") or market.get("market_description", {}).get("name", "")).lower()
-            selections = market.get("selections") or market.get("data", [])
-            if "match winner" in name or "1x2" in name:
-                for sel in selections:
-                    label = str(sel.get("label", "")).lower()
-                    price = float(sel.get("latest_bookmaker_price") or sel.get("price", 0) or 0)
-                    if label == "1" or label == "home": od.home_odds = max(od.home_odds, price)
-                    elif label == "x" or label == "draw": od.draw_odds = max(od.draw_odds, price)
-                    elif label == "2" or label == "away": od.away_odds = max(od.away_odds, price)
-            elif "over/under" in name and "2.5" in name:
-                for sel in selections:
-                    label = str(sel.get("label", "")).lower()
-                    price = float(sel.get("latest_bookmaker_price") or sel.get("price", 0) or 0)
-                    if "over" in label: od.over25_odds = max(od.over25_odds, price)
-                    elif "under" in label: od.under25_odds = max(od.under25_odds, price)
-            elif "both teams to score" in name or "btts" in name:
-                for sel in selections:
-                    label = str(sel.get("label", "")).lower()
-                    price = float(sel.get("latest_bookmaker_price") or sel.get("price", 0) or 0)
-                    if label in ["yes", "1"]: od.btts_yes_odds = max(od.btts_yes_odds, price)
-                    elif label in ["no", "2"]: od.btts_no_odds = max(od.btts_no_odds, price)
+        
+    # Sportmonks v3 returns odds as a flat list of objects.
+    # Market IDs: 1 = Match Winner (1X2), 80 = Goals Over/Under, 14 = Both Teams To Score
+    for odd in odds_list:
+        market_id = odd.get("market_id")
+        name = str(odd.get("name") or "").lower()
+        label = str(odd.get("label") or "").lower()
+        price = float(odd.get("value") or 0.0)
+
+        # 1x2 Match Winner
+        if market_id == 1:
+            if "home" in label or "1" == label: od.home_odds = max(od.home_odds, price)
+            elif "draw" in label or "x" == label: od.draw_odds = max(od.draw_odds, price)
+            elif "away" in label or "2" == label: od.away_odds = max(od.away_odds, price)
+            
+        # Over/Under 2.5
+        elif market_id == 80:
+            total = str(odd.get("total") or "")
+            if "2.5" in total:
+                if "over" in label or "over" in name: od.over25_odds = max(od.over25_odds, price)
+                elif "under" in label or "under" in name: od.under25_odds = max(od.under25_odds, price)
+                
+        # BTTS
+        elif market_id == 14:
+            if "yes" in label or "yes" in name: od.btts_yes_odds = max(od.btts_yes_odds, price)
+            elif "no" in label or "no" in name: od.btts_no_odds = max(od.btts_no_odds, price)
+            
     return od
 
 
@@ -268,7 +271,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
     print(f"[DataPipeline] Fetching fixtures for {date_str}...")
     raw = _get_paginated(
         f"/fixtures/date/{date_str}",
-        params={"include": "league;participants;scores;odds.bookmaker.market.selections", "per_page": 100},
+        params={"include": "league;participants;scores;odds", "per_page": 100},
         max_pages=3,
     )
     if not raw:
@@ -360,12 +363,12 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         try:
             home_recent = _get_paginated(
                 f"/fixtures/between/{from_date}/{date_str}",
-                {"include": "participants;scores", "filters": f"fixtureParticipants:{home_id}", "per_page": 10},
+                {"include": "participants;scores", "filters": f"participantSearch:{home_id}", "per_page": 10},
                 max_pages=1,
             )
             away_recent = _get_paginated(
                 f"/fixtures/between/{from_date}/{date_str}",
-                {"include": "participants;scores", "filters": f"fixtureParticipants:{away_id}", "per_page": 10},
+                {"include": "participants;scores", "filters": f"participantSearch:{away_id}", "per_page": 10},
                 max_pages=1,
             )
             home_stats = _parse_form(home_recent, home_id)
@@ -377,19 +380,9 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         except Exception as e:
             print(f"[DataPipeline] Form fetch error for {md.home_team} vs {md.away_team}: {e}", file=sys.stderr)
 
-        # Fetch H2H
-        try:
-            h2h = _get_paginated(
-                f"/fixtures/head-to-head/{home_id}/{away_id}",
-                {"include": "participants;scores", "per_page": 8},
-                max_pages=1,
-            )
-            md.h2h_home_wins, md.h2h_away_wins, md.h2h_draws, md.h2h_avg_goals, md.h2h_btts_rate = (
-                _parse_h2h(h2h, home_id, away_id)
-            )
-        except Exception as e:
-            print(f"[DataPipeline] H2H fetch error: {e}", file=sys.stderr)
-            md.h2h_avg_goals = _league_avg(lid)
+        # Fetch H2H (Endpoint not available on Pro plan)
+        md.h2h_home_wins, md.h2h_away_wins, md.h2h_draws, md.h2h_btts_rate = 0, 0, 0, 0.0
+        md.h2h_avg_goals = _league_avg(lid)
 
         # Compute expected goals (Dixon-Coles-style attack/defence product)
         league_avg = _league_avg(lid)

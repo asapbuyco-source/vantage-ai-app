@@ -19,12 +19,24 @@ from collections import defaultdict
 
 def _get_firestore():
     try:
+        import os, json
         import firebase_admin
-        from firebase_admin import firestore as fs
+        from firebase_admin import firestore as fs, credentials
+
+        # Initialize only if not already done (each Python process starts fresh)
+        if not firebase_admin._apps:
+            sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
+            if sa_json:
+                cred = credentials.Certificate(json.loads(sa_json))
+            else:
+                cred = credentials.ApplicationDefault()
+            firebase_admin.initialize_app(cred)
+
         return fs.client()
     except Exception as e:
         print(f"[Perf] Firestore unavailable: {e}", file=sys.stderr)
         return None
+
 
 
 def _compute_period_stats(predictions: list[dict]) -> dict:

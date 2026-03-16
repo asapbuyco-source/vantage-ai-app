@@ -118,11 +118,24 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
     """
     try:
         import firebase_admin
-        from firebase_admin import firestore as fs
+        from firebase_admin import firestore as fs, credentials
+
+        # Initialize if not already done
+        if not firebase_admin._apps:
+            sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
+            if sa_json:
+                import json
+                cred = credentials.Certificate(json.loads(sa_json))
+            else:
+                # Fallback: try Application Default Credentials
+                cred = credentials.ApplicationDefault()
+            firebase_admin.initialize_app(cred)
+
         db = fs.client()
     except Exception as e:
         print(f"[Grading] Firestore unavailable: {e}", file=sys.stderr)
         return {"status": "error", "error": str(e)}
+
 
     doc_ref = db.collection("quant_predictions").document(date_str)
     doc = doc_ref.get()
