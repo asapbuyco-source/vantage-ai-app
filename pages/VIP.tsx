@@ -88,7 +88,9 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     const loadQuant = async () => {
       try {
         const today = new Date();
-        const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        // Use UTC date — quant_pipeline.py runs on UTC and saves with UTC date key
+        const utcNow = new Date();
+        const dateKey = `${utcNow.getUTCFullYear()}-${String(utcNow.getUTCMonth() + 1).padStart(2, '0')}-${String(utcNow.getUTCDate()).padStart(2, '0')}`;
         const snap = await getDoc(doc(db, 'quant_predictions', dateKey));
         if (snap.exists()) {
           const data = snap.data();
@@ -542,7 +544,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                     <p className="text-sm font-medium text-gray-500">
                       {quantPredictions.length === 0 ? 'Quant analysis runs at 07:00 Lagos time' : 'No bets match this filter'}
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">Pure statistical models — no AI</p>
+                    <p className="text-xs text-gray-400 mt-1">Pure statistical models</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -558,7 +560,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                         const cfg = CAT_CONFIG[category as keyof typeof CAT_CONFIG] || CAT_CONFIG.value;
                         return (
                           <motion.div
-                            key={match.fixture_id || match.id}
+                            key={match.fixture_id ?? String(idx)}
                             initial={{ opacity: 0, y: 16 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0 }}
@@ -610,14 +612,15 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                                 {/* EV + Kelly + Odds row */}
                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 ${evColor}`}>
-                                    EV: +{((match.ev_pct ?? ev * 100)).toFixed(1)}%
+                                    {/* ev_pct is already stored as % by pipeline; ev (0-1) is the raw fallback */}
+                                    EV: +{(match.ev_pct ?? (ev * 100)).toFixed(1)}%
                                   </span>
                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
                                     Kelly: {kelly.toFixed(1)}%
                                   </span>
-                                  {match.odds > 1 && (
+                                  {Number(match.odds) > 1 && (
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
-                                      {match.odds.toFixed(2)}x
+                                      {Number(match.odds).toFixed(2)}x
                                     </span>
                                   )}
                                 </div>

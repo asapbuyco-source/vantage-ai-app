@@ -164,7 +164,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                 <tab.icon size={16} />
                                 {tab.label}
                                 {'badge' in tab && tab.badge && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-vantage-cyan" />
+                                    <span className="w-1.5 h-1.5 rounded-full bg-vantage-cyan" />
                                 )}
                             </button>
                         ))}
@@ -403,7 +403,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                 <div className="text-center py-10 text-gray-500 text-sm">
                                                     <BarChart3 size={32} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
                                                     <p>{language === 'fr' ? 'Statistiques non disponibles' : 'Stats not available for this match'}</p>
-                                                    <p className="text-xs mt-1 text-gray-400">{language === 'fr' ? '(Match sans données générées par l\'IA)' : '(No AI-generated stats for this fixture)'}</p>
+                                                    <p className="text-xs mt-1 text-gray-400">{language === 'fr' ? '(Match sans données générées par l\'IA)' : '(generated stats for this fixture)'}</p>
                                                 </div>
                                             )}
                                         </div>
