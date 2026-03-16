@@ -1,7 +1,7 @@
 # nixpacks.toml — Railway build configuration
-# Uses aptPkgs (Ubuntu apt) to add Python 3 alongside the auto-detected Node.js.
-# Do NOT use nixPkgs here — it replaces (not adds to) Nixpacks' Node.js nix packages,
-# which causes "npm: command not found" during the install phase.
+# aptPkgs adds Python 3 via Ubuntu apt (runs alongside the nix Node.js setup).
+# nixPkgs pins Node.js to v20 (packages like Firebase & react-router require >=20).
 
 [phases.setup]
+nixPkgs = ["nodejs_20"]
 aptPkgs = ["python3", "python3-pip", "python3-dev"]
