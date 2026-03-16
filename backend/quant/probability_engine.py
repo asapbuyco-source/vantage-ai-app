@@ -16,6 +16,7 @@ from form_model import compute_form_probabilities, FormProbabilities
 W_POISSON = 0.60
 W_ELO = 0.30
 W_FORM = 0.10
+W_H2H = 0.05
 
 
 @dataclass
