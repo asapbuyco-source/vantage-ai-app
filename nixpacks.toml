@@ -1,6 +1,7 @@
 # nixpacks.toml — Railway build configuration
-# Forces Nixpacks to install Python 3.11 alongside Node.js
-# so the quant pipeline (Python statistical models) can run.
+# Uses aptPkgs (Ubuntu apt) to add Python 3 alongside the auto-detected Node.js.
+# Do NOT use nixPkgs here — it replaces (not adds to) Nixpacks' Node.js nix packages,
+# which causes "npm: command not found" during the install phase.
 
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip"]
+aptPkgs = ["python3", "python3-pip", "python3-dev"]
