@@ -1,0 +1,6 @@
+# nixpacks.toml — Railway build configuration
+# Forces Nixpacks to install Python 3.11 alongside Node.js
+# so the quant pipeline (Python statistical models) can run.
+
+[phases.setup]
+nixPkgs = ["python311", "python311Packages.pip"]

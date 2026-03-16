@@ -68,6 +68,14 @@ export interface Match {
   over25_prob?: number;
   btts_prob?: number;
   all_value_bets?: Array<{ market: string; prob: number; odds: number; ev: number }>;
+  // ── Quant snake_case aliases (Python quant pipeline output) ──────────────────
+  fixture_id?: number | string;    // same as fixtureId
+  kickoff_local?: string;          // local kickoff time string
+  probability?: number;            // raw 0–1 model probability
+  home_team?: string;              // alias for homeTeam
+  away_team?: string;              // alias for awayTeam
+  home_team_logo?: string;         // alias for homeTeamLogo
+  away_team_logo?: string;         // alias for awayTeamLogo
 }
 
 

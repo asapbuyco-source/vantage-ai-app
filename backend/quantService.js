@@ -19,18 +19,37 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const QUANT_SCRIPT = path.join(__dirname, 'quant', 'quant_pipeline.py');
 
 // Resolve the correct Python binary name (python3 preferred, fall back to python)
+// Also tries absolute paths for Nixpacks / nix-store environments (Railway, Render).
 function resolvePythonBin() {
-    for (const candidate of ['python3', 'python']) {
+    const candidates = [
+        'python3',
+        'python',
+        // Nixpacks (Railway) nix-store paths for python3.11
+        '/nix/var/nix/profiles/default/bin/python3',
+        '/root/.nix-profile/bin/python3',
+        '/usr/bin/python3',
+        '/usr/local/bin/python3',
+        '/usr/bin/python',
+    ];
+
+    for (const candidate of candidates) {
         try {
-            const result = spawnSync(candidate, ['--version'], { encoding: 'utf8' });
+            const result = spawnSync(candidate, ['--version'], { encoding: 'utf8', timeout: 3000 });
             if (result.status === 0) {
-                console.log(`[QuantService] Using Python binary: ${candidate} (${result.stdout.trim() || result.stderr.trim()})`);
+                const ver = (result.stdout || result.stderr || '').trim();
+                console.log(`[QuantService] ✅ Python binary resolved: ${candidate} (${ver})`);
                 return candidate;
             }
-        } catch (_) { /* not found */ }
+        } catch (_) { /* binary not available */ }
     }
-    console.warn('[QuantService] WARNING: No Python binary found. Pipeline will fail.');
-    return 'python3'; // default — will surface a clear error at runtime
+
+    // None found — log a detailed diagnostic
+    const pathEnv = process.env.PATH || '(not set)';
+    console.error(`[QuantService] ❌ CRITICAL: No Python binary found in PATH or absolute locations.`);
+    console.error(`[QuantService]   PATH = ${pathEnv}`);
+    console.error(`[QuantService]   Tried: ${candidates.join(', ')}`);
+    console.error(`[QuantService]   Fix: ensure nixpacks.toml includes python311 and railway.toml runs pip install.`);
+    return 'python3'; // will surface a clear ENOENT error at spawn time
 }
 
 const PYTHON_BIN = resolvePythonBin();

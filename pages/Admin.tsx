@@ -7,7 +7,7 @@ import { UserProfile, NavigationTab, Match, PayoutRequest, TeamAsset } from '../
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
 import { testGeminiConnection, enrichMatchStats, setGeminiModel, getGeminiModel, AVAILABLE_MODELS } from '../services/gemini';
-import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, getPredictionsForDate, saveTodaysPredictions, savePredictionsForDate, getTeamAssetsMap, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount } from '../services/db';
+import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, saveTodaysPredictions, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount } from '../services/db';
 import { TeamLogo } from '../components/TeamLogo';
 
 interface AdminProps {
@@ -301,24 +301,14 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const handleGenerateData = async () => {
         setIsSystemGenerating(true);
         try {
-            const todayKey = getGlobalTodayKey();
-            const existingPredictions = await getPredictionsForDate(todayKey);
-
-            if (existingPredictions && existingPredictions.length > 0) {
-                if (window.confirm("Predictions for today already exist. Are you sure you want to overwrite them?")) {
-                    await saveTodaysPredictions([]); // Clear them out
-                } else {
-                    return;
-                }
-            }
-
             const backendUrl = import.meta.env.VITE_BACKEND_URL;
             if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
             const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
 
-            const response = await fetch(`${backendUrl}/api/admin/generate-football`, {
+            const response = await fetch(`${backendUrl}/api/admin/trigger-quant`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
+                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+                body: JSON.stringify({})
             });
 
             if (!response.ok) {
@@ -327,17 +317,15 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             }
 
             const result = await response.json();
-            if (result.status === 'skipped') {
-                alert(`⚠️ Football generation skipped: ${result.reason || 'No qualifying predictions found for today.'}`)
+            if (result.status === 'error') {
+                alert(`❌ Quant Pipeline failed: ${result.error || result.message || 'Unknown error'}`);
             } else {
-                alert(`✅ Successfully generated ${result.generated ?? 0} football predictions via Backend Scheduler.`);
+                alert(`✅ Quant Pipeline complete: ${result.generated ?? 0} predictions saved for ${result.date || 'today'}.`);
             }
 
         } catch (error: any) {
-            console.error("Error generating data:", error);
-            if (error.name !== 'AbortError') {
-                alert("Failed to generate data. Check console for details.");
-            }
+            console.error("Error triggering quant pipeline:", error);
+            alert(`Failed to run Quant Pipeline: ${error.message}`);
         } finally {
             setIsSystemGenerating(false);
         }
@@ -351,29 +339,27 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         await generateAccumulators();
     };
 
-    const handleGenerateBasketball = async () => {
+    const handleQuantPerformance = async () => {
         setIsBasketballGenerating(true);
         try {
             const backendUrl = import.meta.env.VITE_BACKEND_URL;
             if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
             const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
 
-            const response = await fetch(`${backendUrl}/api/admin/generate-basketball`, {
+            const response = await fetch(`${backendUrl}/api/admin/quant-performance`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
             });
 
-            if (!response.ok) throw new Error('Backend generation failed');
+            if (!response.ok) throw new Error('Quant performance request failed');
             const result = await response.json();
             if (result.status === 'success') {
-                alert(`✅ Basketball generated via backend: ${result.generated} predictions saved.`);
-            } else if (result.status === 'skipped') {
-                alert(`⚠️ Basketball generation skipped: ${result.reason || result.message || 'no matches found today.'}`);
+                alert(`✅ Quant performance metrics updated successfully.`);
             } else {
-                alert(`❌ Basketball generation error: ${result.error || result.message || 'Unknown error'}`);
+                alert(`❌ Quant performance error: ${result.error || result.message || 'Unknown error'}`);
             }
         } catch (e) {
-            alert('Failed to trigger basketball generation');
+            alert('Failed to trigger quant performance update');
             console.error(e);
         } finally {
             setIsBasketballGenerating(false);
@@ -391,11 +377,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             targetDate = getGlobalYesterdayKey();
         }
 
-        if (!auto && !window.confirm(`Start grading for ${targetDate} via Backend? ${forceRegrade ? '(FORCE REGRADE ENABLED)' : ''}`)) return;
+        if (!auto && !window.confirm(`Start Quant Grading for ${targetDate}?`)) return;
 
         if (isMounted.current) {
             setIsGrading(true);
-            setGradingResult(auto ? `Auto-analyzing ${targetDate} results...` : `Starting grading process for ${targetDate} on Backend...`);
+            setGradingResult(auto ? `Auto-grading ${targetDate}...` : `Running Quant Grading for ${targetDate}...`);
         }
 
         try {
@@ -403,17 +389,17 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
             const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
 
-            const response = await fetch(`${backendUrl}/api/admin/grade-yesterday`, {
+            const response = await fetch(`${backendUrl}/api/admin/grade-quant`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
-                body: JSON.stringify({ date: targetDate, forceRegrade })
+                body: JSON.stringify({ date: targetDate })
             });
 
             const res = await response.json();
             if (isMounted.current) {
                 const resultMsg = res.status === 'success' || res.graded !== undefined
-                    ? `✅ Graded ${res.graded ?? 0}/${res.total ?? 0} matches (${res.status})`
-                    : `Backend response: ${res.message || res.error || JSON.stringify(res)}`;
+                    ? `✅ Quant Graded ${res.graded ?? 0}/${res.total ?? 0} bets`
+                    : `Response: ${res.message || res.error || JSON.stringify(res)}`;
                 setGradingResult(resultMsg);
                 if (!auto) alert(resultMsg);
             }
@@ -421,13 +407,13 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             if (isMounted.current) {
                 const errorMsg = `Error: ${e.message}`;
                 setGradingResult(errorMsg);
-                console.error("Grading failed", e);
+                console.error("Quant Grading failed", e);
                 if (!auto) alert(errorMsg);
             }
         } finally {
             if (isMounted.current) setIsGrading(false);
         }
-    }, [gradingDate, forceRegrade]);
+    }, [gradingDate]);
 
     const toggleAutoGrade = () => {
         const newValue = !autoGrade;
@@ -721,24 +707,24 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                             </button>
 
                             <div className="flex gap-2">
-                                {/* Football */}
+                                {/* Quant Pipeline */}
                                 <button
                                     onClick={handleGenerateData}
                                     disabled={isSystemGenerating || isBasketballGenerating}
-                                    className="flex-1 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-lg text-xs font-bold border border-orange-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                                    className="flex-1 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 rounded-lg text-xs font-bold border border-emerald-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
                                 >
                                     {isSystemGenerating ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
-                                    {isSystemGenerating ? "Generating..." : "Gen Football"}
+                                    {isSystemGenerating ? "Running..." : "⚙ Run Quant Pipeline"}
                                 </button>
 
-                                {/* Basketball */}
+                                {/* Quant Performance */}
                                 <button
-                                    onClick={handleGenerateBasketball}
+                                    onClick={handleQuantPerformance}
                                     disabled={isSystemGenerating || isBasketballGenerating}
-                                    className="flex-1 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-lg text-xs font-bold border border-orange-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                                    className="flex-1 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-bold border border-blue-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
                                 >
-                                    {isBasketballGenerating ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
-                                    {isBasketballGenerating ? "Generating..." : "Gen Basketball"}
+                                    {isBasketballGenerating ? <RefreshCw size={14} className="animate-spin" /> : <BarChart3 size={14} />}
+                                    {isBasketballGenerating ? "Updating..." : "📊 Quant Performance"}
                                 </button>
                             </div>
 

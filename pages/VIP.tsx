@@ -72,6 +72,10 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     }
   }, [picksDay]);
 
+  // isUnlocked must be declared HERE (before the useEffect that references it)
+  // to avoid a Temporal Dead Zone (TDZ) ReferenceError crash.
+  const isUnlocked = (userProfile?.isVip === true) || isAdmin;
+
   // ── Quant Model State ──────────────────────────────────────────────────────
   const [quantPredictions, setQuantPredictions] = useState<Match[]>([]);
   const [quantLoading, setQuantLoading] = useState(false);
@@ -229,7 +233,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     return match.analysis_en || match.analysis;
   };
 
-  const isUnlocked = (userProfile?.isVip === true) || isAdmin;
+  // isUnlocked is declared above (near line 78) to avoid TDZ crash.
 
   const safeBets = predictions.filter(m => m.category === 'safe');
   const valueBets = predictions.filter(m => m.category === 'value');
