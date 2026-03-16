@@ -29,6 +29,44 @@ const getDateKeyDaysAgo = (daysAgo: number) => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
 
+/** 
+ * Normalizes a raw prediction object from the Python quant_pipeline (snake_case)
+ * into the camelCase shape expected by all React components.
+ */
+const normalizeQuantPrediction = (p: any): any => {
+    if (!p) return p;
+    // Already normalized (has homeTeam) — skip to avoid double-mapping
+    if (p.homeTeam !== undefined) return p;
+
+    return {
+        ...p,
+        // Core identity fields
+        id: p.id ?? p.fixture_id ?? String(Math.random()),
+        homeTeam: p.home_team ?? '',
+        awayTeam: p.away_team ?? '',
+        homeTeamLogo: p.home_team_logo ?? '',
+        awayTeamLogo: p.away_team_logo ?? '',
+        league: p.league ?? '',
+        // Time: prefer human-readable kickoff_local; fall back to kickoff_utc snippet
+        time: p.time ?? p.kickoff_local ?? (p.kickoff_utc ? p.kickoff_utc.substring(11, 16) : ''),
+        // Prediction labels expected by AccumulatorModal / FreePicks / Home
+        prediction: p.prediction ?? p.bet_type ?? '',
+        prediction_en: p.prediction_en ?? p.prediction ?? p.bet_type ?? '',
+        prediction_fr: p.prediction_fr ?? p.prediction ?? p.bet_type ?? '',
+        // Stats / form
+        homeForm: p.homeForm ?? p.home_form ?? '',
+        awayForm: p.awayForm ?? p.away_form ?? '',
+        homeWinRate: p.homeWinRate ?? p.home_win_prob ?? null,
+        awayWinRate: p.awayWinRate ?? p.away_win_prob ?? null,
+        // Category / confidence
+        category: p.category ?? 'value',
+        confidence: p.confidence ?? (p.probability ? Math.round(p.probability * 100) : 0),
+        // Analysis line expected in some card renderers
+        analysis_en: p.analysis_en ?? `EV: +${p.ev_pct ?? 0}% | Model: Quant Engine`,
+        analysis_fr: p.analysis_fr ?? `VE: +${p.ev_pct ?? 0}% | Modèle: Quant Engine`,
+    };
+};
+
 export const getDailyData = async (dateStr: string): Promise<DailyAnalysis | null> => {
     try {
         let dailyAnalysis: any = null;
@@ -50,7 +88,9 @@ export const getDailyData = async (dateStr: string): Promise<DailyAnalysis | nul
         if (quantDocSnap.exists()) {
             const data = quantDocSnap.data();
             // The python script writes to 'predictions' instead of 'matches'
-            dailyAnalysis.matches = data.predictions || dailyAnalysis.matches || [];
+            // Normalize snake_case → camelCase so all components work correctly
+            const rawPreds = data.predictions || dailyAnalysis.matches || [];
+            dailyAnalysis.matches = rawPreds.map(normalizeQuantPrediction);
             if (data.accumulators) dailyAnalysis.accumulators = data.accumulators;
             found = true;
         }
@@ -63,6 +103,7 @@ export const getDailyData = async (dateStr: string): Promise<DailyAnalysis | nul
     }
     return null;
 };
+
 
 export const getPredictionsForDate = async (dateStr: string): Promise<Match[] | null> => {
     const data = await getDailyData(dateStr);
