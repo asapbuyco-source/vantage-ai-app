@@ -31,10 +31,32 @@ const getDateKeyDaysAgo = (daysAgo: number) => {
 
 export const getDailyData = async (dateStr: string): Promise<DailyAnalysis | null> => {
     try {
+        let dailyAnalysis: any = null;
+        let found = false;
+
+        // 1. Fetch legacy or raw base data from daily_predictions (like rawFixtures)
         const docRef = doc(db, "daily_predictions", dateStr);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-            return docSnap.data() as DailyAnalysis;
+            dailyAnalysis = docSnap.data();
+            found = true;
+        } else {
+            dailyAnalysis = { matches: [], rawFixtures: [], accumulators: null };
+        }
+
+        // 2. Fetch Quant specific predictions, and let them override the legacy predictions
+        const quantDocRef = doc(db, "quant_predictions", dateStr);
+        const quantDocSnap = await getDoc(quantDocRef);
+        if (quantDocSnap.exists()) {
+            const data = quantDocSnap.data();
+            // The python script writes to 'predictions' instead of 'matches'
+            dailyAnalysis.matches = data.predictions || dailyAnalysis.matches || [];
+            if (data.accumulators) dailyAnalysis.accumulators = data.accumulators;
+            found = true;
+        }
+
+        if (found) {
+            return dailyAnalysis as DailyAnalysis;
         }
     } catch (e) {
         console.warn(`Firestore Fetch Error for ${dateStr}:`, e);
@@ -111,8 +133,11 @@ export const deleteTodaysPredictions = async (): Promise<void> => {
     localStorage.removeItem(`vantage_cache_${todayStr}`);
     try {
         if (!auth.currentUser) return;
-        await deleteDoc(doc(db, "daily_predictions", todayStr));
-        console.log("Firestore data cleared for today.");
+        await Promise.all([
+            deleteDoc(doc(db, "daily_predictions", todayStr)),
+            deleteDoc(doc(db, "quant_predictions", todayStr))
+        ]);
+        console.log("Firestore data cleared for today (both legacy and quant).");
     } catch (e: any) {
         if (e.code === 'permission-denied') {
             console.warn("[DB] Firestore delete denied. Local cache cleared only.");
