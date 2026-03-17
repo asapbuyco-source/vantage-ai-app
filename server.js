@@ -204,12 +204,16 @@ app.post('/api/admin/generate-football', adminAuth, async (req, res) => {
     });
 });
 
-// ⛔ AI Basketball prediction endpoint is DISABLED.
+// 🏀 Basketball Quant Pipeline endpoint — Quant Engine primary, OpenAI/Gemini fallback
 app.post('/api/admin/generate-basketball', adminAuth, async (req, res) => {
-    res.status(410).json({
-        error: 'DISABLED',
-        message: 'AI basketball predictions are disabled. The Quant Engine handles all predictions.',
-    });
+    try {
+        console.log('[API] Manual Basketball Quant Pipeline triggered via Admin');
+        const result = await triggerBasketballGeneration();
+        res.json(result);
+    } catch (e) {
+        console.error('[API] Basketball pipeline error:', e.message);
+        res.status(500).json({ error: 'Basketball pipeline failed', details: e.message });
+    }
 });
 
 // ⛔ AI Grading endpoint is DISABLED — quant grading replaces it.

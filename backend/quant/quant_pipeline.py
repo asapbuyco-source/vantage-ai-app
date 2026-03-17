@@ -238,6 +238,7 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
             # Add to accumulator pool
             bet_pool.append({
                 "fixture_id": match.fixture_id,
+                "league": match.league,
                 "home_team": match.home_team,
                 "away_team": match.away_team,
                 "market": best_bet.market,

@@ -339,6 +339,42 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         await generateAccumulators();
     };
 
+    // Basketball Quant Pipeline
+    const [isBasketballPipelineRunning, setIsBasketballPipelineRunning] = useState(false);
+    const handleGenerateBasketball = async () => {
+        setIsBasketballPipelineRunning(true);
+        try {
+            const backendUrl = import.meta.env.VITE_BACKEND_URL;
+            if (!backendUrl) throw new Error('VITE_BACKEND_URL is not defined');
+            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
+
+            const response = await fetch(`${backendUrl}/api/admin/generate-basketball`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+                body: JSON.stringify({})
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Backend error: ${errText}`);
+            }
+
+            const result = await response.json();
+            if (result.status === 'success') {
+                alert(`✅ Basketball Quant Pipeline complete: ${result.generated ?? 0} picks saved for ${result.date || 'today'}.`);
+            } else if (result.status === 'no_games') {
+                alert(`⚠️ No NBA games found today — OpenAI fallback predictions were used instead.`);
+            } else {
+                alert(`❌ Basketball pipeline error: ${result.error || result.message || 'Unknown error'}`);
+            }
+        } catch (error: any) {
+            console.error('Basketball pipeline error:', error);
+            alert(`❌ Failed to run Basketball Pipeline: ${error.message}`);
+        } finally {
+            setIsBasketballPipelineRunning(false);
+        }
+    };
+
     const handleQuantPerformance = async () => {
         setIsBasketballGenerating(true);
         try {
@@ -728,7 +764,16 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                 </button>
                             </div>
 
-                            {/* Accumulators */}
+                            {/* Basketball Quant Pipeline */}
+                            <button
+                                onClick={handleGenerateBasketball}
+                                disabled={isSystemGenerating || isBasketballGenerating || isBasketballPipelineRunning}
+                                className="w-full py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-lg text-xs font-bold border border-orange-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                            >
+                                {isBasketballPipelineRunning ? <RefreshCw size={14} className="animate-spin" /> : <span>🏀</span>}
+                                {isBasketballPipelineRunning ? 'Generating Picks...' : '🏀 Basketball Quant Picks'}
+                            </button>
+
                             <button
                                 onClick={handleGenerateAccas}
                                 disabled={isSystemGenerating || isBasketballGenerating}

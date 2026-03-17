@@ -60,24 +60,38 @@ class Accumulator:
             self.combined_ev = round((self.combined_prob * self.combined_odds) - 1.0, 4)
 
 
-def _select_legs(bets: list[dict], min_prob: float, max_legs: int) -> list[dict]:
+def _select_legs(bets: list[dict], min_prob: float, max_legs: int, tier: str) -> list[dict]:
     """
     Select up to max_legs bets from the pool.
     - Filters by minimum probability
     - One bet per fixture only
+    - League diversification: Max 1 per league for Safe, Max 2 for Value/Risky
     - Maximizes sum of EV
     """
     pool = [b for b in bets if b["model_prob"] >= min_prob]
-    # One bet per fixture
+    
+    # Diversification caps
+    max_per_league = 1 if tier == "safe" else 2
+    
     seen_fixtures = set()
+    league_counts = {}
     selected = []
+    
     for b in sorted(pool, key=lambda x: x["expected_value"], reverse=True):
         if b["fixture_id"] in seen_fixtures:
             continue
+            
+        league = b.get("league", "unknown")
+        if league_counts.get(league, 0) >= max_per_league:
+            continue
+            
         seen_fixtures.add(b["fixture_id"])
+        league_counts[league] = league_counts.get(league, 0) + 1
         selected.append(b)
+        
         if len(selected) >= max_legs:
             break
+            
     return selected
 
 
@@ -96,7 +110,7 @@ def build_accumulator(bets: list[dict], tier: str) -> Accumulator | None:
         min_prob = 0.55
         min_combined = MIN_COMBINED_ODDS_HIGH
 
-    legs_data = _select_legs(bets, min_prob, MAX_LEGS)
+    legs_data = _select_legs(bets, min_prob, MAX_LEGS, tier)
     if len(legs_data) < 2:
         return None
 

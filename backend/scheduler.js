@@ -19,7 +19,7 @@ import {
 } from './geminiService.js';
 
 // ── Quant Engine (pure statistical — no AI/LLM) ───────────────────────────────
-import { runQuantPipeline, runQuantGrading, runQuantPerformance } from './quantService.js';
+import { runQuantPipeline, runQuantGrading, runQuantPerformance, runBasketballPipeline } from './quantService.js';
 
 import { checkRecentSelarEmails } from './gmailListener.js';
 import { sendDailyPredictionsToTelegram } from './telegramService.js';
@@ -140,8 +140,39 @@ export const triggerFootballGeneration = async () => {
     return result;
 };
 
-export const triggerBasketballGeneration = () =>
-    withOpenAIFallback(generateBasketballPredictionsOpenAI, generateBasketballPredictionsServerSide, 'Basketball Generation');
+/**
+ * Basketball: Try Python quant pipeline first (real NBA stats).
+ * If no games are scheduled today (NO_GAMES signal), fall back to OpenAI.
+ * If OpenAI also fails, fall back to Gemini.
+ */
+export const triggerBasketballGeneration = async () => {
+    console.log('[Scheduler] 🏀 Starting Basketball Quant Pipeline...');
+    try {
+        const result = await runBasketballPipeline();
+        if (result && result.status === 'success') {
+            console.log(`[Scheduler] ✅ Basketball Quant done: ${result.generated} bets from ${result.matches_analyzed} games.`);
+            return result;
+        }
+        // 'no_games' means the Python pipeline found no NBA games today → use OpenAI
+        if (result && result.status === 'no_games') {
+            console.log('[Scheduler] 🏀 No NBA games today — falling back to OpenAI basketball predictions.');
+            return withOpenAIFallback(
+                generateBasketballPredictionsOpenAI,
+                generateBasketballPredictionsServerSide,
+                'Basketball AI Fallback'
+            );
+        }
+        // Other failures → try OpenAI fallback
+        throw new Error(result?.error || 'Basketball quant returned unknown status');
+    } catch (e) {
+        console.warn(`[Scheduler] ⚠️ Basketball Quant failed: ${e.message}. Falling back to OpenAI...`);
+        return withOpenAIFallback(
+            generateBasketballPredictionsOpenAI,
+            generateBasketballPredictionsServerSide,
+            'Basketball AI Fallback'
+        );
+    }
+};
 
 export const triggerGrading = (customDate, forceRegrade) =>
     withOpenAIFallback(
@@ -253,11 +284,7 @@ export const initScheduler = () => {
             }
             */
 
-            // ══════════════════════════════════════════════════════════════════
-            // ⛔ AI BASKETBALL PREDICTION PIPELINE — DISABLED
-            // To re-enable: remove the block comment below.
-            // ══════════════════════════════════════════════════════════════════
-            /*
+            // ── Basketball Quant Scheduler (Quant Pipeline → OpenAI → Gemini) ────
             if (basketballTime !== currentBasketballTime) {
                 if (basketballTask) basketballTask.stop();
                 currentBasketballTime = basketballTime;
@@ -268,12 +295,11 @@ export const initScheduler = () => {
                         console.warn(`[Scheduler] ⛔ Basketball time-gate blocked: not within window of ${currentBasketballTime}`);
                         return;
                     }
-                    console.log(`🏀 Running scheduled Basketball Generation at ${basketballTime}...`);
+                    console.log(`🏀 Running Basketball Quant Pipeline at ${basketballTime}...`);
                     await triggerBasketballGeneration();
                 }, { timezone: "Africa/Lagos" });
-                console.log(`✅ Scheduled Basketball Gen for ${basketballTime} (OpenAI→Gemini fallback)`);
+                console.log(`✅ Scheduled Basketball Quant for ${basketballTime} (Quant→OpenAI→Gemini)`);
             }
-            */
 
             // ══════════════════════════════════════════════════════════════════
             // ⛔ AI GRADING — DISABLED (replaced by Quant Grading @ 06:30)

@@ -223,6 +223,89 @@ export const runQuantPerformance = async () => {
     }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BASKETBALL PIPELINE
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BASKETBALL_SCRIPT = path.join(__dirname, 'quant', 'basketball_pipeline.py');
+
+/**
+ * Run the quantitative basketball pipeline for the given date.
+ * Uses BallDontLie API (free, no key) for real NBA game data.
+ * If no games are found, returns { status: 'no_games' } so the scheduler
+ * can fall back to OpenAI automatically.
+ *
+ * @param {string|null} dateStr - YYYY-MM-DD, defaults to Lagos today
+ * @param {boolean} dryRun
+ * @returns {Promise<{status, generated, matches_analyzed, date}>}
+ */
+export const runBasketballPipeline = async (dateStr = null, dryRun = false) => {
+    const label = dryRun ? 'DRY RUN' : (dateStr || 'today');
+    console.log(`[QuantService] 🏀 Starting Basketball Pipeline (${label})...`);
+
+    return new Promise((resolve, reject) => {
+        const args = ['basketball_pipeline.py'];
+        if (dateStr) args.push(dateStr);
+        if (dryRun) args.push('--dry-run');
+
+        console.log(`[QuantService] Spawning: ${PYTHON_BIN} ${args.join(' ')}`);
+
+        const py = spawn(PYTHON_BIN, args, {
+            cwd: path.join(__dirname, 'quant'),
+            env: buildPythonEnv(),
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        py.stdout.on('data', (data) => {
+            const line = data.toString();
+            stdout += line;
+            line.split('\n').filter(Boolean).forEach(l => console.log(`[Python|Basketball] ${l}`));
+        });
+        py.stderr.on('data', (data) => {
+            const line = data.toString();
+            stderr += line;
+            line.split('\n').filter(Boolean).forEach(l => console.warn(`[Python|Basketball|ERR] ${l}`));
+        });
+
+        py.on('close', (code) => {
+            // Check for "no games today" — not an error, just fall back to OpenAI
+            if (stdout.includes('NO_GAMES')) {
+                console.log('[QuantService] 🏀 Basketball: no NBA games scheduled today — triggering OpenAI fallback.');
+                resolve({ status: 'no_games', generated: 0 });
+                return;
+            }
+            if (code !== 0) {
+                reject(new Error(`Basketball pipeline exited with code ${code}: ${stderr.slice(-500)}`));
+                return;
+            }
+
+            // Parse summary stats from stdout
+            const gamesMatch  = stdout.match(/Games analyzed:\s*(\d+)/);
+            const betsMatch   = stdout.match(/Value bets identified:\s*(\d+)/);
+            const gamesAnalyzed = gamesMatch ? parseInt(gamesMatch[1]) : 0;
+            const generated     = betsMatch  ? parseInt(betsMatch[1])  : 0;
+
+            console.log(`[QuantService] ✅ Basketball done: ${generated} value bets from ${gamesAnalyzed} games.`);
+            resolve({
+                status: 'success',
+                generated,
+                matches_analyzed: gamesAnalyzed,
+                date: dateStr || getLagosDateKey(),
+            });
+        });
+
+        py.on('error', (err) => reject(new Error(`Failed to spawn basketball pipeline: ${err.message}`)));
+
+        // Safety timeout: 5 minutes
+        setTimeout(() => {
+            py.kill('SIGTERM');
+            reject(new Error('Basketball pipeline timed out after 5 minutes'));
+        }, 5 * 60 * 1000);
+    });
+};
+
 // ── Lagos date helper (mirror of scheduler.js) ────────────────────────────────
 function getLagosDateKey() {
     const now = new Date();
