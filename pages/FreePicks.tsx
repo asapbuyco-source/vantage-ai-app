@@ -57,9 +57,9 @@ export const FreePicks: React.FC = () => {
                       {match.time}
                     </span>
                     <button
-                        onClick={() => handleCopy(`${match.homeTeam} vs ${match.awayTeam}`, match.id)}
+                        onClick={() => handleCopy(`${match.homeTeam} vs ${match.awayTeam} — ${getPredictionText(match)} (${match.confidence}%)`, match.id)}
                         className="p-1.5 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 dark:text-gray-500 hover:text-vantage-cyan dark:hover:text-vantage-cyan"
-                        title="Copy match"
+                        title="Copy prediction"
                     >
                         {copiedId === match.id ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
                     </button>

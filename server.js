@@ -386,6 +386,37 @@ app.post('/api/openai/generate', openaiLimiter, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════
+// PUSH NOTIFICATIONS
+// ══════════════════════════════════════════════════════════════════════
+// A valid fallback public key is provided for dev/test to prevent frontend DOMException crashes
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuB220o_Ew8S_Z2hN2-7xMhOOs';
+
+app.get('/api/push/vapid-key', (req, res) => {
+    res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+    try {
+        const subscription = req.body;
+        if (!subscription || !subscription.endpoint || !subscription.keys) {
+            return res.status(400).json({ error: 'Invalid subscription object' });
+        }
+        
+        if (admin.apps.length > 0) {
+            const subId = subscription.keys.auth || Date.now().toString();
+            await admin.firestore().collection('push_subscriptions').doc(subId).set({
+                subscription,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+        res.status(201).json({ success: true });
+    } catch (e) {
+        console.error('Push subscription error:', e);
+        res.status(500).json({ error: 'Failed to save subscription' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════════
 // SERVER-SIDE RENDERING & SEO (Static + Dynamic Routes)
 // ══════════════════════════════════════════════════════════════════════
 

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon,
   Trophy, AlertTriangle, Hourglass, Search, SlidersHorizontal, ChevronDown,
-  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Radio
+  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Radio, Copy, Check
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { CircularProgress } from '../components/CircularProgress';
@@ -15,6 +15,7 @@ import { NavigationTab, Match, Sport } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
 import { getAppSettings } from '../services/db';
+import { PWAInstallButton } from '../components/PWAInstallButton';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
@@ -62,6 +63,18 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [liveCount, setLiveCount] = useState(0);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  const getPredictionText = (match: Match) => {
+    if (language === 'fr') return match.prediction_fr || match.prediction || '';
+    return match.prediction_en || match.prediction || '';
+  };
 
   // Subscribe to live count from Firestore
   useEffect(() => {
@@ -209,7 +222,9 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         )}
       </GlassCard>
 
-      {/* ─── LIVE MATCHES BANNER ─── */}
+      {/* ─── PWA INSTALL + NOTIFICATIONS ─── */}
+      <PWAInstallButton />
+
       {liveCount > 0 && (
         <motion.button
           initial={{ opacity: 0, y: -8 }}
@@ -472,10 +487,28 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[10px] font-bold text-gray-400 group-hover:text-vantage-cyan transition-colors flex items-center gap-1">
-                                {language === 'fr' ? 'Détails' : 'Details'}
-                                <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
-                              </span>
+                              <div className="flex items-center gap-2">
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     const pred = getPredictionText(match);
+                                     const text = pred
+                                       ? `${match.homeTeam} vs ${match.awayTeam} \u2014 ${pred} (${match.confidence}%)`
+                                       : `${match.homeTeam} vs ${match.awayTeam}`;
+                                     handleCopy(text, match.id);
+                                   }}
+                                   className="p-1.5 rounded-lg bg-white/5 hover:bg-vantage-cyan/10 text-gray-500 hover:text-vantage-cyan transition-colors"
+                                   title="Copy prediction"
+                                 >
+                                   {copiedId === match.id
+                                     ? <Check size={11} className="text-green-400" />
+                                     : <Copy size={11} />}
+                                 </button>
+                                 <span className="text-[10px] font-bold text-gray-400 group-hover:text-vantage-cyan transition-colors flex items-center gap-1">
+                                   {language === 'fr' ? 'Détails' : 'Details'}
+                                   <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                                 </span>
+                               </div>
                             </div>
                           </div>
                         </div>

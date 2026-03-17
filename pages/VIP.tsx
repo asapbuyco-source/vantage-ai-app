@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence, useSpring, useMotionValue, useTransform } from 'framer-motion';
-import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, Trophy, TrendingUp, BarChart2, Calculator, ChevronDown, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
@@ -497,7 +497,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           </div>
         </div>
 
-        {/* ── QUANT MODEL PICKS SECTION ──────────────────────────────────────── */}
+        {/* ── VANTAGE MODEL PICKS SECTION ──────────────────────────────────────── */}
         <div className="mb-6">
           {/* Header */}
           <button
@@ -507,7 +507,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
             <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300">
               <BarChart2 size={16} className="text-emerald-500" />
               <span>Model Picks</span>
-              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 ml-1">STATISTICAL</span>
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 ml-1">VANTAGE AI</span>
               {quantPredictions.length > 0 && (
                 <span className="text-[10px] font-normal text-gray-500">{quantPredictions.length} bets</span>
               )}
@@ -542,7 +542,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                   <div className="text-center py-8 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10">
                     <BarChart2 size={28} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
                     <p className="text-sm font-medium text-gray-500">
-                      {quantPredictions.length === 0 ? 'Quant analysis runs at 07:00 Lagos time' : 'No bets match this filter'}
+                      {quantPredictions.length === 0 ? 'Vantage AI analysis runs at 07:00 Lagos time' : 'No bets match this filter'}
                     </p>
                     <p className="text-xs text-gray-400 mt-1">Pure statistical models</p>
                   </div>
@@ -570,9 +570,15 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                               {/* Header */}
                               <div className="px-4 pt-3 pb-2 flex items-center justify-between">
                                 <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest truncate max-w-[100px]">{match.league}</span>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">⚙ QUANT</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">⚡ VANTAGE</span>
                                   <span className="text-[9px] text-gray-400 flex items-center gap-0.5"><Clock size={9} />{match.kickoff_local || match.time}</span>
+                                  <button
+                                    onClick={() => handleCopy(`${match.home_team || match.homeTeam} vs ${match.away_team || match.awayTeam} \u2014 ${match.bet_type || match.prediction} (${match.confidence ?? Math.round((match.probability ?? 0) * 100)}%)`, String(match.fixture_id || idx))}
+                                    className="p-1 rounded bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 hover:text-vantage-cyan shadow-sm border border-slate-200 dark:border-white/5"
+                                  >
+                                    {copiedId === String(match.fixture_id || idx) ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
+                                  </button>
                                 </div>
                               </div>
 
@@ -725,7 +731,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           </div>
         ) : (
           <>
-            {/* AI predictions replaced by Quant Engine — show notice only if no quant picks loaded yet */}
+            {/* AI predictions replaced by Vantage Engine — show notice only if no picks loaded yet */}
             {quantPredictions.length === 0 && !quantLoading && (
               <div className="text-center py-10 rounded-2xl border-2 border-dashed border-emerald-500/30 bg-emerald-500/5">
                 <BarChart2 size={28} className="mx-auto mb-2 text-emerald-500 opacity-60" />
