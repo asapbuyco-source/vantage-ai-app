@@ -38,6 +38,19 @@ TIER_3 = {
     288:  "Ekstraklasa (Poland)",
     1186: "CAF Champions League",
     1187: "CAF Confederation Cup",
+    567:  "Segunda División (Spain)",
+    85:   "2. Bundesliga (Germany)",
+    395:  "Serie B (Italy)",
+    302:  "Ligue 2 (France)",
+}
+
+# ── Tier 4: Minor / High Variance (Safety First) ──────────────────────────
+TIER_4 = {
+    10:   "England League 1",
+    12:   "England League 2",
+    254:  "Brasileirão Série B",
+    14:   "England National League",
+    51:   "Liga Portugal 2",
 }
 
 # ── All approved leagues (merged) ─────────────────────────────────────────
@@ -48,11 +61,13 @@ for _league_id, _name in TIER_2.items():
     ALL_APPROVED_LEAGUES[_league_id] = {"name": _name, "tier": 2, "weight": 0.85}
 for _league_id, _name in TIER_3.items():
     ALL_APPROVED_LEAGUES[_league_id] = {"name": _name, "tier": 3, "weight": 0.70}
+for _league_id, _name in TIER_4.items():
+    ALL_APPROVED_LEAGUES[_league_id] = {"name": _name, "tier": 4, "weight": 0.55}
 
 APPROVED_LEAGUE_IDS = set(ALL_APPROVED_LEAGUES.keys())
 
 # ── Priority scores for fixture sorting (higher = more important) ──────────
-TIER_PRIORITY = {1: 150, 2: 100, 3: 60}
+TIER_PRIORITY = {1: 150, 2: 100, 3: 60, 4: 30}
 
 
 def get_league_info(league_id: int) -> dict | None:

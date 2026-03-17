@@ -169,7 +169,7 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
             all_value_bets = evaluate_all_markets(probs, match.odds)
 
             # Apply risk filters to find approved bets
-            approved_bets = filter_bets(all_value_bets)
+            approved_bets = filter_bets(all_value_bets, league_tier=match.league_tier)
 
             if not approved_bets:
                 print(f"[QuantPipeline]   ✗ {match.home_team} vs {match.away_team}: No value bets passed filters.")

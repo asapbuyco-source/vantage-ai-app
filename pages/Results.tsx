@@ -94,12 +94,12 @@ export const Results: React.FC = () => {
             await savePredictionsForDate(date, updated);
 
             // Recompute local history entry
-            const graded = updated.filter(m => m.status === 'won' || m.status === 'lost');
             setHistory(prev => prev.map(d => {
                 if (d.date !== date) return d;
+                const graded = updated.filter(m => m.status === 'won' || m.status === 'lost');
                 return {
                     ...d,
-                    matches: graded,
+                    matches: updated, // Keep ALL matches in local state
                     wonCount: graded.filter(m => m.status === 'won').length,
                     lostCount: graded.filter(m => m.status === 'lost').length,
                     totalGraded: graded.length,

@@ -443,12 +443,13 @@ export const getResultsHistory = async (days: number = 30): Promise<DayResult[]>
 
     const allDays = await Promise.all(fetchPromises);
     allDays.forEach(({ dateKey, matches }) => {
-        if (!matches) return;
+        if (!matches || matches.length === 0) return;
+        
         const graded = matches.filter(m => m.status === 'won' || m.status === 'lost');
-        if (graded.length === 0) return;
+        
         results.push({
             date: dateKey,
-            matches: graded,
+            matches: matches, // Return all matches so pending ones show up
             wonCount: graded.filter(m => m.status === 'won').length,
             lostCount: graded.filter(m => m.status === 'lost').length,
             totalGraded: graded.length,

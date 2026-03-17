@@ -28,22 +28,34 @@ class FilterResult:
     reason: str | None = None  # Why it failed (if it did)
 
 
-def apply_filters(bet: ValueBet) -> FilterResult:
+def apply_filters(bet: ValueBet, league_tier: int = 1) -> FilterResult:
     """
-    Run all risk filters on a single ValueBet.
-    Returns FilterResult(passed=True) if bet should be accepted.
+    Run all risk filters on a single ValueBet, with thresholds
+    adjusting based on the league tier (safety first).
     """
+    # ── Tier-based dynamic thresholds ──────────────────────────────────────────
+    t_min_prob = MIN_PROBABILITY
+    t_min_ev = MIN_EV
+
+    if league_tier == 3:
+        t_min_prob = 0.58  # 58% floor for Tier 3
+        t_min_ev = 0.06    # 6% edge for Tier 3
+    elif league_tier >= 4:
+        t_min_prob = 0.62  # 62% floor for Tier 4 (high noise)
+        t_min_ev = 0.08    # 8% edge for Tier 4
+
+    # ── Logic ──────────────────────────────────────────────────────────────────
     if bet.odds < MIN_ODDS:
         return FilterResult(False, f"Odds too low ({bet.odds:.2f} < {MIN_ODDS})")
 
     if bet.odds > MAX_ODDS:
         return FilterResult(False, f"Odds too high ({bet.odds:.2f} > {MAX_ODDS})")
 
-    if bet.model_prob < MIN_PROBABILITY:
-        return FilterResult(False, f"Probability too low ({bet.model_prob:.1%} < {MIN_PROBABILITY:.0%})")
+    if bet.model_prob < t_min_prob:
+        return FilterResult(False, f"Probability too low for Tier {league_tier} ({bet.model_prob:.1%} < {t_min_prob:.0%})")
 
-    if bet.expected_value < MIN_EV:
-        return FilterResult(False, f"EV too low ({bet.expected_value:.1%} < {MIN_EV:.0%})")
+    if bet.expected_value < t_min_ev:
+        return FilterResult(False, f"EV too low for Tier {league_tier} ({bet.expected_value:.1%} < {t_min_ev:.0%})")
 
     if bet.inefficiency < MIN_INEFFICIENCY:
         return FilterResult(False, f"Market inefficiency too small ({bet.inefficiency:.1%} < {MIN_INEFFICIENCY:.0%})")
@@ -51,14 +63,14 @@ def apply_filters(bet: ValueBet) -> FilterResult:
     return FilterResult(True)
 
 
-def filter_bets(bets: list[ValueBet]) -> list[ValueBet]:
+def filter_bets(bets: list[ValueBet], league_tier: int = 1) -> list[ValueBet]:
     """
     Filter a list of bets.
     Returns only those that pass all risk filters, sorted by EV descending.
     """
     passed = []
     for bet in bets:
-        result = apply_filters(bet)
+        result = apply_filters(bet, league_tier)
         if result.passed:
             passed.append(bet)
         else:
