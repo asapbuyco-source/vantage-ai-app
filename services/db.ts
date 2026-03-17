@@ -118,12 +118,54 @@ export const getAccumulatorsForDate = async (dateStr: string): Promise<Accumulat
 export const savePredictionsForDate = async (dateStr: string, matches: Match[]): Promise<void> => {
     try {
         if (!auth.currentUser) return;
+
+        // 1. Always write to daily_predictions (backward-compatible for AI-generated picks)
         const docRef = doc(db, "daily_predictions", dateStr);
         await setDoc(docRef, {
             matches: matches,
             updatedAt: new Date().toISOString(),
             date: dateStr
         }, { merge: true });
+
+        // 2. Also sync graded statuses back to quant_predictions so that
+        //    getDailyData (which prioritizes quant_predictions) shows correct grades on reload.
+        //    We only touch status/score/graded_at — we never overwrite model data.
+        try {
+            const quantRef = doc(db, "quant_predictions", dateStr);
+            const quantSnap = await getDoc(quantRef);
+            if (quantSnap.exists()) {
+                const quantPreds: any[] = quantSnap.data()?.predictions || [];
+                if (quantPreds.length > 0) {
+                    // Build a status map keyed by fixture_id from the edited matches
+                    const statusMap: Record<string, { status: string; score?: string }> = {};
+                    matches.forEach((m: any) => {
+                        const fid = String(m.fixture_id ?? m.id ?? '');
+                        if (fid && m.status) statusMap[fid] = { status: m.status, score: m.score };
+                    });
+
+                    const updatedPreds = quantPreds.map((p: any) => {
+                        const fid = String(p.fixture_id ?? p.id ?? '');
+                        const override = statusMap[fid];
+                        if (!override) return p;
+                        return {
+                            ...p,
+                            status: override.status,
+                            ...(override.score ? { score: override.score } : {}),
+                            graded_at: new Date().toISOString(),
+                        };
+                    });
+
+                    await setDoc(quantRef, {
+                        predictions: updatedPreds,
+                        graded_at: new Date().toISOString(),
+                    }, { merge: true });
+                }
+            }
+        } catch (syncErr) {
+            // Non-fatal — the primary daily_predictions write already succeeded
+            console.warn('[DB] Could not sync graded statuses to quant_predictions:', syncErr);
+        }
+
         console.log(`Predictions successfully updated for ${dateStr}.`);
     } catch (e) {
         console.error("Firestore Save Error:", e);

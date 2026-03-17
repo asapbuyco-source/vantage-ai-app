@@ -5,11 +5,11 @@ import {
     Loader2, Trophy, AlertCircle, Pencil, Save, X, MinusCircle
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
-import { getResultsHistory, DayResult, savePredictionsForDate } from '../services/db';
-import { getPredictionsForDate } from '../services/db';
+import { getResultsHistory, DayResult, savePredictionsForDate, getPredictionsForDate } from '../services/db';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Match } from '../types';
+
 
 type MatchStatus = 'won' | 'lost' | 'void' | 'pending';
 
@@ -172,10 +172,11 @@ export const Results: React.FC = () => {
 
             {/* Summary Banner */}
             {!loading && totalGraded > 0 && (
-                // @ts-ignore
+                // @ts-ignore – Framer Motion v12 + React 19 children prop incompatibility
                 <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
                     <GlassCard className="border-vantage-cyan/20 bg-vantage-cyan/5">
                         <div className="grid grid-cols-3 gap-4 text-center">
+
                             <div>
                                 <p className="text-2xl font-black font-orbitron text-green-500">{totalWon}</p>
                                 <p className="text-[10px] uppercase text-gray-500">{language === 'fr' ? 'Gagnés' : 'Won'}</p>
@@ -354,7 +355,12 @@ export const Results: React.FC = () => {
                                                             <span className={`text-xs font-bold font-orbitron ${statusColor[status]}`}>
                                                                 {statusLabel[status]}
                                                             </span>
-                                                            <span className="text-[10px] text-gray-500">@ {match.odds}</span>
+                                                            {/* Show graded score when available, otherwise show odds */}
+                                                            {match.score ? (
+                                                                <span className="text-[10px] text-gray-500">{match.score}</span>
+                                                            ) : match.odds ? (
+                                                                <span className="text-[10px] text-gray-500">@ {match.odds}</span>
+                                                            ) : null}
                                                         </div>
                                                     </div>
                                                 );

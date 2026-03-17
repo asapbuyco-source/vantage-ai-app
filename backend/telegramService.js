@@ -152,20 +152,56 @@ export const sendDailyPredictionsToTelegram = async () => {
             return { status: 'skipped', reason: 'no_chat_id' };
         }
 
-        // 2. Load today's predictions
+        // 2. Load today's predictions from BOTH collections:
+        //    - quant_predictions  : primary (Python quant_pipeline.py writes here)
+        //    - daily_predictions  : legacy / AI-generated picks
         const todayStr = getDateKey(0);
         const db = admin.firestore();
-        const docSnap = await db.collection('daily_predictions').doc(todayStr).get();
-        if (!docSnap.exists) {
-            console.warn('[Telegram] No predictions doc found for today. Skipping.');
+
+        let allMatches = [];
+
+        // 2a. Read quant_predictions (primary — Python pipeline writes here)
+        const quantSnap = await db.collection('quant_predictions').doc(todayStr).get();
+        if (quantSnap.exists) {
+            const rawPreds = quantSnap.data()?.predictions || [];
+            // Normalize snake_case → camelCase so filter logic works uniformly
+            const normalized = rawPreds.map(p => ({
+                ...p,
+                homeTeam: p.homeTeam ?? p.home_team ?? '',
+                awayTeam: p.awayTeam ?? p.away_team ?? '',
+                league: p.league ?? '',
+                // Quant engine stores the market label in 'prediction' and 'bet_type'
+                prediction_en: p.prediction_en ?? p.prediction ?? p.bet_type ?? '',
+                confidence: p.confidence ?? (p.probability ? Math.round(p.probability * 100) : 0),
+                category: p.category ?? 'value',
+                odds: p.odds ?? null,
+                analysis_en: p.analysis_en ?? (p.ev_pct != null ? `EV: +${p.ev_pct}% | Quant Engine` : null),
+            }));
+            allMatches = normalized;
+        }
+
+        // 2b. Merge daily_predictions (legacy AI picks that may also exist)
+        const legacySnap = await db.collection('daily_predictions').doc(todayStr).get();
+        if (legacySnap.exists) {
+            const legacyMatches = legacySnap.data()?.matches || [];
+            const quantFixtureIds = new Set(allMatches.map(m => String(m.fixture_id ?? m.id ?? '')));
+            const uniqueLegacy = legacyMatches.filter(m => {
+                const fid = String(m.fixture_id ?? m.id ?? '');
+                return fid && !quantFixtureIds.has(fid);
+            });
+            allMatches = [...allMatches, ...uniqueLegacy];
+        }
+
+        if (allMatches.length === 0) {
+            console.warn('[Telegram] No predictions found for today in either collection. Skipping.');
             return { status: 'skipped', reason: 'no_predictions' };
         }
 
-        const allMatches = docSnap.data()?.matches || [];
         // FREE TIER ONLY: only send 'safe' category picks on Telegram.
         // Value and risky picks are VIP-exclusive and should not appear on the public channel.
+        // Field fallback: prediction_en (AI picks) or prediction/bet_type (quant picks)
         const ready = allMatches.filter(m =>
-            m.prediction_en &&
+            (m.prediction_en || m.prediction || m.bet_type) &&
             m.confidence >= 68 &&
             m.sport !== 'basketball' &&
             m.category === 'safe'
