@@ -345,7 +345,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
     print(f"[DataPipeline] Fetching fixtures for {date_str}...")
     raw = _get_paginated(
         f"/fixtures/date/{date_str}",
-        params={"include": "league;participants;scores;odds", "per_page": 100},
+        params={"include": "league;participants;scores;odds;statistics", "per_page": 100},
         max_pages=3,
     )
     if not raw:
@@ -438,8 +438,8 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         raw_stats = item.get("statistics") or []
         stats_list = raw_stats if isinstance(raw_stats, list) else (raw_stats.get("data", []) if isinstance(raw_stats, dict) else [])
         for stat in stats_list:
-            stat_type = str(stat.get("type", {}).get("name", "") if isinstance(stat.get("type"), dict) else stat.get("type_id", "")).lower()
-            if "expected" in stat_type and "goal" in stat_type:
+            # type_id 34 = Expected Goals (xG) on Sportmonks V3
+            if stat.get("type_id") == 34:
                 loc = stat.get("location", "")
                 val = stat.get("data", {}).get("value") if isinstance(stat.get("data"), dict) else stat.get("value")
                 try:
