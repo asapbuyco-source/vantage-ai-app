@@ -38,12 +38,12 @@ def _sm_get(path: str, params: dict | None = None) -> dict | None:
 
 def _fetch_results_for_date(date_str: str) -> dict[str, dict]:
     """
-    Fetch completed fixtures for a date.
-    Returns a map: fixture_id → {home_goals, away_goals, state}
+    Fetch completed fixtures for a date, including closing odds for CLV tracking.
+    Returns a map: fixture_id → {home_goals, away_goals, state, closing_odds}
     """
     result = _sm_get(
         f"/fixtures/date/{date_str}",
-        {"include": "participants;scores;state", "per_page": 200},
+        {"include": "participants;scores;state;odds", "per_page": 200},
     )
     data = result.get("data", []) if result else []
     out = {}
@@ -66,8 +66,82 @@ def _fetch_results_for_date(date_str: str) -> dict[str, dict]:
                    if s.get("participant_id") == away_p["id"] and s.get("description") == "CURRENT"), None)
         if hg is None or ag is None:
             continue
-        out[str(item["id"])] = {"home_goals": hg, "away_goals": ag, "state": state}
+
+        # ── Parse closing odds for CLV tracking ───────────────────────────
+        closing_odds = _parse_closing_odds(item.get("odds") or [])
+
+        out[str(item["id"])] = {
+            "home_goals": hg, "away_goals": ag, "state": state,
+            "closing_odds": closing_odds,
+        }
     return out
+
+
+def _parse_closing_odds(odds_list: list) -> dict:
+    """
+    Parse closing odds from Sportmonks odds data.
+    Returns a dict mapping market names to their closing decimal odds.
+    These are the last odds available before the match started (closing line).
+    """
+    closing = {}
+    if not odds_list:
+        return closing
+
+    raw_odds = odds_list if isinstance(odds_list, list) else (odds_list.get("data", []) if isinstance(odds_list, dict) else [])
+
+    for odd in raw_odds:
+        market_id = odd.get("market_id")
+        label = str(odd.get("label") or "").lower()
+        name = str(odd.get("name") or "").lower()
+        price = float(odd.get("value") or 0.0)
+        if price <= 1.0:
+            continue
+
+        # 1X2 Match Winner
+        if market_id == 1:
+            if "home" in label or "1" == label:
+                closing["Home Win"] = max(closing.get("Home Win", 0), price)
+            elif "draw" in label or "x" == label:
+                closing["Draw"] = max(closing.get("Draw", 0), price)
+            elif "away" in label or "2" == label:
+                closing["Away Win"] = max(closing.get("Away Win", 0), price)
+        # Over/Under 2.5
+        elif market_id == 80:
+            total = str(odd.get("total") or "")
+            if "2.5" in total:
+                if "over" in label or "over" in name:
+                    closing["Over 2.5 Goals"] = max(closing.get("Over 2.5 Goals", 0), price)
+                elif "under" in label or "under" in name:
+                    closing["Under 2.5 Goals"] = max(closing.get("Under 2.5 Goals", 0), price)
+        # BTTS
+        elif market_id == 14:
+            if "yes" in label or "yes" in name:
+                closing["BTTS"] = max(closing.get("BTTS", 0), price)
+            elif "no" in label or "no" in name:
+                closing["BTTS No"] = max(closing.get("BTTS No", 0), price)
+
+    return closing
+
+
+def _compute_clv(pick_odds: float, closing_odds: float) -> float:
+    """
+    Compute Closing Line Value.
+
+    CLV = (implied_prob_closing - implied_prob_pick) / implied_prob_pick
+
+    Positive CLV → you got better odds than the closing line → edge confirmed.
+    Negative CLV → the line moved against you → no proven edge on this bet.
+
+    Example: Pick at 1.85 (54.05%), closing at 1.75 (57.14%)
+      CLV = (57.14% - 54.05%) / 54.05% = +5.7%  → the market agreed with you.
+    """
+    if pick_odds <= 1.0 or closing_odds <= 1.0:
+        return 0.0
+    pick_implied = 1.0 / pick_odds
+    closing_implied = 1.0 / closing_odds
+    if pick_implied <= 0:
+        return 0.0
+    return round((closing_implied - pick_implied) / pick_implied, 4)
 
 
 def _grade_bet(market: str, home_goals: int, away_goals: int) -> str:
@@ -111,9 +185,87 @@ def _grade_bet(market: str, home_goals: int, away_goals: int) -> str:
     return "void"  # Unknown market
 
 
+def _chatgpt_grade_fallback(pending_preds: list, date_str: str) -> dict:
+    \"\"\"Uses OpenAI API to find results for matches that Sportmonks missed and grades them.\"\"\"
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        print("[Grading/ChatGPT] No OPENAI_API_KEY found. Skipping fallback.", file=sys.stderr)
+        return {}
+    
+    import json
+    
+    missing_list = []
+    for p in pending_preds:
+        missing_list.append({
+            "id": str(p.get("fixture_id", "")),
+            "home": p.get("home_team", ""),
+            "away": p.get("away_team", ""),
+            "prediction": p.get("bet_type", "")
+        })
+    
+    if not missing_list:
+        return {}
+        
+    prompt = f\"\"\"
+Find the FINAL full-time scores for these football matches played on {date_str}.
+Grade the predictions based on the final scores.
+MATCHES:
+{json.dumps(missing_list, indent=2)}
+
+GRADING RULES:
+- Use FULL-TIME (90 min + stoppage) scores only.
+- If match was postponed/cancelled/no result -> status: "void".
+- RESULT: "Home Win" -> home > away. "Away Win" -> away > home. "Draw" -> equal.
+- DOUBLE CHANCE (1X) -> won if home wins OR draw.
+- DOUBLE CHANCE (X2) -> won if away wins OR draw.
+- DOUBLE CHANCE (12) -> won if home OR away wins (not draw).
+- OVER 1.5 -> total > 1. OVER 2.5 -> total > 2. UNDER 2.5 -> total < 3.
+- BTTS -> home > 0 AND away > 0. BTTS No -> home == 0 OR away == 0.
+- DRAW NO BET (Home) -> won if home wins; void if draw; lost if away wins.
+- DRAW NO BET (Away) -> won if away wins; void if draw; lost if home wins.
+
+Return ONLY a valid JSON array. Each object: {{ "id": string, "score": "H-A" (or "?" if unknown), "status": "won"|"lost"|"void" }}.
+Do NOT skip any match.
+\"\"\"
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": "You are a precise sports data assistant with access to recent match results."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.1
+    }
+    
+    try:
+        r = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=45)
+        r.raise_for_status()
+        res_json = r.json()
+        content = res_json['choices'][0]['message']['content']
+        content = content.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(content)
+        
+        fallback_map = {}
+        for item in parsed:
+            fallback_map[str(item.get("id"))] = {
+                "status": item.get("status", "void"),
+                "score": item.get("score", "?")
+            }
+        return fallback_map
+    except Exception as e:
+        print(f"[Grading/ChatGPT] Failed to fetch grades from ChatGPT: {e}", file=sys.stderr)
+        return {}
+
+
 def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
     """
     Grade all quant predictions for a given date.
+    Also fetches closing odds and computes CLV for each prediction.
     Reads from and writes to Firestore collection `quant_predictions/{date_str}`.
     """
     try:
@@ -152,16 +304,22 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
     if not to_grade:
         return {"status": "skipped", "reason": "already_graded", "date": date_str}
 
-    print(f"[Grading] Fetching results for {date_str}...")
+    print(f"[Grading] Fetching results + closing odds for {date_str}...")
     results_map = _fetch_results_for_date(date_str)
     print(f"[Grading] Found {len(results_map)} finished fixtures from Sportmonks.")
 
     graded_count = 0
+    clv_sum = 0.0
+    clv_count = 0
+    
+    pending_preds = []
+
     for pred in predictions:
         fid = str(pred.get("fixture_id", ""))
         result = results_map.get(fid)
         if not result:
-            continue  # Still pending or not found
+            pending_preds.append((fid, pred))
+            continue  # Will be handled by fallback
 
         hg = result["home_goals"]
         ag = result["away_goals"]
@@ -170,16 +328,53 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
         pred["status"] = _grade_bet(market, hg, ag)
         pred["score"] = f"{hg}-{ag}"
         pred["graded_at"] = datetime.now(timezone.utc).isoformat()
+
+        # ── CLV Tracking ──────────────────────────────────────────────────
+        closing_odds_map = result.get("closing_odds", {})
+        closing_odd = closing_odds_map.get(market, 0.0)
+        pick_odd = float(pred.get("pick_time_odds", 0) or pred.get("odds", 0) or 0)
+
+        if closing_odd > 1.0 and pick_odd > 1.0:
+            clv = _compute_clv(pick_odd, closing_odd)
+            pred["closing_odds"] = closing_odd
+            pred["clv"] = clv
+            clv_sum += clv
+            clv_count += 1
+            direction = "+" if clv >= 0 else ""
+            print(f"[Grading]   CLV {pred.get('home_team','?')} vs {pred.get('away_team','?')}: "
+                  f"pick {pick_odd} -> close {closing_odd} = {direction}{clv:.2%}")
+
         graded_count += 1
+
+    # ── ChatGPT Fallback for Missing Results ──────────────────────────
+    if pending_preds:
+        print(f"[Grading] {len(pending_preds)} matches not found on Sportmonks. Attempting ChatGPT fallback...")
+        fallback_results = _chatgpt_grade_fallback([p for _, p in pending_preds], date_str)
+        if fallback_results:
+            for fid, pred in pending_preds:
+                fb = fallback_results.get(fid)
+                if fb:
+                    pred["status"] = fb["status"]
+                    pred["score"] = fb["score"]
+                    pred["graded_at"] = datetime.now(timezone.utc).isoformat()
+                    pred["graded_by"] = "chatgpt"
+                    graded_count += 1
+                    print(f"[Grading/ChatGPT] Graded {pred.get('home_team')} vs {pred.get('away_team')} -> {fb['status']} ({fb['score']})")
+
+    avg_clv = round(clv_sum / clv_count, 4) if clv_count > 0 else None
 
     doc_ref.set({
         "predictions": predictions,
         "graded_at": datetime.now(timezone.utc).isoformat(),
         "graded_count": graded_count,
+        "avg_clv": avg_clv,
+        "clv_sample_size": clv_count,
     }, merge=True)
 
-    print(f"[Grading] ✅ Graded {graded_count}/{len(predictions)} predictions for {date_str}.")
-    return {"status": "success", "total": len(predictions), "graded": graded_count, "date": date_str}
+    clv_str = f" | Avg CLV: {avg_clv:+.2%} ({clv_count} bets)" if avg_clv is not None else ""
+    print(f"[Grading] Graded {graded_count}/{len(predictions)} predictions for {date_str}.{clv_str}")
+    return {"status": "success", "total": len(predictions), "graded": graded_count,
+            "date": date_str, "avg_clv": avg_clv, "clv_sample_size": clv_count}
 
 
 if __name__ == "__main__":

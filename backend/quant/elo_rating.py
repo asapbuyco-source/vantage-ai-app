@@ -13,9 +13,24 @@ from typing import Optional
 
 # ── Elo constants ──────────────────────────────────────────────────────────────
 DEFAULT_ELO = 1500.0
-K_FACTOR = 32.0          # Adjustment magnitude per match
-HOME_ADVANTAGE = 60.0    # Elo points added to home team
+K_FACTOR = 20.0          # Reduced from 32 — FiveThirtyEight football standard
+HOME_ADVANTAGE = 55.0    # Default Elo points added to home team
 DRAW_PROB_BASE = 0.26    # Base draw probability correction
+
+# League-specific home advantage (Elo points). Falls back to HOME_ADVANTAGE.
+LEAGUE_HOME_ADV: dict[int, float] = {
+    8: 45,     # EPL (post-COVID decline)
+    564: 55,   # La Liga
+    82: 50,    # Bundesliga
+    384: 55,   # Serie A
+    301: 50,   # Ligue 1
+    2: 30,     # UCL (neutral-ish venues)
+    5: 35,     # Europa League
+    176: 75,   # Turkish Süper Lig (intense home crowds)
+    253: 65,   # Brasileirão
+    600: 50,   # MLS
+    570: 70,   # Saudi Pro League
+}
 
 # ── Fix #6: Pre-seed Elo ratings for top clubs ────────────────────────────────
 # Sportmonks team IDs → approximate Elo (based on 2024/25 perf + UEFA coefficient)
@@ -119,6 +134,11 @@ def get_rating(team_id: int) -> float:
     return _elo_cache.get(team_id, DEFAULT_ELO)
 
 
+def get_team_rating(team_id: int) -> float:
+    """Alias for get_rating, used by pipeline."""
+    return get_rating(team_id)
+
+
 def set_rating(team_id: int, rating: float):
     _elo_cache[team_id] = round(rating, 2)
     _dirty.add(team_id)
@@ -134,13 +154,15 @@ def expected_score(rating_a: float, rating_b: float) -> float:
 
 
 def match_probabilities(home_team_id: int, away_team_id: int,
-                        home_adj: float = HOME_ADVANTAGE) -> dict[str, float]:
+                        home_adj: float = HOME_ADVANTAGE,
+                        league_id: int | None = None) -> dict[str, float]:
     """
     Compute match outcome probabilities from Elo ratings.
     Returns: {home_win, draw, away_win}
     Uses the Bradley-Terry logistic model with draw zone.
     """
-    ra = get_rating(home_team_id) + home_adj  # Home advantage bonus
+    adj = LEAGUE_HOME_ADV.get(league_id, home_adj) if league_id else home_adj
+    ra = get_rating(home_team_id) + adj  # Home advantage bonus
     rb = get_rating(away_team_id)
 
     # P(home wins) ignoring draws

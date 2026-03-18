@@ -27,10 +27,13 @@ class FormProbabilities:
     away_form_score: float = 0.5
 
 
-def _form_score(form_str: str) -> float:
+def _form_score(form_str: str, opponent_strengths: list[float] | None = None) -> float:
     """
     Convert form string like 'W D L W W' to a 0–1 score.
     Most recent match is first.
+    
+    Upgrade #4: If opponent_strengths are provided (Elo-based difficulty),
+    wins against strong opponents are worth more.
     """
     if not form_str or form_str == "N/A":
         return 0.5  # Neutral
@@ -44,8 +47,17 @@ def _form_score(form_str: str) -> float:
     for i, token in enumerate(tokens):
         w = RECENCY_WEIGHTS[i] if i < len(RECENCY_WEIGHTS) else 0.5
         score = RESULT_WEIGHTS.get(token, 0)
-        weighted_sum += score * w
-        total_weight += 3 * w  # Max possible at this position
+        
+        # Opponent quality multiplier (Upgrade #4)
+        opp_mult = 1.0
+        if opponent_strengths and i < len(opponent_strengths):
+            # opponent_strengths are Elo-based: >1 = strong opponent, <1 = weak
+            opp_mult = opponent_strengths[i]
+            # Beating a strong team (1.2x) is worth 20% more
+            # Beating a weak team (0.8x) is worth 20% less
+        
+        weighted_sum += score * w * opp_mult
+        total_weight += 3 * w * opp_mult  # Max possible at this position
 
     return weighted_sum / total_weight if total_weight > 0 else 0.5
 
@@ -77,13 +89,18 @@ def _scores_to_probabilities(home_score: float, away_score: float) -> tuple[floa
     return p_home / total, p_draw / total, p_away / total
 
 
-def compute_form_probabilities(home_form: str, away_form: str) -> FormProbabilities:
+def compute_form_probabilities(
+    home_form: str, away_form: str,
+    home_opp_strengths: list[float] | None = None,
+    away_opp_strengths: list[float] | None = None,
+) -> FormProbabilities:
     """
     Main entry point.
     Given form strings for home/away teams, return FormProbabilities.
+    Upgrade #4: Accepts optional opponent strength lists for quality-adjusted scoring.
     """
-    home_score = _form_score(home_form)
-    away_score = _form_score(away_form)
+    home_score = _form_score(home_form, home_opp_strengths)
+    away_score = _form_score(away_form, away_opp_strengths)
 
     p_home, p_draw, p_away = _scores_to_probabilities(home_score, away_score)
 

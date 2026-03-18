@@ -12,7 +12,35 @@ from dataclasses import dataclass
 
 # ── Score grid config ─────────────────────────────────────────────────────────
 MAX_GOALS = 8          # Fix #8: raised from 6 — correctly prices Over 3.5 in EPL/Bundesliga
-DIXON_COLES_RHO = -0.13  # Fix #4: rho for low-score bias correction (empirical football value)
+DIXON_COLES_RHO = -0.13  # Default rho for low-score bias correction
+
+
+def compute_dynamic_rho(mu_home: float, mu_away: float, league_tier: int = 1, is_derby: bool = False) -> float:
+    """
+    Upgrade #5: Compute context-dependent Dixon-Coles rho.
+    - Derby/rivalry matches: stronger correction (more 0-0s and 1-1s)
+    - High-scoring expected matches: weaker correction (goals flow freely)
+    - Top vs bottom mismatches: weaker correction (blowouts)
+    """
+    rho = DIXON_COLES_RHO  # Start with default -0.13
+
+    # Derby adjustment: more extreme low-score correlation
+    if is_derby:
+        rho = -0.20
+
+    # High xG matches: goals flow freely, less correction
+    total_xg = mu_home + mu_away
+    if total_xg > 3.5:
+        rho *= 0.6
+    elif total_xg < 1.5:
+        rho *= 1.3
+
+    # Mismatch: one-sided matches have less score correlation
+    xg_ratio = max(mu_home, mu_away) / max(min(mu_home, mu_away), 0.3)
+    if xg_ratio > 2.5:
+        rho *= 0.7
+
+    return max(-0.30, min(-0.05, rho))
 
 
 @dataclass
@@ -61,18 +89,22 @@ def _tau(h: int, a: int, mu_h: float, mu_a: float, rho: float) -> float:
     return 1.0
 
 
-def compute_score_grid(mu_home: float, mu_away: float) -> dict[tuple[int, int], float]:
+def compute_score_grid(mu_home: float, mu_away: float, rho: float | None = None) -> dict[tuple[int, int], float]:
     """
     Build a (MAX_GOALS+1 x MAX_GOALS+1) dictionary of score probabilities
     with Dixon-Coles rho correction applied to the four low-score cells.
     Key: (home_goals, away_goals), Value: corrected probability.
     Grid is re-normalized so all probabilities sum to 1.0.
+    
+    Upgrade #5: Accepts optional rho override for dynamic context.
     """
+    if rho is None:
+        rho = DIXON_COLES_RHO
     grid: dict[tuple[int, int], float] = {}
     for h in range(MAX_GOALS + 1):
         for a in range(MAX_GOALS + 1):
             raw = _poisson_pmf(h, mu_home) * _poisson_pmf(a, mu_away)
-            correction = _tau(h, a, mu_home, mu_away, DIXON_COLES_RHO)
+            correction = _tau(h, a, mu_home, mu_away, rho)
             grid[(h, a)] = raw * correction
 
     # Re-normalize to handle the correction disturbing the sum
@@ -119,14 +151,15 @@ def derive_markets(grid: dict[tuple[int, int], float]) -> MarketProbabilities:
     return mp
 
 
-def compute_probabilities(mu_home: float, mu_away: float) -> MarketProbabilities:
+def compute_probabilities(mu_home: float, mu_away: float, rho: float | None = None) -> MarketProbabilities:
     """
     Main entry point.
     Given expected goal means, return all market probabilities.
+    Upgrade #5: Accepts optional rho for dynamic context.
     """
     mu_home = max(0.01, mu_home)
     mu_away = max(0.01, mu_away)
-    grid = compute_score_grid(mu_home, mu_away)
+    grid = compute_score_grid(mu_home, mu_away, rho)
     return derive_markets(grid)
 
 

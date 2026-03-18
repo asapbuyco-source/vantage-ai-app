@@ -49,16 +49,17 @@ MARKET_TO_ODDS_FIELD = {
     "Home Win": "home_odds",
     "Away Win": "away_odds",
     "Draw": "draw_odds",
-    "Double Chance (1X)": "home_odds",     # Approx — 1X is almost always cheaper than DC spec
-    "Double Chance (X2)": "away_odds",
-    "Double Chance (12)": "home_odds",
-    "Draw No Bet (Home)": "home_odds",
-    "Draw No Bet (Away)": "away_odds",
-    "Over 1.5 Goals": "over25_odds",       # Use over25 as fallback
+    "Double Chance (1X)": "dc_1x_odds",
+    "Double Chance (X2)": "dc_x2_odds",
+    "Double Chance (12)": "dc_12_odds",
+    "Draw No Bet (Home)": "dnb_home_odds",
+    "Draw No Bet (Away)": "dnb_away_odds",
+    "Over 1.5 Goals": "over15_odds",
+    "Under 1.5 Goals": "under15_odds",
     "Over 2.5 Goals": "over25_odds",
     "Under 2.5 Goals": "under25_odds",
-    "Over 3.5 Goals": "over25_odds",
-    "Under 3.5 Goals": "under25_odds",
+    "Over 3.5 Goals": "over35_odds",
+    "Under 3.5 Goals": "under35_odds",
     "BTTS": "btts_yes_odds",
     "BTTS No": "btts_no_odds",
 }
@@ -116,15 +117,31 @@ def compute_ev(model_prob: float, odds: float) -> float:
     return (model_prob * odds) - 1.0
 
 
-# Markets that require dedicated odds (not approximated from 1X2)
-# If these odds are not explicitly available from the bookmaker, skip them.
-DEDICATED_ODDS_REQUIRED = {
-    "Double Chance (1X)",
-    "Double Chance (X2)",
-    "Double Chance (12)",
-    "Draw No Bet (Home)",
-    "Draw No Bet (Away)",
-}
+# Markets that STILL require dedicated odds (if odds field is 0, skip them)
+# Now much smaller since we fetch DC, DNB, O/U 1.5/3.5 directly
+DEDICATED_ODDS_MARKETS = set()  # All markets now have dedicated odds fields
+
+
+def compute_line_movement(odds: 'OddsData') -> dict:
+    """
+    Compute line movement signals from opening vs current odds.
+    Returns a dict with movement direction and magnitude for 1X2 markets.
+    Positive shift = market moved in favour of that outcome (sharps agree).
+    """
+    signals = {}
+    pairs = [
+        ("Home Win",  odds.opening_home_odds, odds.home_odds),
+        ("Draw",      odds.opening_draw_odds, odds.draw_odds),
+        ("Away Win",  odds.opening_away_odds, odds.away_odds),
+    ]
+    for market, opening, current in pairs:
+        if opening > 1.0 and current > 1.0:
+            # Implied probability shift
+            open_impl = 1.0 / opening
+            curr_impl = 1.0 / current
+            shift = curr_impl - open_impl  # positive = odds shortened = sharps backing this
+            signals[market] = round(shift, 4)
+    return signals
 
 
 def evaluate_all_markets(
@@ -138,10 +155,13 @@ def evaluate_all_markets(
     """
     results: list[ValueBet] = []
 
-    # Compute devigged 1X2 probs once (used for BTTS and O/U devig too)
+    # Compute devigged 1X2 probs once
     home_dv, draw_dv, away_dv = devig_1x2(
         odds.home_odds, odds.draw_odds, odds.away_odds
     ) if (odds.home_odds > 1.0 and odds.draw_odds > 1.0 and odds.away_odds > 1.0) else (0.0, 0.0, 0.0)
+
+    # Compute line movement signals (Upgrade #3)
+    line_signals = compute_line_movement(odds)
 
     # Build per-market devigged probabilities
     market_devig: dict[str, float] = {}
@@ -149,24 +169,37 @@ def evaluate_all_markets(
         market_devig["Home Win"] = home_dv
         market_devig["Draw"] = draw_dv
         market_devig["Away Win"] = away_dv
+    # Double Chance devig
+    if odds.dc_1x_odds > 1.0 and odds.dc_x2_odds > 1.0 and odds.dc_12_odds > 1.0:
+        dc_total = (1/odds.dc_1x_odds) + (1/odds.dc_x2_odds) + (1/odds.dc_12_odds)
+        market_devig["Double Chance (1X)"] = (1/odds.dc_1x_odds) / dc_total
+        market_devig["Double Chance (X2)"] = (1/odds.dc_x2_odds) / dc_total
+        market_devig["Double Chance (12)"] = (1/odds.dc_12_odds) / dc_total
+    # Draw No Bet devig
+    if odds.dnb_home_odds > 1.0 and odds.dnb_away_odds > 1.0:
+        dnb_total = (1/odds.dnb_home_odds) + (1/odds.dnb_away_odds)
+        market_devig["Draw No Bet (Home)"] = (1/odds.dnb_home_odds) / dnb_total
+        market_devig["Draw No Bet (Away)"] = (1/odds.dnb_away_odds) / dnb_total
+    # Over/Under 1.5
+    if odds.over15_odds > 1.0 and odds.under15_odds > 1.0:
+        market_devig["Over 1.5 Goals"] = devig_ouright(odds.over15_odds, [odds.over15_odds, odds.under15_odds])
+        market_devig["Under 1.5 Goals"] = devig_ouright(odds.under15_odds, [odds.over15_odds, odds.under15_odds])
+    # Over/Under 2.5
     if odds.over25_odds > 1.0 and odds.under25_odds > 1.0:
         ov_dv = devig_ouright(odds.over25_odds, [odds.over25_odds, odds.under25_odds])
         un_dv = devig_ouright(odds.under25_odds, [odds.over25_odds, odds.under25_odds])
         market_devig["Over 2.5 Goals"] = ov_dv
         market_devig["Under 2.5 Goals"] = un_dv
-        # Use same odds for 1.5 / 3.5 (best available proxy)
-        market_devig["Over 1.5 Goals"] = ov_dv
-        market_devig["Over 3.5 Goals"] = devig_ouright(odds.over25_odds, [odds.over25_odds, odds.under25_odds])
-        market_devig["Under 3.5 Goals"] = un_dv
+    # Over/Under 3.5
+    if odds.over35_odds > 1.0 and odds.under35_odds > 1.0:
+        market_devig["Over 3.5 Goals"] = devig_ouright(odds.over35_odds, [odds.over35_odds, odds.under35_odds])
+        market_devig["Under 3.5 Goals"] = devig_ouright(odds.under35_odds, [odds.over35_odds, odds.under35_odds])
+    # BTTS
     if odds.btts_yes_odds > 1.0 and odds.btts_no_odds > 1.0:
         market_devig["BTTS"] = devig_ouright(odds.btts_yes_odds, [odds.btts_yes_odds, odds.btts_no_odds])
         market_devig["BTTS No"] = devig_ouright(odds.btts_no_odds, [odds.btts_yes_odds, odds.btts_no_odds])
 
     for market, prob_attr in MARKET_TO_PROB.items():
-        # Skip DC/DNB — we don't have dedicated bookmaker odds for these markets
-        if market in DEDICATED_ODDS_REQUIRED:
-            continue
-
         model_prob = getattr(probs, prob_attr, None)
         if model_prob is None:
             continue
@@ -181,7 +214,17 @@ def evaluate_all_markets(
         ev = compute_ev(model_prob, market_odds)
         inefficiency = model_prob - mkt_prob
 
+        # Line movement bonus/penalty (Upgrade #3)
+        # If sharps moved the line in our direction, boost confidence
+        line_shift = line_signals.get(market, 0.0)
+        line_agrees = line_shift > 0.02  # Sharp money backs our pick
+        line_disagrees = line_shift < -0.03  # Sharp money opposes our pick
+
         is_value = (ev >= MIN_EV) and (inefficiency >= MIN_INEFFICIENCY)
+
+        # If line strongly disagrees (-3%+ shift against us), demote
+        if line_disagrees and is_value:
+            is_value = ev >= MIN_EV * 1.5  # Require 50% more EV to override sharp signal
 
         results.append(ValueBet(
             market=market,

@@ -66,15 +66,18 @@ def _select_legs(bets: list[dict], min_prob: float, max_legs: int, tier: str) ->
     - Filters by minimum probability
     - One bet per fixture only
     - League diversification: Max 1 per league for Safe, Max 2 for Value/Risky
+    - Upgrade #9: Market correlation guard — max 2 same market type per acca
     - Maximizes sum of EV
     """
     pool = [b for b in bets if b["model_prob"] >= min_prob]
     
     # Diversification caps
     max_per_league = 1 if tier == "safe" else 2
+    max_same_market = 2  # Upgrade #9: prevent correlated market clusters
     
     seen_fixtures = set()
     league_counts = {}
+    market_counts = {}
     selected = []
     
     for b in sorted(pool, key=lambda x: x["expected_value"], reverse=True):
@@ -84,15 +87,37 @@ def _select_legs(bets: list[dict], min_prob: float, max_legs: int, tier: str) ->
         league = b.get("league", "unknown")
         if league_counts.get(league, 0) >= max_per_league:
             continue
+        
+        # Upgrade #9: Correlation guard — limit same market type
+        market = b.get("market", "unknown")
+        market_base = _market_base(market)
+        if market_counts.get(market_base, 0) >= max_same_market:
+            continue
             
         seen_fixtures.add(b["fixture_id"])
         league_counts[league] = league_counts.get(league, 0) + 1
+        market_counts[market_base] = market_counts.get(market_base, 0) + 1
         selected.append(b)
         
         if len(selected) >= max_legs:
             break
             
     return selected
+
+
+def _market_base(market: str) -> str:
+    """Normalize market names for correlation grouping."""
+    m = market.lower()
+    if "home win" in m or "away win" in m or "draw" == m:
+        return "1x2"
+    if "over" in m or "under" in m:
+        return "goals_total"
+    if "btts" in m:
+        return "btts"
+    if "double chance" in m:
+        return "double_chance"
+    return market
+
 
 
 def build_accumulator(bets: list[dict], tier: str) -> Accumulator | None:

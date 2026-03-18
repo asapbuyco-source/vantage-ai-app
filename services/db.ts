@@ -41,7 +41,7 @@ const normalizeQuantPrediction = (p: any): any => {
     return {
         ...p,
         // Core identity fields
-        id: p.id ?? p.fixture_id ?? String(Math.random()),
+        id: p.id ?? p.fixture_id ?? `${p.homeTeam || p.home_team || 'home'}_${p.awayTeam || p.away_team || 'away'}`.replace(/\s+/g, '-').toLowerCase(),
         homeTeam: p.home_team ?? '',
         awayTeam: p.away_team ?? '',
         homeTeamLogo: p.home_team_logo ?? '',

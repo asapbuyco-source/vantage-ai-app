@@ -46,8 +46,27 @@ class OddsData:
     away_odds: float = 0.0
     over25_odds: float = 0.0
     under25_odds: float = 0.0
+    over15_odds: float = 0.0
+    under15_odds: float = 0.0
+    over35_odds: float = 0.0
+    under35_odds: float = 0.0
     btts_yes_odds: float = 0.0
     btts_no_odds: float = 0.0
+    # Double Chance
+    dc_1x_odds: float = 0.0
+    dc_x2_odds: float = 0.0
+    dc_12_odds: float = 0.0
+    # Draw No Bet
+    dnb_home_odds: float = 0.0
+    dnb_away_odds: float = 0.0
+    # Asian Handicap -0.5 (equivalent to DNB but priced differently)
+    ah_home_minus05: float = 0.0
+    ah_away_plus05: float = 0.0
+    # Line movement tracking (Upgrade #3)
+    opening_home_odds: float = 0.0
+    opening_away_odds: float = 0.0
+    opening_draw_odds: float = 0.0
+    odds_fetched_at: str = ""  # ISO timestamp for staleness guard
 
     def has_odds(self) -> bool:
         return self.home_odds > 1.0 and self.away_odds > 1.0
@@ -181,7 +200,7 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
         return stats
 
     # Form string (last 5 only)
-    last5 = results[-5:]
+    last5 = results[-5:][::-1]  # Reverse so most recent match is FIRST (matches recency weights)
     stats.form = " ".join(last5)
     stats.form_score = sum(3 if r == "W" else (1 if r == "D" else 0) for r in last5) / (3 * len(last5))
     stats.win_rate = wins / n
@@ -229,33 +248,88 @@ def _parse_odds(odds_list: list) -> OddsData:
     od = OddsData()
     if not odds_list:
         return od
-        
+
+    od.odds_fetched_at = datetime.now(timezone.utc).isoformat()
+
+    # Track opening odds (first/lowest-timestamped) and current (highest price)
+    opening_1x2 = {"home": 999.0, "draw": 999.0, "away": 999.0}
+
     # Sportmonks v3 returns odds as a flat list of objects.
-    # Market IDs: 1 = Match Winner (1X2), 80 = Goals Over/Under, 14 = Both Teams To Score
+    # Market IDs: 1=1X2, 2=Double Chance, 7=Draw No Bet, 14=BTTS, 80=Over/Under
     for odd in odds_list:
         market_id = odd.get("market_id")
         name = str(odd.get("name") or "").lower()
         label = str(odd.get("label") or "").lower()
         price = float(odd.get("value") or 0.0)
+        if price <= 1.0:
+            continue
 
-        # 1x2 Match Winner
+        # ── 1X2 Match Winner ───────────────────────────────────────────
         if market_id == 1:
-            if "home" in label or "1" == label: od.home_odds = max(od.home_odds, price)
-            elif "draw" in label or "x" == label: od.draw_odds = max(od.draw_odds, price)
-            elif "away" in label or "2" == label: od.away_odds = max(od.away_odds, price)
-            
-        # Over/Under 2.5
+            if "home" in label or "1" == label:
+                od.home_odds = max(od.home_odds, price)
+                opening_1x2["home"] = min(opening_1x2["home"], price)
+            elif "draw" in label or "x" == label:
+                od.draw_odds = max(od.draw_odds, price)
+                opening_1x2["draw"] = min(opening_1x2["draw"], price)
+            elif "away" in label or "2" == label:
+                od.away_odds = max(od.away_odds, price)
+                opening_1x2["away"] = min(opening_1x2["away"], price)
+
+        # ── Double Chance (market_id=2) ────────────────────────────────
+        elif market_id == 2:
+            if "1x" in label or "home or draw" in name:
+                od.dc_1x_odds = max(od.dc_1x_odds, price)
+            elif "x2" in label or "draw or away" in name:
+                od.dc_x2_odds = max(od.dc_x2_odds, price)
+            elif "12" in label or "home or away" in name:
+                od.dc_12_odds = max(od.dc_12_odds, price)
+
+        # ── Draw No Bet (market_id=7) ──────────────────────────────────
+        elif market_id == 7:
+            if "home" in label or "1" == label:
+                od.dnb_home_odds = max(od.dnb_home_odds, price)
+            elif "away" in label or "2" == label:
+                od.dnb_away_odds = max(od.dnb_away_odds, price)
+
+        # ── Over/Under Goals (market_id=80) ────────────────────────────
         elif market_id == 80:
             total = str(odd.get("total") or "")
-            if "2.5" in total:
-                if "over" in label or "over" in name: od.over25_odds = max(od.over25_odds, price)
-                elif "under" in label or "under" in name: od.under25_odds = max(od.under25_odds, price)
-                
-        # BTTS
+            is_over = "over" in label or "over" in name
+            is_under = "under" in label or "under" in name
+            if "1.5" in total:
+                if is_over: od.over15_odds = max(od.over15_odds, price)
+                elif is_under: od.under15_odds = max(od.under15_odds, price)
+            elif "2.5" in total:
+                if is_over: od.over25_odds = max(od.over25_odds, price)
+                elif is_under: od.under25_odds = max(od.under25_odds, price)
+            elif "3.5" in total:
+                if is_over: od.over35_odds = max(od.over35_odds, price)
+                elif is_under: od.under35_odds = max(od.under35_odds, price)
+
+        # ── BTTS (market_id=14) ────────────────────────────────────────
         elif market_id == 14:
-            if "yes" in label or "yes" in name: od.btts_yes_odds = max(od.btts_yes_odds, price)
-            elif "no" in label or "no" in name: od.btts_no_odds = max(od.btts_no_odds, price)
-            
+            if "yes" in label or "yes" in name:
+                od.btts_yes_odds = max(od.btts_yes_odds, price)
+            elif "no" in label or "no" in name:
+                od.btts_no_odds = max(od.btts_no_odds, price)
+
+        # ── Asian Handicap -0.5 (market_id=10 in Sportmonks) ───────────
+        elif market_id == 10:
+            handicap = str(odd.get("handicap") or odd.get("total") or "")
+            if "-0.5" in handicap and ("home" in label or "1" == label):
+                od.ah_home_minus05 = max(od.ah_home_minus05, price)
+            elif "+0.5" in handicap and ("away" in label or "2" == label):
+                od.ah_away_plus05 = max(od.ah_away_plus05, price)
+
+    # Store opening odds for line movement analysis
+    if opening_1x2["home"] < 900:
+        od.opening_home_odds = opening_1x2["home"]
+    if opening_1x2["away"] < 900:
+        od.opening_away_odds = opening_1x2["away"]
+    if opening_1x2["draw"] < 900:
+        od.opening_draw_odds = opening_1x2["draw"]
+
     return od
 
 
@@ -271,7 +345,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
     print(f"[DataPipeline] Fetching fixtures for {date_str}...")
     raw = _get_paginated(
         f"/fixtures/date/{date_str}",
-        params={"include": "league;participants;scores;odds", "per_page": 100},
+        params={"include": "league;participants;scores;odds;statistics", "per_page": 100},
         max_pages=3,
     )
     if not raw:
@@ -354,10 +428,26 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
             away_logo=away_p.get("image_path", ""),
         )
 
-        # Parse odds
+        # Parse odds (now includes DC, DNB, O/U 1.5/3.5, AH, line movement)
         raw_odds = item.get("odds") or []
         odds_list = raw_odds if isinstance(raw_odds, list) else (raw_odds.get("data", []) if isinstance(raw_odds, dict) else [])
         md.odds = _parse_odds(odds_list)
+
+        # ── Extract xG from Sportmonks statistics (Upgrade #1) ─────────
+        xg_home, xg_away = None, None
+        raw_stats = item.get("statistics") or []
+        stats_list = raw_stats if isinstance(raw_stats, list) else (raw_stats.get("data", []) if isinstance(raw_stats, dict) else [])
+        for stat in stats_list:
+            stat_type = str(stat.get("type", {}).get("name", "") if isinstance(stat.get("type"), dict) else stat.get("type_id", "")).lower()
+            if "expected" in stat_type and "goal" in stat_type:
+                loc = stat.get("location", "")
+                val = stat.get("data", {}).get("value") if isinstance(stat.get("data"), dict) else stat.get("value")
+                try:
+                    val = float(val)
+                    if loc == "home": xg_home = val
+                    elif loc == "away": xg_away = val
+                except (TypeError, ValueError):
+                    pass
 
         # Fetch team form (recent matches)
         try:
@@ -384,20 +474,29 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         md.h2h_home_wins, md.h2h_away_wins, md.h2h_draws, md.h2h_btts_rate = 0, 0, 0, 0.0
         md.h2h_avg_goals = _league_avg(lid)
 
-        # Compute expected goals (Dixon-Coles-style attack/defence product)
+        # ── Compute expected goals ─────────────────────────────────────
+        # Upgrade #1: Prefer real xG from Sportmonks statistics.
+        # Falls back to Dixon-Coles attack/defence product from raw goals.
         league_avg = _league_avg(lid)
-        home_att = (md.home_stats.home_avg_scored if md.home_stats else 1.2) / (league_avg / 2)
-        away_def = (md.away_stats.home_avg_conceded if md.away_stats else 1.2) / (league_avg / 2)  # away team defending at home
-        away_att = (md.away_stats.away_avg_scored if md.away_stats else 1.0) / (league_avg / 2)
-        home_def = (md.home_stats.away_avg_conceded if md.home_stats else 1.0) / (league_avg / 2)
 
-        # Home advantage factor
-        home_adv = 1.12
-        md.expected_goals_home = max(0.2, home_att * away_def * (league_avg / 2) * home_adv)
-        md.expected_goals_away = max(0.2, away_att * home_def * (league_avg / 2))
+        if xg_home is not None and xg_away is not None:
+            # Real xG available — use directly (gold standard)
+            md.expected_goals_home = max(0.2, xg_home)
+            md.expected_goals_away = max(0.2, xg_away)
+            xg_source = "API-xG"
+        else:
+            # Fallback: Dixon-Coles attack/defence from raw goal averages
+            home_att = (md.home_stats.home_avg_scored if md.home_stats else 1.2) / (league_avg / 2)
+            away_def = (md.away_stats.away_avg_conceded if md.away_stats else 1.2) / (league_avg / 2)
+            away_att = (md.away_stats.away_avg_scored if md.away_stats else 1.0) / (league_avg / 2)
+            home_def = (md.home_stats.home_avg_conceded if md.home_stats else 1.0) / (league_avg / 2)
+            home_adv = 1.12
+            md.expected_goals_home = max(0.2, home_att * away_def * (league_avg / 2) * home_adv)
+            md.expected_goals_away = max(0.2, away_att * home_def * (league_avg / 2))
+            xg_source = "model"
 
         matches.append(md)
-        print(f"[DataPipeline]   ✓ {md.home_team} vs {md.away_team} (xG: {md.expected_goals_home:.2f}–{md.expected_goals_away:.2f})")
+        print(f"[DataPipeline]   ✓ {md.home_team} vs {md.away_team} (xG: {md.expected_goals_home:.2f}–{md.expected_goals_away:.2f} [{xg_source}])")
 
     print(f"[DataPipeline] Pipeline complete: {len(matches)} enriched matches.")
     return matches

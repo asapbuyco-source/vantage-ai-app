@@ -31,8 +31,8 @@ from datetime import datetime, timezone
 
 # ── Local imports ─────────────────────────────────────────────────────────────
 from data_pipeline import fetch_matches, MatchData
-from poisson_model import compute_probabilities
-from elo_rating import load_ratings_from_firestore, match_probabilities as elo_probs, save_dirty_ratings
+from poisson_model import compute_probabilities, compute_dynamic_rho
+from elo_rating import load_ratings_from_firestore, match_probabilities as elo_probs, save_dirty_ratings, get_team_rating
 from form_model import compute_form_probabilities
 from probability_engine import compute_combined, CombinedProbabilities
 from ev_engine import evaluate_all_markets, get_best_value_bet
@@ -46,6 +46,14 @@ MAX_PREDICTIONS_PER_DAY = 50
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _safe_print(text: str, file=sys.stdout):
+    """Safely print text that may contain emojis on Windows CMD/PowerShell."""
+    try:
+        print(text, file=file)
+    except UnicodeEncodeError:
+        print(text.encode('ascii', 'replace').decode('ascii'), file=file)
 
 
 def _get_firestore():
@@ -124,7 +132,7 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
     if date_str is None:
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    print(f"[QuantPipeline] 🚀 Starting quant pipeline for {date_str} (dry_run={dry_run})")
+    _safe_print(f"[QuantPipeline] 🚀 Starting quant pipeline for {date_str} (dry_run={dry_run})")
 
     # ── Step 0: Initialize Firebase ────────────────────────────────────────
     if not dry_run:
@@ -157,12 +165,29 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
             home_id = match.home_team_id
             away_id = match.away_team_id
 
+            # ── Upgrade #4: Extract opponent strengths for form model ───────
+            # This requires looking at the form history and fetching Elos
+            home_opp_strengths = []
+            away_opp_strengths = []
+            if match.home_stats and hasattr(match.home_stats, 'recent_opponents'):
+                home_opp_strengths = [get_team_rating(opp_id) / 1500 for opp_id in match.home_stats.recent_opponents[:5]]
+            if match.away_stats and hasattr(match.away_stats, 'recent_opponents'):
+                away_opp_strengths = [get_team_rating(opp_id) / 1500 for opp_id in match.away_stats.recent_opponents[:5]]
+
+            # ── Upgrade #5: Dynamic Dixon-Coles rho ─────────────────────────
+            # Derby check: simplistic, if same city or known rivalry (mocked here, could use real data)
+            is_derby = str(match.home_team_id) in str(match.away_team_id)  # Placeholder logic
+            rho = compute_dynamic_rho(mu_home, mu_away, match.league_tier, is_derby)
+
             # Combine models (Poisson + Elo + Form + H2H)
             probs: CombinedProbabilities = compute_combined(
                 mu_home, mu_away, home_id, away_id, home_form, away_form,
-                h2h_home_wins=match.h2h_home_wins,   # Fix #5: H2H now wired
+                home_opp_strengths=home_opp_strengths,
+                away_opp_strengths=away_opp_strengths,
+                h2h_home_wins=match.h2h_home_wins,
                 h2h_away_wins=match.h2h_away_wins,
                 h2h_draws=match.h2h_draws,
+                rho=rho,
             )
 
             # Evaluate all markets for EV
@@ -172,14 +197,23 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
             approved_bets = filter_bets(all_value_bets, league_tier=match.league_tier)
 
             if not approved_bets:
-                print(f"[QuantPipeline]   ✗ {match.home_team} vs {match.away_team}: No value bets passed filters.")
+                _safe_print(f"[QuantPipeline]   ✗ {match.home_team} vs {match.away_team}: No value bets passed filters.")
                 continue
 
             # Take the best bet
             best_bet = approved_bets[0]
 
-            # Kelly stake
-            kelly = kelly_stake_pct(best_bet.model_prob, best_bet.odds)
+            # ── Upgrade #8: Odds Staleness Guard ────────────────────────────
+            from risk_filters import check_odds_staleness
+            staleness_mult = check_odds_staleness(match.odds.odds_fetched_at)
+
+            # Kelly stake (adjusted for staleness)
+            base_kelly = kelly_stake_pct(best_bet.model_prob, best_bet.odds)
+            kelly = round(base_kelly * staleness_mult, 2)
+
+            if kelly <= 0:
+                _safe_print(f"[QuantPipeline]   ✗ {match.home_team} vs {match.away_team}: Bet rejected due to extreme odds staleness.")
+                continue
 
             # Risk category
             category = grade_risk(best_bet)
@@ -247,14 +281,15 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                 "expected_value": best_bet.expected_value,
             })
 
-            print(f"[QuantPipeline]   ✅ {match.home_team} vs {match.away_team}: {best_bet.market} | EV {best_bet.expected_value:.1%} | Odds {best_bet.odds} | Kelly {kelly}%")
+            _safe_print(f"[QuantPipeline]   ✅ {match.home_team} vs {match.away_team}: {best_bet.market} | EV {best_bet.expected_value:.1%} | Odds {best_bet.odds} | Kelly {kelly}%")
 
         except Exception as e:
-            print(f"[QuantPipeline]   ⚠️  Error processing {match.home_team} vs {match.away_team}: {e}", file=sys.stderr)
-            continue
+            _safe_print(f"[QuantPipeline]   ❌ Error processing {match.home_team} vs {match.away_team}: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
 
     if not predictions:
-        print("[QuantPipeline] No bets passed filters today.")
+        _safe_print("[QuantPipeline] No bets passed filters today.")
         return {"status": "skipped", "reason": "no_value_bets", "date": date_str, "matches_analyzed": len(matches)}
 
     # ── Step 10: Generate accumulators ─────────────────────────────────────
@@ -262,7 +297,7 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
     accas_dict = {tier: (accumulator_to_dict(a) if a else None) for tier, a in accas.items()}
 
     safe_count = sum(1 for v in accas.values() if v is not None)
-    print(f"[QuantPipeline] 🎰 Generated {safe_count}/3 accumulators.")
+    _safe_print(f"[QuantPipeline] 🎰 Generated {safe_count}/3 accumulators.")
 
     # ── Step 11: Save to Firestore ─────────────────────────────────────────
     doc = {
@@ -277,20 +312,23 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
     }
 
     if not dry_run:
-        db = _get_firestore()
+        db = _get_firestore() # Re-fetch db if not dry_run
         if db:
-            db.collection("quant_predictions").document(date_str).set(doc)
-            print(f"[QuantPipeline] 💾 Saved to Firestore quant_predictions/{date_str}")
-            # Update Elo ratings
-            save_dirty_ratings()
+            try:
+                db.collection("quant_predictions").document(date_str).set(doc)
+                _safe_print(f"[QuantPipeline] 💾 Saved {len(predictions)} predictions to Firestore for {date_str}")
+                # Update Elo ratings
+                save_dirty_ratings()
+            except Exception as e:
+                _safe_print(f"[QuantPipeline]   ❌ Error saving to Firestore: {e}", file=sys.stderr)
         else:
-            print("[QuantPipeline] ⚠️  Firestore unavailable — skipping save.", file=sys.stderr)
+            _safe_print("[QuantPipeline] ⚠️  Firestore unavailable — skipping save.", file=sys.stderr)
     else:
-        print("[QuantPipeline] [DRY RUN] Firestore write skipped.")
+        _safe_print(f"[QuantPipeline] 🛑 Dry run: Skipping Firestore save.")
 
-    print(f"\n[QuantPipeline] ✅ Pipeline complete!")
-    print(f"  Matches analyzed: {len(matches)}")
-    print(f"  Value bets identified: {len(predictions)}")
+    _safe_print(f"\n[QuantPipeline] ✅ Pipeline complete!")
+    _safe_print(f"  Matches analyzed: {len(matches)}")
+    _safe_print(f"  Predictions generated: {len(predictions)}")
     if accas.get("safe"):
         print(f"  Safe acca: {accas['safe'].combined_odds:.2f}x ({accas['safe'].leg_count} legs)")
 

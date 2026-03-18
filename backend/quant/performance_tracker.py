@@ -43,7 +43,7 @@ def _compute_period_stats(predictions: list[dict]) -> dict:
     """Compute stats for a list of predictions."""
     total = wins = losses = voids = 0
     stakes = profits = 0.0
-    clv_bets = []
+    clv_values = []
 
     for pred in predictions:
         status = pred.get("status", "pending")
@@ -65,17 +65,16 @@ def _compute_period_stats(predictions: list[dict]) -> dict:
         else:  # void
             voids += 1
 
-        # CLV: if we recorded opening odds vs closing odds
-        opening_odds = pred.get("opening_odds")
-        closing_odds = pred.get("odds")  # Odds at time of pick (proxy for opening)
-        if opening_odds and closing_odds:
-            clv = (float(closing_odds) - float(opening_odds)) / float(opening_odds)
-            clv_bets.append(clv)
+        # CLV: read the pre-computed value from grading engine
+        clv = pred.get("clv")
+        if clv is not None:
+            clv_values.append(float(clv))
 
     graded = wins + losses  # Exclude voids from win rate
     win_rate = wins / graded if graded > 0 else 0.0
     roi = profits / stakes if stakes > 0 else 0.0
-    avg_clv = sum(clv_bets) / len(clv_bets) if clv_bets else None
+    avg_clv = sum(clv_values) / len(clv_values) if clv_values else None
+    positive_clv_pct = (sum(1 for c in clv_values if c > 0) / len(clv_values)) if clv_values else None
 
     return {
         "total_bets": total,
@@ -87,6 +86,8 @@ def _compute_period_stats(predictions: list[dict]) -> dict:
         "profit_units": round(profits, 4),
         "stakes_units": round(stakes, 4),
         "avg_clv": round(avg_clv, 4) if avg_clv is not None else None,
+        "clv_sample_size": len(clv_values),
+        "positive_clv_pct": round(positive_clv_pct, 4) if positive_clv_pct is not None else None,
     }
 
 

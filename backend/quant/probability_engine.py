@@ -12,11 +12,11 @@ from poisson_model import MarketProbabilities, compute_probabilities
 from elo_rating import match_probabilities as elo_match_probs
 from form_model import compute_form_probabilities, FormProbabilities
 
-# ── Model weights ──────────────────────────────────────────────────────────────
-W_POISSON = 0.60
-W_ELO = 0.30
-W_FORM = 0.10
-W_H2H = 0.05
+# ── Model weights (must sum to 1.00) ──────────────────────────────────────────
+W_POISSON = 0.55
+W_ELO     = 0.25
+W_FORM    = 0.10
+W_H2H     = 0.10  # Falls back to Poisson when H2H data unavailable
 
 
 @dataclass
@@ -26,6 +26,7 @@ class CombinedProbabilities:
     draw: float = 0.0
     away_win: float = 0.0
     over15: float = 0.0
+    under15: float = 0.0
     over25: float = 0.0
     under25: float = 0.0
     over35: float = 0.0
@@ -58,9 +59,12 @@ def compute_combined(
     away_team_id: int,
     home_form: str,
     away_form: str,
+    home_opp_strengths: list[float] | None = None,
+    away_opp_strengths: list[float] | None = None,
     h2h_home_wins: int = 0,
     h2h_away_wins: int = 0,
     h2h_draws: int = 0,
+    rho: float | None = None,
 ) -> CombinedProbabilities:
     """
     Combine Poisson + Elo + Form + H2H into final probabilities.
@@ -81,13 +85,15 @@ def compute_combined(
         CombinedProbabilities with all markets filled.
     """
     # ── Model 1: Poisson ───────────────────────────────────────────────────
-    poisson: MarketProbabilities = compute_probabilities(mu_home, mu_away)
+    poisson: MarketProbabilities = compute_probabilities(mu_home, mu_away, rho)
 
     # ── Model 2: Elo ───────────────────────────────────────────────────────
     elo = elo_match_probs(home_team_id, away_team_id)
 
-    # ── Model 3: Form ──────────────────────────────────────────────────────
-    form: FormProbabilities = compute_form_probabilities(home_form, away_form)
+    # ── Model 3: Form (Upgrade #4: opponent strength aware) ───────────────
+    form: FormProbabilities = compute_form_probabilities(
+        home_form, away_form, home_opp_strengths, away_opp_strengths
+    )
 
     # ── Model 4: H2H (Fix #5) ─────────────────────────────────────────────
     h2h_total = h2h_home_wins + h2h_away_wins + h2h_draws
@@ -119,6 +125,7 @@ def compute_combined(
     over35 = min(0.90, max(0.05, poisson.over35 + form_adj * 0.6))
     under35 = 1.0 - over35
     over15 = min(0.98, max(0.10, poisson.over15))
+    under15 = 1.0 - over15
     btts = min(0.90, max(0.05, poisson.btts + form_adj * 0.3))
     btts_no = 1.0 - btts
 
@@ -143,6 +150,7 @@ def compute_combined(
         draw=round(p_draw, 4),
         away_win=round(p_away, 4),
         over15=round(over15, 4),
+        under15=round(under15, 4),
         over25=round(over25, 4),
         under25=round(under25, 4),
         over35=round(over35, 4),

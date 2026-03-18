@@ -4,18 +4,21 @@ risk_filters.py
 Strict bet risk filters. A bet must pass ALL conditions to be accepted.
 
 Reject if:
-  probability < 0.55  (55% confidence floor)
+  probability < 0.40  (40% confidence floor, tiered by league)
   EV < 0.05           (5% minimum edge)
   odds > 3.50         (excessive odds)
   odds < 1.30         (too short, poor risk/reward)
+
+Upgrade #8: Odds staleness guard — demotes bets with stale odds.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from ev_engine import ValueBet
 
 
 # ── Filter thresholds ──────────────────────────────────────────────────────────
-MIN_PROBABILITY = 0.55     # Minimum model probability
+MIN_PROBABILITY = 0.40     # Lowered from 0.55 — let EV/inefficiency filters guard quality
 MIN_EV = 0.05              # Minimum expected value (5%)
 MAX_ODDS = 3.50            # Reject high-risk outliers
 MIN_ODDS = 1.30            # Reject near-certainty bets (usually no edge)
@@ -38,10 +41,10 @@ def apply_filters(bet: ValueBet, league_tier: int = 1) -> FilterResult:
     t_min_ev = MIN_EV
 
     if league_tier == 3:
-        t_min_prob = 0.58  # 58% floor for Tier 3
+        t_min_prob = 0.45  # 45% floor for Tier 3
         t_min_ev = 0.06    # 6% edge for Tier 3
     elif league_tier >= 4:
-        t_min_prob = 0.62  # 62% floor for Tier 4 (high noise)
+        t_min_prob = 0.50  # 50% floor for Tier 4 (high noise)
         t_min_ev = 0.08    # 8% edge for Tier 4
 
     # ── Logic ──────────────────────────────────────────────────────────────────
@@ -61,6 +64,28 @@ def apply_filters(bet: ValueBet, league_tier: int = 1) -> FilterResult:
         return FilterResult(False, f"Market inefficiency too small ({bet.inefficiency:.1%} < {MIN_INEFFICIENCY:.0%})")
 
     return FilterResult(True)
+
+
+def check_odds_staleness(odds_fetched_at: str, max_hours: float = 2.0) -> float:
+    """
+    Upgrade #8: Check if odds are stale.
+    Returns a Kelly multiplier:
+      1.0  = fresh odds (< max_hours old)
+      0.5  = stale odds (> max_hours old)
+      0.25 = very stale odds (> 2x max_hours old)
+    """
+    if not odds_fetched_at:
+        return 0.75  # No timestamp = assume mildly stale
+    try:
+        fetched = datetime.fromisoformat(odds_fetched_at.replace("Z", "+00:00"))
+        age_hours = (datetime.now(timezone.utc) - fetched).total_seconds() / 3600
+        if age_hours > max_hours * 2:
+            return 0.25  # Very stale
+        elif age_hours > max_hours:
+            return 0.5   # Stale
+        return 1.0       # Fresh
+    except Exception:
+        return 0.75  # Parse error = assume mildly stale
 
 
 def filter_bets(bets: list[ValueBet], league_tier: int = 1) -> list[ValueBet]:
