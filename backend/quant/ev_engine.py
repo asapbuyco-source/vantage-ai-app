@@ -22,7 +22,26 @@ from data_pipeline import OddsData
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 MIN_EV = 0.05           # 5% minimum expected value
-MIN_INEFFICIENCY = 0.06  # 6% model vs market gap
+MIN_INEFFICIENCY = 0.06  # Default 6% model vs market gap (used for goals/BTTS)
+
+# Market-aware inefficiency: bookmakers price 1X2 very tightly (1-2% margin),
+# so requiring 6%+ gap blocks almost all 1X2 bets. Lower threshold for result markets.
+MARKET_INEFFICIENCY = {
+    "result": 0.03,      # 3% for Home Win, Away Win, Draw, DC, DNB
+    "goals": 0.05,       # 5% for Over/Under goals
+    "btts": 0.05,        # 5% for BTTS Yes/No
+}
+
+def _get_market_category(market: str) -> str:
+    """Classify a market into a category for threshold selection."""
+    m = market.lower()
+    if any(k in m for k in ["home win", "away win", "draw", "double chance", "draw no bet"]):
+        return "result"
+    if any(k in m for k in ["over", "under"]):
+        return "goals"
+    if "btts" in m:
+        return "btts"
+    return "goals"  # Default to stricter threshold
 
 
 # ── Market → probability mapping ───────────────────────────────────────────────
@@ -220,7 +239,7 @@ def evaluate_all_markets(
         line_agrees = line_shift > 0.02  # Sharp money backs our pick
         line_disagrees = line_shift < -0.03  # Sharp money opposes our pick
 
-        is_value = (ev >= MIN_EV) and (inefficiency >= MIN_INEFFICIENCY)
+        is_value = (ev >= MIN_EV) and (inefficiency >= MARKET_INEFFICIENCY.get(_get_market_category(market), MIN_INEFFICIENCY))
 
         # If line strongly disagrees (-3%+ shift against us), demote
         if line_disagrees and is_value:

@@ -91,29 +91,57 @@ def check_odds_staleness(odds_fetched_at: str, max_hours: float = 2.0) -> float:
 def filter_bets(bets: list[ValueBet], league_tier: int = 1) -> list[ValueBet]:
     """
     Filter a list of bets.
-    Returns only those that pass all risk filters, sorted by EV descending.
+    Returns only those that pass all risk filters, sorted by a confidence-weighted
+    composite score (not just raw EV) to prefer high-agreement, high-quality picks.
+    
+    Score = EV * 0.4 + model_prob * 0.4 + inefficiency * 0.2
+    This prevents low-probability defensive markets from always dominating.
     """
     passed = []
     for bet in bets:
         result = apply_filters(bet, league_tier)
         if result.passed:
             passed.append(bet)
-        else:
-            pass  # Silently drop (logged at pipeline level)
-    return sorted(passed, key=lambda b: b.expected_value, reverse=True)
+    
+    # Sort by safety tier first, then composite quality score
+    # This ensures "safe" bets always outrank "risky" ones — critical for financial integrity
+    tier_priority = {"safe": 2, "value": 1, "risky": 0}
+    
+    def _quality_score(b: ValueBet) -> float:
+        tier = tier_priority.get(grade_risk(b), 0)
+        composite = b.expected_value * 0.4 + b.model_prob * 0.4 + b.inefficiency * 0.2
+        return tier + composite  # Tier dominates (2/1/0), composite breaks ties
+    
+    return sorted(passed, key=_quality_score, reverse=True)
 
 
 def grade_risk(bet: ValueBet) -> str:
     """
-    Map a bet to a display category.
-    safe  → confidence ≥ 70% and EV ≥ 8%
-    value → confidence ≥ 60% and EV ≥ 5%
-    risky → confidence < 60%
+    Map a bet to a display category, market-aware.
+    
+    Result markets (1X2/DC/DNB): these rarely exceed 60% model prob
+      safe  → ≥ 55% and EV ≥ 6%
+      value → ≥ 45% and EV ≥ 5%
+      risky → below these thresholds
+    
+    Goals/BTTS markets: higher certainty is possible
+      safe  → ≥ 65% and EV ≥ 8%
+      value → ≥ 55% and EV ≥ 5%
+      risky → below these thresholds
     """
-    if bet.model_prob >= 0.70 and bet.expected_value >= 0.08:
-        return "safe"
-    if bet.model_prob >= 0.60:
-        return "value"
+    m = bet.market.lower()
+    is_result = any(k in m for k in ["home win", "away win", "draw", "double chance", "draw no bet"])
+    
+    if is_result:
+        if bet.model_prob >= 0.55 and bet.expected_value >= 0.06:
+            return "safe"
+        if bet.model_prob >= 0.45 and bet.expected_value >= 0.05:
+            return "value"
+    else:
+        if bet.model_prob >= 0.65 and bet.expected_value >= 0.08:
+            return "safe"
+        if bet.model_prob >= 0.55 and bet.expected_value >= 0.05:
+            return "value"
     return "risky"
 
 
