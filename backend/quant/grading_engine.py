@@ -186,7 +186,7 @@ def _grade_bet(market: str, home_goals: int, away_goals: int) -> str:
 
 
 def _chatgpt_grade_fallback(pending_preds: list, date_str: str) -> dict:
-    \"\"\"Uses OpenAI API to find results for matches that Sportmonks missed and grades them.\"\"\"
+    """Uses OpenAI API to find results for matches that Sportmonks missed and grades them."""
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         print("[Grading/ChatGPT] No OPENAI_API_KEY found. Skipping fallback.", file=sys.stderr)
@@ -206,7 +206,7 @@ def _chatgpt_grade_fallback(pending_preds: list, date_str: str) -> dict:
     if not missing_list:
         return {}
         
-    prompt = f\"\"\"
+    prompt = f"""
 Find the FINAL full-time scores for these football matches played on {date_str}.
 Grade the predictions based on the final scores.
 MATCHES:
@@ -226,7 +226,7 @@ GRADING RULES:
 
 Return ONLY a valid JSON array. Each object: {{ "id": string, "score": "H-A" (or "?" if unknown), "status": "won"|"lost"|"void" }}.
 Do NOT skip any match.
-\"\"\"
+"""
 
     headers = {
         "Authorization": f"Bearer {api_key}",
