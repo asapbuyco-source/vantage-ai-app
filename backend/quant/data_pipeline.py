@@ -345,7 +345,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
     print(f"[DataPipeline] Fetching fixtures for {date_str}...")
     raw = _get_paginated(
         f"/fixtures/date/{date_str}",
-        params={"include": "league;participants;scores;odds;statistics", "per_page": 100},
+        params={"include": "league;participants;scores;odds", "per_page": 100},
         max_pages=3,
     )
     if not raw:
