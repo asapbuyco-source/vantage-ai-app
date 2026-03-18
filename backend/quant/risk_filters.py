@@ -63,6 +63,14 @@ def apply_filters(bet: ValueBet, league_tier: int = 1) -> FilterResult:
     if bet.inefficiency < MIN_INEFFICIENCY:
         return FilterResult(False, f"Market inefficiency too small ({bet.inefficiency:.1%} < {MIN_INEFFICIENCY:.0%})")
 
+    # ── Sanity cap for defensive markets (prevents data-quality inflation) ──────
+    # No real football match should have ≥88% model confidence for BTTS No or Under 3.5.
+    # If we see this, it means xG data is unreliable (e.g., form fetch returned 0 goals).
+    m = bet.market.lower()
+    is_defensive = "btts no" in m or "under 3.5" in m or "under 2.5" in m
+    if is_defensive and bet.model_prob >= 0.88:
+        return FilterResult(False, f"Defensive market probability suspiciously high ({bet.model_prob:.1%}) — likely data quality issue, skipping.")
+
     return FilterResult(True)
 
 

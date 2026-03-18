@@ -538,13 +538,24 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
             xg_source = "API-xG"
         else:
             # Fallback: Dixon-Coles attack/defence from raw goal averages
-            home_att = (md.home_stats.home_avg_scored if md.home_stats else 1.2) / (league_avg / 2)
-            away_def = (md.away_stats.away_avg_conceded if md.away_stats else 1.2) / (league_avg / 2)
-            away_att = (md.away_stats.away_avg_scored if md.away_stats else 1.0) / (league_avg / 2)
-            home_def = (md.home_stats.home_avg_conceded if md.home_stats else 1.0) / (league_avg / 2)
+            # Use league-average defaults when team stats are missing or zero
+            # (zero avg_scored means form fetch returned no data — don't let xG collapse to 0.2)
+            half_avg = league_avg / 2
+
+            home_scored_val = md.home_stats.home_avg_scored if md.home_stats else 0
+            away_conceded_val = md.away_stats.away_avg_conceded if md.away_stats else 0
+            away_scored_val = md.away_stats.away_avg_scored if md.away_stats else 0
+            home_conceded_val = md.home_stats.home_avg_conceded if md.home_stats else 0
+
+            # If no data available, default to league-average attacking/defensive strength (1.0 ratio)
+            home_att = (home_scored_val / half_avg) if home_scored_val > 0 else 1.0
+            away_def = (away_conceded_val / half_avg) if away_conceded_val > 0 else 1.0
+            away_att = (away_scored_val / half_avg) if away_scored_val > 0 else 1.0
+            home_def = (home_conceded_val / half_avg) if home_conceded_val > 0 else 1.0
             home_adv = 1.12
-            md.expected_goals_home = max(0.2, home_att * away_def * (league_avg / 2) * home_adv)
-            md.expected_goals_away = max(0.2, away_att * home_def * (league_avg / 2))
+
+            md.expected_goals_home = max(0.75, home_att * away_def * half_avg * home_adv)
+            md.expected_goals_away = max(0.60, away_att * home_def * half_avg)
             xg_source = "model"
 
         matches.append(md)

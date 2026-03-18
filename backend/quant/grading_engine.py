@@ -105,14 +105,20 @@ def _parse_closing_odds(odds_list: list) -> dict:
                 closing["Draw"] = max(closing.get("Draw", 0), price)
             elif "away" in label or "2" == label:
                 closing["Away Win"] = max(closing.get("Away Win", 0), price)
-        # Over/Under 2.5
+        # Over/Under Goals
         elif market_id == 80:
             total = str(odd.get("total") or "")
-            if "2.5" in total:
-                if "over" in label or "over" in name:
-                    closing["Over 2.5 Goals"] = max(closing.get("Over 2.5 Goals", 0), price)
-                elif "under" in label or "under" in name:
-                    closing["Under 2.5 Goals"] = max(closing.get("Under 2.5 Goals", 0), price)
+            is_over = "over" in label or "over" in name
+            is_under = "under" in label or "under" in name
+            if "1.5" in total:
+                if is_over: closing["Over 1.5 Goals"] = max(closing.get("Over 1.5 Goals", 0), price)
+                elif is_under: closing["Under 1.5 Goals"] = max(closing.get("Under 1.5 Goals", 0), price)
+            elif "2.5" in total:
+                if is_over: closing["Over 2.5 Goals"] = max(closing.get("Over 2.5 Goals", 0), price)
+                elif is_under: closing["Under 2.5 Goals"] = max(closing.get("Under 2.5 Goals", 0), price)
+            elif "3.5" in total:
+                if is_over: closing["Over 3.5 Goals"] = max(closing.get("Over 3.5 Goals", 0), price)
+                elif is_under: closing["Under 3.5 Goals"] = max(closing.get("Under 3.5 Goals", 0), price)
         # BTTS
         elif market_id == 14:
             if "yes" in label or "yes" in name:
@@ -219,7 +225,7 @@ GRADING RULES:
 - DOUBLE CHANCE (1X) -> won if home wins OR draw.
 - DOUBLE CHANCE (X2) -> won if away wins OR draw.
 - DOUBLE CHANCE (12) -> won if home OR away wins (not draw).
-- OVER 1.5 -> total > 1. OVER 2.5 -> total > 2. UNDER 2.5 -> total < 3.
+- OVER 1.5 -> total > 1. OVER 2.5 -> total > 2. UNDER 2.5 -> total < 3. OVER 3.5 -> total > 3. UNDER 3.5 -> total < 4.
 - BTTS -> home > 0 AND away > 0. BTTS No -> home == 0 OR away == 0.
 - DRAW NO BET (Home) -> won if home wins; void if draw; lost if away wins.
 - DRAW NO BET (Away) -> won if away wins; void if draw; lost if home wins.

@@ -197,14 +197,15 @@ export const sendDailyPredictionsToTelegram = async () => {
             return { status: 'skipped', reason: 'no_predictions' };
         }
 
-        // FREE TIER ONLY: only send 'safe' category picks on Telegram.
-        // Value and risky picks are VIP-exclusive and should not appear on the public channel.
-        // Field fallback: prediction_en (AI picks) or prediction/bet_type (quant picks)
+        // FREE TIER ONLY: send 'safe' and 'value' category picks on Telegram.
+        // 'risky' picks are VIP-exclusive and should not appear on the public channel.
+        // Confidence >= 55 ensures only meaningful quant picks are broadcast.
+        // Note: quant engine confidence = probability * 100 (e.g. 58.0 for 58%)
         const ready = allMatches.filter(m =>
             (m.prediction_en || m.prediction || m.bet_type) &&
-            m.confidence >= 68 &&
+            m.confidence >= 55 &&
             m.sport !== 'basketball' &&
-            m.category === 'safe'
+            (m.category === 'safe' || m.category === 'value')
         );
 
         if (ready.length === 0) {

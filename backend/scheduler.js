@@ -418,6 +418,14 @@ export const initScheduler = () => {
     // because we skip the write if there are no live matches.
     let liveScoreTask = cron.schedule('* * * * *', async () => {
         try {
+            // ── Time-gate: only poll during match hours (11:00–01:00 Lagos UTC+1) ──
+            // Saves ~720 wasted Sportmonks API calls per night during dead hours.
+            const nowMs = Date.now();
+            const lagosHour = new Date(nowMs + (60 - new Date().getTimezoneOffset()) * 60000).getUTCHours();
+            // Allow 11:00–23:59 (lagosHour >= 11) and 00:00–01:00 (lagosHour <= 1)
+            const inMatchHours = lagosHour >= 11 || lagosHour <= 1;
+            if (!inMatchHours) return;
+
             const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
             const url = `https://api.sportmonks.com/v3/football/livescores/latest?include=league;participants;scores;events;state&api_token=${token}`;

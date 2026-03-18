@@ -134,7 +134,7 @@ export const runQuantPipeline = async (dateStr = null, dryRun = false) => {
 
         // Try to extract summary from stdout "[QuantPipeline] ✅ Pipeline complete!"
         const matchesMatch = stdout.match(/Matches analyzed:\s*(\d+)/);
-        const betsMatch = stdout.match(/Value bets (?:found|identified):\s*(\d+)/);
+        const betsMatch = stdout.match(/Value bets found:\s*(\d+)/);
         const matchesAnalyzed = matchesMatch ? parseInt(matchesMatch[1]) : 0;
         const generated = betsMatch ? parseInt(betsMatch[1]) : 0;
 

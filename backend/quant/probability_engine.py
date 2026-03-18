@@ -17,10 +17,12 @@ if TYPE_CHECKING:
     from data_pipeline import TeamStats
 
 # ── Model weights (must sum to 1.00) ──────────────────────────────────────────
-W_POISSON = 0.55
+# H2H endpoint is unavailable on Sportmonks Pro plan — always defaults to Poisson.
+# Setting W_H2H = 0.0 makes this explicit and prevents implicit Poisson double-weighting.
+W_POISSON = 0.65  # Was 0.55; +0.10 absorbed from H2H
 W_ELO     = 0.25
 W_FORM    = 0.10
-W_H2H     = 0.10  # Falls back to Poisson when H2H data unavailable
+W_H2H     = 0.00  # H2H data unavailable — do not use
 
 
 @dataclass
@@ -124,14 +126,25 @@ def compute_combined(
     # ── Goals markets: use Poisson (most objective) ────────────────────────
     # Apply a slight form adjustment (±5% shift) for over/under
     form_adj = (form.home_form_score + form.away_form_score - 1.0) * 0.05
-    over25 = min(0.95, max(0.05, poisson.over25 + form_adj))
+    over25 = min(0.92, max(0.08, poisson.over25 + form_adj))
     under25 = 1.0 - over25
-    over35 = min(0.90, max(0.05, poisson.over35 + form_adj * 0.6))
+    over35 = min(0.85, max(0.05, poisson.over35 + form_adj * 0.6))
     under35 = 1.0 - over35
     over15 = min(0.98, max(0.10, poisson.over15))
     under15 = 1.0 - over15
-    btts = min(0.90, max(0.05, poisson.btts + form_adj * 0.3))
+    btts = min(0.90, max(0.10, poisson.btts + form_adj * 0.3))
     btts_no = 1.0 - btts
+
+    # ── Realistic probability caps for defensive markets ───────────────────
+    # This prevents artificially low xG (from missing form data) from generating
+    # mega-confident Under/BTTS No predictions that look like "sure things"
+    under25 = min(under25, 0.80)   # Under 2.5 cannot exceed 80% (avg scoreline is ~2.7)
+    under35 = min(under35, 0.88)   # Under 3.5 cannot exceed 88%
+    btts_no = min(btts_no, 0.85)   # BTTS No cannot exceed 85%
+    # Re-balance complementary markets after capping
+    over25 = 1.0 - under25
+    over35 = 1.0 - under35
+    btts = 1.0 - btts_no
 
     # ── Compound markets ───────────────────────────────────────────────────
     dc_1x = p_home + p_draw

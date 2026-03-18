@@ -309,6 +309,12 @@ app.post('/api/admin/quant-performance', adminAuth, async (req, res) => {
     }
 });
 
+// ── OpenAI API Key (declared here so it's available to both test-openai and the proxy below) ───
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+if (!OPENAI_API_KEY) {
+    console.warn('⚠️ OPENAI_API_KEY not set — OpenAI proxy will return 500 until configured.');
+}
+
 // Test OpenAI connection — used by the Admin panel "Test OpenAI" button
 app.post('/api/admin/test-openai', adminAuth, async (req, res) => {
     const start = Date.now();
@@ -346,10 +352,7 @@ app.post('/api/admin/test-openai', adminAuth, async (req, res) => {
 // Keeps OPENAI_API_KEY server-side only. Same pattern as Gemini proxy.
 // ══════════════════════════════════════════════════════════════════════
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-if (!OPENAI_API_KEY) {
-    console.warn('⚠️ OPENAI_API_KEY not set — OpenAI proxy will return 500 until configured.');
-}
+// Re-use key already declared above; just set up the rate limiter and proxy endpoint
 
 const openaiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,

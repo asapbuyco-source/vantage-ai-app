@@ -56,7 +56,7 @@ MARKET_TO_PROB = {
     "Draw No Bet (Away)": "draw_no_bet_away",
     "Over 1.5 Goals": "over15",
     "Over 2.5 Goals": "over25",
-    "Under 2.5 Goals": "under25",
+    # "Under 2.5 Goals" has been replaced by the safer "Under 3.5 Goals"
     "Over 3.5 Goals": "over35",
     "Under 3.5 Goals": "under35",
     "BTTS": "btts",
@@ -76,7 +76,7 @@ MARKET_TO_ODDS_FIELD = {
     "Over 1.5 Goals": "over15_odds",
     "Under 1.5 Goals": "under15_odds",
     "Over 2.5 Goals": "over25_odds",
-    "Under 2.5 Goals": "under25_odds",
+    # Under 2.5 removed — replaced by the safer Under 3.5
     "Over 3.5 Goals": "over35_odds",
     "Under 3.5 Goals": "under35_odds",
     "BTTS": "btts_yes_odds",
