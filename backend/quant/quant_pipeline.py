@@ -30,7 +30,7 @@ import math
 from datetime import datetime, timezone
 
 # ── Local imports ─────────────────────────────────────────────────────────────
-from data_pipeline import fetch_matches, MatchData
+from data_pipeline import fetch_matches, MatchData, TeamStats
 from poisson_model import compute_probabilities, compute_dynamic_rho
 from elo_rating import load_ratings_from_firestore, match_probabilities as elo_probs, save_dirty_ratings, get_team_rating
 from form_model import compute_form_probabilities
@@ -160,10 +160,14 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
         try:
             mu_home = match.expected_goals_home
             mu_away = match.expected_goals_away
-            home_form = match.home_stats.form if match.home_stats else "N/A"
-            away_form = match.away_stats.form if match.away_stats else "N/A"
             home_id = match.home_team_id
             away_id = match.away_team_id
+            
+            home_stats = match.home_stats if match.home_stats else TeamStats(team_id=home_id, team_name=match.home_team)
+            away_stats = match.away_stats if match.away_stats else TeamStats(team_id=away_id, team_name=match.away_team)
+            
+            home_form_str = home_stats.form
+            away_form_str = away_stats.form
 
             # ── Upgrade #4: Extract opponent strengths for form model ───────
             # This requires looking at the form history and fetching Elos
@@ -181,7 +185,7 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
 
             # Combine models (Poisson + Elo + Form + H2H)
             probs: CombinedProbabilities = compute_combined(
-                mu_home, mu_away, home_id, away_id, home_form, away_form,
+                mu_home, mu_away, home_id, away_id, home_stats, away_stats,
                 home_opp_strengths=home_opp_strengths,
                 away_opp_strengths=away_opp_strengths,
                 h2h_home_wins=match.h2h_home_wins,
@@ -243,8 +247,8 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                 "kelly_stake": kelly,                # % to stake
                 "expected_goals_home": round(mu_home, 2),
                 "expected_goals_away": round(mu_away, 2),
-                "home_form": home_form,
-                "away_form": away_form,
+                "home_form": home_form_str,
+                "away_form": away_form_str,
                 "h2h_home_wins": match.h2h_home_wins,
                 "h2h_away_wins": match.h2h_away_wins,
                 "h2h_draws": match.h2h_draws,
@@ -293,11 +297,10 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
         return {"status": "skipped", "reason": "no_value_bets", "date": date_str, "matches_analyzed": len(matches)}
 
     # ── Step 10: Generate accumulators ─────────────────────────────────────
-    accas = generate_accumulators(bet_pool)
-    accas_dict = {tier: (accumulator_to_dict(a) if a else None) for tier, a in accas.items()}
-
-    safe_count = sum(1 for v in accas.values() if v is not None)
-    _safe_print(f"[QuantPipeline] 🎰 Generated {safe_count}/3 accumulators.")
+    accas_dict = generate_accumulators(bet_pool)
+    
+    total_accas = sum(len(v) for v in accas_dict.values())
+    _safe_print(f"[QuantPipeline] 🎰 Generated {total_accas} advanced accumulators across 3 tiers.")
 
     # ── Step 11: Save to Firestore ─────────────────────────────────────────
     doc = {
@@ -329,8 +332,9 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
     _safe_print(f"\n[QuantPipeline] ✅ Pipeline complete!")
     _safe_print(f"  Matches analyzed: {len(matches)}")
     _safe_print(f"  Predictions generated: {len(predictions)}")
-    if accas.get("safe"):
-        print(f"  Safe acca: {accas['safe'].combined_odds:.2f}x ({accas['safe'].leg_count} legs)")
+    if accas_dict.get("banker"):
+        b = accas_dict["banker"][0]
+        print(f"  Banker acca: {b['combined_odds']:.2f}x ({b['leg_count']} legs)")
 
     return {
         "status": "success",

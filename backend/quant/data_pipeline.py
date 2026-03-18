@@ -37,6 +37,12 @@ class TeamStats:
     win_rate: float = 0.0
     clean_sheet_rate: float = 0.0
     matches_analyzed: int = 0
+    
+    # --- Advanced Form Metrics ---
+    avg_xg_created: float = 0.0
+    avg_xg_conceded: float = 0.0
+    avg_possession: float = 50.0
+    avg_shots_on_target: float = 0.0
 
 
 @dataclass
@@ -162,6 +168,10 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
     away_scored, away_conceded, away_matches = 0, 0, 0
     wins, clean_sheets = 0, 0
 
+    total_xg_created, total_xg_conceded = 0.0, 0.0
+    total_possession, total_sot = 0.0, 0.0
+    stats_matches = 0
+
     for fx in recent_fixtures[:10]:
         participants = fx.get("participants", [])
         home_p = next((p for p in participants if p.get("meta", {}).get("location") == "home"), {})
@@ -195,6 +205,39 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
         if opp_goals == 0:
             clean_sheets += 1
 
+        # Extract advanced statistics
+        raw_stats = fx.get("statistics") or []
+        stats_list = raw_stats if isinstance(raw_stats, list) else (raw_stats.get("data", []) if isinstance(raw_stats, dict) else [])
+        
+        has_stats = False
+        my_xg, opp_xg, my_poss, my_sot = 0.0, 0.0, 50.0, 0.0
+        loc_str = "home" if is_home else "away"
+        opp_loc = "away" if is_home else "home"
+        
+        for stat in stats_list:
+            tid = stat.get("type_id")
+            s_loc = stat.get("location", "")
+            val = stat.get("data", {}).get("value") if isinstance(stat.get("data"), dict) else stat.get("value")
+            try:
+                val = float(val)
+                has_stats = True
+                if tid == 34:
+                    if s_loc == loc_str: my_xg = val
+                    elif s_loc == opp_loc: opp_xg = val
+                elif tid == 45 and s_loc == loc_str:
+                    my_poss = val
+                elif tid == 41 and s_loc == loc_str:
+                    my_sot = val
+            except (TypeError, ValueError):
+                pass
+                
+        if has_stats:
+            total_xg_created += my_xg
+            total_xg_conceded += opp_xg
+            total_possession += my_poss
+            total_sot += my_sot
+            stats_matches += 1
+
     n = len(results)
     if n == 0:
         return stats
@@ -216,6 +259,15 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
     stats.home_avg_conceded = home_conceded / home_matches if home_matches > 0 else stats.avg_conceded
     stats.away_avg_scored = away_scored / away_matches if away_matches > 0 else stats.avg_scored
     stats.away_avg_conceded = away_conceded / away_matches if away_matches > 0 else stats.avg_conceded
+
+    if stats_matches > 0:
+        stats.avg_xg_created = total_xg_created / stats_matches
+        stats.avg_xg_conceded = total_xg_conceded / stats_matches
+        stats.avg_possession = total_possession / stats_matches
+        stats.avg_shots_on_target = total_sot / stats_matches
+    else:
+        stats.avg_xg_created = stats.avg_scored
+        stats.avg_xg_conceded = stats.avg_conceded
 
     return stats
 
@@ -453,12 +505,12 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         try:
             home_recent = _get_paginated(
                 f"/fixtures/between/{from_date}/{date_str}",
-                {"include": "participants;scores", "filters": f"participantSearch:{home_id}", "per_page": 10},
+                {"include": "participants;scores;statistics", "filters": f"participantSearch:{home_id}", "per_page": 10},
                 max_pages=1,
             )
             away_recent = _get_paginated(
                 f"/fixtures/between/{from_date}/{date_str}",
-                {"include": "participants;scores", "filters": f"participantSearch:{away_id}", "per_page": 10},
+                {"include": "participants;scores;statistics", "filters": f"participantSearch:{away_id}", "per_page": 10},
                 max_pages=1,
             )
             home_stats = _parse_form(home_recent, home_id)

@@ -8,9 +8,13 @@ Weights: 60% Poisson | 30% Elo | 10% Form
 """
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 from poisson_model import MarketProbabilities, compute_probabilities
 from elo_rating import match_probabilities as elo_match_probs
 from form_model import compute_form_probabilities, FormProbabilities
+
+if TYPE_CHECKING:
+    from data_pipeline import TeamStats
 
 # ── Model weights (must sum to 1.00) ──────────────────────────────────────────
 W_POISSON = 0.55
@@ -57,8 +61,8 @@ def compute_combined(
     mu_away: float,
     home_team_id: int,
     away_team_id: int,
-    home_form: str,
-    away_form: str,
+    home_stats: 'TeamStats',
+    away_stats: 'TeamStats',
     home_opp_strengths: list[float] | None = None,
     away_opp_strengths: list[float] | None = None,
     h2h_home_wins: int = 0,
@@ -92,7 +96,7 @@ def compute_combined(
 
     # ── Model 3: Form (Upgrade #4: opponent strength aware) ───────────────
     form: FormProbabilities = compute_form_probabilities(
-        home_form, away_form, home_opp_strengths, away_opp_strengths
+        home_stats, away_stats, home_opp_strengths, away_opp_strengths
     )
 
     # ── Model 4: H2H (Fix #5) ─────────────────────────────────────────────

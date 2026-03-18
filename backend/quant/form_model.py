@@ -5,9 +5,11 @@ Form adjustment model.
 Computes a form-based probability modifier from a team's last-5 results.
 Uses weighted recency so more recent matches count more.
 """
-
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from data_pipeline import TeamStats
 
 # ── Point system ──────────────────────────────────────────────────────────────
 RESULT_WEIGHTS = {"W": 3, "D": 1, "L": 0}
@@ -62,6 +64,30 @@ def _form_score(form_str: str, opponent_strengths: list[float] | None = None) ->
     return weighted_sum / total_weight if total_weight > 0 else 0.5
 
 
+def _performance_score(stats: 'TeamStats') -> float:
+    """
+    Computes a True Dominance score (0–1) based on underlying performance metrics.
+    Looks at xG created vs conceded, average possession, and shots on target.
+    """
+    # 1. xG Dominance (0–1)
+    # If a team creates 2.0 xG and concedes 1.0 xG, their ratio is 0.66
+    xg_sum = stats.avg_xg_created + stats.avg_xg_conceded
+    xg_ratio = (stats.avg_xg_created / xg_sum) if xg_sum > 0 else 0.5
+    
+    # 2. Match Control (0–1)
+    # 50% possession = 0.5, 70% possession = 0.7
+    poss_score = min(1.0, max(0.0, stats.avg_possession / 100.0))
+    
+    # 3. Attacking Threat (0–1)
+    # 8 Shots on Target average is considered highly dominant (1.0)
+    sot_score = min(1.0, stats.avg_shots_on_target / 8.0)
+    
+    # True Dominance: 60% xG, 20% Possession, 20% SOT
+    true_dominance = (xg_ratio * 0.6) + (poss_score * 0.2) + (sot_score * 0.2)
+    return true_dominance
+
+
+
 def _scores_to_probabilities(home_score: float, away_score: float) -> tuple[float, float, float]:
     """
     Convert two form scores (0–1) into match outcome probabilities.
@@ -90,17 +116,28 @@ def _scores_to_probabilities(home_score: float, away_score: float) -> tuple[floa
 
 
 def compute_form_probabilities(
-    home_form: str, away_form: str,
+    home_stats: 'TeamStats', away_stats: 'TeamStats',
     home_opp_strengths: list[float] | None = None,
     away_opp_strengths: list[float] | None = None,
 ) -> FormProbabilities:
     """
     Main entry point.
-    Given form strings for home/away teams, return FormProbabilities.
+    Given TeamStats objects for home/away teams, return FormProbabilities.
     Upgrade #4: Accepts optional opponent strength lists for quality-adjusted scoring.
+    Fix: Advanced Underlying Performance Form Model (blends W/D/L with xG/Poss/SOT)
     """
-    home_score = _form_score(home_form, home_opp_strengths)
-    away_score = _form_score(away_form, away_opp_strengths)
+    # 1. Classic Form (W/D/L adjusted for opponent strength)
+    home_res_score = _form_score(home_stats.form, home_opp_strengths)
+    away_res_score = _form_score(away_stats.form, away_opp_strengths)
+
+    # 2. True Dominance (xG, Possession, SOT)
+    home_perf_score = _performance_score(home_stats)
+    away_perf_score = _performance_score(away_stats)
+
+    # 3. Blended Form Score (50% Results, 50% Underlying Performance)
+    # Gives a massive edge in catching "Unlucky" performing teams
+    home_score = (home_res_score * 0.5) + (home_perf_score * 0.5)
+    away_score = (away_res_score * 0.5) + (away_perf_score * 0.5)
 
     p_home, p_draw, p_away = _scores_to_probabilities(home_score, away_score)
 
@@ -114,8 +151,12 @@ def compute_form_probabilities(
 
 
 if __name__ == "__main__":
+    from data_pipeline import TeamStats
     # Demo
-    probs = compute_form_probabilities("W W W D W", "L D L L W")
+    ts_home = TeamStats(1, "Home", form="W W W D W", avg_xg_created=2.5, avg_xg_conceded=0.5, avg_possession=65, avg_shots_on_target=6)
+    ts_away = TeamStats(2, "Away", form="L D L L W", avg_xg_created=1.2, avg_xg_conceded=1.8, avg_possession=45, avg_shots_on_target=3)
+    
+    probs = compute_form_probabilities(ts_home, ts_away)
     print(f"Home Win: {probs.home_win:.3f}")
     print(f"Draw:     {probs.draw:.3f}")
     print(f"Away Win: {probs.away_win:.3f}")
