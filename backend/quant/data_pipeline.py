@@ -17,8 +17,12 @@ from league_config import APPROVED_LEAGUE_IDS, get_league_info, get_priority_sco
 # ── Config ────────────────────────────────────────────────────────────────────
 SM_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN") or os.environ.get("VITE_SPORTMONKS_API_TOKEN", "")
 SM_BASE = "https://api.sportmonks.com/v3/football"
-MAX_MATCHES = 50
+MAX_MATCHES = 100
 RECENT_DAYS = 90  # Look back 90 days for form data
+
+# API-Football.com (for H2H data — free plan, 100 calls/day)
+AF_KEY = os.environ.get("API_FOOTBALL_KEY", "")
+AF_BASE = "https://v3.football.api-sports.io"
 
 
 # ── Data Structures ───────────────────────────────────────────────────────────
@@ -272,27 +276,140 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
     return stats
 
 
-# ── H2H parser ────────────────────────────────────────────────────────────────
-def _parse_h2h(h2h_fixtures: list, home_id: int, away_id: int) -> tuple:
-    """Returns (h2h_home_wins, h2h_away_wins, h2h_draws, avg_goals, btts_rate)."""
-    hw = aw = dr = total_goals = btts = count = 0
-    for fx in (h2h_fixtures or [])[:8]:
-        scores = fx.get("scores", [])
-        hg = next((s["score"]["goals"] for s in scores
-                   if s.get("participant_id") == home_id and s.get("description") == "CURRENT"), None)
-        ag = next((s["score"]["goals"] for s in scores
-                   if s.get("participant_id") == away_id and s.get("description") == "CURRENT"), None)
+# ── H2H via API-Football.com (with Firestore cache) ──────────────────────────
+_af_team_id_cache: dict[str, int] = {}  # team_name -> API-Football team ID
+
+
+def _af_get(endpoint: str, params: dict | None = None) -> dict | None:
+    """GET request to API-Football.com with header auth."""
+    if not AF_KEY:
+        return None
+    try:
+        resp = requests.get(
+            f"{AF_BASE}/{endpoint}",
+            params=params or {},
+            headers={"x-apisports-key": AF_KEY},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        print(f"[H2H] API-Football error {resp.status_code}: {resp.text[:200]}", file=sys.stderr)
+    except Exception as e:
+        print(f"[H2H] API-Football request error: {e}", file=sys.stderr)
+    return None
+
+
+def _af_find_team_id(team_name: str) -> int | None:
+    """Search API-Football for a team ID by name. Cached in memory."""
+    if team_name in _af_team_id_cache:
+        return _af_team_id_cache[team_name]
+    data = _af_get("teams", {"search": team_name})
+    if data and data.get("response"):
+        # Take exact match or first result
+        for t in data["response"]:
+            tid = t.get("team", {}).get("id")
+            name = t.get("team", {}).get("name", "")
+            if name.lower() == team_name.lower():
+                _af_team_id_cache[team_name] = tid
+                return tid
+        # Fallback: first result
+        tid = data["response"][0].get("team", {}).get("id")
+        if tid:
+            _af_team_id_cache[team_name] = tid
+            return tid
+    return None
+
+
+def _fetch_h2h_cached(home_name: str, away_name: str, home_sm_id: int, away_sm_id: int, league_id: int) -> tuple:
+    """
+    Fetch H2H data via API-Football.com with Firestore caching.
+    Returns (h2h_home_wins, h2h_away_wins, h2h_draws, avg_goals, btts_rate).
+    Cache key: sorted team IDs to ensure consistency regardless of home/away order.
+    """
+    default = (0, 0, 0, _league_avg(league_id), 0.45)
+
+    if not AF_KEY:
+        return default
+
+    # ── Check Firestore cache first ────────────────────────────────────────
+    cache_key = f"{min(home_sm_id, away_sm_id)}_{max(home_sm_id, away_sm_id)}"
+    try:
+        from google.cloud import firestore as gfs
+        db = gfs.Client()
+        cache_doc = db.collection("h2h_cache").document(cache_key).get()
+        if cache_doc.exists:
+            cd = cache_doc.to_dict()
+            # Cache valid for 30 days
+            cached_at = cd.get("cached_at", "")
+            if cached_at:
+                try:
+                    ct = datetime.fromisoformat(cached_at.replace("Z", "+00:00"))
+                    if (datetime.now(timezone.utc) - ct).days < 30:
+                        return (cd.get("hw", 0), cd.get("aw", 0), cd.get("dr", 0),
+                                cd.get("avg_goals", default[3]), cd.get("btts_rate", 0.45))
+                except Exception:
+                    pass
+    except Exception:
+        pass  # Firestore unavailable — continue with API call
+
+    # ── Resolve API-Football team IDs ──────────────────────────────────────
+    af_home = _af_find_team_id(home_name)
+    af_away = _af_find_team_id(away_name)
+    if not af_home or not af_away:
+        print(f"[H2H] Could not find API-Football IDs for {home_name} / {away_name}")
+        return default
+
+    # ── Fetch H2H from API-Football ───────────────────────────────────────
+    data = _af_get("fixtures/headtohead", {"h2h": f"{af_home}-{af_away}"})
+    if not data or not data.get("response"):
+        return default
+
+    # Parse last 8 completed matches
+    matches = [m for m in data["response"] if m.get("fixture", {}).get("status", {}).get("short") == "FT"]
+    matches.sort(key=lambda x: x.get("fixture", {}).get("date", ""), reverse=True)
+    recent = matches[:8]
+
+    hw = aw = dr = total_goals = btts_count = 0
+    for m in recent:
+        hg = m.get("goals", {}).get("home")
+        ag = m.get("goals", {}).get("away")
         if hg is None or ag is None:
             continue
-        total_goals += hg + ag; count += 1
-        if hg > ag: hw += 1
-        elif ag > hg: aw += 1
-        else: dr += 1
+        h_team_id = m.get("teams", {}).get("home", {}).get("id")
+        # Determine who is "home" in our context
+        if h_team_id == af_home:
+            if hg > ag: hw += 1
+            elif ag > hg: aw += 1
+            else: dr += 1
+        else:
+            if ag > hg: hw += 1
+            elif hg > ag: aw += 1
+            else: dr += 1
+        total_goals += hg + ag
         if hg > 0 and ag > 0:
-            btts += 1
-    avg = total_goals / count if count else _league_avg(8)
-    btts_rate = btts / count if count else 0.45
-    return hw, aw, dr, avg, btts_rate
+            btts_count += 1
+
+    n = hw + aw + dr
+    avg_goals = total_goals / n if n > 0 else _league_avg(league_id)
+    btts_rate = btts_count / n if n > 0 else 0.45
+    result = (hw, aw, dr, round(avg_goals, 2), round(btts_rate, 3))
+
+    # ── Cache to Firestore ─────────────────────────────────────────────────
+    try:
+        db = gfs.Client()
+        db.collection("h2h_cache").document(cache_key).set({
+            "hw": hw, "aw": aw, "dr": dr,
+            "avg_goals": result[3], "btts_rate": result[4],
+            "home_name": home_name, "away_name": away_name,
+            "af_home_id": af_home, "af_away_id": af_away,
+            "matches_parsed": n,
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass  # Cache save is best-effort
+
+    print(f"[H2H] {home_name} vs {away_name}: {hw}W/{dr}D/{aw}L (avg {avg_goals:.1f} goals, BTTS {btts_rate:.0%})")
+    return result
 
 
 # ── Odds parser ───────────────────────────────────────────────────────────────
@@ -407,41 +524,76 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
     print(f"[DataPipeline] Raw fixtures: {len(raw)}")
 
     # ── Filter approved leagues ────────────────────────────────────────────
+    from league_config import get_league_tier
     approved = []
     for item in raw:
         lid = item.get("league_id")
-        if lid not in APPROVED_LEAGUE_IDS:
-            continue
-        participants = item.get("participants", [])
-        home_p = next((p for p in participants if p.get("meta", {}).get("location") == "home"), None)
-        away_p = next((p for p in participants if p.get("meta", {}).get("location") == "away"), None)
-        if not home_p or not away_p:
-            continue
-        # Skip already-started matches
-        starting_at = item.get("starting_at", "")
-        if starting_at:
-            try:
-                kick = datetime.fromisoformat(starting_at.replace("Z", "+00:00"))
-                if kick <= datetime.now(timezone.utc):
-                    continue
-            except Exception:
-                pass
+        tier, priority = get_league_tier(lid)
+        
+        if tier > 0:
+            participants = item.get("participants", [])
+            home_p = next((p for p in participants if p.get("meta", {}).get("location") == "home"), None)
+            away_p = next((p for p in participants if p.get("meta", {}).get("location") == "away"), None)
+            
+            if home_p and away_p:
+                approved.append({
+                    "raw": item,
+                    "league_id": lid,
+                    "league_name": item.get("league", {}).get("name") if item.get("league") else "Unknown League",
+                    "league_tier": tier,
+                    "priority": priority,
+                    "home_p": home_p,
+                    "away_p": away_p,
+                })
 
-        info = get_league_info(lid)
-        approved.append({
-            "raw": item,
-            "league_id": lid,
-            "league_name": info["name"],
-            "league_tier": info["tier"],
-            "priority": get_priority_score(lid),
-            "home_p": home_p,
-            "away_p": away_p,
-        })
-
-    # Sort by priority, cap at MAX_MATCHES
+    # Sort by priority
     approved.sort(key=lambda x: x["priority"], reverse=True)
+    
+    # --- FALLBACK LOGIC ---
+    # If we have very few matches from approved leagues, fill with ANY fixture that has odds
+    if len(approved) < 15:
+        print(f"[DataPipeline] Only {len(approved)} approved fixtures. Loosening filters to include all leagues...")
+        for item in raw:
+            lid = item.get("league_id")
+            # Skip if already in approved list
+            if any(a["raw"].get("id") == item.get("id") for a in approved):
+                continue
+            
+            # Basic validation: must have participants and odds
+            participants = item.get("participants", [])
+            home_p = next((p for p in participants if p.get("meta", {}).get("location") == "home"), None)
+            away_p = next((p for p in participants if p.get("meta", {}).get("location") == "away"), None)
+            if not home_p or not away_p:
+                continue
+            
+            # Must have at least basic 1X2 odds to be useful
+            raw_odds = item.get("odds") or []
+            if not raw_odds:
+                continue
+
+            # Skip already-started matches
+            starting_at = item.get("starting_at", "")
+            if starting_at:
+                try:
+                    kick = datetime.fromisoformat(starting_at.replace("Z", "+00:00"))
+                    if kick <= datetime.now(timezone.utc):
+                        continue
+                except Exception:
+                    pass
+
+            approved.append({
+                "raw": item,
+                "league_id": lid,
+                "league_name": item.get("league", {}).get("name", "Unknown League"),
+                "league_tier": 5, # Low priority / Unknown
+                "priority": 0,
+                "home_p": home_p,
+                "away_p": away_p,
+            })
+    
+    # Cap at MAX_MATCHES
     approved = approved[:MAX_MATCHES]
-    print(f"[DataPipeline] Approved + sorted fixtures: {len(approved)}")
+    print(f"[DataPipeline] Final fixtures for analysis: {len(approved)}")
 
     # ── Enrich each fixture with team stats + H2H ──────────────────────────
     from_date = (datetime.now(timezone.utc) - timedelta(days=RECENT_DAYS)).strftime("%Y-%m-%d")
@@ -522,9 +674,20 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         except Exception as e:
             print(f"[DataPipeline] Form fetch error for {md.home_team} vs {md.away_team}: {e}", file=sys.stderr)
 
-        # Fetch H2H (Endpoint not available on Pro plan)
-        md.h2h_home_wins, md.h2h_away_wins, md.h2h_draws, md.h2h_btts_rate = 0, 0, 0, 0.0
-        md.h2h_avg_goals = _league_avg(lid)
+        # Fetch H2H via API-Football.com (cached in Firestore)
+        try:
+            hw, aw, dr, avg_g, btts_r = _fetch_h2h_cached(
+                md.home_team, md.away_team, home_id, away_id, lid
+            )
+            md.h2h_home_wins = hw
+            md.h2h_away_wins = aw
+            md.h2h_draws = dr
+            md.h2h_avg_goals = avg_g
+            md.h2h_btts_rate = btts_r
+        except Exception as e:
+            print(f"[DataPipeline] H2H fetch error: {e}", file=sys.stderr)
+            md.h2h_home_wins, md.h2h_away_wins, md.h2h_draws, md.h2h_btts_rate = 0, 0, 0, 0.0
+            md.h2h_avg_goals = _league_avg(lid)
 
         # ── Compute expected goals ─────────────────────────────────────
         # Upgrade #1: Prefer real xG from Sportmonks statistics.

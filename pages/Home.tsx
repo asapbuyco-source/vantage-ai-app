@@ -29,6 +29,20 @@ const CATEGORY_CONFIG = {
   safe: { label: 'SAFE', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400' },
   value: { label: 'VALUE', bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400', dot: 'bg-amber-400' },
   risky: { label: 'RISKY', bg: 'bg-rose-500/15', border: 'border-rose-500/30', text: 'text-rose-400', dot: 'bg-rose-400' },
+  lean: { label: 'LEAN', bg: 'bg-slate-500/15', border: 'border-slate-500/30', text: 'text-slate-400', dot: 'bg-slate-400' },
+  no_edge: { label: 'DATA', bg: 'bg-gray-500/15', border: 'border-gray-500/30', text: 'text-gray-400', dot: 'bg-gray-400' },
+};
+
+const FormDots = ({ form }: { form?: string }) => {
+  if (!form || form === 'N/A') return null;
+  const results = form.split(' ').slice(0, 5);
+  return (
+    <div className="flex items-center gap-0.5">
+      {results.map((r, i) => (
+        <span key={i} className={`w-1.5 h-1.5 rounded-full ${ r === 'W' ? 'bg-emerald-500' : r === 'D' ? 'bg-amber-400' : 'bg-rose-500' }`} />
+      ))}
+    </div>
+  );
 };
 
 export const Home: React.FC<HomeProps> = ({ setTab }) => {
@@ -104,9 +118,23 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         m.league.toLowerCase().includes(q)
       );
     }
+    const categoryPriority: Record<string, number> = { safe: 4, value: 3, risky: 2, lean: 1 };
+
     switch (sortKey) {
-      case 'time': result.sort((a, b) => a.time.localeCompare(b.time)); break;
-      case 'league': result.sort((a, b) => a.league.localeCompare(b.league)); break;
+      case 'time': 
+        result.sort((a, b) => {
+          const timeCompare = a.time.localeCompare(b.time);
+          if (timeCompare !== 0) return timeCompare;
+          return (categoryPriority[b.category] || 0) - (categoryPriority[a.category] || 0);
+        }); 
+        break;
+      case 'league': 
+        result.sort((a, b) => {
+          const leagueCompare = a.league.localeCompare(b.league);
+          if (leagueCompare !== 0) return leagueCompare;
+          return (categoryPriority[b.category] || 0) - (categoryPriority[a.category] || 0);
+        }); 
+        break;
     }
     return result;
   }, [fixturePool, searchQuery, sortKey]);
@@ -451,14 +479,22 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                 <div className="w-10 h-10 shrink-0 rounded-xl bg-slate-100 dark:bg-white/8 flex items-center justify-center border border-slate-200 dark:border-white/8 p-1.5">
                                   <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-full h-full" />
                                 </div>
-                                <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight line-clamp-1 text-left">
-                                  {match.homeTeam}
-                                </span>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight line-clamp-1 text-left">
+                                    {match.homeTeam}
+                                  </span>
+                                  <FormDots form={match.home_form} />
+                                </div>
                               </div>
 
-                              {/* VS badge */}
+                              {/* VS + xG badge */}
                               <div className="shrink-0 flex flex-col items-center">
                                 <span className="text-[11px] font-black font-orbitron text-gray-300 dark:text-gray-600 px-2">VS</span>
+                                {(match.expected_goals_home > 0 || match.expected_goals_away > 0) && (
+                                  <span className="text-[9px] font-bold text-vantage-cyan mt-0.5">
+                                    {(match.expected_goals_home || 0).toFixed(1)} - {(match.expected_goals_away || 0).toFixed(1)}
+                                  </span>
+                                )}
                               </div>
 
                               {/* Away Team */}
@@ -466,11 +502,35 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                 <div className="w-10 h-10 shrink-0 rounded-xl bg-slate-100 dark:bg-white/8 flex items-center justify-center border border-slate-200 dark:border-white/8 p-1.5">
                                   <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-full h-full" />
                                 </div>
-                                <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight line-clamp-1 text-right">
-                                  {match.awayTeam}
-                                </span>
+                                <div className="flex flex-col items-end min-w-0">
+                                  <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight line-clamp-1 text-right">
+                                    {match.awayTeam}
+                                  </span>
+                                  <FormDots form={match.away_form} />
+                                </div>
                               </div>
                             </div>
+
+                            {/* Probability mini-stats */}
+                            {(match.home_win_prob || match.over25_prob) && (
+                              <div className="mt-2 flex items-center justify-center gap-1.5 flex-wrap">
+                                {match.home_win_prob > 0 && (
+                                  <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">H {Math.round(match.home_win_prob * 100)}%</span>
+                                )}
+                                {match.draw_prob > 0 && (
+                                  <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">D {Math.round(match.draw_prob * 100)}%</span>
+                                )}
+                                {match.away_win_prob > 0 && (
+                                  <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">A {Math.round(match.away_win_prob * 100)}%</span>
+                                )}
+                                {match.over25_prob > 0 && (
+                                  <span className="text-[9px] font-bold text-vantage-cyan/70 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>
+                                )}
+                                {match.btts_prob > 0 && (
+                                  <span className="text-[9px] font-bold text-amber-400/70 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>
+                                )}
+                              </div>
+                            )}
 
                             {/* Bottom row — confidence / CTA */}
                             <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/5 pt-3">

@@ -1,29 +1,68 @@
 """
 accumulator_engine.py
 ──────────────────────
-Automatically generates accumulators from filtered value bets.
+Generates 4 premium named accumulators from the filtered value bet pool.
 
-Rules:
-  - Max 4 selections per accumulator
-  - No two legs from the same fixture
-  - Minimum combined odds: 2.00 for safe, 3.50 for value
-  - Three tiers: safe (prob ≥ 0.68), value (prob ≥ 0.58), risky (all)
+Tiers:
+  1. The Baseline    – Safest treble (3 legs, highest probability)
+  2. The Alpha Edge  – Best EV treble (3 legs, highest expected value)
+  3. The Syndicate   – 4-leg balanced combo
+  4. The Variance Play – 5+ leg moonshot (high combined odds)
+
+Only matches with approved value bets (safe/value category) are eligible.
 """
 
 from dataclasses import dataclass, field
 from itertools import combinations
-from ev_engine import ValueBet
 
 
 # ── Accumulator config ─────────────────────────────────────────────────────────
-MAX_LEGS_PER_ACCA = 3  # Stable trebles
-MIN_COMBINED_ODDS_SAFE = 2.00
-MIN_COMBINED_ODDS_VALUE = 3.50
-MIN_COMBINED_ODDS_HIGH = 7.00
-
-SAFE_MIN_PROB = 0.65   # Avg prob per leg
-VALUE_MIN_PROB = 0.55
-RISKY_MIN_PROB = 0.45
+TIER_CONFIG = {
+    "baseline": {
+        "label": "The Baseline",
+        "description": "Highest probability treble — built for bankroll protection",
+        "icon": "🛡️",
+        "max_legs": 3,
+        "min_legs": 2,
+        "min_prob": 0.60,
+        "min_combined_odds": 2.00,
+        "sort_key": "prob",   # sort by probability
+        "count": 1,
+    },
+    "alpha_edge": {
+        "label": "The Alpha Edge",
+        "description": "Highest expected value — where the model found market mispricing",
+        "icon": "⚡",
+        "max_legs": 3,
+        "min_legs": 2,
+        "min_prob": 0.50,
+        "min_combined_odds": 2.50,
+        "sort_key": "ev",     # sort by expected value
+        "count": 1,
+    },
+    "syndicate": {
+        "label": "The Syndicate",
+        "description": "4-leg balanced combo — value meets volume",
+        "icon": "🎯",
+        "max_legs": 4,
+        "min_legs": 3,
+        "min_prob": 0.50,
+        "min_combined_odds": 4.00,
+        "sort_key": "composite",  # sort by EV*0.5 + prob*0.5
+        "count": 1,
+    },
+    "variance_play": {
+        "label": "The Variance Play",
+        "description": "High-yield moonshot — big odds, calculated risk",
+        "icon": "🚀",
+        "max_legs": 6,
+        "min_legs": 4,
+        "min_prob": 0.45,
+        "min_combined_odds": 8.00,
+        "sort_key": "ev",
+        "count": 1,
+    },
+}
 
 
 @dataclass
@@ -40,7 +79,10 @@ class AccumulatorLeg:
 
 @dataclass
 class Accumulator:
-    tier: str          # "banker" | "value_triple" | "moonshot"
+    tier: str
+    tier_label: str
+    tier_description: str
+    tier_icon: str
     legs: list[AccumulatorLeg]
     combined_odds: float = 0.0
     combined_prob: float = 0.0
@@ -51,25 +93,22 @@ class Accumulator:
     def __post_init__(self):
         self.leg_count = len(self.legs)
         if self.legs:
-            # Calculate combined metrics
             self.combined_odds = 1.0
             self.combined_prob = 1.0
             for l in self.legs:
                 self.combined_odds *= l.odds
                 self.combined_prob *= l.model_prob
-            
+
             self.combined_odds = round(self.combined_odds, 2)
             self.combined_prob = round(self.combined_prob, 4)
             self.combined_ev = round((self.combined_prob * self.combined_odds) - 1.0, 4)
-            
-            # Calculate Kelly Stake for the parlay
-            # Formula: (bp - q) / b  where b is net odds (odds - 1)
+
+            # Conservative fractional Kelly for parlays (0.10 multiplier)
             b = self.combined_odds - 1
             if b > 0:
                 p = self.combined_prob
                 q = 1 - p
                 kelly = (b * p - q) / b
-                # Use a very conservative fractional Kelly for parlays (0.10 multiplier)
                 self.kelly_stake = round(max(0, kelly * 100 * 0.10), 2)
 
 
@@ -84,89 +123,79 @@ def _market_base(market: str) -> str:
     return market
 
 
-def _select_optimized_legs(bets: list[dict], min_prob: float, max_legs: int, tier: str, exclude_fixtures: set = None) -> list[dict]:
+def _select_legs(bets: list[dict], config: dict, exclude_fixtures: set = None) -> list[dict]:
     """
-    Select legs optimized for the specific tier.
-    - Exclude already used fixtures for diversity.
-    - Risk parity: prevents pairing 0.85 prob with 0.30 prob in a 'Safe' ticket.
+    Select legs for an accumulator tier based on its config.
+    Applies fixture deduplication, market correlation guard, and risk parity.
     """
-    if exclude_fixtures is None: exclude_fixtures = set()
-    
+    if exclude_fixtures is None:
+        exclude_fixtures = set()
+
+    min_prob = config["min_prob"]
+    max_legs = config["max_legs"]
+    sort_key = config["sort_key"]
+
     # Filter pool
     pool = [b for b in bets if b["model_prob"] >= min_prob and b["fixture_id"] not in exclude_fixtures]
-    
+
     # Tier-specific sorting
-    if tier == "banker":
-        # Sort by higher probability first for bankers
+    if sort_key == "prob":
         pool.sort(key=lambda x: (x["model_prob"], x["expected_value"]), reverse=True)
-    else:
-        # Sort by EV first
-        pool.sort(key=lambda x: x["expected_value"], reverse=True)
+    elif sort_key == "ev":
+        pool.sort(key=lambda x: (x["expected_value"], x["model_prob"]), reverse=True)
+    elif sort_key == "composite":
+        pool.sort(key=lambda x: x["expected_value"] * 0.5 + x["model_prob"] * 0.5, reverse=True)
 
     selected = []
     seen_fixtures = set()
     market_counts = {}
-    
+
     for b in pool:
-        if b["fixture_id"] in seen_fixtures: continue
-        
-        # Risk parity check: don't let one leg be a 'junk' leg
-        # For 'banker' tier, all legs must be > 60%
-        if tier == "banker" and b["model_prob"] < 0.60: continue
-        
-        # Market correlation guard
+        if b["fixture_id"] in seen_fixtures:
+            continue
+
+        # Market correlation guard: max 2 legs from same market type
         m_base = _market_base(b["market"])
-        if market_counts.get(m_base, 0) >= 2: continue
+        if market_counts.get(m_base, 0) >= 2:
+            continue
 
         selected.append(b)
         seen_fixtures.add(b["fixture_id"])
         market_counts[m_base] = market_counts.get(m_base, 0) + 1
-        
-        if len(selected) >= max_legs: break
-        
+
+        if len(selected) >= max_legs:
+            break
+
     return selected
 
 
 def generate_accumulators(value_bets: list[dict]) -> dict[str, list[dict]]:
     """
-    Generate Advanced Accumulators: Multiple tickets per tier.
-    Returns serialized dicts ready for Firestore.
+    Generate 4 named accumulators from the value bet pool.
+    Returns a dict keyed by tier name, each containing a list of accumulator dicts.
     """
-    results = {
-        "banker": [],
-        "value_triple": [],
-        "moonshot": []
-    }
-    
+    results = {tier: [] for tier in TIER_CONFIG}
+
     used_fixtures = set()
 
-    # 1. Generate Bankers (up to 2 tickets)
-    for _ in range(2):
-        legs = _select_optimized_legs(value_bets, SAFE_MIN_PROB, 3, "banker", used_fixtures)
-        if len(legs) >= 2:
-            acca = Accumulator(tier="banker", legs=[AccumulatorLeg(**l) for l in legs])
-            if acca.combined_odds >= MIN_COMBINED_ODDS_SAFE:
-                results["banker"].append(accumulator_to_dict(acca))
-                # Burn fixtures so tickets are distinct
-                for l in legs: used_fixtures.add(l["fixture_id"])
+    for tier_key, config in TIER_CONFIG.items():
+        for _ in range(config["count"]):
+            legs = _select_legs(value_bets, config, used_fixtures)
 
-    # 2. Generate Value Triples (up to 2 tickets)
-    # Reset used fixtures for value triples to allow best bets to re-appear in different combos
-    # but still prioritize new ones first.
-    for _ in range(2):
-        legs = _select_optimized_legs(value_bets, VALUE_MIN_PROB, 3, "value_triple", used_fixtures)
-        if len(legs) >= 2:
-            acca = Accumulator(tier="value_triple", legs=[AccumulatorLeg(**l) for l in legs])
-            if acca.combined_odds >= MIN_COMBINED_ODDS_VALUE:
-                results["value_triple"].append(accumulator_to_dict(acca))
-                for l in legs: used_fixtures.add(l["fixture_id"])
+            if len(legs) >= config["min_legs"]:
+                acca = Accumulator(
+                    tier=tier_key,
+                    tier_label=config["label"],
+                    tier_description=config["description"],
+                    tier_icon=config["icon"],
+                    legs=[AccumulatorLeg(**l) for l in legs],
+                )
 
-    # 3. Generate Moonshot (1 ticket)
-    legs = _select_optimized_legs(value_bets, RISKY_MIN_PROB, 4, "moonshot", used_fixtures)
-    if len(legs) >= 3:
-        acca = Accumulator(tier="moonshot", legs=[AccumulatorLeg(**l) for l in legs])
-        if acca.combined_odds >= MIN_COMBINED_ODDS_HIGH:
-            results["moonshot"].append(accumulator_to_dict(acca))
+                if acca.combined_odds >= config["min_combined_odds"]:
+                    results[tier_key].append(accumulator_to_dict(acca))
+                    # Burn fixtures for diversity across tiers
+                    for l in legs:
+                        used_fixtures.add(l["fixture_id"])
 
     return results
 
@@ -175,6 +204,9 @@ def accumulator_to_dict(acca: Accumulator) -> dict:
     """Serialize an accumulator to a Firestore-ready dict."""
     return {
         "tier": acca.tier,
+        "tier_label": acca.tier_label,
+        "tier_description": acca.tier_description,
+        "tier_icon": acca.tier_icon,
         "leg_count": acca.leg_count,
         "combined_odds": acca.combined_odds,
         "combined_prob": acca.combined_prob,
@@ -196,23 +228,31 @@ def accumulator_to_dict(acca: Accumulator) -> dict:
     }
 
 
-
 if __name__ == "__main__":
     # Demo
     sample_bets = [
         {"fixture_id": "101", "home_team": "Arsenal", "away_team": "Everton",
-         "market": "Home Win", "odds": 1.65, "model_prob": 0.72, "expected_value": 0.088},
+         "market": "Home Win", "odds": 1.65, "model_prob": 0.72, "expected_value": 0.088, "league": "EPL"},
         {"fixture_id": "102", "home_team": "Real Madrid", "away_team": "Getafe",
-         "market": "Over 2.5 Goals", "odds": 1.75, "model_prob": 0.68, "expected_value": 0.085},
+         "market": "Over 2.5 Goals", "odds": 1.75, "model_prob": 0.68, "expected_value": 0.085, "league": "La Liga"},
         {"fixture_id": "103", "home_team": "Bayern", "away_team": "Dortmund",
-         "market": "BTTS", "odds": 1.70, "model_prob": 0.65, "expected_value": 0.105},
+         "market": "BTTS", "odds": 1.70, "model_prob": 0.65, "expected_value": 0.105, "league": "Bundesliga"},
         {"fixture_id": "104", "home_team": "PSG", "away_team": "Lyon",
-         "market": "Home Win", "odds": 1.55, "model_prob": 0.78, "expected_value": 0.209},
+         "market": "Home Win", "odds": 1.55, "model_prob": 0.78, "expected_value": 0.209, "league": "Ligue 1"},
+        {"fixture_id": "105", "home_team": "Juventus", "away_team": "Roma",
+         "market": "Double Chance (1X)", "odds": 1.30, "model_prob": 0.82, "expected_value": 0.066, "league": "Serie A"},
+        {"fixture_id": "106", "home_team": "Ajax", "away_team": "PSV",
+         "market": "Over 2.5 Goals", "odds": 1.80, "model_prob": 0.62, "expected_value": 0.116, "league": "Eredivisie"},
     ]
 
     accas = generate_accumulators(sample_bets)
-    for tier, acca in accas.items():
-        if acca:
-            print(f"{tier.upper()} ACCA: {acca.leg_count} legs | Odds: {acca.combined_odds:.2f} | EV: {acca.combined_ev:.2%}")
+    for tier, tickets in accas.items():
+        if tickets:
+            t = tickets[0]
+            print(f"{t['tier_icon']} {t['tier_label']}: {t['leg_count']} legs | Odds: {t['combined_odds']:.2f}x | EV: {t['combined_ev']:.2%}")
+            for leg in t['legs']:
+                print(f"   └─ {leg['home_team']} vs {leg['away_team']}: {leg['market']} ({leg['odds']}x)")
         else:
-            print(f"{tier.upper()} ACCA: Not possible")
+            cfg = TIER_CONFIG[tier]
+            print(f"{cfg['icon']} {cfg['label']}: Not enough qualifying bets")
+

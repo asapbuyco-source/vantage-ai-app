@@ -36,12 +36,12 @@ from elo_rating import load_ratings_from_firestore, match_probabilities as elo_p
 from form_model import compute_form_probabilities
 from probability_engine import compute_combined, CombinedProbabilities
 from ev_engine import evaluate_all_markets, get_best_value_bet
-from risk_filters import filter_bets, grade_risk
+from risk_filters import filter_bets, grade_risk, check_odds_staleness
 from kelly_optimizer import kelly_stake_pct
 from accumulator_engine import generate_accumulators, accumulator_to_dict
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-MAX_PREDICTIONS_PER_DAY = 50
+MAX_PREDICTIONS_PER_DAY = 100
 
 
 def _now_iso() -> str:
@@ -153,8 +153,10 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
     print(f"[QuantPipeline] Processing {len(matches)} matches...")
 
     # ── Steps 2–9: Model pipeline per match ───────────────────────────────
+    # MATCH ANALYSIS PLATFORM: Analyze ALL matches, never discard.
+    # Filtering is ONLY applied when building accumulators.
     predictions: list[dict] = []
-    bet_pool: list[dict] = []  # For accumulator input
+    bet_pool: list[dict] = []  # Only value bets go here (for accumulators)
 
     for match in matches[:MAX_PREDICTIONS_PER_DAY]:
         try:
@@ -169,8 +171,7 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
             home_form_str = home_stats.form
             away_form_str = away_stats.form
 
-            # ── Upgrade #4: Extract opponent strengths for form model ───────
-            # This requires looking at the form history and fetching Elos
+            # ── Extract opponent strengths for form model ───────────────────
             home_opp_strengths = []
             away_opp_strengths = []
             if match.home_stats and hasattr(match.home_stats, 'recent_opponents'):
@@ -178,9 +179,8 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
             if match.away_stats and hasattr(match.away_stats, 'recent_opponents'):
                 away_opp_strengths = [get_team_rating(opp_id) / 1500 for opp_id in match.away_stats.recent_opponents[:5]]
 
-            # ── Upgrade #5: Dynamic Dixon-Coles rho ─────────────────────────
-            # Derby check: simplistic, if same city or known rivalry (mocked here, could use real data)
-            is_derby = str(match.home_team_id) in str(match.away_team_id)  # Placeholder logic
+            # ── Dynamic Dixon-Coles rho ─────────────────────────────────────
+            is_derby = str(match.home_team_id) in str(match.away_team_id)
             rho = compute_dynamic_rho(mu_home, mu_away, match.league_tier, is_derby)
 
             # Combine models (Poisson + Elo + Form + H2H)
@@ -194,71 +194,111 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                 rho=rho,
             )
 
-            # Evaluate all markets for EV
+            # ── Evaluate ALL markets for this match (FIX: was undefined) ────
             all_value_bets = evaluate_all_markets(probs, match.odds)
 
-            # Apply risk filters to find approved bets
-            approved_bets = filter_bets(all_value_bets, league_tier=match.league_tier)
+            # ── Apply risk filters to find approved value bets ──────────────
+            approved_bets = filter_bets(all_value_bets, match.league_tier)
 
-            if not approved_bets:
-                _safe_print(f"[QuantPipeline]   ✗ {match.home_team} vs {match.away_team}: No value bets passed filters.")
-                continue
+            # ── Determine best bet & category ───────────────────────────────
+            # Match Analysis Platform: NEVER skip a match. Always pick the
+            # best available angle even if it has no edge.
+            if approved_bets:
+                best_bet = approved_bets[0]
+                category = grade_risk(best_bet)
+                value_rank = "high" if category == "safe" else "medium"
+            elif all_value_bets:
+                # No approved bet, but markets exist — pick the best lean
+                all_value_bets.sort(key=lambda b: b.expected_value * 0.5 + b.model_prob * 0.5, reverse=True)
+                best_bet = all_value_bets[0]
+                # Check if it has positive EV but just failed a minor filter
+                if best_bet.expected_value > 0:
+                    category = "lean"
+                    value_rank = "low"
+                else:
+                    category = "no_edge"
+                    value_rank = "none"
+            else:
+                # No odds/markets at all — still keep the match for the dashboard
+                _safe_print(f"[QuantPipeline]   ⚪ {match.home_team} vs {match.away_team}: No odds available, keeping as data card.")
+                best_bet = None
+                category = "no_edge"
+                value_rank = "none"
 
-            # Take the best bet
-            best_bet = approved_bets[0]
+            # ── Odds Staleness Guard ────────────────────────────────────────
+            staleness_mult = check_odds_staleness(match.odds.odds_fetched_at) if match.odds else 1.0
 
-            # ── Upgrade #8: Odds Staleness Guard ────────────────────────────
-            from risk_filters import check_odds_staleness
-            staleness_mult = check_odds_staleness(match.odds.odds_fetched_at)
+            # ── Kelly stake ─────────────────────────────────────────────────
+            if best_bet:
+                kelly_fraction = 1.0 if category in ("safe", "value") else 0.25
+                base_kelly = kelly_stake_pct(best_bet.model_prob, best_bet.odds)
+                kelly = round(max(0, base_kelly * staleness_mult * kelly_fraction), 2)
+            else:
+                kelly = 0.0
 
-            # Kelly stake (adjusted for staleness)
-            base_kelly = kelly_stake_pct(best_bet.model_prob, best_bet.odds)
-            kelly = round(base_kelly * staleness_mult, 2)
-
-            if kelly <= 0:
-                _safe_print(f"[QuantPipeline]   ✗ {match.home_team} vs {match.away_team}: Bet rejected due to extreme odds staleness.")
-                continue
-
-            # Risk category
-            category = grade_risk(best_bet)
-
+            # ── Build prediction dict with RICH match stats ─────────────────
             pred = {
                 "fixture_id": match.fixture_id,
                 "league": match.league,
                 "league_id": match.league_id,
+                "league_tier": match.league_tier,
                 "home_team": match.home_team,
                 "away_team": match.away_team,
                 "home_team_logo": match.home_logo,
                 "away_team_logo": match.away_logo,
                 "kickoff_utc": match.kickoff_utc,
                 "kickoff_local": match.kickoff_local,
-                "bet_type": best_bet.market,
-                "prediction": best_bet.market,       # Alias for frontend compat
-                "probability": round(best_bet.model_prob, 4),
-                "confidence": round(best_bet.model_prob * 100, 1),  # % for frontend
-                "odds": best_bet.odds,
-                # Fix #9: Store odds at pick-time for CLV calculation after match closes
-                "pick_time_odds": best_bet.odds,
-                "clv_tracked": True,  # Flag for performance_tracker to diff vs closing line
-                "expected_value": best_bet.expected_value,
-                "ev_pct": round(best_bet.expected_value * 100, 2),  # % display
-                "market_implied_prob": best_bet.market_prob,
-                "inefficiency": best_bet.inefficiency,
-                "kelly_stake": kelly,                # % to stake
+                # ── Best bet for this match ─────────────────────────────────
+                "bet_type": best_bet.market if best_bet else "N/A",
+                "prediction": best_bet.market if best_bet else "N/A",
+                "probability": round(best_bet.model_prob, 4) if best_bet else 0,
+                "confidence": round(best_bet.model_prob * 100, 1) if best_bet else 0,
+                "odds": best_bet.odds if best_bet else 0,
+                "pick_time_odds": best_bet.odds if best_bet else 0,
+                "clv_tracked": True,
+                "expected_value": best_bet.expected_value if best_bet else 0,
+                "ev_pct": round(best_bet.expected_value * 100, 2) if best_bet else 0,
+                "market_implied_prob": best_bet.market_prob if best_bet else 0,
+                "inefficiency": best_bet.inefficiency if best_bet else 0,
+                "kelly_stake": kelly,
+                # ── Match analysis data (rich stats for cards) ──────────────
                 "expected_goals_home": round(mu_home, 2),
                 "expected_goals_away": round(mu_away, 2),
                 "home_form": home_form_str,
                 "away_form": away_form_str,
+                "home_win_rate": round(home_stats.win_rate * 100, 1),
+                "away_win_rate": round(away_stats.win_rate * 100, 1),
+                "home_avg_scored": round(home_stats.avg_scored, 2),
+                "away_avg_scored": round(away_stats.avg_scored, 2),
+                "home_avg_conceded": round(home_stats.avg_conceded, 2),
+                "away_avg_conceded": round(away_stats.avg_conceded, 2),
+                "home_clean_sheet_rate": round(home_stats.clean_sheet_rate * 100, 1),
+                "away_clean_sheet_rate": round(away_stats.clean_sheet_rate * 100, 1),
+                "home_xg_avg": round(home_stats.avg_xg_created, 2),
+                "away_xg_avg": round(away_stats.avg_xg_created, 2),
+                "home_possession": round(home_stats.avg_possession, 1),
+                "away_possession": round(away_stats.avg_possession, 1),
+                "home_shots_on_target": round(home_stats.avg_shots_on_target, 1),
+                "away_shots_on_target": round(away_stats.avg_shots_on_target, 1),
+                # ── Head-to-head ────────────────────────────────────────────
                 "h2h_home_wins": match.h2h_home_wins,
                 "h2h_away_wins": match.h2h_away_wins,
                 "h2h_draws": match.h2h_draws,
+                # ── Model probabilities (all markets) ───────────────────────
                 "home_win_prob": round(probs.home_win, 4),
                 "draw_prob": round(probs.draw, 4),
                 "away_win_prob": round(probs.away_win, 4),
                 "over25_prob": round(probs.over25, 4),
+                "under25_prob": round(probs.under25, 4),
+                "over15_prob": round(probs.over15, 4),
+                "over35_prob": round(probs.over35, 4),
                 "btts_prob": round(probs.btts, 4),
+                "double_chance_1x": round(probs.double_chance_1x, 4),
+                "double_chance_x2": round(probs.double_chance_x2, 4),
                 "model_confidence": round(probs.confidence_score, 4),
+                # ── Classification ──────────────────────────────────────────
                 "category": category,
+                "value_rank": value_rank,  # high / medium / low / none
                 "status": "pending",
                 "score": None,
                 "sport": "football",
@@ -268,24 +308,28 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                 # All approved bets for this match (metadata)
                 "all_value_bets": [
                     {"market": b.market, "prob": b.model_prob, "odds": b.odds, "ev": b.expected_value}
-                    for b in approved_bets[:3]
+                    for b in approved_bets[:5]
                 ],
             }
             predictions.append(pred)
 
-            # Add to accumulator pool
-            bet_pool.append({
-                "fixture_id": match.fixture_id,
-                "league": match.league,
-                "home_team": match.home_team,
-                "away_team": match.away_team,
-                "market": best_bet.market,
-                "odds": best_bet.odds,
-                "model_prob": best_bet.model_prob,
-                "expected_value": best_bet.expected_value,
-            })
+            # ── Add to accumulator pool ONLY if it has real value ───────────
+            if best_bet and category in ("safe", "value"):
+                bet_pool.append({
+                    "fixture_id": match.fixture_id,
+                    "league": match.league,
+                    "home_team": match.home_team,
+                    "away_team": match.away_team,
+                    "market": best_bet.market,
+                    "odds": best_bet.odds,
+                    "model_prob": best_bet.model_prob,
+                    "expected_value": best_bet.expected_value,
+                })
 
-            _safe_print(f"[QuantPipeline]   ✅ {match.home_team} vs {match.away_team}: {best_bet.market} | EV {best_bet.expected_value:.1%} | Odds {best_bet.odds} | Kelly {kelly}%")
+            emoji = {"high": "🟢", "medium": "🟡", "low": "⚪", "none": "⚫"}.get(value_rank, "⚫")
+            bet_label = best_bet.market if best_bet else "N/A"
+            ev_label = f"EV {best_bet.expected_value:.1%}" if best_bet else "No odds"
+            _safe_print(f"[QuantPipeline]   {emoji} {match.home_team} vs {match.away_team}: {bet_label} | {ev_label} | Rank={value_rank}")
 
         except Exception as e:
             _safe_print(f"[QuantPipeline]   ❌ Error processing {match.home_team} vs {match.away_team}: {e}", file=sys.stderr)
@@ -293,14 +337,14 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
             traceback.print_exc()
 
     if not predictions:
-        _safe_print("[QuantPipeline] No bets passed filters today.")
-        return {"status": "skipped", "reason": "no_value_bets", "date": date_str, "matches_analyzed": len(matches)}
+        _safe_print("[QuantPipeline] No matches could be analyzed today.")
+        return {"status": "skipped", "reason": "no_matches_analyzed", "date": date_str, "matches_analyzed": len(matches)}
 
     # ── Step 10: Generate accumulators ─────────────────────────────────────
     accas_dict = generate_accumulators(bet_pool)
     
     total_accas = sum(len(v) for v in accas_dict.values())
-    _safe_print(f"[QuantPipeline] 🎰 Generated {total_accas} advanced accumulators across 3 tiers.")
+    _safe_print(f"[QuantPipeline] 🎰 Generated {total_accas} named accumulators across 4 tiers.")
 
     # ── Step 11: Save to Firestore ─────────────────────────────────────────
     doc = {
@@ -309,7 +353,8 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
         "predictions": predictions,
         "accumulators": accas_dict,
         "matches_analyzed": len(matches),
-        "value_bets_found": len(predictions),
+        "value_bets_found": len([p for p in predictions if p["value_rank"] in ("high", "medium")]),
+        "total_analyzed": len(predictions),
         "generated_at": _now_iso(),
         "generated_by": "quant_pipeline",
     }
@@ -319,7 +364,7 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
         if db:
             try:
                 db.collection("quant_predictions").document(date_str).set(doc)
-                _safe_print(f"[QuantPipeline] 💾 Saved {len(predictions)} predictions to Firestore for {date_str}")
+                _safe_print(f"[QuantPipeline] 💾 Saved {len(predictions)} match analyses to Firestore for {date_str}")
                 # Update Elo ratings
                 save_dirty_ratings()
             except Exception as e:
@@ -332,9 +377,13 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
     _safe_print(f"\n[QuantPipeline] ✅ Pipeline complete!")
     _safe_print(f"  Matches analyzed: {len(matches)}")
     _safe_print(f"  Predictions generated: {len(predictions)}")
-    if accas_dict.get("banker"):
-        b = accas_dict["banker"][0]
-        print(f"  Banker acca: {b['combined_odds']:.2f}x ({b['leg_count']} legs)")
+    value_count = len([p for p in predictions if p["value_rank"] in ("high", "medium")])
+    _safe_print(f"  Value bets (high/medium): {value_count}")
+    _safe_print(f"  Accumulators: {total_accas}")
+    for tier_name, tier_list in accas_dict.items():
+        if tier_list:
+            t = tier_list[0]
+            _safe_print(f"    {t.get('tier_icon', '')} {t.get('tier_label', tier_name)}: {t['combined_odds']:.2f}x ({t['leg_count']} legs)")
 
     return {
         "status": "success",

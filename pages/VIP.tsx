@@ -78,6 +78,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
 
   // ── Quant Model State ──────────────────────────────────────────────────────
   const [quantPredictions, setQuantPredictions] = useState<Match[]>([]);
+  const [quantAccumulators, setQuantAccumulators] = useState<Record<string, any[]>>({});
   const [quantLoading, setQuantLoading] = useState(false);
   const [quantBetFilter, setQuantBetFilter] = useState<string>('All');
   const [quantExpanded, setQuantExpanded] = useState(true);
@@ -87,14 +88,19 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     setQuantLoading(true);
     const loadQuant = async () => {
       try {
-        const today = new Date();
-        // Use UTC date — quant_pipeline.py runs on UTC and saves with UTC date key
         const utcNow = new Date();
         const dateKey = `${utcNow.getUTCFullYear()}-${String(utcNow.getUTCMonth() + 1).padStart(2, '0')}-${String(utcNow.getUTCDate()).padStart(2, '0')}`;
         const snap = await getDoc(doc(db, 'quant_predictions', dateKey));
         if (snap.exists()) {
           const data = snap.data();
-          setQuantPredictions((data.predictions || []) as Match[]);
+          const preds = (data.predictions || []) as Match[];
+          const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
+          preds.sort((a, b) => (rankPriority[b.value_rank] || 0) - (rankPriority[a.value_rank] || 0));
+          setQuantPredictions(preds);
+          // Load pre-built named accumulators
+          if (data.accumulators) {
+            setQuantAccumulators(data.accumulators);
+          }
         }
       } catch (e) {
         console.warn('[VIP] Could not load quant predictions:', e);
@@ -246,6 +252,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     safe: { border: 'border-l-green-500', badge: 'bg-green-500/15 text-green-500 border-green-500/30', icon: <ShieldCheck size={12} />, label: '🟢 Safe' },
     value: { border: 'border-l-vantage-cyan', badge: 'bg-vantage-cyan/15 text-vantage-cyan border-vantage-cyan/30', icon: <Star size={12} />, label: '⭐ Value' },
     risky: { border: 'border-l-orange-500', badge: 'bg-orange-500/15 text-orange-500 border-orange-500/30', icon: <Flame size={12} />, label: '🔥 Risky' },
+    lean: { border: 'border-l-slate-500', badge: 'bg-slate-500/15 text-slate-500 border-slate-500/30', icon: <BarChart2 size={12} />, label: '📊 Lean' },
   } as const;
 
   // ── Animated confidence bar component ────────────────────────────────────
@@ -453,47 +460,81 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           </a>
         )}
 
-        {/* SMART ACCUMULATORS SECTION */}
+        {/* ── 4 NAMED ACCUMULATORS ── */}
         <div className="mb-8">
           <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300 mb-3">
-            <Layers size={16} className="text-vantage-purple" /> Smart Accumulators
+            <Layers size={16} className="text-vantage-purple" />
+            {language === 'fr' ? 'Accumulateurs IA' : 'AI Accumulators'}
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-vantage-purple/15 border border-vantage-purple/30 text-vantage-purple ml-1">DAILY</span>
           </h3>
 
-          {/* MAIN GENERATOR BUTTON */}
-          <button
-            onClick={() => openAccumulator('medium')}
-            className="w-full mb-3 py-3 bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 relative overflow-hidden group border border-white/20"
-          >
-            <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-            <Layers size={20} />
-            <span>{language === 'fr' ? 'Générer Accumulateur Intelligent' : 'Generate Smart Accumulator'}</span>
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(['baseline', 'alpha_edge', 'syndicate', 'variance_play'] as const).map(tierKey => {
+              const tierTickets = quantAccumulators[tierKey] || [];
+              const ticket = tierTickets[0];
+              const tierMeta: Record<string, { icon: string; label: string; gradient: string; border: string }> = {
+                baseline: { icon: '🛡️', label: 'The Baseline', gradient: 'from-emerald-500/10 to-emerald-500/5', border: 'border-emerald-500/30 hover:border-emerald-500/50' },
+                alpha_edge: { icon: '⚡', label: 'The Alpha Edge', gradient: 'from-vantage-cyan/10 to-blue-500/5', border: 'border-vantage-cyan/30 hover:border-vantage-cyan/50' },
+                syndicate: { icon: '🎯', label: 'The Syndicate', gradient: 'from-vantage-purple/10 to-purple-500/5', border: 'border-vantage-purple/30 hover:border-vantage-purple/50' },
+                variance_play: { icon: '🚀', label: 'The Variance Play', gradient: 'from-orange-500/10 to-amber-500/5', border: 'border-orange-500/30 hover:border-orange-500/50' },
+              };
+              const meta = tierMeta[tierKey];
 
-          <div className="grid grid-cols-3 gap-3">
-            <button
-              onClick={() => openAccumulator('low')}
-              className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:border-green-500/50 hover:bg-green-500/10 transition-all group"
-            >
-              <ShieldCheck size={24} className="text-green-500 mb-2 group-hover:scale-110 transition-transform" />
-              <span className="text-xs font-bold text-slate-700 dark:text-white">Safe Acca</span>
-              <span className="text-[10px] text-gray-500">Low Risk</span>
-            </button>
-            <button
-              onClick={() => openAccumulator('medium')}
-              className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:border-vantage-cyan/50 hover:bg-vantage-cyan/10 transition-all group"
-            >
-              <Zap size={24} className="text-vantage-cyan mb-2 group-hover:scale-110 transition-transform" />
-              <span className="text-xs font-bold text-slate-700 dark:text-white">Value Acca</span>
-              <span className="text-[10px] text-gray-500">Best Odds</span>
-            </button>
-            <button
-              onClick={() => openAccumulator('high')}
-              className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:border-orange-500/50 hover:bg-orange-500/10 transition-all group"
-            >
-              <Flame size={24} className="text-orange-500 mb-2 group-hover:scale-110 transition-transform" />
-              <span className="text-xs font-bold text-slate-700 dark:text-white">High Risk</span>
-              <span className="text-[10px] text-gray-500">Big Win</span>
-            </button>
+              return (
+                <motion.div
+                  key={tierKey}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: ['baseline', 'alpha_edge', 'syndicate', 'variance_play'].indexOf(tierKey) * 0.08 }}
+                  className={`rounded-2xl border bg-gradient-to-br ${meta.gradient} ${meta.border} p-4 transition-all cursor-pointer hover:shadow-lg`}
+                  onClick={() => ticket && openAccumulator('medium')}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{meta.icon}</span>
+                      <div>
+                        <p className="text-xs font-bold text-slate-900 dark:text-white">{ticket?.tier_label || meta.label}</p>
+                        <p className="text-[9px] text-gray-500">{ticket?.tier_description || 'Generating...'}</p>
+                      </div>
+                    </div>
+                    {ticket && (
+                      <div className="text-right">
+                        <p className="text-sm font-bold font-orbitron text-vantage-cyan">{ticket.combined_odds?.toFixed(2)}x</p>
+                        <p className="text-[9px] text-gray-500">{ticket.leg_count} legs</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {ticket ? (
+                    <div className="space-y-1.5">
+                      {(ticket.legs || []).map((leg: any, li: number) => (
+                        <div key={li} className="flex items-center justify-between text-[10px] px-2 py-1 rounded-lg bg-black/5 dark:bg-white/5">
+                          <span className="font-medium text-slate-700 dark:text-gray-300 truncate max-w-[45%]">{leg.home_team} v {leg.away_team}</span>
+                          <span className="font-bold text-vantage-cyan">{leg.market}</span>
+                          <span className="font-bold text-slate-600 dark:text-gray-400">{leg.odds?.toFixed(2)}x</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/10">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ticket.combined_ev > 0 ? 'bg-emerald-500/15 text-emerald-500' : 'bg-orange-500/15 text-orange-500'}`}>
+                          EV: {ticket.combined_ev > 0 ? '+' : ''}{(ticket.combined_ev * 100).toFixed(1)}%
+                        </span>
+                        {ticket.kelly_stake > 0 && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
+                            Kelly: {ticket.kelly_stake}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-3">
+                      <p className="text-[10px] text-gray-500">
+                        {language === 'fr' ? 'Pas assez de matchs qualifiés' : 'Not enough qualifying matches'}
+                      </p>
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
         </div>
 

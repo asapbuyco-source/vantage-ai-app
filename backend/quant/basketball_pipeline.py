@@ -35,10 +35,12 @@ except ImportError:
     FIREBASE_AVAILABLE = False
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CONSTANTS
+# ─────────────────────────────────────────────────────────────────────────────
+# CONSTANTS & CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
-BALLDONTLIE_BASE = "https://api.balldontlie.io/v1"
+API_SPORTS_BASE = "https://v1.basketball.api-sports.io"
+API_SPORTS_KEY = os.environ.get("VITE_FOOTBALL_API_KEY") or os.environ.get("API_FOOTBALL_KEY", "")
 
 # Risk filter thresholds for basketball
 MIN_PROBABILITY = 0.62      # 62% minimum model confidence
@@ -46,14 +48,16 @@ MIN_EV = 0.06               # 6% minimum expected value
 MIN_CONFIDENCE_DISPLAY = 62  # floor for UI confidence %
 
 # Estimated market odds for each bet type (used to compute EV)
-# These are conservative market estimates (bookmaker's implied probability ~50-52% for balanced lines)
-MONEYLINE_FAVORITE_ODDS = 1.75       # typical odds for a clear favourite
-MONEYLINE_UNDERDOG_ODDS  = 2.10      # typical odds for the underdog
-TOTAL_OVER_ODDS  = 1.85              # typical over/under odds
+MONEYLINE_FAVORITE_ODDS = 1.75
+MONEYLINE_UNDERDOG_ODDS = 2.10
+TOTAL_OVER_ODDS  = 1.85
 TOTAL_UNDER_ODDS = 1.85
 
-# NBA League ID in BallDontLie
-NBA_SEASON = 2024  # adjust each season
+# NBA League ID in API-Sports is 12
+# Free plan only supports statistics up to 2023-2024 season
+NBA_LEAGUE_ID = 12
+NBA_STATS_SEASON = "2023-2024"
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -67,12 +71,18 @@ def get_lagos_date(offset_days=0):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HELPER: HTTP GET (no external dependencies)
+# HELPER: HTTP GET (with headers for API-Sports)
 # ─────────────────────────────────────────────────────────────────────────────
 def http_get(url, timeout=15):
     """Fetch a URL and return parsed JSON, or None on error."""
+    if not API_SPORTS_KEY:
+        print("[Basketball] Error: No API-Sports key provided.", file=sys.stderr)
+        return None
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "VantageAI-Basketball/1.0"})
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "VantageAI-Basketball/1.0",
+            "x-apisports-key": API_SPORTS_KEY
+        })
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8")
             return json.loads(body)
@@ -89,28 +99,32 @@ def http_get(url, timeout=15):
 # ─────────────────────────────────────────────────────────────────────────────
 def fetch_games(date_str):
     """Return list of {id, home_team, away_team, home_team_id, away_team_id, status} for date_str."""
-    url = f"{BALLDONTLIE_BASE}/games?dates[]={date_str}&per_page=100"
+    # Fetch all basketball games for the date (avoids season param requirement on free plan)
+    url = f"{API_SPORTS_BASE}/games?date={date_str}"
     data = http_get(url)
-    if not data or "data" not in data:
+    if not data or not data.get("response"):
         return []
     
     games = []
-    for g in data["data"]:
-        home = g.get("home_team", {})
-        visitor = g.get("visitor_team", {})
-        status = g.get("status", "")
-        # Skip already finished games
-        if "Final" in status or "PT" in status:
+    for g in data["response"]:
+        # Filter for NBA only
+        league_id = g.get("league", {}).get("id")
+        if league_id != NBA_LEAGUE_ID:
+            continue
+            
+        home = g.get("teams", {}).get("home", {})
+        visitor = g.get("teams", {}).get("away", {})
+        status = g.get("status", {}).get("short", "")
+        # Skip finished games (FT, AOT) or cancelled/postponed
+        if status in ["FT", "AOT", "CANC", "POSTP"]:
             continue
         games.append({
             "id": str(g["id"]),
-            "home_team": home.get("full_name", home.get("name", "Home")),
-            "home_team_abbr": home.get("abbreviation", ""),
-            "away_team": visitor.get("full_name", visitor.get("name", "Away")),
-            "away_team_abbr": visitor.get("abbreviation", ""),
+            "home_team": home.get("name", "Home"),
+            "away_team": visitor.get("name", "Away"),
             "home_team_id": home.get("id"),
             "away_team_id": visitor.get("id"),
-            "time": g.get("status", "TBD"),
+            "time": g.get("time", g.get("status", {}).get("long", "TBD")),
             "league": "NBA",
         })
     return games
@@ -119,61 +133,48 @@ def fetch_games(date_str):
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 2: Fetch Team Season Stats
 # ─────────────────────────────────────────────────────────────────────────────
-def fetch_team_stats(team_id, season=NBA_SEASON):
+def fetch_team_stats(team_id):
     """
-    Return dict of avg stats for a team: {ppg, opp_ppg, fg_pct, ft_pct, reb, ast, pace_estimate}
-    Uses per-game season averages from BallDontLie.
+    Return dict of avg stats for a team: {ppg, opp_ppg, pace_estimate}
+    Uses per-game season averages from API-Sports.
+    Note: Free tier only supports up to 2023-2024 season.
     """
-    url = f"{BALLDONTLIE_BASE}/season_averages?season={season}&team_ids[]={team_id}&per_page=100"
+    url = f"{API_SPORTS_BASE}/statistics?season={NBA_STATS_SEASON}&team={team_id}&league={NBA_LEAGUE_ID}"
     data = http_get(url)
-    if not data or not data.get("data"):
+    if not data or not data.get("response"):
         return None
     
-    # Sum over all players on the team to estimate team pace / scoring
-    total_pts = 0.0
-    total_reb = 0.0
-    total_ast = 0.0
-    total_fg_pct = 0.0
-    total_ft_pct = 0.0
-    fg_count = 0
-    ft_count = 0
-    player_count = 0
+    resp = data["response"]
+    points = resp.get("points", {})
     
-    for p in data["data"]:
-        total_pts += float(p.get("pts", 0) or 0)
-        total_reb += float(p.get("reb", 0) or 0)
-        total_ast += float(p.get("ast", 0) or 0)
-        if p.get("fg_pct") is not None:
-            total_fg_pct += float(p["fg_pct"])
-            fg_count += 1
-        if p.get("ft_pct") is not None:
-            total_ft_pct += float(p["ft_pct"])
-            ft_count += 1
-        player_count += 1
-
-    if player_count == 0:
+    try:
+        # PPG (Points Per Game)
+        ppg_str = points.get("for", {}).get("average", {}).get("all", "0")
+        ppg = float(ppg_str) if ppg_str else 0.0
+        
+        # Opponent PPG
+        opp_ppg_str = points.get("against", {}).get("average", {}).get("all", "0")
+        opp_ppg = float(opp_ppg_str) if opp_ppg_str else 0.0
+        
+        if ppg == 0.0:
+            return None
+            
+        # API-Sports basketball statistics endpoint doesn't break down FGA/FTA to precisely calculate Pace.
+        # We will estimate pace based on scoring environment (higher PPG total usually correlates with higher pace)
+        # NBA average pace is around 99-100 possessions.
+        avg_game_pts = ppg + opp_ppg
+        # Baseline: 230 pts game ~ 100 pace. 
+        pace_estimate = 90 + ((avg_game_pts - 200) * 0.3)
+        pace_estimate = min(max(pace_estimate, 90), 115)
+        
+        return {
+            "ppg": ppg,
+            "opp_ppg": opp_ppg,
+            "pace_estimate": pace_estimate,
+        }
+    except Exception as e:
+        print(f"[Basketball] Error parsing stats for team {team_id}: {e}")
         return None
-    
-    avg_fg = total_fg_pct / fg_count if fg_count else 0.45
-    avg_ft = total_ft_pct / ft_count if ft_count else 0.75
-    
-    # PPG is sum of per-player averages (NBA games have ~8-10 rotation players contributing)
-    # Cap at realistic team total: NBA teams average ~110-120 ppg
-    ppg = min(total_pts, 130.0)
-    
-    # Pace estimate: points + rebounds + assists correlate with pace
-    # NBA baseline pace ~100 possessions/game; high pace teams ~108+
-    pace_estimate = 95 + (total_ast * 0.4) + (total_reb * 0.15)
-    pace_estimate = min(max(pace_estimate, 90), 115)
-    
-    return {
-        "ppg": ppg,
-        "reb": total_reb,
-        "ast": total_ast,
-        "fg_pct": avg_fg,
-        "ft_pct": avg_ft,
-        "pace_estimate": pace_estimate,
-    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -390,7 +391,7 @@ def main():
     date_str = args[0] if args else get_lagos_date()
     
     print(f"[Basketball] 🏀 Basketball Quant Pipeline starting for {date_str} (dry_run={dry_run})")
-    print(f"[Basketball] Fetching NBA games from BallDontLie API...")
+    print(f"[Basketball] Fetching NBA games from API-Sports...")
     
     # STEP 1: Get games
     games = fetch_games(date_str)

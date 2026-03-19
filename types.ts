@@ -21,7 +21,7 @@ export interface Match {
   prediction_fr?: string;
   confidence: number;
   odds: number;
-  category: 'safe' | 'value' | 'risky';
+  category: 'safe' | 'value' | 'risky' | 'lean' | 'no_edge';
   analysis?: string; // Fallback
   analysis_en?: string;
   analysis_fr?: string;
@@ -66,8 +66,35 @@ export interface Match {
   draw_prob?: number;
   away_win_prob?: number;
   over25_prob?: number;
+  under25_prob?: number;
+  over15_prob?: number;
+  over35_prob?: number;
   btts_prob?: number;
+  double_chance_1x?: number;
+  double_chance_x2?: number;
   all_value_bets?: Array<{ market: string; prob: number; odds: number; ev: number }>;
+  // ── Match Analysis Platform fields (snake_case from pipeline) ────────────────
+  value_rank?: 'high' | 'medium' | 'low' | 'none';
+  league_tier?: number;
+  home_form?: string;
+  away_form?: string;
+  home_win_rate?: number;
+  away_win_rate?: number;
+  home_avg_scored?: number;
+  away_avg_scored?: number;
+  home_avg_conceded?: number;
+  away_avg_conceded?: number;
+  home_clean_sheet_rate?: number;
+  away_clean_sheet_rate?: number;
+  home_xg_avg?: number;
+  away_xg_avg?: number;
+  home_possession?: number;
+  away_possession?: number;
+  home_shots_on_target?: number;
+  away_shots_on_target?: number;
+  h2h_home_wins?: number;
+  h2h_away_wins?: number;
+  h2h_draws?: number;
   // ── Quant snake_case aliases (Python quant pipeline output) ──────────────────
   fixture_id?: number | string;    // same as fixtureId
   kickoff_local?: string;          // local kickoff time string

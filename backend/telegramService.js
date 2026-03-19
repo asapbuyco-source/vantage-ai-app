@@ -197,15 +197,27 @@ export const sendDailyPredictionsToTelegram = async () => {
             return { status: 'skipped', reason: 'no_predictions' };
         }
 
+        // --- PROTECT VIP VALUE ---
+        // We only care about 'safe' and 'value' picks for the VIP value calculation.
+        // 'lean' picks are now included in allMatches but are not considered high-value.
+        const strictPicks = allMatches.filter(m => m.category === 'safe' || m.category === 'value');
+
+        if (strictPicks.length === 0) {
+            console.warn('[Telegram] No strict (safe/value) predictions found today. Skipping.');
+            return { status: 'skipped', reason: 'no_strict_predictions' };
+        }
+
+        if (strictPicks.length <= 3) {
+            console.info(`[Telegram] Only ${strictPicks.length} strict predictions today. Skipping free broadcast to protect VIP value.`);
+            return { status: 'skipped', reason: 'too_few_strict_predictions_protect_vip' };
+        }
+
         // FREE TIER ONLY: send 'safe' and 'value' category picks on Telegram.
-        // 'risky' picks are VIP-exclusive and should not appear on the public channel.
-        // Confidence >= 55 ensures only meaningful quant picks are broadcast.
-        // Note: quant engine confidence = probability * 100 (e.g. 58.0 for 58%)
-        const ready = allMatches.filter(m =>
+        // 'risky' or 'lean' picks are excluded/VIP-exclusive.
+        const ready = strictPicks.filter(m =>
             (m.prediction_en || m.prediction || m.bet_type) &&
             m.confidence >= 55 &&
-            m.sport !== 'basketball' &&
-            (m.category === 'safe' || m.category === 'value')
+            m.sport !== 'basketball'
         );
 
         if (ready.length === 0) {
