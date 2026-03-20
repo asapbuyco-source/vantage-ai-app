@@ -81,6 +81,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const [quantAccumulators, setQuantAccumulators] = useState<Record<string, any[]>>({});
   const [quantLoading, setQuantLoading] = useState(false);
   const [quantBetFilter, setQuantBetFilter] = useState<string>('All');
+  const [quantLeagueFilter, setQuantLeagueFilter] = useState<string>('All');
   const [quantExpanded, setQuantExpanded] = useState(true);
 
   useEffect(() => {
@@ -131,13 +132,17 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     'Double Chance': ['Double Chance (1X)', 'Double Chance (X2)', 'Double Chance (12)'],
   };
 
-  const filteredQuantPredictions = quantBetFilter === 'All'
-    ? quantPredictions
-    : quantPredictions.filter(m => {
+  // Unique league names for the league filter
+  const availableLeagues = ['All', ...Array.from(new Set(quantPredictions.map(m => m.league || '').filter(Boolean))).sort()];
+
+  const filteredQuantPredictions = quantPredictions
+    .filter(m => {
+      if (quantBetFilter === 'All') return true;
       const betType = m.bet_type || m.prediction || '';
       const group = BET_FILTER_GROUPS[quantBetFilter] || [];
       return group.some(g => betType.includes(g)) || betType === quantBetFilter;
-    });
+    })
+    .filter(m => quantLeagueFilter === 'All' || (m.league || '') === quantLeagueFilter);
 
   const plans: Array<{
     id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
@@ -561,18 +566,53 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
                 {/* Bet-type filter tabs */}
                 {!quantLoading && quantPredictions.length > 0 && (
-                  <div className="flex gap-1.5 flex-wrap mb-3">
-                    {['All', 'Straight Win', 'Over/Under', 'BTTS', 'Double Chance'].map(tab => (
-                      <button
-                        key={tab}
-                        onClick={() => setQuantBetFilter(tab)}
-                        className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${quantBetFilter === tab
-                          ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/30'
-                          : 'bg-slate-100 dark:bg-white/5 text-gray-500 border-slate-200 dark:border-white/10 hover:border-emerald-500/50'
-                          }`}
-                      >{tab}</button>
-                    ))}
-                  </div>
+                  <>
+                    <div className="flex gap-1.5 flex-wrap mb-2">
+                      {['All', 'Straight Win', 'Over/Under', 'BTTS', 'Double Chance'].map(tab => (
+                        <button
+                          key={tab}
+                          onClick={() => setQuantBetFilter(tab)}
+                          className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${quantBetFilter === tab
+                            ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/30'
+                            : 'bg-slate-100 dark:bg-white/5 text-gray-500 border-slate-200 dark:border-white/10 hover:border-emerald-500/50'
+                            }`}
+                        >{tab}</button>
+                      ))}
+                    </div>
+
+                    {/* League filter — scrollable horizontal chip row */}
+                    {availableLeagues.length > 1 && (
+                      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+                        {availableLeagues.map(league => (
+                          <button
+                            key={league}
+                            onClick={() => setQuantLeagueFilter(league)}
+                            className={`px-3 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap shrink-0 transition-all ${
+                              quantLeagueFilter === league
+                                ? 'bg-vantage-cyan text-slate-900 border-vantage-cyan shadow-sm shadow-vantage-cyan/30'
+                                : 'bg-slate-100 dark:bg-white/5 text-gray-500 border-slate-200 dark:border-white/10 hover:border-vantage-cyan/50'
+                            }`}
+                          >
+                            {league === 'All' ? '🌍 All Leagues' : league}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {(quantBetFilter !== 'All' || quantLeagueFilter !== 'All') && (
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] text-gray-500">
+                          Showing <span className="font-bold text-vantage-cyan">{filteredQuantPredictions.length}</span> of {quantPredictions.length} picks
+                        </p>
+                        <button
+                          onClick={() => { setQuantBetFilter('All'); setQuantLeagueFilter('All'); }}
+                          className="text-[10px] font-bold text-gray-400 hover:text-vantage-cyan transition-colors underline"
+                        >
+                          Clear filters
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {quantLoading ? (

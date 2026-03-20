@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, Clock, Target, Loader2, Copy, Check, Lock, Zap,
   BarChart3, Shield, Activity, Flame, ChevronRight, Eye, EyeOff,
-  ArrowRight, Star
+  ArrowRight, Star, Brain, Crown, ChevronDown, AlertCircle
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
@@ -44,11 +44,21 @@ const StatPill = ({ label, value, icon }: { label: string; value: string; icon?:
   </div>
 );
 
+// ── VIP feature list for FOMO ───────────────────────────────────────────────
+const VIP_FEATURES = [
+  { icon: <Zap size={14} className="text-yellow-400 fill-yellow-400" />, text: 'See the picks our AI rated highest — hidden from you right now' },
+  { icon: <BarChart3 size={14} className="text-vantage-cyan" />, text: 'xG models & win probability on EVERY match, not just 2' },
+  { icon: <Brain size={14} className="text-vantage-purple" />, text: '4 ready-made accumulators built by AI — daily, automatically' },
+  { icon: <Crown size={14} className="text-amber-400" />, text: 'Filter by league so you only see what you bet on' },
+  { icon: <Shield size={14} className="text-emerald-400" />, text: 'Instant WhatsApp alert the second picks drop each morning' },
+];
+
 export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
   const { t, language } = useAppContext();
   const { predictions, loading } = useData();
   const { userProfile, isAdmin } = useAuth();
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showAllLeans, setShowAllLeans] = useState(false);
 
   const isVip = userProfile?.isVip || isAdmin;
 
@@ -64,8 +74,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
   };
 
   // ── Categorize matches into tiers ─────────────────────────────────────
-  const { hookPicks, vipTeasers, dataCards } = useMemo(() => {
-    // Sort all predictions by value_rank and confidence
+  const { hookPicks, vipTeasers, dataCards, leagueBreakdown } = useMemo(() => {
     const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
     const sorted = [...predictions].sort((a, b) => {
       const rankDiff = (rankPriority[b.value_rank] || 0) - (rankPriority[a.value_rank] || 0);
@@ -73,24 +82,32 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
       return (b.confidence || 0) - (a.confidence || 0);
     });
 
-    // Top-tier picks (safe/value/high rank)
+    // Top-tier picks (high/medium value rank OR safe/value category)
     const topPicks = sorted.filter(m =>
       m.value_rank === 'high' || m.value_rank === 'medium' ||
       m.category === 'safe' || m.category === 'value'
     );
 
-    // Hook: 1-2 free, unblurred top picks
+    // Hook: 1-2 free picks
     const hook = topPicks.slice(0, 2);
-
-    // VIP Teasers: next 5-8 top picks, blurred for free users
+    // VIP Teasers: next 5-8 picks (blurred)
     const teasers = topPicks.slice(2, 10);
-
-    // Data Cards: everything else (leans and no-edge matched)
+    // Data cards: everything else
     const teaseIds = new Set([...hook, ...teasers].map(m => m.id));
     const data = sorted.filter(m => !teaseIds.has(m.id));
 
-    return { hookPicks: hook, vipTeasers: teasers, dataCards: data };
+    // League breakdown for FOMO
+    const leagues: Record<string, number> = {};
+    sorted.forEach(m => {
+      const l = m.league || 'Other';
+      leagues[l] = (leagues[l] || 0) + 1;
+    });
+
+    return { hookPicks: hook, vipTeasers: teasers, dataCards: data, leagueBreakdown: leagues };
   }, [predictions]);
+
+  const totalAnalyzed = predictions.length;
+  const topLeagues = Object.entries(leagueBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 4);
 
   const renderRichMatchCard = (match: any, idx: number, blurred: boolean = false) => {
     const pred = getPredictionText(match);
@@ -195,7 +212,6 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
                     </div>
                   </div>
                 </div>
-                {/* Overlay */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-transparent via-slate-50/80 to-slate-50 dark:via-[#1a1d26]/80 dark:to-[#1a1d26] rounded-xl">
                   <div className="w-10 h-10 bg-vantage-purple/20 rounded-full flex items-center justify-center mb-2">
                     <Lock size={18} className="text-vantage-purple" />
@@ -235,17 +251,161 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
     );
   };
 
+  // ── VIP Intelligence Report Card (replaces "Other Analyzed Matches") ──────
+  const renderVipConversionWall = () => {
+    if (dataCards.length === 0 || isVip) return null;
+
+    const hiddenCount = dataCards.length;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="rounded-2xl border border-vantage-purple/30 bg-gradient-to-b from-vantage-purple/5 to-black/20 dark:to-[#0a0c14] overflow-hidden"
+      >
+        {/* Header */}
+        <div className="px-5 pt-5 pb-4 border-b border-white/5">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-vantage-purple/20 flex items-center justify-center">
+                <Brain size={16} className="text-vantage-purple" />
+              </div>
+              <div>
+                <p className="text-xs font-black text-white uppercase tracking-widest">
+                  {language === 'fr' ? 'Rapport Intelligence IA' : 'AI Intelligence Report'}
+                </p>
+                <p className="text-[10px] text-gray-500">
+                  {language === 'fr' ? 'Accès VIP requis' : 'VIP Access Required'}
+                </p>
+              </div>
+            </div>
+            <span className="flex items-center gap-1 text-xs font-black text-vantage-purple bg-vantage-purple/15 border border-vantage-purple/30 px-2.5 py-1 rounded-full">
+              <Lock size={10} />
+              {hiddenCount} {language === 'fr' ? 'cachés' : 'hidden'}
+            </span>
+          </div>
+        </div>
+
+        {/* Teaser stats */}
+        <div className="px-5 py-4 space-y-3">
+
+          {/* Match count breakdown */}
+          <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2.5">
+              {language === 'fr' ? `${totalAnalyzed} matchs analysés aujourd'hui` : `${totalAnalyzed} matches analyzed today`}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {topLeagues.map(([league, count]) => (
+                <div key={league} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-black/20">
+                  <span className="text-[10px] text-gray-400 truncate max-w-[90px]">{league}</span>
+                  <span className="text-[10px] font-bold text-vantage-cyan shrink-0">{count} games</span>
+                </div>
+              ))}
+              {Object.keys(leagueBreakdown).length > 4 && (
+                <div className="col-span-2 text-center text-[10px] text-gray-600">
+                  + {Object.keys(leagueBreakdown).length - 4} more leagues...
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* What VIP unlocks */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+              {language === 'fr' ? 'Ce que vous obtenez avec VIP' : 'What you unlock with VIP'}
+            </p>
+            {VIP_FEATURES.map((f, i) => (
+              <div key={i} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/3 border border-white/5">
+                {f.icon}
+                <span className="text-xs text-gray-300">{f.text}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Blurred preview of hidden matches */}
+          <div className="relative rounded-xl overflow-hidden border border-white/5">
+            <div className="blur-sm select-none pointer-events-none p-4 space-y-2">
+              {dataCards.slice(0, 3).map((m, i) => (
+                <div key={i} className="flex justify-between items-center py-1.5 border-b border-white/5 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-slate-700" />
+                    <div>
+                      <div className="h-2 w-24 bg-slate-600 rounded mb-1" />
+                      <div className="h-1.5 w-16 bg-slate-700 rounded" />
+                    </div>
+                  </div>
+                  <div className="h-5 w-14 bg-green-500/20 rounded" />
+                </div>
+              ))}
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/50 to-black/80 flex items-end justify-center pb-4">
+              <p className="text-[11px] text-gray-400 font-medium">
+                {hiddenCount} {language === 'fr' ? 'analyses cachées...' : 'analyses hidden...'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* CTA Button */}
+        {/* @ts-ignore */}
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={() => setTab('vip')}
+          className="w-full mx-0 px-5 py-4 flex items-center justify-between group"
+          style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #06b6d4 100%)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-lg shrink-0">
+              <Crown size={16} className="text-yellow-300 fill-yellow-300" />
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-black text-white tracking-wide">
+                {language === 'fr' ? `Débloquer les ${hiddenCount} analyses` : `Unlock all ${hiddenCount} analyses`}
+              </div>
+              <div className="text-[10px] text-white/70">
+                {language === 'fr' ? 'Dès 2000 FCFA/semaine • Actif instantanément' : 'From 2000 FCFA/week • Active instantly'}
+              </div>
+            </div>
+          </div>
+          <ArrowRight size={20} className="text-white shrink-0 group-hover:translate-x-1 transition-transform" />
+        </motion.button>
+      </motion.div>
+    );
+  };
+
   return (
     <div className="space-y-6 pb-24">
-      <div className="flex flex-col space-y-1">
+
+      {/* ── Header with match count ── */}
+      <div className="flex flex-col space-y-2">
         <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white">
           {language === 'fr' ? 'Analyse' : 'Match'} <span className="text-vantage-cyan">{language === 'fr' ? 'des Matchs' : 'Analysis'}</span>
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {language === 'fr'
-            ? `${predictions.length} matchs analysés par notre moteur IA`
-            : `${predictions.length} matches analyzed by our AI engine`}
-        </p>
+
+        {/* Live match count banner */}
+        {!loading && totalAnalyzed > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-bold text-slate-700 dark:text-gray-300">
+                <span className="text-vantage-cyan font-black">{totalAnalyzed}</span>
+                {language === 'fr' ? ' matchs analysés par notre IA' : ' matches analyzed by AI today'}
+              </span>
+            </div>
+            {!isVip && (
+              <button onClick={() => setTab('vip')} className="flex items-center gap-1 text-[10px] font-bold text-vantage-purple hover:text-purple-400 transition-colors">
+                <Lock size={9} />
+                {language === 'fr' ? 'Voir tout' : 'View all'}
+                <ChevronRight size={10} />
+              </button>
+            )}
+          </motion.div>
+        )}
       </div>
 
       {loading ? (
@@ -276,7 +436,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
             </div>
           )}
 
-          {/* ── SECTION 2: VIP TEASERS (Blurred) ── */}
+          {/* ── SECTION 2: VIP TEASERS (Blurred for non-VIP) ── */}
           {vipTeasers.length > 0 && !isVip && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 mb-1">
@@ -290,7 +450,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
               </div>
               {vipTeasers.map((match, idx) => renderRichMatchCard(match, idx + 2, true))}
 
-              {/* CTA to upgrade */}
+              {/* CTA after teasers */}
               {/* @ts-ignore */}
               <motion.button
                 initial={{ opacity: 0, y: 12 }}
@@ -319,7 +479,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
             </div>
           )}
 
-          {/* If VIP, show all teasers unblurred */}
+          {/* VIP: show all teasers unblurred */}
           {vipTeasers.length > 0 && isVip && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 mb-1">
@@ -332,19 +492,29 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
             </div>
           )}
 
-          {/* ── SECTION 3: DATA CARDS (All remaining matches) ── */}
-          {dataCards.length > 0 && (
+          {/* ── SECTION 3: VIP Intelligence Report (non-VIP) or full data cards (VIP) ── */}
+          {isVip && dataCards.length > 0 ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 mb-1">
                 <BarChart3 size={12} className="text-slate-500" />
                 <h2 className="text-sm font-bold uppercase tracking-widest text-slate-500">
-                  {language === 'fr' ? 'Autres Matchs Analysés' : 'Other Analyzed Matches'}
+                  {language === 'fr' ? 'Leans du Marché' : 'Market Leans'}
                 </h2>
                 <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-500/15 border border-slate-500/30 text-slate-500 font-bold">{dataCards.length}</span>
               </div>
-
-              {dataCards.map((match, idx) => renderRichMatchCard(match, idx + 10, false))}
+              {(showAllLeans ? dataCards : dataCards.slice(0, 10)).map((match, idx) => renderRichMatchCard(match, idx + 10, false))}
+              {dataCards.length > 10 && !showAllLeans && (
+                <button
+                  onClick={() => setShowAllLeans(true)}
+                  className="w-full py-3 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-bold text-gray-500 hover:text-vantage-cyan transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <ChevronDown size={14} />
+                  {language === 'fr' ? `Voir ${dataCards.length - 10} autres` : `Show ${dataCards.length - 10} more`}
+                </button>
+              )}
             </div>
+          ) : (
+            renderVipConversionWall()
           )}
         </div>
       )}
