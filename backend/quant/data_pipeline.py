@@ -8,6 +8,7 @@ Outputs a list of enriched MatchData objects ready for the model pipeline.
 import os
 import sys
 import math
+import time
 import requests
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
@@ -111,20 +112,29 @@ class MatchData:
 
 # ── API Helpers ───────────────────────────────────────────────────────────────
 def _get(path: str, params: dict | None = None) -> list | dict | None:
-    """Single-page GET to Sportmonks v3 API."""
+    """Single-page GET to Sportmonks v3 API with exponential backoff retry."""
     if not SM_TOKEN:
         print("[DataPipeline] ERROR: No Sportmonks API token found.", file=sys.stderr)
         return None
     base_params = {"api_token": SM_TOKEN}
     if params:
         base_params.update(params)
-    try:
-        resp = requests.get(f"{SM_BASE}{path}", params=base_params, timeout=15)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as e:
-        print(f"[DataPipeline] API error on {path}: {e}", file=sys.stderr)
-        return None
+        
+    max_attempts = 3
+    base_delay = 1.5
+    for attempt in range(max_attempts):
+        try:
+            resp = requests.get(f"{SM_BASE}{path}", params=base_params, timeout=15)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            if attempt < max_attempts - 1:
+                delay = base_delay * (2 ** attempt)
+                print(f"[DataPipeline] API error on {path} (attempt {attempt+1}): {e}. Retrying in {delay}s...", file=sys.stderr)
+                time.sleep(delay)
+            else:
+                print(f"[DataPipeline] API error on {path} after {max_attempts} attempts: {e}", file=sys.stderr)
+    return None
 
 
 def _get_paginated(path: str, params: dict | None = None, max_pages: int = 5) -> list:
@@ -277,7 +287,31 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
 
 
 # ── H2H via API-Football.com (with Firestore cache) ──────────────────────────
-_af_team_id_cache: dict[str, int] = {}  # team_name -> API-Football team ID
+def _load_team_cache() -> dict[str, int]:
+    """Load API-Football team ID cache from Firestore (persistent across runs)."""
+    try:
+        from google.cloud import firestore as gfs
+        db = gfs.Client()
+        doc = db.collection("system_cache").document("af_team_ids").get(timeout=5)
+        if doc.exists:
+            return doc.to_dict().get("teams", {})
+    except Exception as e:
+        print(f"[H2H] Persistent team cache unavailable: {e}", file=sys.stderr)
+    return {}
+
+def _save_team_cache(cache: dict[str, int]):
+    """Persist team ID cache to Firestore."""
+    try:
+        from google.cloud import firestore as gfs
+        db = gfs.Client()
+        db.collection("system_cache").document("af_team_ids").set({
+            "teams": cache,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }, timeout=10)
+    except Exception as e:
+        print(f"[H2H] Failed to save persistent team cache: {e}", file=sys.stderr)
+
+_af_team_id_cache: dict[str, int] = _load_team_cache()  # team_name -> API-Football team ID
 
 
 def _af_get(endpoint: str, params: dict | None = None) -> dict | None:
@@ -300,23 +334,33 @@ def _af_get(endpoint: str, params: dict | None = None) -> dict | None:
 
 
 def _af_find_team_id(team_name: str) -> int | None:
-    """Search API-Football for a team ID by name. Cached in memory."""
+    """Search API-Football for a team ID by name. Cached persistently."""
+    global _af_team_id_cache
     if team_name in _af_team_id_cache:
         return _af_team_id_cache[team_name]
-    data = _af_get("teams", {"search": team_name})
-    if data and data.get("response"):
-        # Take exact match or first result
-        for t in data["response"]:
-            tid = t.get("team", {}).get("id")
-            name = t.get("team", {}).get("name", "")
-            if name.lower() == team_name.lower():
-                _af_team_id_cache[team_name] = tid
-                return tid
-        # Fallback: first result
-        tid = data["response"][0].get("team", {}).get("id")
-        if tid:
-            _af_team_id_cache[team_name] = tid
-            return tid
+    
+    for attempt in range(2):
+        try:
+            data = _af_get("teams", {"search": team_name})
+            if data and data.get("response"):
+                # Take exact match or first result
+                for t in data["response"]:
+                    tid = t.get("team", {}).get("id")
+                    name = t.get("team", {}).get("name", "")
+                    if name.lower() == team_name.lower() and tid:
+                        _af_team_id_cache[team_name] = tid
+                        _save_team_cache(_af_team_id_cache)
+                        return tid
+                # Fallback: first result
+                tid = data["response"][0].get("team", {}).get("id")
+                if tid:
+                    _af_team_id_cache[team_name] = tid
+                    _save_team_cache(_af_team_id_cache)
+                    return tid
+            return None # Successful API call but no teams found
+        except Exception as e:
+            print(f"[H2H] API-Football lookup failed for {team_name} (attempt {attempt+1}): {e}", file=sys.stderr)
+            time.sleep(1) # delay before retry
     return None
 
 
@@ -336,7 +380,7 @@ def _fetch_h2h_cached(home_name: str, away_name: str, home_sm_id: int, away_sm_i
     try:
         from google.cloud import firestore as gfs
         db = gfs.Client()
-        cache_doc = db.collection("h2h_cache").document(cache_key).get()
+        cache_doc = db.collection("h2h_cache").document(cache_key).get(timeout=5)
         if cache_doc.exists:
             cd = cache_doc.to_dict()
             # Cache valid for 30 days
@@ -345,27 +389,39 @@ def _fetch_h2h_cached(home_name: str, away_name: str, home_sm_id: int, away_sm_i
                 try:
                     ct = datetime.fromisoformat(cached_at.replace("Z", "+00:00"))
                     if (datetime.now(timezone.utc) - ct).days < 30:
+                        print(f"[H2H] Using cached data for {home_name} vs {away_name}")
                         return (cd.get("hw", 0), cd.get("aw", 0), cd.get("dr", 0),
                                 cd.get("avg_goals", default[3]), cd.get("btts_rate", 0.45))
-                except Exception:
-                    pass
-    except Exception:
-        pass  # Firestore unavailable — continue with API call
+                except Exception as e:
+                    print(f"[H2H] Cache date parse error: {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"[H2H] Firestore cache read error: {e}", file=sys.stderr)
 
     # ── Resolve API-Football team IDs ──────────────────────────────────────
     af_home = _af_find_team_id(home_name)
     af_away = _af_find_team_id(away_name)
     if not af_home or not af_away:
-        print(f"[H2H] Could not find API-Football IDs for {home_name} / {away_name}")
+        print(f"[H2H] Team IDs not found ({home_name}: {af_home}, {away_name}: {af_away}) — FALLBACK TO ZERO H2H", file=sys.stderr)
         return default
 
-    # ── Fetch H2H from API-Football ───────────────────────────────────────
-    data = _af_get("fixtures/headtohead", {"h2h": f"{af_home}-{af_away}"})
-    if not data or not data.get("response"):
+    # ── Fetch H2H from API-Football with retry ────────────────────────────
+    h2h_data = None
+    for attempt in range(2):
+        data = _af_get("fixtures/headtohead", {"h2h": f"{af_home}-{af_away}"})
+        if data and data.get("response"):
+            h2h_data = data
+            break
+        if attempt < 1:
+            print(f"[H2H] H2H fetch failed (attempt {attempt+1}), retrying in 1s...", file=sys.stderr)
+            time.sleep(1)
+        else:
+            print(f"[H2H] H2H fetch failed after 2 attempts for {home_name} vs {away_name} — FALLBACK TO ZERO H2H", file=sys.stderr)
+    
+    if not h2h_data or not h2h_data.get("response"):
         return default
 
     # Parse last 8 completed matches
-    matches = [m for m in data["response"] if m.get("fixture", {}).get("status", {}).get("short") == "FT"]
+    matches = [m for m in h2h_data["response"] if m.get("fixture", {}).get("status", {}).get("short") == "FT"]
     matches.sort(key=lambda x: x.get("fixture", {}).get("date", ""), reverse=True)
     recent = matches[:8]
 
@@ -396,6 +452,7 @@ def _fetch_h2h_cached(home_name: str, away_name: str, home_sm_id: int, away_sm_i
 
     # ── Cache to Firestore ─────────────────────────────────────────────────
     try:
+        from google.cloud import firestore as gfs
         db = gfs.Client()
         db.collection("h2h_cache").document(cache_key).set({
             "hw": hw, "aw": aw, "dr": dr,
@@ -405,8 +462,8 @@ def _fetch_h2h_cached(home_name: str, away_name: str, home_sm_id: int, away_sm_i
             "matches_parsed": n,
             "cached_at": datetime.now(timezone.utc).isoformat(),
         })
-    except Exception:
-        pass  # Cache save is best-effort
+    except Exception as e:
+        print(f"[H2H] Cache save error: {e}", file=sys.stderr)
 
     print(f"[H2H] {home_name} vs {away_name}: {hw}W/{dr}D/{aw}L (avg {avg_goals:.1f} goals, BTTS {btts_rate:.0%})")
     return result

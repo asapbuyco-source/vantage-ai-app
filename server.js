@@ -8,6 +8,9 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import admin from 'firebase-admin';
 import fs from 'fs';
+import { spawnSync } from 'child_process';
+import pino from 'pino';
+import * as Sentry from '@sentry/node';
 import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGeneration, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
 import OpenAI from 'openai';
@@ -16,6 +19,44 @@ import OpenAI from 'openai';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env.local') });
+
+// ══════════════════════════════════════════════════════════════════════
+// SENTRY & STRUCTURED LOGGING SETUP
+// ══════════════════════════════════════════════════════════════════════
+
+// Initialize Sentry for error tracking (if SENTRY_DSN is provided)
+const SENTRY_DSN = process.env.SENTRY_DSN;
+if (SENTRY_DSN) {
+    Sentry.init({
+        dsn: SENTRY_DSN,
+        environment: process.env.NODE_ENV || 'development',
+        tracesSampleRate: 0.1, // 10% of transactions for performance monitoring
+        integrations: [
+            new Sentry.Integrations.Http({ tracing: true }),
+            new Sentry.Integrations.OnUncaughtException(),
+            new Sentry.Integrations.OnUnhandledRejection(),
+        ],
+    });
+    console.log('✅ Sentry initialized for error tracking');
+} else {
+    console.warn('⚠️  SENTRY_DSN not set — error tracking disabled');
+}
+
+// Initialize Pino structured logger
+const logger = pino({
+    level: process.env.LOG_LEVEL || 'info',
+    transport: process.env.NODE_ENV === 'development'
+        ? { target: 'pino-pretty', options: { colorize: true } }
+        : undefined,
+    serializers: {
+        error: pino.stdSerializers.err,
+        req: pino.stdSerializers.req,
+        res: pino.stdSerializers.res,
+    }
+});
+
+// Log startup
+logger.info({ env: process.env.NODE_ENV }, '[Server] Starting Vantage AI backend');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -32,24 +73,83 @@ try {
         // This prevents crashes if the AI omits optional fields like `homeForm` from its JSON output
         admin.firestore().settings({ ignoreUndefinedProperties: true });
 
-        console.log('✅ Firebase Admin UI Initialized successfully');
+        logger.info('[Server] Firebase Admin SDK initialized successfully');
 
         // Start the automated cron scheduler now that Admin is ready
         initScheduler();
     } else {
-        console.warn('⚠️ FIREBASE_SERVICE_ACCOUNT not found. Auto-generation scheduler will not work.');
+        logger.warn('[Server] FIREBASE_SERVICE_ACCOUNT not found. Auto-generation scheduler will not work.');
     }
 } catch (error) {
-    console.error('❌ Failed to initialize Firebase Admin:', error.message);
+    logger.error({ error }, '[Server] Failed to initialize Firebase Admin');
+    Sentry.captureException(error);
 }
 
 // Trust the reverse proxy (Render, Railway, etc.) so express-rate-limit can get the real client IP.
 // This resolves the ERR_ERL_UNEXPECTED_X_FORWARDED_FOR error.
 app.set('trust proxy', 1);
 
+// ── Sentry Middleware ─────────────────────────────────────────────────────────
+if (SENTRY_DSN) {
+    // Request handler must be the first middleware
+    app.use(Sentry.Handlers.requestHandler());
+}
+
 // Basic health check endpoint for Render/Railway (Needs to be above CORS so it isn't blocked by missing origin)
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Health check endpoint for Python environment availability
+// This endpoint verifies that the Python binary can be invoked and is working
+app.get('/health/python', (req, res) => {
+    try {
+        // Try common Python binary names
+        const pythonBinaries = ['python3', 'python'];
+        let pythonVersion = null;
+        let pythonBinary = null;
+        
+        for (const binary of pythonBinaries) {
+            try {
+                const result = spawnSync(binary, ['--version'], { 
+                    encoding: 'utf8', 
+                    timeout: 3000 
+                });
+                if (result.status === 0) {
+                    pythonVersion = (result.stdout || result.stderr || '').trim();
+                    pythonBinary = binary;
+                    break;
+                }
+            } catch (_) {
+                // Binary not available, try next
+            }
+        }
+        
+        if (!pythonBinary) {
+            console.warn('[Health] Python binary not found');
+            return res.status(503).json({
+                status: 'degraded',
+                python: 'unavailable',
+                message: 'Python binary not found in system PATH',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        res.status(200).json({
+            status: 'ok',
+            python: 'available',
+            pythonBinary: pythonBinary,
+            pythonVersion: pythonVersion,
+            timestamp: new Date().toISOString()
+        });
+    } catch (err) {
+        logger.error({ error: err }, '[Health] Python check error');
+        res.status(500).json({
+            status: 'error',
+            error: err.message,
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 
 // Enable CORS
@@ -86,7 +186,8 @@ app.use(cors({
 const SPORTMONKS_API_TOKEN = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
 
 if (!SPORTMONKS_API_TOKEN) {
-    console.error("❌ CRITICAL ERROR: SPORTMONKS_API_TOKEN environment variable is not set!");
+    logger.error("[API] CRITICAL: SPORTMONKS_API_TOKEN environment variable is not set!");
+    Sentry.captureMessage("CRITICAL: SPORTMONKS_API_TOKEN missing", "fatal");
 }
 
 // 100 requests per 15 minutes per IP for Sportmonks
@@ -111,7 +212,8 @@ app.use('/api/sportmonks', sportmonksLimiter, createProxyMiddleware({
         // Token is now appended via pathRewrite
     },
     onError: (err, req, res) => {
-        console.error('Proxy Error:', err);
+        logger.error({ error: err, url: req.url }, 'Sportmonks proxy error');
+        Sentry.captureException(err);
         res.status(500).json({ error: 'Proxy implementation error', details: err.message });
     }
 }));
@@ -125,7 +227,8 @@ app.use(express.json({ limit: '5mb' }));
 const GOOGLE_GENAI_API_KEY = process.env.VITE_GOOGLE_GENAI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
 
 if (!GOOGLE_GENAI_API_KEY) {
-    console.error("❌ CRITICAL ERROR: GOOGLE_GENAI_API_KEY environment variable is not set!");
+    logger.error("[API] CRITICAL: GOOGLE_GENAI_API_KEY environment variable is not set!");
+    Sentry.captureMessage("CRITICAL: GOOGLE_GENAI_API_KEY missing", "fatal");
 }
 
 // 50 requests per 15 minutes per IP for Gemini
@@ -140,6 +243,7 @@ const geminiLimiter = rateLimit({
 app.post('/api/gemini/generate', geminiLimiter, async (req, res) => {
     try {
         if (!GOOGLE_GENAI_API_KEY) {
+            logger.warn("[API] Gemini: API key missing on server");
             return res.status(500).json({ error: "API Key missing on server" });
         }
 
@@ -161,7 +265,8 @@ app.post('/api/gemini/generate', geminiLimiter, async (req, res) => {
         res.json({ text: response.text });
 
     } catch (error) {
-        console.error('Gemini Proxy Error:', error);
+        logger.error({ error, model: req.body?.model }, 'Gemini generation error');
+        Sentry.captureException(error);
 
         // Pass through the status code if it exists on the error, otherwise 500
         const status = error.status || 500;
@@ -207,11 +312,12 @@ app.post('/api/admin/generate-football', adminAuth, async (req, res) => {
 // 🏀 Basketball Quant Pipeline endpoint — Quant Engine primary, OpenAI/Gemini fallback
 app.post('/api/admin/generate-basketball', adminAuth, async (req, res) => {
     try {
-        console.log('[API] Manual Basketball Quant Pipeline triggered via Admin');
+        logger.info('[API] Manual Basketball Quant Pipeline triggered via Admin');
         const result = await triggerBasketballGeneration();
         res.json(result);
     } catch (e) {
-        console.error('[API] Basketball pipeline error:', e.message);
+        logger.error({ error: e }, '[API] Basketball pipeline error');
+        Sentry.captureException(e);
         res.status(500).json({ error: 'Basketball pipeline failed', details: e.message });
     }
 });
@@ -227,44 +333,48 @@ app.post('/api/admin/grade-yesterday', adminAuth, async (req, res) => {
 
 app.post('/api/admin/generate-blog', adminAuth, geminiLimiter, async (req, res) => {
     try {
-        console.log('[API] Manual Blog Generation Triggered via Admin (OpenAI→Gemini fallback)');
+        logger.info('[API] Manual Blog Generation Triggered via Admin (OpenAI→Gemini fallback)');
         const result = await triggerBlogGeneration();
         res.json(result);
     } catch (e) {
-        console.error(e);
+        logger.error({ error: e }, '[API] Blog generation error');
+        Sentry.captureException(e);
         res.status(500).json({ error: 'Blog generation failed', details: e.message });
     }
 });
 
 app.post('/api/admin/generate-accumulators', adminAuth, geminiLimiter, async (req, res) => {
     try {
-        console.log('[API] Manual Accumulator Generation Triggered via Admin (OpenAI)');
+        logger.info('[API] Manual Accumulator Generation Triggered via Admin (OpenAI)');
         const result = await triggerAccumulatorGeneration();
         res.json(result);
     } catch (e) {
-        console.error(e);
+        logger.error({ error: e }, '[API] Accumulator generation error');
+        Sentry.captureException(e);
         res.status(500).json({ error: 'Accumulator generation failed', details: e.message });
     }
 });
 
 app.post('/api/admin/telegram-broadcast', adminAuth, async (req, res) => {
     try {
-        console.log('[API] Manual Telegram Broadcast Triggered via Admin');
+        logger.info('[API] Manual Telegram Broadcast Triggered via Admin');
         const result = await triggerTelegramBroadcast();
         res.json(result);
     } catch (e) {
-        console.error(e);
+        logger.error({ error: e }, '[API] Telegram broadcast error');
+        Sentry.captureException(e);
         res.status(500).json({ error: 'Telegram broadcast failed', details: e.message });
     }
 });
 
 app.post('/api/admin/telegram-test', adminAuth, async (req, res) => {
     try {
-        console.log('[API] Telegram Test Message Triggered via Admin');
+        logger.info('[API] Telegram Test Message Triggered via Admin');
         const result = await sendTelegramTestMessage();
         res.json(result);
     } catch (e) {
-        console.error(e);
+        logger.error({ error: e }, '[API] Telegram test error');
+        Sentry.captureException(e);
         res.status(500).json({ error: 'Telegram test failed', details: e.message });
     }
 });
@@ -275,11 +385,12 @@ app.post('/api/admin/telegram-test', adminAuth, async (req, res) => {
 app.post('/api/admin/trigger-quant', adminAuth, async (req, res) => {
     try {
         const { date, dryRun } = req.body || {};
-        console.log(`[API] Quant Pipeline triggered (date: ${date || 'today'}, dryRun: ${!!dryRun})`);
+        logger.info({ date: date || 'today', dryRun: !!dryRun }, '[API] Quant Pipeline triggered');
         const result = await triggerQuantPipeline(date || null, !!dryRun);
         res.json(result);
     } catch (e) {
-        console.error('[API] Quant trigger error:', e);
+        logger.error({ error: e }, '[API] Quant trigger error');
+        Sentry.captureException(e);
         res.status(500).json({ error: 'Quant pipeline failed', details: e.message });
     }
 });
@@ -288,11 +399,12 @@ app.post('/api/admin/trigger-quant', adminAuth, async (req, res) => {
 app.post('/api/admin/grade-quant', adminAuth, async (req, res) => {
     try {
         const { date } = req.body || {};
-        console.log(`[API] Quant Grading triggered for ${date || 'yesterday'}`);
+        logger.info({ date: date || 'yesterday' }, '[API] Quant Grading triggered');
         const result = await triggerQuantGrading(date || null);
         res.json(result);
     } catch (e) {
-        console.error('[API] Quant grading error:', e);
+        logger.error({ error: e }, '[API] Quant grading error');
+        Sentry.captureException(e);
         res.status(500).json({ error: 'Quant grading failed', details: e.message });
     }
 });
@@ -300,11 +412,12 @@ app.post('/api/admin/grade-quant', adminAuth, async (req, res) => {
 /** Recompute and save quant performance analytics */
 app.post('/api/admin/quant-performance', adminAuth, async (req, res) => {
     try {
-        console.log('[API] Quant Performance computation triggered');
+        logger.info('[API] Quant Performance computation triggered');
         const result = await triggerQuantPerformance();
         res.json(result);
     } catch (e) {
-        console.error('[API] Quant performance error:', e);
+        logger.error({ error: e }, '[API] Quant performance error');
+        Sentry.captureException(e);
         res.status(500).json({ error: 'Quant performance failed', details: e.message });
     }
 });
@@ -312,7 +425,7 @@ app.post('/api/admin/quant-performance', adminAuth, async (req, res) => {
 // ── OpenAI API Key (declared here so it's available to both test-openai and the proxy below) ───
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 if (!OPENAI_API_KEY) {
-    console.warn('⚠️ OPENAI_API_KEY not set — OpenAI proxy will return 500 until configured.');
+    logger.warn('[API] OPENAI_API_KEY not set — OpenAI proxy will return 500 until configured.');
 }
 
 // Test OpenAI connection — used by the Admin panel "Test OpenAI" button
@@ -585,13 +698,29 @@ app.use(async (req, res, next) => {
 
         res.send(html);
     } catch (err) {
-        console.error('SSR Error:', err);
+        logger.error({ error: err }, 'SSR rendering error');
+        Sentry.captureException(err);
         res.status(500).send('Server Error rendering page.');
     }
 });
 
+// ── Sentry Error Handler ──────────────────────────────────────────────────────
+// This must be last before app.listen
+if (SENTRY_DSN) {
+    app.use(Sentry.Handlers.errorHandler());
+}
+
+// Global error handler (catches all unhandled errors)
+app.use((err, req, res, next) => {
+    logger.error({ error: err, method: req.method, url: req.url }, 'Unhandled error');
+    Sentry.captureException(err);
+    res.status(err.status || 500).json({
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'An error occurred'
+    });
+});
+
 // Start server
 app.listen(PORT, () => {
-    console.log(`🚀 Backend proxy server running on port ${PORT}`);
-    console.log(`🌐 Allowing CORS for:`, allowedOrigins);
+    logger.info({ port: PORT, origins: allowedOrigins }, '🚀 Backend proxy server running');
 });

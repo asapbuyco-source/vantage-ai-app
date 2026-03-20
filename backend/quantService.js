@@ -14,9 +14,18 @@ import { spawn, spawnSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import admin from 'firebase-admin';
+import pino from 'pino';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const QUANT_SCRIPT = path.join(__dirname, 'quant', 'quant_pipeline.py');
+
+// Initialize Pino logger for structured logging
+const logger = pino({
+    level: process.env.LOG_LEVEL || 'info',
+    transport: process.env.NODE_ENV === 'development'
+        ? { target: 'pino-pretty', options: { colorize: true } }
+        : undefined,
+});
 
 // Resolve the correct Python binary name (python3 preferred, fall back to python)
 // Also tries absolute paths for Nixpacks / nix-store environments (Railway, Render).
@@ -37,7 +46,7 @@ function resolvePythonBin() {
             const result = spawnSync(candidate, ['--version'], { encoding: 'utf8', timeout: 3000 });
             if (result.status === 0) {
                 const ver = (result.stdout || result.stderr || '').trim();
-                console.log(`[QuantService] ✅ Python binary resolved: ${candidate} (${ver})`);
+                logger.info(`[QuantService] ✅ Python binary resolved: ${candidate} (${ver})`);
                 return candidate;
             }
         } catch (_) { /* binary not available */ }
@@ -45,10 +54,10 @@ function resolvePythonBin() {
 
     // None found — log a detailed diagnostic
     const pathEnv = process.env.PATH || '(not set)';
-    console.error(`[QuantService] ❌ CRITICAL: No Python binary found in PATH or absolute locations.`);
-    console.error(`[QuantService]   PATH = ${pathEnv}`);
-    console.error(`[QuantService]   Tried: ${candidates.join(', ')}`);
-    console.error(`[QuantService]   Fix: ensure nixpacks.toml includes python311 and railway.toml runs pip install.`);
+    logger.error(`[QuantService] ❌ CRITICAL: No Python binary found in PATH or absolute locations.`);
+    logger.error(`[QuantService]   PATH = ${pathEnv}`);
+    logger.error(`[QuantService]   Tried: ${candidates.join(', ')}`);
+    logger.error(`[QuantService]   Fix: ensure nixpacks.toml includes python311 and railway.toml runs pip install.`);
     return 'python3'; // will surface a clear ENOENT error at spawn time
 }
 
@@ -66,6 +75,48 @@ function buildPythonEnv() {
     };
 }
 
+// ── Exponential backoff retry helper ──────────────────────────────────────────
+/**
+ * Execute a promise with exponential backoff retry logic.
+ * @param {Function} fn - Async function to retry
+ * @param {object} opts - {maxAttempts, baseDelayMs, backoffMultiplier, maxDelayMs}
+ */
+async function withExponentialBackoff(fn, opts = {}) {
+    const {
+        maxAttempts = 3,
+        baseDelayMs = 2000,
+        backoffMultiplier = 2.5,
+        maxDelayMs = 30000,
+        label = 'operation'
+    } = opts;
+
+    let lastErr;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            logger.info(`[QuantService] ${label} (attempt ${attempt}/${maxAttempts})...`);
+            const result = await fn();
+            if (attempt > 1) {
+                logger.info(`[QuantService] ✅ ${label} succeeded on attempt ${attempt}`);
+            }
+            return result;
+        } catch (err) {
+            lastErr = err;
+            if (attempt < maxAttempts) {
+                const delayMs = Math.min(
+                    baseDelayMs * Math.pow(backoffMultiplier, attempt - 1),
+                    maxDelayMs
+                );
+                logger.warn(`[QuantService] ⚠️  ${label} attempt ${attempt} failed: ${err.message}`);
+                logger.info(`[QuantService] Retrying in ${delayMs}ms...`);
+                await new Promise(r => setTimeout(r, delayMs));
+            } else {
+                logger.error(`[QuantService] ❌ ${label} failed on all ${maxAttempts} attempts: ${err.message}`);
+            }
+        }
+    }
+    throw lastErr;
+}
+
 // ── Spawn Python quant pipeline ───────────────────────────────────────────────
 async function spawnPythonPipeline(dateStr = null, dryRun = false) {
     return new Promise((resolve, reject) => {
@@ -73,7 +124,7 @@ async function spawnPythonPipeline(dateStr = null, dryRun = false) {
         if (dateStr) args.push(dateStr);
         if (dryRun) args.push('--dry-run');
 
-        console.log(`[QuantService] Spawning Python pipeline: ${PYTHON_BIN} ${args.join(' ')}`);
+        logger.info(`[QuantService] Spawning Python pipeline: ${PYTHON_BIN} ${args.join(' ')}`);
 
         const py = spawn(PYTHON_BIN, args, {
             cwd: path.join(__dirname, 'quant'),
@@ -87,13 +138,13 @@ async function spawnPythonPipeline(dateStr = null, dryRun = false) {
             const line = data.toString();
             stdout += line;
             // Stream pipeline log lines to main Node log
-            line.split('\n').filter(Boolean).forEach(l => console.log(`[Python|Quant] ${l}`));
+            line.split('\n').filter(Boolean).forEach(l => logger.info(`[Python|Quant] ${l}`));
         });
 
         py.stderr.on('data', (data) => {
             const line = data.toString();
             stderr += line;
-            line.split('\n').filter(Boolean).forEach(l => console.warn(`[Python|Quant|ERR] ${l}`));
+            line.split('\n').filter(Boolean).forEach(l => logger.warn(`[Python|Quant|ERR] ${l}`));
         });
 
         py.on('close', (code) => {
@@ -128,10 +179,20 @@ async function spawnPythonPipeline(dateStr = null, dryRun = false) {
  */
 export const runQuantPipeline = async (dateStr = null, dryRun = false) => {
     const label = dryRun ? 'DRY RUN' : (dateStr || 'today');
-    console.log(`[QuantService] Starting Quant Pipeline (${label})...`);
+    logger.info(`[QuantService] Starting Quant Pipeline (${label})...`);
 
     try {
-        const { stdout } = await spawnPythonPipeline(dateStr, dryRun);
+        // Use exponential backoff: 3 attempts, 2s base delay, 2.5x multiplier, 30s max
+        const { stdout } = await withExponentialBackoff(
+            () => spawnPythonPipeline(dateStr, dryRun),
+            {
+                maxAttempts: 3,
+                baseDelayMs: 2000,
+                backoffMultiplier: 2.5,
+                maxDelayMs: 30000,
+                label: 'Quant pipeline execution'
+            }
+        );
 
         // Try to extract summary from stdout "[QuantPipeline] ✅ Pipeline complete!"
         const matchesMatch = stdout.match(/Matches analyzed:\s*(\d+)/);
@@ -150,11 +211,11 @@ export const runQuantPipeline = async (dateStr = null, dryRun = false) => {
                     predictions = doc.data()?.predictions || [];
                 }
             } catch (fsErr) {
-                console.warn(`[QuantService] Could not read Firestore confirmation: ${fsErr.message}`);
+                logger.warn(`[QuantService] Could not read Firestore confirmation: ${fsErr.message}`);
             }
         }
 
-        console.log(`[QuantService] ✅ Quant Pipeline done: ${generated} value bets from ${matchesAnalyzed} matches.`);
+        logger.info(`[QuantService] ✅ Quant Pipeline done: ${generated} value bets from ${matchesAnalyzed} matches.`);
         return {
             status: 'success',
             generated: predictions.length || generated,
@@ -162,7 +223,7 @@ export const runQuantPipeline = async (dateStr = null, dryRun = false) => {
             date: dateStr || getLagosDateKey(),
         };
     } catch (err) {
-        console.error(`[QuantService] ❌ Quant Pipeline failed: ${err.message}`);
+        logger.error(`[QuantService] ❌ Quant Pipeline failed: ${err.message}`);
         return { status: 'error', error: err.message };
     }
 };
@@ -171,23 +232,37 @@ export const runQuantPipeline = async (dateStr = null, dryRun = false) => {
  * Run grading for yesterday (or a custom date).
  */
 export const runQuantGrading = async (dateStr = null) => {
-    console.log(`[QuantService] Starting Quant Grading for ${dateStr || 'yesterday'}...`);
+    logger.info(`[QuantService] Starting Quant Grading for ${dateStr || 'yesterday'}...`);
     try {
-        const args = ['grading_engine.py'];
-        if (dateStr) args.push(dateStr);
+        const result = await withExponentialBackoff(
+            async () => {
+                return new Promise((resolve, reject) => {
+                    const args = ['grading_engine.py'];
+                    if (dateStr) args.push(dateStr);
 
-        const result = await new Promise((resolve, reject) => {
-            const py = spawn(PYTHON_BIN, args, {
-                cwd: path.join(__dirname, 'quant'),
-                env: buildPythonEnv(),
-            });
-            let stdout = '';
-            py.stdout.on('data', d => { stdout += d; console.log(`[Python|Grading] ${d.toString().trim()}`); });
-            py.stderr.on('data', d => console.warn(`[Python|Grading|ERR] ${d.toString().trim()}`));
-            py.on('close', code => code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`)));
-            py.on('error', reject);
-            setTimeout(() => { py.kill(); reject(new Error('Grading timeout')); }, 5 * 60 * 1000);
-        });
+                    const py = spawn(PYTHON_BIN, args, {
+                        cwd: path.join(__dirname, 'quant'),
+                        env: buildPythonEnv(),
+                    });
+
+                    let stdout = '';
+                    py.stdout.on('data', d => { 
+                        stdout += d; 
+                        logger.info(`[Python|Grading] ${d.toString().trim()}`); 
+                    });
+                    py.stderr.on('data', d => logger.warn(`[Python|Grading|ERR] ${d.toString().trim()}`));
+                    py.on('close', code => code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`)));
+                    py.on('error', reject);
+                    setTimeout(() => { py.kill(); reject(new Error('Grading timeout')); }, 5 * 60 * 1000);
+                });
+            },
+            {
+                maxAttempts: 2,
+                baseDelayMs: 2000,
+                backoffMultiplier: 2.5,
+                label: 'Quant grading'
+            }
+        );
 
         const gradedMatch = result.match(/Graded (\d+)\/(\d+)/);
         return {
@@ -205,19 +280,28 @@ export const runQuantGrading = async (dateStr = null) => {
  * Run performance tracker and save to Firestore.
  */
 export const runQuantPerformance = async () => {
-    console.log('[QuantService] Computing quant performance metrics...');
+    logger.info('[QuantService] Computing quant performance metrics...');
     try {
-        await new Promise((resolve, reject) => {
-            const py = spawn(PYTHON_BIN, ['performance_tracker.py'], {
-                cwd: path.join(__dirname, 'quant'),
-                env: buildPythonEnv(),
-            });
-            py.stdout.on('data', d => console.log(`[Python|Perf] ${d.toString().trim()}`));
-            py.stderr.on('data', d => console.warn(`[Python|Perf|ERR] ${d.toString().trim()}`));
-            py.on('close', code => code === 0 ? resolve() : reject(new Error(`Exit code ${code}`)));
-            py.on('error', reject);
-            setTimeout(() => { py.kill(); reject(new Error('Performance timeout')); }, 3 * 60 * 1000);
-        });
+        await withExponentialBackoff(
+            async () => {
+                return new Promise((resolve, reject) => {
+                    const py = spawn(PYTHON_BIN, ['performance_tracker.py'], {
+                        cwd: path.join(__dirname, 'quant'),
+                        env: buildPythonEnv(),
+                    });
+                    py.stdout.on('data', d => logger.info(`[Python|Perf] ${d.toString().trim()}`));
+                    py.stderr.on('data', d => logger.warn(`[Python|Perf|ERR] ${d.toString().trim()}`));
+                    py.on('close', code => code === 0 ? resolve() : reject(new Error(`Exit code ${code}`)));
+                    py.on('error', reject);
+                    setTimeout(() => { py.kill(); reject(new Error('Performance timeout')); }, 3 * 60 * 1000);
+                });
+            },
+            {
+                maxAttempts: 2,
+                baseDelayMs: 2000,
+                label: 'Performance tracking'
+            }
+        );
         return { status: 'success' };
     } catch (err) {
         return { status: 'error', error: err.message };
@@ -242,69 +326,92 @@ const BASKETBALL_SCRIPT = path.join(__dirname, 'quant', 'basketball_pipeline.py'
  */
 export const runBasketballPipeline = async (dateStr = null, dryRun = false) => {
     const label = dryRun ? 'DRY RUN' : (dateStr || 'today');
-    console.log(`[QuantService] 🏀 Starting Basketball Pipeline (${label})...`);
+    logger.info(`[QuantService] 🏀 Starting Basketball Pipeline (${label})...`);
 
-    return new Promise((resolve, reject) => {
-        const args = ['basketball_pipeline.py'];
-        if (dateStr) args.push(dateStr);
-        if (dryRun) args.push('--dry-run');
+    try {
+        const { stdout } = await withExponentialBackoff(
+            async () => {
+                return new Promise((resolve, reject) => {
+                    const args = ['basketball_pipeline.py'];
+                    if (dateStr) args.push(dateStr);
+                    if (dryRun) args.push('--dry-run');
 
-        console.log(`[QuantService] Spawning: ${PYTHON_BIN} ${args.join(' ')}`);
+                    logger.info(`[QuantService] Spawning: ${PYTHON_BIN} ${args.join(' ')}`);
 
-        const py = spawn(PYTHON_BIN, args, {
-            cwd: path.join(__dirname, 'quant'),
-            env: buildPythonEnv(),
-        });
+                    const py = spawn(PYTHON_BIN, args, {
+                        cwd: path.join(__dirname, 'quant'),
+                        env: buildPythonEnv(),
+                    });
 
-        let stdout = '';
-        let stderr = '';
+                    let stdout = '';
+                    let stderr = '';
 
-        py.stdout.on('data', (data) => {
-            const line = data.toString();
-            stdout += line;
-            line.split('\n').filter(Boolean).forEach(l => console.log(`[Python|Basketball] ${l}`));
-        });
-        py.stderr.on('data', (data) => {
-            const line = data.toString();
-            stderr += line;
-            line.split('\n').filter(Boolean).forEach(l => console.warn(`[Python|Basketball|ERR] ${l}`));
-        });
+                    py.stdout.on('data', (data) => {
+                        const line = data.toString();
+                        stdout += line;
+                        line.split('\n').filter(Boolean).forEach(l => logger.info(`[Python|Basketball] ${l}`));
+                    });
+                    py.stderr.on('data', (data) => {
+                        const line = data.toString();
+                        stderr += line;
+                        line.split('\n').filter(Boolean).forEach(l => logger.warn(`[Python|Basketball|ERR] ${l}`));
+                    });
 
-        py.on('close', (code) => {
-            // Check for "no games today" — not an error, just fall back to OpenAI
-            if (stdout.includes('NO_GAMES')) {
-                console.log('[QuantService] 🏀 Basketball: no NBA games scheduled today — triggering OpenAI fallback.');
-                resolve({ status: 'no_games', generated: 0 });
-                return;
+                    py.on('close', (code) => {
+                        // Check for "no games today" — not an error, just fall back to OpenAI
+                        if (stdout.includes('NO_GAMES')) {
+                            logger.info('[QuantService] 🏀 Basketball: no NBA games scheduled today — triggering OpenAI fallback.');
+                            resolve({ stdout, stderr, noGames: true });
+                            return;
+                        }
+                        if (code !== 0) {
+                            reject(new Error(`Basketball pipeline exited with code ${code}: ${stderr.slice(-500)}`));
+                            return;
+                        }
+                        resolve({ stdout, stderr });
+                    });
+
+                    py.on('error', (err) => reject(new Error(`Failed to spawn basketball pipeline: ${err.message}`)));
+
+                    // Safety timeout: 5 minutes
+                    setTimeout(() => {
+                        py.kill('SIGTERM');
+                        reject(new Error('Basketball pipeline timed out after 5 minutes'));
+                    }, 5 * 60 * 1000);
+                });
+            },
+            {
+                maxAttempts: 2,
+                baseDelayMs: 2000,
+                backoffMultiplier: 2.5,
+                maxDelayMs: 15000,
+                label: 'Basketball pipeline execution'
             }
-            if (code !== 0) {
-                reject(new Error(`Basketball pipeline exited with code ${code}: ${stderr.slice(-500)}`));
-                return;
-            }
+        );
 
-            // Parse summary stats from stdout
-            const gamesMatch  = stdout.match(/Games analyzed:\s*(\d+)/);
-            const betsMatch   = stdout.match(/Value bets identified:\s*(\d+)/);
-            const gamesAnalyzed = gamesMatch ? parseInt(gamesMatch[1]) : 0;
-            const generated     = betsMatch  ? parseInt(betsMatch[1])  : 0;
+        // Check for "no games today" — not an error, just fall back to OpenAI
+        if (stdout.includes('NO_GAMES')) {
+            logger.info('[QuantService] 🏀 Basketball: no NBA games scheduled today — triggering OpenAI fallback.');
+            return { status: 'no_games', generated: 0 };
+        }
 
-            console.log(`[QuantService] ✅ Basketball done: ${generated} value bets from ${gamesAnalyzed} games.`);
-            resolve({
-                status: 'success',
-                generated,
-                matches_analyzed: gamesAnalyzed,
-                date: dateStr || getLagosDateKey(),
-            });
-        });
+        // Parse summary stats from stdout
+        const gamesMatch  = stdout.match(/Games analyzed:\s*(\d+)/);
+        const betsMatch   = stdout.match(/Value bets identified:\s*(\d+)/);
+        const gamesAnalyzed = gamesMatch ? parseInt(gamesMatch[1]) : 0;
+        const generated     = betsMatch  ? parseInt(betsMatch[1])  : 0;
 
-        py.on('error', (err) => reject(new Error(`Failed to spawn basketball pipeline: ${err.message}`)));
-
-        // Safety timeout: 5 minutes
-        setTimeout(() => {
-            py.kill('SIGTERM');
-            reject(new Error('Basketball pipeline timed out after 5 minutes'));
-        }, 5 * 60 * 1000);
-    });
+        logger.info(`[QuantService] ✅ Basketball done: ${generated} value bets from ${gamesAnalyzed} games.`);
+        return {
+            status: 'success',
+            generated,
+            matches_analyzed: gamesAnalyzed,
+            date: dateStr || getLagosDateKey(),
+        };
+    } catch (err) {
+        logger.error(`[QuantService] 🏀 Basketball pipeline failed: ${err.message}`);
+        return { status: 'error', error: err.message };
+    }
 };
 
 // ── Lagos date helper (mirror of scheduler.js) ────────────────────────────────
