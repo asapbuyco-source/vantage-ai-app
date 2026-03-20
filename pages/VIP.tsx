@@ -50,7 +50,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
 
   // Accumulator Modal State
   const [isAccuOpen, setIsAccuOpen] = useState(false);
-  const [accuRisk, setAccuRisk] = useState<'low' | 'medium' | 'high'>('medium');
+  const [accuTier, setAccuTier] = useState<string>('baseline');
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -202,8 +202,8 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     setTimeout(() => setCopiedId(null), 1500);
   };
 
-  const openAccumulator = (risk: 'low' | 'medium' | 'high') => {
-    setAccuRisk(risk);
+  const openAccumulator = (tier: string) => {
+    setAccuTier(tier);
     setIsAccuOpen(true);
   };
 
@@ -492,7 +492,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: ['baseline', 'alpha_edge', 'syndicate', 'variance_play'].indexOf(tierKey) * 0.08 }}
                   className={`rounded-2xl border bg-gradient-to-br ${meta.gradient} ${meta.border} p-4 transition-all cursor-pointer hover:shadow-lg`}
-                  onClick={() => ticket && openAccumulator('medium')}
+                  onClick={() => ticket && openAccumulator(tierKey)}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -826,7 +826,13 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           </>
         )}
 
-        <AccumulatorModal isOpen={isAccuOpen} onClose={() => setIsAccuOpen(false)} initialRisk={accuRisk} />
+        {/* Modal mounts dynamically and handles its own entry/exit */}
+        <AccumulatorModal
+          isOpen={isAccuOpen}
+          onClose={() => setIsAccuOpen(false)}
+          accumulators={quantAccumulators}
+          initialTier={accuTier}
+        />
       </div>
     );
   }
