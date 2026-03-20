@@ -59,6 +59,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     });
   }, []);
 
+  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'accumulators'>('predictions');
   const [picksDay, setPicksDay] = useState<'today' | 'tomorrow'>('today');
   const [tomorrowFixtures, setTomorrowFixtures] = useState<Match[]>([]);
   const [tomorrowLoading, setTomorrowLoading] = useState(false);
@@ -465,9 +466,26 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           </a>
         )}
 
+       {/* ── TAB SWITCH ── */}
+       <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 mb-6">
+          <button
+            onClick={() => setActiveVipTab('predictions')}
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${activeVipTab === 'predictions' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-vantage-cyan' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            <BarChart2 size={16} /> {language === 'fr' ? 'Pronostics IA' : 'AI Predictions'}
+          </button>
+          <button
+            onClick={() => setActiveVipTab('accumulators')}
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${activeVipTab === 'accumulators' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-vantage-purple' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            <Layers size={16} /> {language === 'fr' ? 'Accumulateurs IA' : 'AI Accumulators'}
+          </button>
+        </div>
+
         {/* ── 4 NAMED ACCUMULATORS ── */}
-        <div className="mb-8">
-          <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300 mb-3">
+        {activeVipTab === 'accumulators' && (
+          <div className="mb-8 animate-in slide-in-from-right duration-300">
+            <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300 mb-3">
             <Layers size={16} className="text-vantage-purple" />
             {language === 'fr' ? 'Accumulateurs IA' : 'AI Accumulators'}
             <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-vantage-purple/15 border border-vantage-purple/30 text-vantage-purple ml-1">DAILY</span>
@@ -542,9 +560,11 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
             })}
           </div>
         </div>
+        )}
 
         {/* ── VANTAGE MODEL PICKS SECTION ──────────────────────────────────────── */}
-        <div className="mb-6">
+        {activeVipTab === 'predictions' && (
+        <div className="mb-6 animate-in slide-in-from-left duration-300">
           {/* Header */}
           <button
             onClick={() => setQuantExpanded(v => !v)}
@@ -741,6 +761,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
             )}
           </AnimatePresence>
         </div>
+        )}
 
         {/* ── TODAY / TOMORROW DATE TOGGLE ── */}
         <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 border border-slate-200 dark:border-white/10">
