@@ -287,11 +287,37 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
 
 
 # ── H2H via API-Football.com (with Firestore cache) ──────────────────────────
+
+def _get_firestore_client():
+    """
+    Return an authenticated Firestore client.
+    Reads FIREBASE_SERVICE_ACCOUNT JSON (already set in Railway for Node.js backend)
+    and uses it as explicit credentials so no ADC / key-file is needed.
+    Falls back to ADC if the env var is absent (local dev with `gcloud auth`).
+    """
+    import json
+    from google.cloud import firestore as gfs
+    sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
+    if sa_json:
+        try:
+            from google.oauth2 import service_account
+            info = json.loads(sa_json)
+            creds = service_account.Credentials.from_service_account_info(
+                info,
+                scopes=["https://www.googleapis.com/auth/datastore"],
+            )
+            project_id = info.get("project_id") or os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+            return gfs.Client(project=project_id, credentials=creds)
+        except Exception as e:
+            print(f"[H2H] Failed to build Firestore client from FIREBASE_SERVICE_ACCOUNT: {e}", file=sys.stderr)
+    # Fallback: Application Default Credentials (local dev)
+    return gfs.Client()
+
+
 def _load_team_cache() -> dict[str, int]:
     """Load API-Football team ID cache from Firestore (persistent across runs)."""
     try:
-        from google.cloud import firestore as gfs
-        db = gfs.Client()
+        db = _get_firestore_client()
         doc = db.collection("system_cache").document("af_team_ids").get(timeout=5)
         if doc.exists:
             return doc.to_dict().get("teams", {})
@@ -302,8 +328,7 @@ def _load_team_cache() -> dict[str, int]:
 def _save_team_cache(cache: dict[str, int]):
     """Persist team ID cache to Firestore."""
     try:
-        from google.cloud import firestore as gfs
-        db = gfs.Client()
+        db = _get_firestore_client()
         db.collection("system_cache").document("af_team_ids").set({
             "teams": cache,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -378,8 +403,7 @@ def _fetch_h2h_cached(home_name: str, away_name: str, home_sm_id: int, away_sm_i
     # ── Check Firestore cache first ────────────────────────────────────────
     cache_key = f"{min(home_sm_id, away_sm_id)}_{max(home_sm_id, away_sm_id)}"
     try:
-        from google.cloud import firestore as gfs
-        db = gfs.Client()
+        db = _get_firestore_client()
         cache_doc = db.collection("h2h_cache").document(cache_key).get(timeout=5)
         if cache_doc.exists:
             cd = cache_doc.to_dict()
@@ -452,8 +476,7 @@ def _fetch_h2h_cached(home_name: str, away_name: str, home_sm_id: int, away_sm_i
 
     # ── Cache to Firestore ─────────────────────────────────────────────────
     try:
-        from google.cloud import firestore as gfs
-        db = gfs.Client()
+        db = _get_firestore_client()
         db.collection("h2h_cache").document(cache_key).set({
             "hw": hw, "aw": aw, "dr": dr,
             "avg_goals": result[3], "btts_rate": result[4],
@@ -581,13 +604,16 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
     print(f"[DataPipeline] Raw fixtures: {len(raw)}")
 
     # ── Filter approved leagues ────────────────────────────────────────────
-    from league_config import get_league_tier
+    from league_config import get_league_info, get_priority_score
+    TIER_PRIORITY = {1: 150, 2: 100, 3: 60, 4: 30}
     approved = []
     for item in raw:
         lid = item.get("league_id")
-        tier, priority = get_league_tier(lid)
+        league_info = get_league_info(lid)
         
-        if tier > 0:
+        if league_info:
+            tier = league_info["tier"]
+            priority = get_priority_score(lid)
             participants = item.get("participants", [])
             home_p = next((p for p in participants if p.get("meta", {}).get("location") == "home"), None)
             away_p = next((p for p in participants if p.get("meta", {}).get("location") == "away"), None)
@@ -596,7 +622,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
                 approved.append({
                     "raw": item,
                     "league_id": lid,
-                    "league_name": item.get("league", {}).get("name") if item.get("league") else "Unknown League",
+                    "league_name": league_info.get("name") or (item.get("league", {}).get("name") if item.get("league") else "Unknown League"),
                     "league_tier": tier,
                     "priority": priority,
                     "home_p": home_p,
