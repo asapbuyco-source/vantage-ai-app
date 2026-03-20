@@ -512,6 +512,7 @@ export interface AppSettings {
     telegramLastSentAt?: string;    // ISO timestamp of last successful send
     telegramLastSentCount?: number; // Number of picks shown in last send
     referralRewardDays?: number; // Free VIP days granted per successful referral
+    freePicksCount?: number;     // Number of picks shown to free users (default 2)
     annualPlanEnabled?: boolean;
     footballGenTime?: string;
     basketballGenTime?: string;

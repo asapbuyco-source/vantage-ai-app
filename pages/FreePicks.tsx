@@ -10,6 +10,7 @@ import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
+import { getAppSettings } from '../services/db';
 import { TeamLogo } from '../components/TeamLogo';
 import { NavigationTab, Match } from '../types';
 
@@ -59,6 +60,13 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
   const { userProfile, isAdmin } = useAuth();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAllLeans, setShowAllLeans] = useState(false);
+  const [freePicksCount, setFreePicksCount] = useState(2);
+
+  React.useEffect(() => {
+    getAppSettings().then(s => {
+      if (s.freePicksCount !== undefined) setFreePicksCount(s.freePicksCount);
+    });
+  }, []);
 
   const isVip = userProfile?.isVip || isAdmin;
 
@@ -88,10 +96,10 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
       m.category === 'safe' || m.category === 'value'
     );
 
-    // Hook: 1-2 free picks
-    const hook = topPicks.slice(0, 2);
-    // VIP Teasers: next 5-8 picks (blurred)
-    const teasers = topPicks.slice(2, 10);
+    // Hook: dynamic free picks based on admin setting
+    const hook = topPicks.slice(0, freePicksCount);
+    // VIP Teasers: next up to 8 picks (blurred)
+    const teasers = topPicks.slice(freePicksCount, freePicksCount + 8);
     // Data cards: everything else
     const teaseIds = new Set([...hook, ...teasers].map(m => m.id));
     const data = sorted.filter(m => !teaseIds.has(m.id));
@@ -104,7 +112,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
     });
 
     return { hookPicks: hook, vipTeasers: teasers, dataCards: data, leagueBreakdown: leagues };
-  }, [predictions]);
+  }, [predictions, freePicksCount]);
 
   const totalAnalyzed = predictions.length;
   const topLeagues = Object.entries(leagueBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 4);

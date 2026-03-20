@@ -80,6 +80,9 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const [schedulesSaved, setSchedulesSaved] = useState(false);
     const [savingSeo, setSavingSeo] = useState(false);
     const [seoSaved, setSeoSaved] = useState(false);
+    const [freePicksCount, setFreePicksCount] = useState(2);
+    const [savingFreePicks, setSavingFreePicks] = useState(false);
+    const [freePicksSaved, setFreePicksSaved] = useState(false);
 
     useEffect(() => {
         isMounted.current = true;
@@ -101,6 +104,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             if (s.gradingTime) setGradingTime(s.gradingTime);
             if (s.blogGenTime) setBlogGenTime(s.blogGenTime);
             if (s.googleSiteVerificationTag) setGoogleSiteVerificationTag(s.googleSiteVerificationTag);
+            if (s.freePicksCount !== undefined) setFreePicksCount(s.freePicksCount);
         });
         return () => { isMounted.current = false; };
     }, []);
@@ -167,6 +171,19 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             console.error('Failed to save SEO settings', e);
         } finally {
             setSavingSeo(false);
+        }
+    };
+
+    const handleSaveFreePicks = async () => {
+        setSavingFreePicks(true);
+        try {
+            await saveAppSettings({ freePicksCount });
+            setFreePicksSaved(true);
+            setTimeout(() => setFreePicksSaved(false), 3000);
+        } catch (e) {
+            console.error('Failed to save free picks count', e);
+        } finally {
+            setSavingFreePicks(false);
         }
     };
 
@@ -993,6 +1010,38 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                     onChange={e => setGradingTime(e.target.value)}
                                     className="bg-transparent text-white text-sm outline-none font-mono"
                                 />
+                            </div>
+                        </div>
+                    </GlassCard>
+
+                    {/* Content & Growth Settings */}
+                    <GlassCard className="border-emerald-500/30 bg-emerald-500/5">
+                        <h3 className="text-sm font-bold text-emerald-500 uppercase mb-3 flex items-center gap-2">
+                            <Activity size={16} /> Content Settings
+                        </h3>
+                        <div className="flex flex-col gap-3">
+                            <div>
+                                <label className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Free Picks Count</label>
+                                <p className="text-xs text-gray-400 mb-2">
+                                    Number of unblurred predictions shown to non-VIP users on the Free Picks page.
+                                </p>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={20}
+                                        value={freePicksCount}
+                                        onChange={(e) => setFreePicksCount(Number(e.target.value))}
+                                        className="flex-1 bg-slate-200 dark:bg-black/40 border border-slate-300 dark:border-white/10 rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-emerald-500 outline-none text-slate-900 dark:text-white"
+                                    />
+                                    <button
+                                        onClick={handleSaveFreePicks}
+                                        disabled={savingFreePicks}
+                                        className={`px-4 font-bold rounded-lg text-sm transition-colors disabled:opacity-50 ${freePicksSaved ? 'bg-emerald-500 text-white' : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-500 border border-emerald-500/30'}`}
+                                    >
+                                        {savingFreePicks ? <RefreshCw size={14} className="animate-spin" /> : freePicksSaved ? '✓ Saved' : 'Save Config'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </GlassCard>
