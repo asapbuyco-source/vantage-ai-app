@@ -57,9 +57,11 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
 
   // Load the scheduled football gen time from Firestore settings (for display only)
   const [scheduledTime, setScheduledTime] = useState('08:00');
+  const [freePicksCount, setFreePicksCount] = useState(2);
   useEffect(() => {
     getAppSettings().then(s => {
       if (s.footballGenTime) setScheduledTime(s.footballGenTime);
+      if (s.freePicksCount !== undefined) setFreePicksCount(s.freePicksCount);
     }).catch(() => { }); // silently fail — display is non-critical
   }, []);
 
@@ -138,6 +140,20 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
     }
     return result;
   }, [fixturePool, searchQuery, sortKey]);
+
+  const freeMatchIds = useMemo(() => {
+    const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
+    const sorted = [...predictions].sort((a, b) => {
+      const rankDiff = (rankPriority[b.value_rank] || 0) - (rankPriority[a.value_rank] || 0);
+      if (rankDiff !== 0) return rankDiff;
+      return (b.confidence || 0) - (a.confidence || 0);
+    });
+    const topPicks = sorted.filter(m =>
+      m.value_rank === 'high' || m.value_rank === 'medium' ||
+      m.category === 'safe' || m.category === 'value'
+    );
+    return new Set(topPicks.slice(0, freePicksCount).map(m => m.id));
+  }, [predictions, freePicksCount]);
 
   const groupedMatches = useMemo(() => {
     if (sortKey !== 'league') return { 'All Matches': filteredMatches };
@@ -430,6 +446,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                   const hasConfidence = match.confidence && match.confidence > 0;
                   const hasOdds = match.odds && match.odds > 1;
                   const hasPrediction = match.prediction_en || match.prediction;
+                  const isFreeMatch = freeMatchIds.has(match.id);
+                  const isUnlocked = isVip || isFreeMatch;
 
                   return (
                     // @ts-ignore
@@ -514,20 +532,29 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                             {/* Probability mini-stats */}
                             {(match.home_win_prob || match.over25_prob) && (
                               <div className="mt-2 flex items-center justify-center gap-1.5 flex-wrap">
-                                {match.home_win_prob > 0 && (
-                                  <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">H {Math.round(match.home_win_prob * 100)}%</span>
-                                )}
-                                {match.draw_prob > 0 && (
-                                  <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">D {Math.round(match.draw_prob * 100)}%</span>
-                                )}
-                                {match.away_win_prob > 0 && (
-                                  <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">A {Math.round(match.away_win_prob * 100)}%</span>
-                                )}
-                                {match.over25_prob > 0 && (
-                                  <span className="text-[9px] font-bold text-vantage-cyan/70 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>
-                                )}
-                                {match.btts_prob > 0 && (
-                                  <span className="text-[9px] font-bold text-amber-400/70 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>
+                                {isUnlocked ? (
+                                  <>
+                                    {match.home_win_prob > 0 && (
+                                      <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">H {Math.round(match.home_win_prob * 100)}%</span>
+                                    )}
+                                    {match.draw_prob > 0 && (
+                                      <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">D {Math.round(match.draw_prob * 100)}%</span>
+                                    )}
+                                    {match.away_win_prob > 0 && (
+                                      <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">A {Math.round(match.away_win_prob * 100)}%</span>
+                                    )}
+                                    {match.over25_prob > 0 && (
+                                      <span className="text-[9px] font-bold text-vantage-cyan/70 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>
+                                    )}
+                                    {match.btts_prob > 0 && (
+                                      <span className="text-[9px] font-bold text-amber-400/70 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <button onClick={(e) => { e.stopPropagation(); setTab('vip'); }} className="flex items-center gap-1 text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded cursor-pointer hover:bg-vantage-purple/20 transition-colors">
+                                    <Lock size={9} />
+                                    {language === 'fr' ? 'Stats Détaillées VIP' : 'Unlock Detailed Stats'}
+                                  </button>
                                 )}
                               </div>
                             )}
@@ -536,10 +563,16 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                             <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/5 pt-3">
                               <div className="flex items-center gap-2">
                                 {hasConfidence && (
-                                  <span className="text-[10px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    <BarChart3 size={9} />
-                                    {match.confidence}%
-                                  </span>
+                                  isUnlocked ? (
+                                    <span className="text-[10px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                      <BarChart3 size={9} />
+                                      {match.confidence}%
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-vantage-purple/60 bg-vantage-purple/5 border border-vantage-purple/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                      <Lock size={9} /> VIP
+                                    </span>
+                                  )
                                 )}
                                 {!hasConfidence && (
                                   <span className="text-[10px] text-gray-500 flex items-center gap-1">
@@ -548,22 +581,24 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
-                                 <button
-                                   onClick={(e) => {
-                                     e.stopPropagation();
-                                     const pred = getPredictionText(match);
-                                     const text = pred
-                                       ? `${match.homeTeam} vs ${match.awayTeam} \u2014 ${pred} (${match.confidence}%)`
-                                       : `${match.homeTeam} vs ${match.awayTeam}`;
-                                     handleCopy(text, match.id);
-                                   }}
-                                   className="p-1.5 rounded-lg bg-white/5 hover:bg-vantage-cyan/10 text-gray-500 hover:text-vantage-cyan transition-colors"
-                                   title="Copy prediction"
-                                 >
-                                   {copiedId === match.id
-                                     ? <Check size={11} className="text-green-400" />
-                                     : <Copy size={11} />}
-                                 </button>
+                                 {isUnlocked && (
+                                   <button
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       const pred = getPredictionText(match);
+                                       const text = pred
+                                         ? `${match.homeTeam} vs ${match.awayTeam} \u2014 ${pred} (${match.confidence}%)`
+                                         : `${match.homeTeam} vs ${match.awayTeam}`;
+                                       handleCopy(text, match.id);
+                                     }}
+                                     className="p-1.5 rounded-lg bg-white/5 hover:bg-vantage-cyan/10 text-gray-500 hover:text-vantage-cyan transition-colors"
+                                     title="Copy prediction"
+                                   >
+                                     {copiedId === match.id
+                                       ? <Check size={11} className="text-green-400" />
+                                       : <Copy size={11} />}
+                                   </button>
+                                 )}
                                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-vantage-cyan transition-colors flex items-center gap-1">
                                    {language === 'fr' ? 'Détails' : 'Details'}
                                    <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
