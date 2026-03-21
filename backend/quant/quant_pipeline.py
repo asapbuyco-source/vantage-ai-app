@@ -109,6 +109,8 @@ def _mock_matches() -> list[MatchData]:
                                away_avg_scored=0.9, away_avg_conceded=1.7,
                                form="L D L W D", form_score=0.45, win_rate=0.30)
         od = OddsData(home_odds=ho, draw_odds=do, away_odds=ao,
+                      dc_1x_odds=1.20, dc_x2_odds=1.35, dc_12_odds=1.15,
+                      over15_odds=1.25, under15_odds=3.00,
                       over25_odds=ov25o, under25_odds=un25o,
                       btts_yes_odds=bttsy, btts_no_odds=bttsn)
         m = MatchData(
@@ -224,6 +226,38 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                 best_bet = None
                 category = "no_edge"
                 value_rank = "none"
+
+            # ── Conditional Safety Downgrade for Predictions (Risk Mitigation) ──
+            if best_bet:
+                dynamic_draw_safe = "Double Chance (1X)" if probs.home_win >= probs.away_win else "Double Chance (X2)"
+                
+                SAFETY_DOWNGRADES = {
+                    "Over 2.5 Goals": "Over 1.5 Goals",
+                    "Over 3.5 Goals": "Over 2.5 Goals",
+                    "Home Win": "Double Chance (1X)",
+                    "Away Win": "Double Chance (X2)",
+                    "BTTS": "Over 1.5 Goals",
+                    "Draw": dynamic_draw_safe
+                }
+                
+                if best_bet.market in SAFETY_DOWNGRADES:
+                    # Apply safety only if the prediction is considered risky
+                    is_risky_prob = best_bet.model_prob < 0.62
+                    is_low_agreement = probs.confidence_score < 0.60
+                    is_volatile_league = match.league_tier >= 3
+
+                    if is_risky_prob or is_low_agreement or is_volatile_league:
+                        safe_target = SAFETY_DOWNGRADES[best_bet.market]
+                        safe_bet = next((b for b in all_value_bets if b.market == safe_target), None)
+                        if safe_bet:
+                            reasons = []
+                            if is_risky_prob: reasons.append(f"Prob {best_bet.model_prob:.0%}")
+                            if is_low_agreement: reasons.append(f"Agreement {probs.confidence_score:.2f}")
+                            if is_volatile_league: reasons.append(f"Tier {match.league_tier}")
+                            reason_str = " & ".join(reasons)
+                            
+                            _safe_print(f"[QuantPipeline]   🛡️ Safety Downgrade [{reason_str}]: {best_bet.market} -> {safe_target}")
+                            best_bet = safe_bet
 
             # ── Odds Staleness Guard ────────────────────────────────────────
             staleness_mult = check_odds_staleness(match.odds.odds_fetched_at) if match.odds else 1.0
