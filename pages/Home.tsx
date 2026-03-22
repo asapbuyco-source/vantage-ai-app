@@ -126,6 +126,20 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
 
   const filteredMatches = useMemo(() => {
     let result = [...fixturePool];
+
+    // Filter out matches that have already started if we are viewing today
+    const now = new Date();
+    let isToday = true;
+    if (activeDate) {
+      const [y, m, d] = activeDate.split('-').map(Number);
+      isToday = y === now.getFullYear() && (m - 1) === now.getMonth() && d === now.getDate();
+    }
+
+    if (isToday) {
+      const currentTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      result = result.filter(match => !match.time || match.time >= currentTimeStr);
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(m =>

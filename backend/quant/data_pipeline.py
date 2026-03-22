@@ -601,7 +601,23 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         print("[DataPipeline] No fixtures returned.", file=sys.stderr)
         return []
 
-    print(f"[DataPipeline] Raw fixtures: {len(raw)}")
+    # ── 🚨 Global Past Match Filter ────────────────────────────────────────
+    future_raw = []
+    now_utc = datetime.now(timezone.utc)
+    for item in raw:
+        starting_at = item.get("starting_at", "")
+        if starting_at:
+            try:
+                kick = datetime.fromisoformat(starting_at.replace("Z", "+00:00"))
+                if kick > now_utc:
+                    future_raw.append(item)
+                continue
+            except Exception:
+                pass
+        future_raw.append(item)
+    raw = future_raw
+
+    print(f"[DataPipeline] Raw fixtures (future only): {len(raw)}")
 
     # ── Filter approved leagues ────────────────────────────────────────────
     from league_config import get_league_info, get_priority_score
