@@ -33,6 +33,20 @@ const CATEGORY_CONFIG = {
   no_edge: { label: 'DATA', bg: 'bg-gray-500/15', border: 'border-gray-500/30', text: 'text-gray-400', dot: 'bg-gray-400' },
 };
 
+const TOP_LEAGUES = [
+  'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1',
+  'Champions League', 'Europa League', 'World Cup', 'Euro', 'Copa America'
+];
+
+function getLeagueTier(match: Match): number {
+  if (match.league_tier !== undefined && match.league_tier > 0) return match.league_tier;
+  const leagueName = match.league || '';
+  for (let i = 0; i < TOP_LEAGUES.length; i++) {
+    if (leagueName.includes(TOP_LEAGUES[i])) return 1;
+  }
+  return 99;
+}
+
 const FormDots = ({ form }: { form?: string }) => {
   if (!form || form === 'N/A') return null;
   const results = form.split(' ').slice(0, 5);
@@ -75,7 +89,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
 
   // ─── Filters ─────────────────────────────────────────────────────────────
   const [activeSport, setActiveSport] = useState<Sport>('football');
-  const [sortKey, setSortKey] = useState<SortKey>('time');
+  const [sortKey, setSortKey] = useState<SortKey>('league');
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [liveCount, setLiveCount] = useState(0);
@@ -132,8 +146,13 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         break;
       case 'league': 
         result.sort((a, b) => {
+          const tierA = getLeagueTier(a);
+          const tierB = getLeagueTier(b);
+          if (tierA !== tierB) return tierA - tierB;
           const leagueCompare = a.league.localeCompare(b.league);
           if (leagueCompare !== 0) return leagueCompare;
+          const timeCompare = a.time.localeCompare(b.time);
+          if (timeCompare !== 0) return timeCompare;
           return (categoryPriority[b.category] || 0) - (categoryPriority[a.category] || 0);
         }); 
         break;
