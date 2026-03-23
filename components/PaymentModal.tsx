@@ -65,6 +65,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     localStorage.setItem('pendingVipPlan', plan.id);
 
     try {
+        if (typeof window !== 'undefined' && (window as any).fbq) {
+            (window as any).fbq('track', 'InitiateCheckout', { currency: 'XAF', value: parseInt(plan.price) });
+        }
+    } catch(err) { console.error('Pixel error', err); }
+
+    try {
       if (gateway === 'fapshi') {
         const { link, transId } = await initiatePayment(
           parseInt(plan.price),

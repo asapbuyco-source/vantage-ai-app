@@ -76,6 +76,11 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
                 await signInWithEmail(email, password);
             } else {
                 await signUpWithEmail(email, password, referralCodeInput);
+                try {
+                    if (typeof window !== 'undefined' && (window as any).fbq) {
+                        (window as any).fbq('track', 'CompleteRegistration');
+                    }
+                } catch(err) { console.error('Pixel error', err); }
             }
         } catch (e) {
             // Error handled by AuthContext
