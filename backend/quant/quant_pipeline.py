@@ -222,9 +222,32 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                     value_rank = "none"
             else:
                 # No odds/markets at all — still keep the match for the dashboard
-                _safe_print(f"[QuantPipeline]   ⚪ {match.home_team} vs {match.away_team}: No odds available, keeping as data card.")
-                best_bet = None
-                category = "no_edge"
+                _safe_print(f"[QuantPipeline]   ⚪ {match.home_team} vs {match.away_team}: No odds available, providing probability lean.")
+                
+                from ev_engine import ValueBet
+                candidate_markets = [
+                    ("Home Win", probs.home_win),
+                    ("Away Win", probs.away_win),
+                    ("Draw", probs.draw),
+                    ("Over 2.5 Goals", probs.over25),
+                    ("Under 2.5 Goals", probs.under25),
+                    ("BTTS", probs.btts),
+                    ("Double Chance (1X)", probs.double_chance_1x),
+                    ("Double Chance (X2)", probs.double_chance_x2),
+                ]
+                lean_market, lean_prob = max(candidate_markets, key=lambda x: x[1])
+                
+                best_bet = ValueBet(
+                    market=lean_market,
+                    bet_label=lean_market,
+                    model_prob=lean_prob,
+                    market_prob=1.0,
+                    odds=0.0,
+                    expected_value=0.0,
+                    inefficiency=0.0,
+                    is_value=False
+                )
+                category = "lean"
                 value_rank = "none"
 
             # ── Conditional Safety Downgrade for Predictions (Risk Mitigation) ──
