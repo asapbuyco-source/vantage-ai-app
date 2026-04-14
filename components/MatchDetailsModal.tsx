@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Activity, Scale, ShieldAlert, Zap, Loader2, Trophy, Crosshair, Target, BarChart3, Newspaper, Users, CheckCircle2 } from 'lucide-react';
 import { NavigationTab, Match, MatchNews } from '../types';
-import { getLiveOddsFromDB, getH2HFromDB, getMatchNewsFromDB, getFixtureLineupsFromDB, LineupPlayer, TeamForm, H2HRecord, MatchOdds, InjuryReport } from '../services/sportsData';
+import { getLiveOddsFromDB, getH2HFromDB, getMatchNewsFromDB, getFixtureLineupsFromDB, getMatchStatsFromDB, LineupPlayer, TeamForm, H2HRecord, MatchOdds, InjuryReport, MatchStatsData } from '../services/sportsData';
 import { TeamLogo } from './TeamLogo';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +25,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
     const [realH2H, setRealH2H] = useState<H2HRecord | null>(null);
     const [news, setNews] = useState<MatchNews[]>([]);
     const [lineup, setLineup] = useState<{ home: LineupPlayer[]; away: LineupPlayer[] } | null>(null);
+    const [matchStats, setMatchStats] = useState<MatchStatsData | null>(null);
 
     useEffect(() => {
         if (!match) return;
@@ -35,6 +36,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
         setRealH2H(null);
         setNews([]);
         setLineup(null);
+        setMatchStats(null);
 
         document.body.style.overflow = 'hidden';
 
@@ -42,11 +44,12 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
             try {
                 const fixtureId = Number(match.fixtureId || match.id) || 0;
 
-                const [od, h2hData, newsData, lineupData] = await Promise.all([
+                const [od, h2hData, newsData, lineupData, statsData] = await Promise.all([
                     fixtureId ? getLiveOddsFromDB(fixtureId) : null,
                     (match.homeTeamId && match.awayTeamId) ? getH2HFromDB(match.homeTeamId, match.awayTeamId) : null,
                     fixtureId ? getMatchNewsFromDB(fixtureId) : [],
                     fixtureId ? getFixtureLineupsFromDB(fixtureId) : null,
+                    fixtureId ? getMatchStatsFromDB(fixtureId) : null,
                 ]);
 
                 if (isMounted) {
@@ -54,6 +57,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                     setRealH2H(h2hData);
                     setNews(newsData);
                     setLineup(lineupData);
+                    setMatchStats(statsData);
                     setLoading(false);
                 }
             } catch (e) {
@@ -386,24 +390,46 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
                                     {activeTab === 'stats' && (
                                         <div className="space-y-5">
-                                            {(match.homeWinRate !== undefined || match.awayWinRate !== undefined) ? (
+                                            {/* Real Sportmonks stats (possession, shots, corners) */}
+                                            {matchStats?.stats && (
                                                 <>
+                                                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+                                                        <BarChart3 size={12} /> {language === 'fr' ? 'Stats du Match (Live)' : 'Live Match Statistics'}
+                                                        <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-500 border border-green-500/30">LIVE DATA</span>
+                                                    </h4>
                                                     <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider mb-1 text-gray-500">
                                                         <span>{match.homeTeam}</span>
                                                         <span>{match.awayTeam}</span>
                                                     </div>
-                                                    <>
-                                                        {match.homeWinRate !== undefined && renderStatBar(language === 'fr' ? 'Victoires %' : 'Win Rate %', match.homeWinRate || 0, match.awayWinRate || 0, true)}
-                                                        {match.homeAvgScored !== undefined && renderStatBar(language === 'fr' ? 'Buts marqués (moy)' : 'Avg Goals Scored', match.homeAvgScored || 0, match.awayAvgScored || 0, false)}
-                                                        {match.homeAvgConceded !== undefined && renderStatBar(language === 'fr' ? 'Buts concédés (moy)' : 'Avg Goals Conceded', match.homeAvgConceded || 0, match.awayAvgConceded || 0, false)}
-                                                        {match.homeCleanSheetRate !== undefined && renderStatBar(language === 'fr' ? 'Clean sheets %' : 'Clean Sheets %', match.homeCleanSheetRate || 0, match.awayCleanSheetRate || 0, true)}
-                                                    </>
+                                                    {matchStats.stats.possession?.home != null && renderStatBar(language === 'fr' ? 'Possession %' : 'Possession %', matchStats.stats.possession.home, matchStats.stats.possession.away ?? 0, true)}
+                                                    {matchStats.stats.shots?.home != null && renderStatBar(language === 'fr' ? 'Tirs' : 'Shots', matchStats.stats.shots.home, matchStats.stats.shots.away ?? 0)}
+                                                    {matchStats.stats.shots_on_target?.home != null && renderStatBar(language === 'fr' ? 'Tirs cadrés' : 'Shots on Target', matchStats.stats.shots_on_target.home, matchStats.stats.shots_on_target.away ?? 0)}
+                                                    {matchStats.stats.corners?.home != null && renderStatBar(language === 'fr' ? 'Corners' : 'Corners', matchStats.stats.corners.home, matchStats.stats.corners.away ?? 0)}
+                                                    {matchStats.stats.fouls?.home != null && renderStatBar(language === 'fr' ? 'Fautes' : 'Fouls', matchStats.stats.fouls.home, matchStats.stats.fouls.away ?? 0)}
+                                                    {matchStats.stats.yellow_cards?.home != null && renderStatBar(language === 'fr' ? 'Cartons Jaunes' : 'Yellow Cards', matchStats.stats.yellow_cards.home, matchStats.stats.yellow_cards.away ?? 0)}
                                                 </>
-                                            ) : (
+                                            )}
+                                            {/* Fallback: AI-generated season stats */}
+                                            {!matchStats?.stats && (match.homeWinRate !== undefined || match.awayWinRate !== undefined) && (
+                                                <>
+                                                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+                                                        <BarChart3 size={12} /> {language === 'fr' ? 'Stats Saison (IA)' : 'Season Stats (AI)'}
+                                                    </h4>
+                                                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider mb-1 text-gray-500">
+                                                        <span>{match.homeTeam}</span>
+                                                        <span>{match.awayTeam}</span>
+                                                    </div>
+                                                    {match.homeWinRate !== undefined && renderStatBar(language === 'fr' ? 'Victoires %' : 'Win Rate %', match.homeWinRate || 0, match.awayWinRate || 0, true)}
+                                                    {match.homeAvgScored !== undefined && renderStatBar(language === 'fr' ? 'Buts marqués (moy)' : 'Avg Goals Scored', match.homeAvgScored || 0, match.awayAvgScored || 0)}
+                                                    {match.homeAvgConceded !== undefined && renderStatBar(language === 'fr' ? 'Buts concédés (moy)' : 'Avg Goals Conceded', match.homeAvgConceded || 0, match.awayAvgConceded || 0)}
+                                                    {match.homeCleanSheetRate !== undefined && renderStatBar(language === 'fr' ? 'Clean sheets %' : 'Clean Sheets %', match.homeCleanSheetRate || 0, match.awayCleanSheetRate || 0, true)}
+                                                </>
+                                            )}
+                                            {!matchStats?.stats && match.homeWinRate === undefined && (
                                                 <div className="text-center py-10 text-gray-500 text-sm">
                                                     <BarChart3 size={32} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
                                                     <p>{language === 'fr' ? 'Statistiques non disponibles' : 'Stats not available for this match'}</p>
-                                                    <p className="text-xs mt-1 text-gray-400">{language === 'fr' ? '(Match sans données générées par l\'IA)' : '(generated stats for this fixture)'}</p>
+                                                    <p className="text-xs mt-1 text-gray-400">{language === 'fr' ? '(Disponibles pendant/après le match)' : '(Available during/after the match)'}</p>
                                                 </div>
                                             )}
                                         </div>
@@ -503,13 +529,18 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                 </div>
                                             ) : (
                                                 news.map((item, i) => (
-                                                    <div key={item.id || i} className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10">
+                                                    <div key={item.id || i} className="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 space-y-2">
                                                         <div className="flex items-start gap-2">
                                                             <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-vantage-cyan/15 text-vantage-cyan border border-vantage-cyan/30 shrink-0 mt-0.5">
                                                                 {item.type || 'preview'}
                                                             </span>
                                                             <p className="text-sm text-slate-700 dark:text-gray-200 font-medium leading-snug">{item.title}</p>
                                                         </div>
+                                                        {item.body && (
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed pl-1 border-l-2 border-vantage-cyan/20">
+                                                                {item.body}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 ))
                                             )}

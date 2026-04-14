@@ -439,13 +439,24 @@ export const initScheduler = () => {
                 const away = item.participants?.find(p => p.meta?.location === 'away') || {};
                 const homeScore = item.scores?.find(s => s.participant_id === home.id && s.description === 'CURRENT')?.score?.goals ?? 0;
                 const awayScore = item.scores?.find(s => s.participant_id === away.id && s.description === 'CURRENT')?.score?.goals ?? 0;
+                // Map ALL event types: goals, yellow/red cards, substitutions, VAR, penalties
+                const EVENT_TYPE_MAP = {
+                    'GOAL': 'goal', 'OWN-GOAL': 'own_goal', 'PENALTY': 'penalty',
+                    'MISSED-PENALTY': 'missed_penalty', 'YELLOW-CARD': 'yellow_card',
+                    'YELLOWRED-CARD': 'second_yellow', 'RED-CARD': 'red_card',
+                    'SUBST': 'substitution', 'VAR': 'var',
+                };
                 const events = (item.events || []).map(ev => ({
                     id: ev.id,
-                    type: ev.type?.code || ev.type?.name || 'event',
+                    type: EVENT_TYPE_MAP[ev.type?.developer_name] || ev.type?.code || ev.type?.name || 'event',
                     name: ev.type?.name || '',
-                    playerName: ev.player?.name || '',
+                    playerName: ev.player?.name || ev.related_player?.name || '',
+                    playerNameOut: ev.related_player?.name || '', // For substitutions
                     minute: ev.minute || 0,
+                    extraMinute: ev.extra_minute || 0,
                     teamId: ev.participant_id,
+                    isHome: ev.participant_id === home.id,
+                    result: ev.result || '', // Score at time of goal e.g. "1-0"
                 }));
                 return {
                     id: String(item.id),
@@ -498,6 +509,7 @@ export const initScheduler = () => {
                 fixtureId: n.fixture_id,
                 leagueId: n.league_id,
                 title: n.title || n.name || 'Match Preview',
+                body: n.body || n.preview || n.content || '', // Full preview text
                 type: n.type || 'preview',
             }));
 
@@ -513,6 +525,65 @@ export const initScheduler = () => {
         }
     }, { timezone: 'Africa/Lagos' });
     console.log('📰 Pre-match news fetcher scheduled at 07:30 Lagos');
+
+    // ── Daily Match Statistics Fetcher (07:45 Lagos) ─────────────────────────
+    // Fetches ball possession, shots on target, corners, fouls for today's fixtures.
+    // Stored in Firestore match_stats/{dateKey} for quant engine and MatchDetailsModal.
+    // Cost: ~1 SportMonks API call per day
+    cron.schedule('45 7 * * *', async () => {
+        try {
+            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            if (!token) return;
+            const dateKey = new Date().toISOString().split('T')[0];
+            const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateKey}?include=statistics;participants&api_token=${token}`;
+            const res = await fetch(url);
+            if (!res.ok) { console.warn('[Stats] API error:', res.status); return; }
+            const json = await res.json();
+            const raw = json.data || [];
+
+            // STAT TYPE IDs in SportMonks v3:
+            // 45 = ball_possession, 41 = shots_total, 42 = shots_on_target,
+            // 34 = corners, 56 = fouls, 58 = yellow_cards, 16 = offsides
+            const STAT_TYPES = { 45: 'possession', 41: 'shots', 42: 'shots_on_target', 34: 'corners', 56: 'fouls', 58: 'yellow_cards', 16: 'offsides' };
+
+            const fixtureStats = {};
+            for (const item of raw) {
+                const home = item.participants?.find(p => p.meta?.location === 'home') || {};
+                const away = item.participants?.find(p => p.meta?.location === 'away') || {};
+                const stats = {};
+                for (const stat of (item.statistics || [])) {
+                    const key = STAT_TYPES[stat.type_id];
+                    if (!key) continue;
+                    if (!stats[key]) stats[key] = { home: null, away: null };
+                    if (stat.participant_id === home.id) stats[key].home = stat.data?.value ?? null;
+                    if (stat.participant_id === away.id) stats[key].away = stat.data?.value ?? null;
+                }
+                if (Object.keys(stats).length > 0) {
+                    fixtureStats[String(item.id)] = {
+                        fixtureId: item.id,
+                        homeTeam: home.name || 'Unknown',
+                        awayTeam: away.name || 'Unknown',
+                        stats,
+                    };
+                }
+            }
+
+            const db = admin.firestore();
+            if (Object.keys(fixtureStats).length > 0) {
+                await db.collection('match_stats').doc(dateKey).set({
+                    fixtures: fixtureStats,
+                    fetchedAt: new Date().toISOString(),
+                    count: Object.keys(fixtureStats).length,
+                });
+                console.log(`[Stats] 📊 Stored stats for ${Object.keys(fixtureStats).length} fixtures on ${dateKey}`);
+            } else {
+                console.log(`[Stats] No statistics available yet for ${dateKey} (pre-match)`);
+            }
+        } catch (e) {
+            console.warn('[Scheduler] Match stats fetch error:', e.message);
+        }
+    }, { timezone: 'Africa/Lagos' });
+    console.log('📊 Match statistics fetcher scheduled at 07:45 Lagos');
 
     // ── Tomorrow's Fixture Pre-Fetch (daily at 23:00 Lagos) ─────────────────
     // Fetches tomorrow's fixtures and stores odds for VIP tomorrow preview.

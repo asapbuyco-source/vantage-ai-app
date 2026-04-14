@@ -109,11 +109,15 @@ export interface Match {
 // ── Live Match (from SportMonks /livescores — stored in Firestore live_scores/{date}/matches) ────
 export interface LiveEvent {
   id: number;
-  type: string;           // e.g. 'goal', 'yellowcard', 'redcard', 'substitution'
+  type: string;               // 'goal' | 'own_goal' | 'penalty' | 'yellow_card' | 'red_card' | 'substitution' | 'var' | 'event'
   name: string;
-  playerName?: string;
+  playerName?: string;        // scorer / carded player / player coming on
+  playerNameOut?: string;     // player going off (substitutions only)
   minute: number;
+  extraMinute?: number;       // stoppage time (e.g. 90+3)
   teamId?: number;
+  isHome?: boolean;           // true = home team event
+  result?: string;            // score at time of event e.g. "1-0"
 }
 
 export interface LiveMatch {
@@ -141,7 +145,29 @@ export interface MatchNews {
   fixtureId: number;
   leagueId?: number;
   title: string;
+  body?: string;          // Full preview/analysis text (if available)
   type: string;           // e.g. 'preview', 'injury'
+}
+
+// ── Match Statistics (from SportMonks ?include=statistics — stored in Firestore match_stats/{date}) ─
+export interface StatValue {
+  home: number | null;
+  away: number | null;
+}
+export interface MatchStats {
+  possession?: StatValue;       // ball possession %
+  shots?: StatValue;            // total shots
+  shots_on_target?: StatValue;  // shots on target
+  corners?: StatValue;          // corner kicks
+  fouls?: StatValue;            // fouls committed
+  yellow_cards?: StatValue;     // yellow cards
+  offsides?: StatValue;         // offsides
+}
+export interface MatchStatsData {
+  fixtureId: number;
+  homeTeam: string;
+  awayTeam: string;
+  stats: MatchStats;
 }
 
 export interface AccumulatorSet {

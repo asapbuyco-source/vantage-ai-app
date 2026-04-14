@@ -654,3 +654,30 @@ export const getH2HFromDB = async (homeId: number, awayId: number): Promise<H2HR
     return getH2H(homeId, awayId);
 };
 
+import { MatchStatsData } from '../types';
+
+/**
+ * Read today's pre-match / in-play statistics for a specific fixture.
+ * Written by the backend at 07:45 Lagos and updated live during matches.
+ * Returns possession, shots, corners, fouls, yellow cards.
+ */
+export const getMatchStatsFromDB = async (fixtureId: number): Promise<MatchStatsData | null> => {
+    const todayKey = getTodayKey();
+    const cacheKey = `stats_db_${fixtureId}_${todayKey}`;
+    const cached = _mcGet<MatchStatsData>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'match_stats', todayKey));
+        if (snap.exists()) {
+            const data = snap.data() as { fixtures: Record<string, MatchStatsData> };
+            const statsForFixture = data.fixtures?.[String(fixtureId)];
+            if (statsForFixture) {
+                _mcSet(cacheKey, statsForFixture);
+                return statsForFixture;
+            }
+        }
+    } catch (e) {
+        console.warn('[DB] getMatchStatsFromDB error:', e);
+    }
+    return null;
+};
