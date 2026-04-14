@@ -1,0 +1,83 @@
+{
+  "testedAt": "2026-04-14T14:26:18.930Z",
+  "results": [
+    {
+      "id": "gemini-1.5-flash",
+      "name": "Gemini 1.5 Flash",
+      "tier": "Legacy Fast",
+      "status": "❌ Failed (with/without search)",
+      "latency": 310,
+      "picks": 0,
+      "quality": 0,
+      "error": "{\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is n",
+      "sample": null,
+      "tokensUsed": null,
+      "supportsSearch": false
+    },
+    {
+      "id": "gemini-1.5-flash-8b",
+      "name": "Gemini 1.5 Flash-8B",
+      "tier": "Lightweight",
+      "status": "❌ Failed (with/without search)",
+      "latency": 316,
+      "picks": 0,
+      "quality": 0,
+      "error": "{\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash-8b is not found for API version v1beta, or i",
+      "sample": null,
+      "tokensUsed": null,
+      "supportsSearch": false
+    },
+    {
+      "id": "gemini-2.5-pro",
+      "name": "Gemini 2.5 Pro",
+      "tier": "High Accuracy",
+      "status": "❌ Failed",
+      "latency": 317,
+      "picks": 0,
+      "quality": 0,
+      "error": "{\"error\":{\"code\":429,\"message\":\"You exceeded your current quota, please check your plan and billing ",
+      "sample": null,
+      "tokensUsed": null,
+      "supportsSearch": false
+    },
+    {
+      "id": "gemini-1.5-pro",
+      "name": "Gemini 1.5 Pro",
+      "tier": "Legacy Stable",
+      "status": "❌ Failed (with/without search)",
+      "latency": 331,
+      "picks": 0,
+      "quality": 0,
+      "error": "{\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-pro is not found for API version v1beta, or is not",
+      "sample": null,
+      "tokensUsed": null,
+      "supportsSearch": false
+    },
+    {
+      "id": "gemini-2.0-flash",
+      "name": "Gemini 2.0 Flash",
+      "tier": "Current Primary",
+      "status": "❌ Failed",
+      "latency": 1143,
+      "picks": 0,
+      "quality": 0,
+      "error": "{\"error\":{\"code\":429,\"message\":\"You exceeded your current quota, please check your plan and billing ",
+      "sample": null,
+      "tokensUsed": null,
+      "supportsSearch": false
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "name": "Gemini 2.5 Flash",
+      "tier": "Recommended",
+      "status": "❌ Failed",
+      "latency": 1174,
+      "picks": 0,
+      "quality": 0,
+      "error": "{\"error\":{\"code\":403,\"message\":\"Your project has been denied access. Please contact support.\",\"statu",
+      "sample": null,
+      "tokensUsed": null,
+      "supportsSearch": false
+    }
+  ]
+}

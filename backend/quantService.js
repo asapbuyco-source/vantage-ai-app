@@ -69,6 +69,7 @@ function buildPythonEnv() {
         ...process.env,
         SPORTMONKS_API_TOKEN: process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN || '',
         API_FOOTBALL_KEY: process.env.VITE_FOOTBALL_API_KEY || process.env.API_FOOTBALL_KEY || '',
+        VITE_API_BASKETBALL_KEY: process.env.VITE_API_BASKETBALL_KEY || '',
         FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT || '',
         PYTHONUNBUFFERED: '1',         // Ensure real-time stdout
         PYTHONPATH: path.join(__dirname, 'quant'),

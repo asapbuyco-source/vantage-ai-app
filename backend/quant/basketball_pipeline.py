@@ -40,7 +40,7 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────────────────────
 
 API_SPORTS_BASE = "https://v1.basketball.api-sports.io"
-API_SPORTS_KEY = os.environ.get("VITE_FOOTBALL_API_KEY") or os.environ.get("API_FOOTBALL_KEY", "")
+API_SPORTS_KEY = os.environ.get("VITE_API_BASKETBALL_KEY") or os.environ.get("API_BASKETBALL_KEY", "")
 
 # Risk filter thresholds for basketball
 MIN_PROBABILITY = 0.62      # 62% minimum model confidence
@@ -378,7 +378,7 @@ def save_to_firestore(db, date_str, matches):
         "updatedAt": datetime.datetime.utcnow().isoformat() + "Z",
         "date": date_str,
     })
-    print(f"[Basketball] ✅ Saved {len(matches)} basketball predictions to Firestore for {date_str}.")
+    print(f"[Basketball] [PASS] Saved {len(matches)} basketball predictions to Firestore for {date_str}.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -390,7 +390,7 @@ def main():
     
     date_str = args[0] if args else get_lagos_date()
     
-    print(f"[Basketball] 🏀 Basketball Quant Pipeline starting for {date_str} (dry_run={dry_run})")
+    print(f"[Basketball] Quant Pipeline starting for {date_str} (dry_run={dry_run})")
     print(f"[Basketball] Fetching NBA games from API-Sports...")
     
     # STEP 1: Get games
@@ -420,9 +420,9 @@ def main():
         bet = pick_best_bet(game, home_prob, away_prob, expected_total)
         if bet:
             approved.append(bet)
-            print(f"[Basketball]   ✅ {game['home_team']} vs {game['away_team']}: {bet['prediction_en']} | EV {bet['analysis_en'].split('|')[0].strip()} | Confidence {bet['confidence']}%")
+            print(f"[Basketball]   [PASS] {game['home_team']} vs {game['away_team']}: {bet['prediction_en']} | EV {bet['analysis_en'].split('|')[0].strip()} | Confidence {bet['confidence']}%")
         else:
-            print(f"[Basketball]   ✗ {game['home_team']} vs {game['away_team']}: No value bet found.")
+            print(f"[Basketball]   [FAIL] {game['home_team']} vs {game['away_team']}: No value bet found.")
     
     print(f"\n[Basketball] Pipeline complete!")
     print(f"  Games analyzed: {len(games)}")
@@ -436,15 +436,14 @@ def main():
                 print(f"  {m['homeTeam']} vs {m['awayTeam']} — {m['prediction_en']} ({m['confidence']}%) @ {m['odds']}")
         return
     
-    if not approved:
-        print("[Basketball] NO_GAMES — No value bets met threshold. OpenAI fallback will be used.")
-        return  # Return instead of sys.exit(0)
+    # Even if approved is empty, we save to Firestore to clear yesterday's data
+    # and we definitely do NOT print NO_GAMES, because 0 value bets is a valid model outcome.
     
     # STEP 5: Save to Firestore
     db = init_firebase()
     save_to_firestore(db, date_str, approved)
     
-    print(f"\n✅ Basketball Pipeline complete!")
+    print(f"\n[PASS] Basketball Pipeline complete!")
     print(f"  Matches analyzed: {len(games)}")
     print(f"  Value bets identified: {len(approved)}")
 
