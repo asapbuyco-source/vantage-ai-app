@@ -244,11 +244,24 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
     const handleToggleVip = async (user: UserProfile) => {
         if (processingId) return;
+        
+        let selectedPlan: 'weekly' | 'monthly' | 'quarterly' | 'annual' | undefined;
+        if (!user.isVip) {
+            const planRes = window.prompt("Enter plan duration to grant (weekly, monthly, quarterly, annual):", "monthly");
+            if (!planRes) return; // cancelled
+            if (['weekly', 'monthly', 'quarterly', 'annual'].includes(planRes.toLowerCase())) {
+                selectedPlan = planRes.toLowerCase() as 'weekly' | 'monthly' | 'quarterly' | 'annual';
+            } else {
+                alert("Invalid plan. Must be weekly, monthly, quarterly, or annual.");
+                return;
+            }
+        }
+
         setProcessingId(user.uid);
         try {
-            await toggleUserVip(user.uid, user.isVip);
+            await toggleUserVip(user.uid, user.isVip, selectedPlan);
             // Optimistic update
-            setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: !u.isVip } : u));
+            setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: !u.isVip, vipPlan: user.isVip ? null : selectedPlan } : u));
             setUserStats(prev => ({
                 ...prev,
                 vip: prev.vip + (user.isVip ? -1 : 1),

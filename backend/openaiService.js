@@ -202,11 +202,12 @@ export const generateDailyPredictionsOpenAI = async () => {
         // Fetch fixtures from Sportmonks for context
         const rawData = await fetchSportmonksServerSide(`/fixtures/date/${todayStr}?include=league;participants;scores`) || [];
 
-        // FILTER: Keep only matches that have not yet started based on current UTC time
+        // FILTER: Keep only matches that have not yet started (with 30 min buffer)
         const nowMs = Date.now();
+        const thirtyMinsMs = 30 * 60 * 1000;
         const upcomingData = rawData.filter(item => {
             if (!item.starting_at) return true;
-            return new Date(item.starting_at).getTime() > nowMs;
+            return new Date(item.starting_at).getTime() > (nowMs + thirtyMinsMs);
         });
 
         const allMappedFixtures = upcomingData.map(item => {

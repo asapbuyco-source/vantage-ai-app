@@ -237,13 +237,14 @@ export const generateDailyPredictionsServerSide = async () => {
         const todayStr = getGlobalTodayKey();
         const rawFixtures = await getTodaysFixturesServerSide(todayStr);
 
-        // FILTER: Keep only matches that have not yet started based on current UTC time
+        // FILTER: Keep only matches that have not yet started (with 30 min buffer)
         const nowMs = Date.now();
+        const thirtyMinsMs = 30 * 60 * 1000;
         const upcomingFixtures = rawFixtures.filter(f => {
             if (!f.fixture.date) return true; // keep if no time provided just in case
             // Sportmonks provides 'starting_at' which is parsed into f.fixture.date
             const kickOffMs = new Date(f.fixture.date).getTime();
-            return kickOffMs > nowMs;
+            return kickOffMs > (nowMs + thirtyMinsMs);
         });
 
         const filteredFixtures = filterGlobalFixturesServerSide(upcomingFixtures);

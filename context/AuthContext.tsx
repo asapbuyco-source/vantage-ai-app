@@ -30,7 +30,7 @@ interface AuthContextType {
     clearError: () => void;
     upgradeToVip: (plan: 'weekly' | 'monthly' | 'quarterly' | 'annual') => Promise<void>;
     getAllUsers: () => Promise<UserProfile[]>;
-    toggleUserVip: (uid: string, currentStatus: boolean) => Promise<void>;
+    toggleUserVip: (uid: string, currentStatus: boolean, plan?: 'weekly'|'monthly'|'quarterly'|'annual') => Promise<void>;
     toggleUserAdmin: (uid: string, currentStatus: boolean) => Promise<void>;
     toggleUserBlock: (uid: string, currentStatus: boolean) => Promise<void>;
     verifyTransaction: (transId: string) => Promise<boolean>;
@@ -240,7 +240,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (plan === 'monthly') expiry.setDate(now.getDate() + 30);
         if (plan === 'quarterly') expiry.setDate(now.getDate() + 90);
         if (plan === 'annual') expiry.setDate(now.getDate() + 365);
-        const planCost = plan === 'weekly' ? 2000 : plan === 'monthly' ? 6500 : plan === 'quarterly' ? 18000 : 70000;
+        
+        const isFirstTime = !userProfile?.totalPaid || userProfile.totalPaid === 0;
+        let planCost = plan === 'weekly' ? 2000 : plan === 'monthly' ? 6500 : plan === 'quarterly' ? 18000 : 70000;
+        
+        if (isFirstTime) {
+            if (plan === 'weekly') planCost = 1000;
+            if (plan === 'monthly') planCost = 3250;
+        }
 
         try {
             const userRef = doc(db, "profiles", user.uid);
@@ -350,15 +357,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const toggleUserVip = async (uid: string, currentStatus: boolean) => {
+    const toggleUserVip = async (uid: string, currentStatus: boolean, plan: 'weekly' | 'monthly' | 'quarterly' | 'annual' = 'monthly') => {
         if (!isAdmin) return;
         const userRef = doc(db, "profiles", uid);
         if (!currentStatus) {
             const expiry = new Date();
-            expiry.setDate(expiry.getDate() + 30);
-            await updateDoc(userRef, { isVip: true, vipExpiry: expiry.toISOString() });
+            if (plan === 'weekly') expiry.setDate(expiry.getDate() + 7);
+            else if (plan === 'quarterly') expiry.setDate(expiry.getDate() + 90);
+            else if (plan === 'annual') expiry.setDate(expiry.getDate() + 365);
+            else expiry.setDate(expiry.getDate() + 30);
+            await updateDoc(userRef, { isVip: true, vipExpiry: expiry.toISOString(), vipPlan: plan });
         } else {
-            await updateDoc(userRef, { isVip: false, vipExpiry: null });
+            await updateDoc(userRef, { isVip: false, vipExpiry: null, vipPlan: null });
         }
     };
 

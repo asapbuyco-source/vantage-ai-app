@@ -145,6 +145,8 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     })
     .filter(m => quantLeagueFilter === 'All' || (m.league || '') === quantLeagueFilter);
 
+  const isFirstTime = userProfile && (!userProfile.totalPaid || userProfile.totalPaid === 0);
+
   const plans: Array<{
     id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
     label: string;
@@ -156,19 +158,19 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   }> = [
       {
         id: 'weekly',
-        label: t('vip.plan_weekly'),
-        price: '2000',
-        originalPrice: null,
-        badge: null,
+        label: isFirstTime ? `Trial ${t('vip.plan_weekly')}` : t('vip.plan_weekly'),
+        price: isFirstTime ? '1000' : '2000',
+        originalPrice: isFirstTime ? '2000' : null,
+        badge: isFirstTime ? '1-WEEK TRIAL' : null,
         features: [t('vip.feat_1'), 'Accumulator Access'],
         color: 'border-slate-700 bg-slate-800/50'
       },
       {
         id: 'monthly',
         label: t('vip.plan_monthly'),
-        price: '6500',
-        originalPrice: '8000', // 2000 * 4
-        badge: 'MOST POPULAR',
+        price: isFirstTime ? '3250' : '6500',
+        originalPrice: isFirstTime ? '6500' : '8000', // 2000 * 4
+        badge: isFirstTime ? '50% OFF' : 'MOST POPULAR',
         features: [t('vip.feat_1'), 'Accumulator Access', 'VIP WhatsApp'],
         color: 'border-vantage-purple bg-vantage-purple/10 shadow-[0_0_30px_rgba(168,85,247,0.15)]'
       },
