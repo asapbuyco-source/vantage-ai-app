@@ -1,30 +1,39 @@
 
 import { Match, TeamAsset, AccumulatorSet, DailyAnalysis, WinRateStats, UserProfile } from "../types";
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, updateDoc, serverTimestamp, getCountFromServer, query, where } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, updateDoc, serverTimestamp, getCountFromServer, query, where, writeBatch } from "firebase/firestore";
 import { db, auth } from "../firebaseConfig";
 
-// Return simple YYYY-MM-DD for the current client date
+// Return YYYY-MM-DD for Africa/Lagos (UTC+1)
 export const getGlobalTodayKey = () => {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
+    const lagosOffset = 60;
+    const localMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
+    const d = new Date(localMs);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
 
-// Return simple YYYY-MM-DD for Yesterday
+// Return YYYY-MM-DD for Yesterday (Africa/Lagos timezone)
 export const getGlobalYesterdayKey = () => {
-    const date = new Date();
-    date.setDate(date.getDate() - 1);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const now = new Date();
+    const lagosOffset = 60;
+    const localMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
+    const d = new Date(localMs);
+    d.setDate(d.getDate() - 1);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
 
-/** Helper to get a date key for N days ago */
+/** Helper to get a date key for N days ago (Africa/Lagos timezone) */
 const getDateKeyDaysAgo = (daysAgo: number) => {
-    const date = new Date();
+    const now = new Date();
+    const lagosOffset = 60;
+    const localMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
+    const date = new Date(localMs);
     date.setDate(date.getDate() - daysAgo);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
@@ -119,52 +128,49 @@ export const savePredictionsForDate = async (dateStr: string, matches: Match[]):
     try {
         if (!auth.currentUser) return;
 
-        // 1. Always write to daily_predictions (backward-compatible for AI-generated picks)
+        // Use batch write for atomic updates to daily_predictions and quant_predictions
+        const batch = writeBatch(db);
+
         const docRef = doc(db, "daily_predictions", dateStr);
-        await setDoc(docRef, {
+        batch.set(docRef, {
             matches: matches,
             updatedAt: new Date().toISOString(),
             date: dateStr
         }, { merge: true });
 
-        // 2. Also sync graded statuses back to quant_predictions so that
-        //    getDailyData (which prioritizes quant_predictions) shows correct grades on reload.
-        //    We only touch status/score/graded_at — we never overwrite model data.
-        try {
-            const quantRef = doc(db, "quant_predictions", dateStr);
-            const quantSnap = await getDoc(quantRef);
-            if (quantSnap.exists()) {
-                const quantPreds: any[] = quantSnap.data()?.predictions || [];
-                if (quantPreds.length > 0) {
-                    // Build a status map keyed by fixture_id from the edited matches
-                    const statusMap: Record<string, { status: string; score?: string }> = {};
-                    matches.forEach((m: any) => {
-                        const fid = String(m.fixture_id ?? m.id ?? '');
-                        if (fid && m.status) statusMap[fid] = { status: m.status, score: m.score };
-                    });
+        // Try to sync graded statuses to quant_predictions
+        const quantRef = doc(db, "quant_predictions", dateStr);
+        const quantSnap = await getDoc(quantRef);
+        if (quantSnap.exists()) {
+            const quantPreds: any[] = quantSnap.data()?.predictions || [];
+            if (quantPreds.length > 0) {
+                const statusMap: Record<string, { status: string; score?: string }> = {};
+                matches.forEach((m: any) => {
+                    const fid = String(m.fixture_id ?? m.id ?? '');
+                    if (fid && m.status) statusMap[fid] = { status: m.status, score: m.score };
+                });
 
-                    const updatedPreds = quantPreds.map((p: any) => {
-                        const fid = String(p.fixture_id ?? p.id ?? '');
-                        const override = statusMap[fid];
-                        if (!override) return p;
-                        return {
-                            ...p,
-                            status: override.status,
-                            ...(override.score ? { score: override.score } : {}),
-                            graded_at: new Date().toISOString(),
-                        };
-                    });
-
-                    await setDoc(quantRef, {
-                        predictions: updatedPreds,
+                const updatedPreds = quantPreds.map((p: any) => {
+                    const fid = String(p.fixture_id ?? p.id ?? '');
+                    const override = statusMap[fid];
+                    if (!override) return p;
+                    return {
+                        ...p,
+                        status: override.status,
+                        ...(override.score ? { score: override.score } : {}),
                         graded_at: new Date().toISOString(),
-                    }, { merge: true });
-                }
+                    };
+                });
+
+                batch.set(quantRef, {
+                    predictions: updatedPreds,
+                    graded_at: new Date().toISOString(),
+                }, { merge: true });
             }
-        } catch (syncErr) {
-            // Non-fatal — the primary daily_predictions write already succeeded
-            console.warn('[DB] Could not sync graded statuses to quant_predictions:', syncErr);
         }
+
+        await batch.commit();
+        console.log(`Predictions successfully batch-updated for ${dateStr}.`);
 
         console.log(`Predictions successfully updated for ${dateStr}.`);
     } catch (e) {

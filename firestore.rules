@@ -79,11 +79,13 @@ service cloud.firestore {
     // Selar pending tokens — owner can read and CREATE their own token only.
     // Updates are FORBIDDEN client-side — only the backend Admin SDK can mark tokens as used.
     // This prevents plan spoofing (changing daily→annual before payment completes).
+    // Strict schema: only allow valid plan values.
     match /selar_pending/{refId} {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       allow create: if request.auth != null
         && request.resource.data.userId == request.auth.uid
-        && request.resource.data.used == false;
+        && request.resource.data.used == false
+        && request.resource.data.plan in ['weekly', 'monthly', 'quarterly', 'annual'];
       // No client-side update — backend Admin SDK handles marking as used
       allow update: if false;
       allow delete: if false;

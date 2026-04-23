@@ -893,11 +893,13 @@ async function parseAndEnhanceMatches(
 }
 
 /**
- * OFFLINE / FALLBACK GENERATOR — Day-indexed rotating pool of 50 matches.
- * Rotates every day so users never see the same stale set twice in a row.
+ * OFFLINE / FALLBACK GENERATOR — Removed per audit requirements.
+ * The app now shows "No predictions available" for empty states instead of hallucinated matches.
  */
 async function generateLocalFallbackMatches(): Promise<Match[]> {
-    console.log("[Gemini] Generating Local Fallback Data (Rotating Pool, Offline Mode)");
+    console.log("[Gemini] Fallback disabled — returning empty. Use Quant Engine for predictions.");
+    return [];
+};
 
     // 50-match pool — Ordered by actual African betting volume (EPL first)
     const FALLBACK_POOL = [

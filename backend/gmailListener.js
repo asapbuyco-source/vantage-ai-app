@@ -248,6 +248,20 @@ export const checkRecentSelarEmails = async () => {
             console.error('[Gmail Listener]   2. Copy the new GMAIL_REFRESH_TOKEN into your .env.local / Railway env vars');
             console.error('[Gmail Listener]   3. Restart the server');
             console.error('[Gmail Listener] Gmail listener DISABLED until server restarts with a valid token.\n');
+            
+            // Write error flag to Firestore for admin visibility
+            try {
+                const db = admin.firestore();
+                await db.collection('settings').doc('system_health').set({
+                    gmail_listener_error: 'invalid_grant',
+                    error_message: 'Gmail refresh token expired or revoked',
+                    failed_at: admin.firestore.FieldValue.serverTimestamp(),
+                    requires_attention: true,
+                }, { merge: true });
+                console.log('[Gmail Listener] ⚠️ Wrote error flag to settings/system_health');
+            } catch (firestoreErr) {
+                console.error('[Gmail Listener] Failed to write error flag to Firestore:', firestoreErr.message);
+            }
             return;
         }
         console.error('[Gmail Listener] Error:', error.message);

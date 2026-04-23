@@ -1,63 +1,32 @@
 import cron from 'node-cron';
 import admin from 'firebase-admin';
 
-// ── OpenAI PRIMARY functions ──────────────────────────────────────────────────
-import {
-    generateDailyPredictionsOpenAI,
-    generateDailyBlogOpenAI,
-    gradeYesterdayOpenAI,
-    generateBasketballPredictionsOpenAI,
-    generateAccumulatorsOpenAI,
-} from './openaiService.js';
-
-// ── Gemini FALLBACK functions ─────────────────────────────────────────────────
-import {
-    generateDailyPredictionsServerSide,
-    generateDailyBlogServerSide,
-    gradeYesterdayServerSide,
-    generateBasketballPredictionsServerSide
-} from './geminiService.js';
-
 // ── Quant Engine (pure statistical — no AI/LLM) ───────────────────────────────
 import { runQuantPipeline, runQuantGrading, runQuantPerformance, runBasketballPipeline } from './quantService.js';
+
+// ── Blog Generator (programmatic — no AI) ───────────────────────────────
+import { triggerBlogGeneration } from './blogGenerator.js';
 
 import { checkRecentSelarEmails } from './gmailListener.js';
 import { sendDailyPredictionsToTelegram } from './telegramService.js';
 
 /**
- * Dual-Engine Wrapper
- * Tries OpenAI first. If it fails (any error or non-success status),
- * transparently falls back to Gemini. Zero impact on callers.
+ * Standalone accumulator trigger (Quant Engine based)
  */
-async function withOpenAIFallback(openAIFn, geminiFn, taskName) {
+export const triggerAccumulatorGeneration = async () => {
     try {
-        const result = await openAIFn();
+        const result = await runQuantPipeline(null, false, true);
         if (result && result.status === 'success') {
-            // Support different result shapes: predictions (generated), grading (graded), blog (generatedLength)
-            const itemCount = result.generated ?? result.graded ?? result.generatedLength ?? result.footballPicks ?? 0;
-            console.log(`[Scheduler] ✅ ${taskName} completed via OpenAI (${itemCount} items)`);
-            return result;
+            console.log(`[Scheduler] ✅ Accumulators generated: safe=${result.accumulators?.safe?.length}, medium=${result.accumulators?.medium?.length}, high=${result.accumulators?.high?.length}`);
+        } else {
+            console.warn(`[Scheduler] ⏭️ Accumulators skipped: ${result?.reason || result?.error}`);
         }
-        // skipped is not an error — don't fall back for skipped (e.g. no predictions to blog yet)
-        if (result && result.status === 'skipped') {
-            console.log(`[Scheduler] ⏭️ ${taskName} skipped: ${result.reason}`);
-            return result;
-        }
-        // Non-success (but no throw) — treat as failure and fall back
-        throw new Error(result?.error || `OpenAI returned status: ${result?.status}`);
+        return result;
     } catch (e) {
-        console.warn(`[Scheduler] ⚠️ ${taskName} OpenAI failed: "${e.message}". Falling back to Gemini...`);
-        try {
-            const fallbackResult = await geminiFn();
-            const itemCount = fallbackResult?.generated ?? fallbackResult?.graded ?? fallbackResult?.generatedLength ?? 0;
-            console.log(`[Scheduler] ✅ ${taskName} completed via Gemini fallback (${itemCount} items)`);
-            return fallbackResult;
-        } catch (fallbackErr) {
-            console.error(`[Scheduler] ❌ ${taskName} both OpenAI and Gemini failed: ${fallbackErr.message}`);
-            return { status: 'error', error: fallbackErr.message };
-        }
+        console.error('[Scheduler] Accumulator generation error:', e.message);
+        return { status: 'error', error: e.message };
     }
-}
+};
 
 // ── Admin trigger helpers (used by server.js admin endpoints) ─────────────────
 
@@ -106,83 +75,52 @@ export const triggerQuantPerformance = async () => {
     }
 };
 
-/** Standalone accumulator trigger (OpenAI only — Gemini fallback via generateAccumulators in geminiService) */
-export const triggerAccumulatorGeneration = async () => {
+/**
+ * Football generation — Quant Engine only (no AI/LLM)
+ */
+export const triggerFootballGeneration = async () => {
+    console.log('[Scheduler] ⚽ Running Football Generation via Quant Engine...');
     try {
-        const result = await generateAccumulatorsOpenAI();
+        const result = await runQuantPipeline();
         if (result && result.status === 'success') {
-            console.log(`[Scheduler] ✅ Accumulators generated: safe=${result.accumulators?.safe?.length}, medium=${result.accumulators?.medium?.length}, high=${result.accumulators?.high?.length}`);
+            console.log(`[Scheduler] ✅ Quant Pipeline done: ${result.generated} bets from ${result.matches_analyzed} matches.`);
+            await triggerAccumulatorGeneration();
         } else {
-            console.warn(`[Scheduler] ⏭️ Accumulators skipped: ${result?.reason || result?.error}`);
+            console.warn(`[Scheduler] ⚠️ Quant Pipeline: ${result?.status} — ${result?.reason || result?.error}`);
         }
         return result;
     } catch (e) {
-        console.error('[Scheduler] Accumulator generation error:', e.message);
+        console.error('[Scheduler] Football generation error:', e.message);
         return { status: 'error', error: e.message };
     }
 };
 
 /**
- * Football generation + immediate accumulator chaining.
- * Used by both the scheduled cron and the admin endpoint.
- */
-export const triggerFootballGeneration = async () => {
-    const result = await withOpenAIFallback(
-        generateDailyPredictionsOpenAI,
-        generateDailyPredictionsServerSide,
-        'Football Generation'
-    );
-    // Auto-generate accumulators immediately after football predictions succeed and has actual predictions
-    if (result && result.status === 'success' && (result.generated ?? 0) > 0) {
-        console.log('[Scheduler] ⚽ Football done — auto-triggering Accumulator generation...');
-        await triggerAccumulatorGeneration();
-    }
-    return result;
-};
-
-/**
- * Basketball: Try Python quant pipeline first (real NBA stats).
- * If no games are scheduled today (NO_GAMES signal), fall back to OpenAI.
- * If OpenAI also fails, fall back to Gemini.
+ * Basketball: Quant Pipeline only (no AI/LLM fallback)
  */
 export const triggerBasketballGeneration = async () => {
-    console.log('[Scheduler] 🏀 Starting Basketball Quant Pipeline...');
+    console.log('[Scheduler] 🏀 Running Basketball Quant Pipeline...');
     try {
         const result = await runBasketballPipeline();
         if (result && result.status === 'success') {
             console.log(`[Scheduler] ✅ Basketball Quant done: ${result.generated} bets from ${result.matches_analyzed} games.`);
             return result;
         }
-        // 'no_games' means the Python pipeline found no NBA games today → use OpenAI
-        if (result && result.status === 'no_games') {
-            console.log('[Scheduler] 🏀 No NBA games today — falling back to OpenAI basketball predictions.');
-            return withOpenAIFallback(
-                generateBasketballPredictionsOpenAI,
-                generateBasketballPredictionsServerSide,
-                'Basketball AI Fallback'
-            );
-        }
-        // Other failures → try OpenAI fallback
-        throw new Error(result?.error || 'Basketball quant returned unknown status');
+        console.warn(`[Scheduler] ⚠️ Basketball Quant: ${result?.status} — ${result?.reason || result?.error}`);
+        return { status: 'skipped', reason: result?.status };
     } catch (e) {
-        console.warn(`[Scheduler] ⚠️ Basketball Quant failed: ${e.message}. Falling back to OpenAI...`);
-        return withOpenAIFallback(
-            generateBasketballPredictionsOpenAI,
-            generateBasketballPredictionsServerSide,
-            'Basketball AI Fallback'
-        );
+        console.error('[Scheduler] Basketball Pipeline error:', e.message);
+        return { status: 'error', error: e.message };
     }
 };
 
-export const triggerGrading = (customDate, forceRegrade) =>
-    withOpenAIFallback(
-        () => gradeYesterdayOpenAI(customDate, forceRegrade),
-        () => gradeYesterdayServerSide(customDate, forceRegrade),
-        'Grading'
-    );
+export const triggerGrading = async (customDate, forceRegrade) => {
+    return triggerQuantGrading(customDate);
+};
 
-export const triggerBlogGeneration = () =>
-    withOpenAIFallback(generateDailyBlogOpenAI, generateDailyBlogServerSide, 'Blog Generation');
+export const triggerBlogGen = async () => {
+    return triggerBlogGeneration(); // from blogGenerator.js
+};
 
 /** Sends today's predictions to the configured Telegram group/channel */
 export const triggerTelegramBroadcast = async () => {
@@ -334,10 +272,10 @@ export const initScheduler = () => {
                         console.warn(`[Scheduler] ⛔ Blog time-gate blocked: not within window of ${currentBlogTime}`);
                         return;
                     }
-                    console.log(`✍️ Running scheduled AI Blog Generation at ${blogTime}...`);
-                    await triggerBlogGeneration();
+                    console.log(`✍️ Running scheduled Programmatic Blog Generation at ${blogTime}...`);
+                    await triggerBlogGen();
                 }, { timezone: "Africa/Lagos" });
-                console.log(`✅ Scheduled AI Blog Gen for ${blogTime} (OpenAI→Gemini fallback)`);
+                console.log(`✅ Scheduled Programmatic Blog Gen for ${blogTime}`);
             }
 
             // ── Telegram Broadcast Scheduler ─────────────────────────────────

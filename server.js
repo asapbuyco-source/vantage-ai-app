@@ -5,15 +5,13 @@ import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
 import admin from 'firebase-admin';
 import fs from 'fs';
 import { spawnSync } from 'child_process';
 import pino from 'pino';
 import * as Sentry from '@sentry/node';
-import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGeneration, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance } from './backend/scheduler.js';
+import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
-import OpenAI from 'openai';
 
 // Load environment variables from .env.local if available (for local dev)
 const __filename = fileURLToPath(import.meta.url);
@@ -331,10 +329,10 @@ app.post('/api/admin/grade-yesterday', adminAuth, async (req, res) => {
     });
 });
 
-app.post('/api/admin/generate-blog', adminAuth, geminiLimiter, async (req, res) => {
+app.post('/api/admin/generate-blog', adminAuth, async (req, res) => {
     try {
-        logger.info('[API] Manual Blog Generation Triggered via Admin (OpenAI→Gemini fallback)');
-        const result = await triggerBlogGeneration();
+        logger.info('[API] Manual Blog Generation Triggered via Admin (Programmatic)');
+        const result = await triggerBlogGen();
         res.json(result);
     } catch (e) {
         logger.error({ error: e }, '[API] Blog generation error');
