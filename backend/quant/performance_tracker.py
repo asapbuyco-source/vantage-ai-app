@@ -49,8 +49,16 @@ def _compute_period_stats(predictions: list[dict]) -> dict:
         status = pred.get("status", "pending")
         if status == "pending":
             continue
+        # ISSUE-04: Only include bets the system actually recommended (safe/value).
+        # Lean and no_edge picks pollute win rate and ROI with untracked stakes.
+        category = pred.get("category", "")
+        if category not in ("safe", "value"):
+            continue
         total += 1
-        kelly_stake = float(pred.get("kelly_stake", 1.0))  # % as stake units
+        # ISSUE-04: Default was 1.0 — caused fake 1% stake inflation on missing data.
+        kelly_stake = float(pred.get("kelly_stake", 0.0))
+        if kelly_stake <= 0.0:
+            continue  # Skip zero-stake records from tracking
         stake_unit = kelly_stake / 100.0  # Convert to fractional
 
         if status == "won":

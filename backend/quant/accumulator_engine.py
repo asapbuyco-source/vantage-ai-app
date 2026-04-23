@@ -55,9 +55,9 @@ TIER_CONFIG = {
         "label": "The Variance Play",
         "description": "High-yield moonshot — big odds, calculated risk",
         "icon": "🚀",
-        "max_legs": 6,
+        "max_legs": 5,      # OPP-04: Reduced from 6 (6-leg@45% = 0.83% win prob)
         "min_legs": 4,
-        "min_prob": 0.45,
+        "min_prob": 0.58,  # OPP-04: Raised from 0.45 (5-leg@58% = ~6% win prob)
         "min_combined_odds": 8.00,
         "sort_key": "ev",
         "count": 1,
@@ -154,9 +154,11 @@ def _select_legs(bets: list[dict], config: dict, exclude_fixtures: set = None) -
         if b["fixture_id"] in seen_fixtures:
             continue
 
-        # Market correlation guard: max 2 legs from same market type
+        # Market correlation guard: max 2 legs from same market type,
+        # EXCEPT goals_total (Over/Under) which is capped at 1 per acca (M-07)
         m_base = _market_base(b["market"])
-        if market_counts.get(m_base, 0) >= 2:
+        cap = 1 if m_base == "goals_total" else 2
+        if market_counts.get(m_base, 0) >= cap:
             continue
 
         selected.append(b)
@@ -212,6 +214,7 @@ def accumulator_to_dict(acca: Accumulator) -> dict:
         "combined_prob": acca.combined_prob,
         "combined_ev": acca.combined_ev,
         "kelly_stake": acca.kelly_stake,
+        "kelly_stake_unit": "pct_of_bankroll",  # BUG-02: explicit unit to prevent misinterpretation
         "legs": [
             {
                 "fixture_id": l.fixture_id,

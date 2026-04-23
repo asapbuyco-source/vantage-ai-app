@@ -13,9 +13,49 @@ from typing import Optional
 
 # ── Elo constants ──────────────────────────────────────────────────────────────
 DEFAULT_ELO = 1500.0
-K_FACTOR = 20.0          # Reduced from 32 — FiveThirtyEight football standard
+K_FACTOR = 20.0          # Default K — overridden per-league by LEAGUE_K_FACTOR
 HOME_ADVANTAGE = 55.0    # Default Elo points added to home team
 DRAW_PROB_BASE = 0.26    # Base draw probability correction
+
+# ── League-specific K-factor (MODEL-03) ───────────────────────────────────────
+# Higher K = results in this competition teach the model more per match.
+# Elite continental competitions carry more information value.
+LEAGUE_K_FACTOR: dict[int, float] = {
+    2:   30.0,  # UEFA Champions League — highest information
+    5:   28.0,  # UEFA Europa League
+    7:   25.0,  # UEFA Conference League
+    8:   22.0,  # English Premier League
+    564: 22.0,  # La Liga
+    82:  22.0,  # Bundesliga
+    384: 22.0,  # Serie A
+    301: 20.0,  # Ligue 1
+    72:  19.0,  # Eredivisie
+    # All other leagues use the default K_FACTOR (20.0)
+}
+
+# ── Derby / Rivalry pairs (BUG-01) ────────────────────────────────────────────
+# Frozensets of Sportmonks team IDs. Used by quant_pipeline to set is_derby=True
+# for the Dixon-Coles rho computation, boosting 0-0 and 1-1 scoreline probability.
+DERBY_PAIRS: set[frozenset] = {
+    frozenset({214, 593}),    # El Clásico — Real Madrid vs Barcelona
+    frozenset({9, 29}),       # Man City vs Man United
+    frozenset({5, 7}),        # Arsenal vs Chelsea
+    frozenset({9, 7}),        # Liverpool vs Chelsea
+    frozenset({5, 9}),        # Arsenal vs Liverpool
+    frozenset({8, 6}),        # Bayern Munich vs Borussia Dortmund (Der Klassiker)
+    frozenset({3, 1}),        # Inter vs Juventus (Derby d'Italia)
+    frozenset({384, 610}),    # Roma vs Lazio (Derby della Capitale)
+    frozenset({631, 29}),     # Man City vs Man United
+    frozenset({3468, 3479}),  # Wydad vs Al Ahly (African Super Derby)
+    frozenset({232, 1064}),   # PSG vs Lyon (Le Classique)
+    frozenset({45, 29}),      # Tottenham vs Man United
+    frozenset({45, 5}),       # Tottenham vs Arsenal (North London Derby)
+}
+
+
+def is_derby_match(home_team_id: int, away_team_id: int) -> bool:
+    """Return True if this fixture is a known rivalry/derby match."""
+    return frozenset({home_team_id, away_team_id}) in DERBY_PAIRS
 
 # League-specific home advantage (Elo points). Falls back to HOME_ADVANTAGE.
 LEAGUE_HOME_ADV: dict[int, float] = {
@@ -186,15 +226,26 @@ def match_probabilities(home_team_id: int, away_team_id: int,
 
 
 # ── Rating update ──────────────────────────────────────────────────────────────
-def update_ratings(home_team_id: int, away_team_id: int, home_goals: int, away_goals: int):
+def update_ratings(
+    home_team_id: int,
+    away_team_id: int,
+    home_goals: int,
+    away_goals: int,
+    league_id: int | None = None,
+):
     """
     Update Elo ratings after a match result.
     Actual score: 1 = win, 0.5 = draw, 0 = loss.
+    M-05: Uses LEAGUE_HOME_ADV for the expected-score calculation so rating
+    updates are consistent with the probability predictions.
+    MODEL-03: Uses LEAGUE_K_FACTOR so elite competition results carry more weight.
     """
     ra = get_rating(home_team_id)
     rb = get_rating(away_team_id)
 
-    ea = expected_score(ra + HOME_ADVANTAGE, rb)
+    # M-05: use the league-specific home advantage, not the global constant
+    home_adv = LEAGUE_HOME_ADV.get(league_id, HOME_ADVANTAGE) if league_id else HOME_ADVANTAGE
+    ea = expected_score(ra + home_adv, rb)
     eb = 1.0 - ea
 
     if home_goals > away_goals:
@@ -208,8 +259,11 @@ def update_ratings(home_team_id: int, away_team_id: int, home_goals: int, away_g
     goal_diff = abs(home_goals - away_goals)
     k_mult = 1.0 if goal_diff <= 1 else (1.5 if goal_diff == 2 else 1.75)
 
-    new_ra = ra + K_FACTOR * k_mult * (sa - ea)
-    new_rb = rb + K_FACTOR * k_mult * (sb - eb)
+    # MODEL-03: league-specific K-factor
+    k = LEAGUE_K_FACTOR.get(league_id, K_FACTOR) if league_id else K_FACTOR
+
+    new_ra = ra + k * k_mult * (sa - ea)
+    new_rb = rb + k * k_mult * (sb - eb)
 
     set_rating(home_team_id, new_ra)
     set_rating(away_team_id, new_rb)
@@ -219,13 +273,14 @@ def update_ratings(home_team_id: int, away_team_id: int, home_goals: int, away_g
 def bulk_update_from_results(match_results: list[dict]):
     """
     Update Elo ratings from a list of match results.
-    Each dict: {home_team_id, away_team_id, home_goals, away_goals}
+    Each dict: {home_team_id, away_team_id, home_goals, away_goals, league_id (optional)}
     """
     for m in match_results:
         try:
             update_ratings(
                 int(m["home_team_id"]), int(m["away_team_id"]),
-                int(m["home_goals"]), int(m["away_goals"])
+                int(m["home_goals"]), int(m["away_goals"]),
+                league_id=int(m["league_id"]) if m.get("league_id") else None,
             )
         except (KeyError, ValueError, TypeError) as e:
             print(f"[Elo] Skipping result due to error: {e}")

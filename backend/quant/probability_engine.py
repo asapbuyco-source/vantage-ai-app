@@ -44,6 +44,8 @@ class CombinedProbabilities:
     double_chance_12: float = 0.0
     draw_no_bet_home: float = 0.0
     draw_no_bet_away: float = 0.0
+    # OPP-01: BTTS + Over 2.5 composite probability
+    btts_and_over25: float = 0.0
     # Model contributions for transparency
     poisson_home: float = 0.0
     elo_home: float = 0.0
@@ -90,8 +92,14 @@ def compute_combined(
     Returns:
         CombinedProbabilities with all markets filled.
     """
-    # ── Model 1: Poisson ───────────────────────────────────────────────────
-    poisson: MarketProbabilities = compute_probabilities(mu_home, mu_away, rho)
+    # ── Model 1: Poisson (MODEL-01: form-adjusted xG before grid) ────────
+    # Multiplicative xG form scaling applied before Poisson grid so the full
+    # probability distribution stays coherent (old additive tweak did not).
+    _hfs = getattr(home_stats, 'form_score', 0.5) if home_stats else 0.5
+    _afs = getattr(away_stats, 'form_score', 0.5) if away_stats else 0.5
+    adj_mu_home = max(0.20, mu_home * (0.90 + _hfs * 0.20))  # 0.90–1.10×
+    adj_mu_away = max(0.20, mu_away * (0.90 + _afs * 0.20))
+    poisson: MarketProbabilities = compute_probabilities(adj_mu_home, adj_mu_away, rho)
 
     # ── Model 2: Elo ───────────────────────────────────────────────────────
     elo = elo_match_probs(home_team_id, away_team_id)
@@ -123,22 +131,20 @@ def compute_combined(
 
     p_home, p_draw, p_away = _normalize(p_home, p_draw, p_away)
 
-    # ── Goals markets: use Poisson (most objective) ────────────────────────
-    # Apply a slight form adjustment (±5% shift) for over/under
-    form_adj = (form.home_form_score + form.away_form_score - 1.0) * 0.05
-    over25 = min(0.92, max(0.08, poisson.over25 + form_adj))
+    # ── Goals markets: taken directly from form-adjusted Poisson grid ─────
+    # MODEL-01: Poisson already used form-scaled xG above — no additive tweaks.
+    over25 = poisson.over25
     under25 = 1.0 - over25
-    over35 = min(0.85, max(0.05, poisson.over35 + form_adj * 0.6))
+    over35 = poisson.over35
     under35 = 1.0 - over35
-    over15 = min(0.98, max(0.10, poisson.over15))
+    over15 = poisson.over15
     under15 = 1.0 - over15
-    btts = min(0.90, max(0.10, poisson.btts + form_adj * 0.3))
+    btts = poisson.btts
     btts_no = 1.0 - btts
 
     # ── Realistic probability caps for defensive markets ───────────────────
-    # This prevents artificially low xG (from missing form data) from generating
-    # mega-confident Under/BTTS No predictions that look like "sure things"
-    under25 = min(under25, 0.80)   # Under 2.5 cannot exceed 80% (avg scoreline is ~2.7)
+    # Prevents artificially low xG from generating over-confident Under/BTTS No picks.
+    under25 = min(under25, 0.80)   # Under 2.5 cannot exceed 80% (avg ~2.7 goals)
     under35 = min(under35, 0.88)   # Under 3.5 cannot exceed 88%
     btts_no = min(btts_no, 0.85)   # BTTS No cannot exceed 85%
     # Re-balance complementary markets after capping
@@ -155,12 +161,16 @@ def compute_combined(
     dnb_home = p_home / non_draw if non_draw > 0 else 0.5
     dnb_away = p_away / non_draw if non_draw > 0 else 0.5
 
-    # ── Model agreement → confidence score ───────────────────────────────
-    # Std deviation of home_win across 3 models = low spread = high agreement
-    home_preds = [poisson.home_win, elo["home_win"], form.home_win]
-    mean_h = sum(home_preds) / 3
-    variance = sum((x - mean_h) ** 2 for x in home_preds) / 3
-    agreement = max(0.0, 1.0 - (variance ** 0.5) / 0.3)  # 0–1 scale
+    # ── Model agreement → confidence score (MODEL-02) ─────────────────────
+    # Average agreement across home/draw/away — not just home_win (was a bug).
+    def _oa(a: float, b: float, c: float) -> float:
+        m = (a + b + c) / 3.0
+        return max(0.0, 1.0 - (((a-m)**2 + (b-m)**2 + (c-m)**2) / 3.0)**0.5 / 0.3)
+    agreement = (
+        _oa(poisson.home_win, elo["home_win"], form.home_win)
+        + _oa(poisson.draw,     elo["draw"],     form.draw)
+        + _oa(poisson.away_win, elo["away_win"], form.away_win)
+    ) / 3.0
 
     cp = CombinedProbabilities(
         home_win=round(p_home, 4),
@@ -179,6 +189,8 @@ def compute_combined(
         double_chance_12=round(dc_12, 4),
         draw_no_bet_home=round(dnb_home, 4),
         draw_no_bet_away=round(dnb_away, 4),
+        # OPP-01: Composite — P(BTTS AND Over 2.5) = P(BTTS) × P(O2.5) assuming near-independence
+        btts_and_over25=round(btts * over25, 4),
         poisson_home=round(poisson.home_win, 4),
         elo_home=round(elo["home_win"], 4),
         form_home=round(form.home_win, 4),

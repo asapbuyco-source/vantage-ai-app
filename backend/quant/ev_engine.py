@@ -54,13 +54,18 @@ MARKET_TO_PROB = {
     "Double Chance (12)": "double_chance_12",
     "Draw No Bet (Home)": "draw_no_bet_home",
     "Draw No Bet (Away)": "draw_no_bet_away",
+    # OPP-02: AH -0.5 maps to same probability as Draw No Bet (often better odds)
+    "AH Home -0.5": "draw_no_bet_home",
+    "AH Away +0.5": "draw_no_bet_away",
     "Over 1.5 Goals": "over15",
+    "Under 1.5 Goals": "under15",   # ISSUE-02: was missing — profitable defensive market
     "Over 2.5 Goals": "over25",
-    # "Under 2.5 Goals" has been replaced by the safer "Under 3.5 Goals"
     "Over 3.5 Goals": "over35",
     "Under 3.5 Goals": "under35",
     "BTTS": "btts",
     "BTTS No": "btts_no",
+    # OPP-01: BTTS + Over 2.5 composite — bookmakers price this inefficiently
+    "BTTS + Over 2.5": "btts_and_over25",
 }
 
 # Market → odds field in OddsData
@@ -73,14 +78,18 @@ MARKET_TO_ODDS_FIELD = {
     "Double Chance (12)": "dc_12_odds",
     "Draw No Bet (Home)": "dnb_home_odds",
     "Draw No Bet (Away)": "dnb_away_odds",
+    # OPP-02: AH -0.5 collected in OddsData — wire it to EV evaluation
+    "AH Home -0.5": "ah_home_minus05",
+    "AH Away +0.5": "ah_away_plus05",
     "Over 1.5 Goals": "over15_odds",
     "Under 1.5 Goals": "under15_odds",
     "Over 2.5 Goals": "over25_odds",
-    # Under 2.5 removed — replaced by the safer Under 3.5
     "Over 3.5 Goals": "over35_odds",
     "Under 3.5 Goals": "under35_odds",
     "BTTS": "btts_yes_odds",
     "BTTS No": "btts_no_odds",
+    # OPP-01: BTTS + Over 2.5 composite odds field (computed in data_pipeline)
+    "BTTS + Over 2.5": "btts_and_over25_odds",
 }
 
 

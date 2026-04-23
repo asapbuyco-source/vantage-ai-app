@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 # ── Local imports ─────────────────────────────────────────────────────────────
 from data_pipeline import fetch_matches, MatchData, TeamStats
 from poisson_model import compute_probabilities, compute_dynamic_rho
-from elo_rating import load_ratings_from_firestore, match_probabilities as elo_probs, save_dirty_ratings, get_team_rating
+from elo_rating import load_ratings_from_firestore, match_probabilities as elo_probs, save_dirty_ratings, get_team_rating, is_derby_match
 from form_model import compute_form_probabilities
 from probability_engine import compute_combined, CombinedProbabilities
 from ev_engine import evaluate_all_markets, get_best_value_bet
@@ -181,8 +181,10 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
             if match.away_stats and hasattr(match.away_stats, 'recent_opponents'):
                 away_opp_strengths = [get_team_rating(opp_id) / 1500 for opp_id in match.away_stats.recent_opponents[:5]]
 
-            # ── Dynamic Dixon-Coles rho ─────────────────────────────────────
-            is_derby = str(match.home_team_id) in str(match.away_team_id)
+            # ── Dynamic Dixon-Coles rho (BUG-01 fixed) ─────────────────────
+            # BUG-01: was `str(id) in str(id)` which was always True for any ID
+            # containing a digit that appeared in another. Now uses frozenset lookup.
+            is_derby = is_derby_match(match.home_team_id, match.away_team_id)
             rho = compute_dynamic_rho(mu_home, mu_away, match.league_tier, is_derby)
 
             # Combine models (Poisson + Elo + Form + H2H)
@@ -264,12 +266,17 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                 }
                 
                 if best_bet.market in SAFETY_DOWNGRADES:
-                    # Apply safety only if the prediction is considered risky
+                    # MODEL-05 fix: Require BOTH probability AND agreement to be low
+                    # before downgrading result markets in Tier 1/2 leagues.
+                    # Previously fired on ANY single condition, over-downgrading EPL/La Liga picks.
                     is_risky_prob = best_bet.model_prob < 0.62
                     is_low_agreement = probs.confidence_score < 0.60
                     is_volatile_league = match.league_tier >= 3
 
-                    if is_risky_prob or is_low_agreement or is_volatile_league:
+                    # Downgrade if: (both prob low AND agreement low) OR volatile league
+                    should_downgrade = (is_risky_prob and is_low_agreement) or is_volatile_league
+
+                    if should_downgrade:
                         safe_target = SAFETY_DOWNGRADES[best_bet.market]
                         safe_bet = next((b for b in all_value_bets if b.market == safe_target), None)
                         if safe_bet:
@@ -278,16 +285,17 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                             if is_low_agreement: reasons.append(f"Agreement {probs.confidence_score:.2f}")
                             if is_volatile_league: reasons.append(f"Tier {match.league_tier}")
                             reason_str = " & ".join(reasons)
-                            
                             _safe_print(f"[QuantPipeline]   🛡️ Safety Downgrade [{reason_str}]: {best_bet.market} -> {safe_target}")
                             best_bet = safe_bet
 
             # ── Odds Staleness Guard ────────────────────────────────────────
             staleness_mult = check_odds_staleness(match.odds.odds_fetched_at) if match.odds else 1.0
 
-            # ── Kelly stake ─────────────────────────────────────────────────
+            # ── Kelly stake (ISSUE-01 fixed) ────────────────────────────────
             if best_bet:
-                kelly_fraction = 1.0 if category in ("safe", "value") else 0.25
+                # ISSUE-01: Full Kelly (1.0x) for safe bets was reckless.
+                # Cap all single bets at quarter-Kelly (0.25). Accas use 0.10.
+                kelly_fraction = 0.25
                 base_kelly = kelly_stake_pct(best_bet.model_prob, best_bet.odds)
                 kelly = round(max(0, base_kelly * staleness_mult * kelly_fraction), 2)
             else:
@@ -318,6 +326,8 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                 "market_implied_prob": best_bet.market_prob if best_bet else 0,
                 "inefficiency": best_bet.inefficiency if best_bet else 0,
                 "kelly_stake": kelly,
+                # OPP-03: Flag high-value away wins as potential upsets
+                "upset_alert": best_bet is not None and best_bet.market == "Away Win" and best_bet.expected_value >= 0.05,
                 # ── Match analysis data (rich stats for cards) ──────────────
                 "expected_goals_home": round(mu_home, 2),
                 "expected_goals_away": round(mu_away, 2),

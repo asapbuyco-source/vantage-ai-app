@@ -63,6 +63,8 @@ class OddsData:
     under35_odds: float = 0.0
     btts_yes_odds: float = 0.0
     btts_no_odds: float = 0.0
+    # OPP-01: Composite odds
+    btts_and_over25_odds: float = 0.0
     # Double Chance
     dc_1x_odds: float = 0.0
     dc_x2_odds: float = 0.0

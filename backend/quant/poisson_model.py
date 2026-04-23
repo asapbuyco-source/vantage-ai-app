@@ -95,9 +95,11 @@ def compute_score_grid(mu_home: float, mu_away: float, rho: float | None = None)
     with Dixon-Coles rho correction applied to the four low-score cells.
     Key: (home_goals, away_goals), Value: corrected probability.
     Grid is re-normalized so all probabilities sum to 1.0.
-    
-    Upgrade #5: Accepts optional rho override for dynamic context.
+
+    MODEL-04: Warns when truncation at MAX_GOALS exceeds 1% of total mass,
+    which can distort Over 3.5+ markets in high-scoring fixtures.
     """
+    import sys
     if rho is None:
         rho = DIXON_COLES_RHO
     grid: dict[tuple[int, int], float] = {}
@@ -106,6 +108,18 @@ def compute_score_grid(mu_home: float, mu_away: float, rho: float | None = None)
             raw = _poisson_pmf(h, mu_home) * _poisson_pmf(a, mu_away)
             correction = _tau(h, a, mu_home, mu_away, rho)
             grid[(h, a)] = raw * correction
+
+    # MODEL-04: Estimate truncated mass before normalisation
+    raw_total = sum(_poisson_pmf(h, mu_home) * _poisson_pmf(a, mu_away)
+                    for h in range(MAX_GOALS + 1) for a in range(MAX_GOALS + 1))
+    truncated = 1.0 - raw_total
+    if truncated > 0.01:
+        print(
+            f"[Poisson] WARNING: {truncated:.1%} probability mass truncated "
+            f"(mu_home={mu_home:.2f}, mu_away={mu_away:.2f}). "
+            f"Consider raising MAX_GOALS above {MAX_GOALS}.",
+            file=sys.stderr,
+        )
 
     # Re-normalize to handle the correction disturbing the sum
     total = sum(grid.values())

@@ -97,35 +97,39 @@ def _parse_closing_odds(odds_list: list) -> dict:
         if price <= 1.0:
             continue
 
+        # BUG-04: Collect ALL prices per market, then take MIN (sharpest closing line).
+        # Previously used max() which inflated closing odds and biased CLV downward.
         # 1X2 Match Winner
         if market_id == 1:
             if "home" in label or "1" == label:
-                closing["Home Win"] = max(closing.get("Home Win", 0), price)
+                closing["Home Win"] = min(closing.get("Home Win", 9999), price)
             elif "draw" in label or "x" == label:
-                closing["Draw"] = max(closing.get("Draw", 0), price)
+                closing["Draw"] = min(closing.get("Draw", 9999), price)
             elif "away" in label or "2" == label:
-                closing["Away Win"] = max(closing.get("Away Win", 0), price)
+                closing["Away Win"] = min(closing.get("Away Win", 9999), price)
         # Over/Under Goals
         elif market_id == 80:
             total = str(odd.get("total") or "")
             is_over = "over" in label or "over" in name
             is_under = "under" in label or "under" in name
             if "1.5" in total:
-                if is_over: closing["Over 1.5 Goals"] = max(closing.get("Over 1.5 Goals", 0), price)
-                elif is_under: closing["Under 1.5 Goals"] = max(closing.get("Under 1.5 Goals", 0), price)
+                if is_over: closing["Over 1.5 Goals"] = min(closing.get("Over 1.5 Goals", 9999), price)
+                elif is_under: closing["Under 1.5 Goals"] = min(closing.get("Under 1.5 Goals", 9999), price)
             elif "2.5" in total:
-                if is_over: closing["Over 2.5 Goals"] = max(closing.get("Over 2.5 Goals", 0), price)
-                elif is_under: closing["Under 2.5 Goals"] = max(closing.get("Under 2.5 Goals", 0), price)
+                if is_over: closing["Over 2.5 Goals"] = min(closing.get("Over 2.5 Goals", 9999), price)
+                elif is_under: closing["Under 2.5 Goals"] = min(closing.get("Under 2.5 Goals", 9999), price)
             elif "3.5" in total:
-                if is_over: closing["Over 3.5 Goals"] = max(closing.get("Over 3.5 Goals", 0), price)
-                elif is_under: closing["Under 3.5 Goals"] = max(closing.get("Under 3.5 Goals", 0), price)
+                if is_over: closing["Over 3.5 Goals"] = min(closing.get("Over 3.5 Goals", 9999), price)
+                elif is_under: closing["Under 3.5 Goals"] = min(closing.get("Under 3.5 Goals", 9999), price)
         # BTTS
         elif market_id == 14:
             if "yes" in label or "yes" in name:
-                closing["BTTS"] = max(closing.get("BTTS", 0), price)
+                closing["BTTS"] = min(closing.get("BTTS", 9999), price)
             elif "no" in label or "no" in name:
-                closing["BTTS No"] = max(closing.get("BTTS No", 0), price)
+                closing["BTTS No"] = min(closing.get("BTTS No", 9999), price)
 
+    # Clean up sentinel values (9999 means no odds were found)
+    closing = {k: v for k, v in closing.items() if v < 9000}
     return closing
 
 
