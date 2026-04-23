@@ -150,47 +150,47 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const plans: Array<{
     id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
     label: string;
-    price: string;
-    originalPrice: string | null;
     badge: string | null;
+    icon: React.ReactNode;
     features: string[];
     color: string;
+    claimColor: string;
   }> = [
       {
         id: 'weekly',
         label: isFirstTime ? `Trial ${t('vip.plan_weekly')}` : t('vip.plan_weekly'),
-        price: isFirstTime ? '1000' : '2000',
-        originalPrice: isFirstTime ? '2000' : null,
-        badge: isFirstTime ? '1-WEEK TRIAL' : null,
+        badge: isFirstTime ? '🎁 1-WEEK TRIAL' : null,
+        icon: <Zap size={20} />,
         features: [t('vip.feat_1'), 'Accumulator Access'],
-        color: 'border-slate-700 bg-slate-800/50'
+        color: 'border-slate-700 bg-slate-800/50',
+        claimColor: 'bg-slate-600 hover:bg-slate-500 text-white',
       },
       {
         id: 'monthly',
         label: t('vip.plan_monthly'),
-        price: isFirstTime ? '3250' : '6500',
-        originalPrice: isFirstTime ? '6500' : '8000', // 2000 * 4
-        badge: isFirstTime ? '50% OFF' : 'MOST POPULAR',
+        badge: isFirstTime ? '⚡ 50% OFF' : '🔥 MOST POPULAR',
+        icon: <Star size={20} />,
         features: [t('vip.feat_1'), 'Accumulator Access', 'VIP WhatsApp'],
-        color: 'border-vantage-purple bg-vantage-purple/10 shadow-[0_0_30px_rgba(168,85,247,0.15)]'
+        color: 'border-vantage-purple bg-vantage-purple/10 shadow-[0_0_30px_rgba(168,85,247,0.15)]',
+        claimColor: 'bg-vantage-purple hover:bg-purple-500 text-white',
       },
       {
         id: 'quarterly',
         label: t('vip.plan_quarterly'),
-        price: '18000',
-        originalPrice: '19500', // 6500 * 3
-        badge: 'BEST VALUE',
-        features: ['3 Months Access', 'All Features', 'VIP WhatsApp', 'Save 1500 FCFA'],
-        color: 'border-vantage-cyan bg-vantage-cyan/10 shadow-[0_0_30px_rgba(34,211,238,0.15)]'
+        badge: '💎 BEST VALUE',
+        icon: <ShieldCheck size={20} />,
+        features: ['3 Months Access', 'All Features', 'VIP WhatsApp'],
+        color: 'border-vantage-cyan bg-vantage-cyan/10 shadow-[0_0_30px_rgba(34,211,238,0.15)]',
+        claimColor: 'bg-vantage-cyan hover:bg-cyan-400 text-slate-900',
       },
       {
         id: 'annual',
         label: t('vip.plan_yearly'),
-        price: '70000',
-        originalPrice: '78000', // 6500 * 12
-        badge: '🔥 BEST DEAL',
-        features: ['Full Year Access (365 days)', 'All VIP Features', 'VIP WhatsApp Group', 'Huge Savings'],
-        color: 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_30px_rgba(234,179,8,0.15)]'
+        badge: '👑 BEST DEAL',
+        icon: <Crown size={20} />,
+        features: ['Full Year Access (365 days)', 'All VIP Features', 'VIP WhatsApp Group'],
+        color: 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_30px_rgba(234,179,8,0.15)]',
+        claimColor: 'bg-yellow-500 hover:bg-yellow-400 text-slate-900',
       },
     ];
 
@@ -943,11 +943,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
             </div>
 
             <div className="flex flex-col gap-4">
-              {plans.map((plan) => {
-                const countryCode = userProfile?.country || 'other';
-                const pricing = getPricingForCountry(Number(plan.price), countryCode);
-                const origPricing = plan.originalPrice ? getPricingForCountry(Number(plan.originalPrice), countryCode) : null;
-
+            {plans.map((plan) => {
                 return (
                   <motion.button
                     key={plan.id}
@@ -959,27 +955,22 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                             ${selectedPlanId === plan.id ? 'ring-2 ring-vantage-purple ring-offset-2 ring-offset-black' : ''}
                         `}
                   >
-                    {/* Popular Badge */}
+                    {/* Badge */}
                     {plan.badge && (
                       <div className="absolute top-0 right-0 bg-gradient-to-l from-vantage-purple to-purple-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-lg flex items-center gap-1 z-10">
-                        {plan.badge === 'MOST POPULAR' && <Crown size={10} fill="currentColor" />}
                         {plan.badge}
                       </div>
                     )}
 
                     <div className="p-5 flex justify-between items-center relative z-0">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm font-bold text-slate-300 uppercase tracking-wide">{plan.label}</span>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-2xl font-bold font-orbitron text-white">{pricing.symbol}{pricing.amount.toLocaleString()} <span className="text-sm text-gray-400 font-sans">{pricing.code}</span></span>
-                          {origPricing && (
-                            <span className="text-xs text-gray-500 line-through decoration-red-500 decoration-2">{origPricing.symbol}{origPricing.amount.toLocaleString()}</span>
-                          )}
+                      <div className="flex flex-col gap-2">
+                        {/* Plan icon + label */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-vantage-purple">{plan.icon}</span>
+                          <span className="text-sm font-bold text-slate-300 uppercase tracking-wide">{plan.label}</span>
                         </div>
-                        {pricing.isConverted && (
-                          <span className="text-[10px] text-gray-500">Base: {plan.price} FCFA</span>
-                        )}
-                        <div className="flex items-center gap-2 mt-2">
+                        {/* Features */}
+                        <div className="flex items-center gap-2 flex-wrap mt-1">
                           {plan.features.map((feat, idx) => (
                             <span key={idx} className="text-[10px] flex items-center text-gray-400 bg-black/20 px-2 py-0.5 rounded-full">
                               <Check size={8} className="mr-1 text-vantage-cyan" /> {feat}
@@ -988,8 +979,10 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                         </div>
                       </div>
 
-                      <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-vantage-purple group-hover:text-white transition-colors text-gray-400">
-                        <ArrowRight size={20} />
+                      {/* Claim CTA */}
+                      <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-sm transition-all ${plan.claimColor} shadow-lg shrink-0`}>
+                        <Zap size={14} />
+                        <span>Claim</span>
                       </div>
                     </div>
 
