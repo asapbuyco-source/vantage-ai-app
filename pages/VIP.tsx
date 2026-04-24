@@ -10,6 +10,7 @@ import { NavigationTab, Match } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { AccumulatorModal } from '../components/AccumulatorModal';
 import { getAppSettings } from '../services/db';
+import { normalizeQuantPrediction } from '../services/db';
 import { getTomorrowFixturesFromDB } from '../services/sportsData';
 import { Calendar } from 'lucide-react';
 import { db } from '../firebaseConfig';
@@ -95,7 +96,8 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
         const snap = await getDoc(doc(db, 'quant_predictions', dateKey));
         if (snap.exists()) {
           const data = snap.data();
-          const preds = (data.predictions || []) as Match[];
+          const rawPreds = (data.predictions || []);
+          const preds = rawPreds.map(normalizeQuantPrediction) as Match[];
           const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
           preds.sort((a, b) => (rankPriority[b.value_rank] || 0) - (rankPriority[a.value_rank] || 0));
           setQuantPredictions(preds);

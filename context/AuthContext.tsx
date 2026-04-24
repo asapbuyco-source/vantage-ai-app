@@ -10,7 +10,7 @@ import {
     onAuthStateChanged,
     User
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where, increment, addDoc, orderBy, runTransaction, limit } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDoc, orderBy, runTransaction, limit, getDocs, query } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
 import { checkPaymentStatus } from "../services/fapshi";
@@ -63,15 +63,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return `${prefix}${random}`;
     };
 
+    /**
+     * FIX (HIGH): O(1) referral lookup using a dedicated `referral_codes` collection.
+     * The old implementation scanned the entire `profiles` collection to find the referrer,
+     * which was O(n) in user count and would spike Firestore costs at scale.
+     * The `referral_codes` collection is keyed by the referral code itself, so lookup is O(1).
+     */
     const processReferral = async (newUserId: string, promoCode: string) => {
         try {
-            const q = query(collection(db, "profiles"), where("referralCode", "==", promoCode));
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) {
-                const referrerDoc = snapshot.docs[0];
-                const referrerId = referrerDoc.id;
-                await updateDoc(doc(db, "profiles", newUserId), { referredBy: referrerId });
-                await updateDoc(doc(db, "profiles", referrerId), { referralCount: increment(1) });
+            // O(1) lookup — direct doc read by code key (no collection scan)
+            const codeRef = doc(db, "referral_codes", promoCode.toUpperCase());
+            const codeSnap = await getDoc(codeRef);
+            if (codeSnap.exists()) {
+                const referrerId = codeSnap.data().ownerUid;
+                if (referrerId && referrerId !== newUserId) {
+                    await updateDoc(doc(db, "profiles", newUserId), { referredBy: referrerId });
+                    await updateDoc(doc(db, "profiles", referrerId), { referralCount: increment(1) });
+                }
             }
         } catch (e) {
             console.error("Error processing referral:", e);
@@ -151,6 +159,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 lifetimeEarnings: 0
             };
             await setDoc(userRef, profileData);
+
+            // FIX: Write reverse-index for O(1) referral lookups.
+            // Key = the referral code, value = the owner's UID.
+            // This avoids the full profiles collection scan in processReferral.
+            try {
+                const codeRef = doc(db, "referral_codes", newReferralCode.toUpperCase());
+                await setDoc(codeRef, { ownerUid: firebaseUser.uid, createdAt: new Date().toISOString() });
+            } catch (e) {
+                // Non-critical: profile is already written, just log
+                console.warn('[Auth] Could not write referral_codes index:', e);
+            }
+
             if (referralCodeInput && referralCodeInput.length > 3) {
                 await processReferral(firebaseUser.uid, referralCodeInput);
             }

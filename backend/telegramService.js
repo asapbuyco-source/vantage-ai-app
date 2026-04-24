@@ -214,11 +214,34 @@ export const sendDailyPredictionsToTelegram = async () => {
 
         // FREE TIER ONLY: send 'safe' and 'value' category picks on Telegram.
         // 'risky' or 'lean' picks are excluded/VIP-exclusive.
-        const ready = strictPicks.filter(m =>
-            (m.prediction_en || m.prediction || m.bet_type) &&
-            m.confidence >= 55 &&
-            m.sport !== 'basketball'
-        );
+        // FIX: Also filter out matches whose kickoff time has already passed so the
+        // bot never sends predictions for games that have already started or ended.
+        const nowLagos = (() => {
+            const now = new Date();
+            const lagosOffset = 60; // Africa/Lagos is always UTC+1
+            const lagosMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
+            const d = new Date(lagosMs);
+            return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+        })();
+
+        const ready = strictPicks.filter(m => {
+            // Require a valid prediction and minimum confidence
+            if (!(m.prediction_en || m.prediction || m.bet_type)) return false;
+            if (m.confidence < 55) return false;
+            if (m.sport === 'basketball') return false;
+
+            // Remove old matches — skip any match whose time has already passed today
+            const kickoffTime = m.kickoff_local || m.time || '';
+            // kickoffTime is expected to be HH:MM (24h). If malformed or missing, keep the match.
+            if (kickoffTime && /^\d{2}:\d{2}$/.test(kickoffTime)) {
+                if (kickoffTime <= nowLagos) {
+                    console.log(`[Telegram] ⏩ Skipping past match: ${m.homeTeam} vs ${m.awayTeam} (kickoff ${kickoffTime}, now ${nowLagos})`);
+                    return false;
+                }
+            }
+            return true;
+        });
+
 
         if (ready.length === 0) {
             console.warn('[Telegram] No ready free (safe) predictions for today. Skipping.');

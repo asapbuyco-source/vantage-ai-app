@@ -63,7 +63,7 @@ const FormDots = ({ form }: { form?: string }) => {
 
 export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const { t, language, setLanguage, theme, toggleTheme } = useAppContext();
-  const { userProfile, isAdmin } = useAuth();
+  const { user, userProfile, isAdmin } = useAuth();
   const {
     activeDate, predictions, rawFixtures, basketballPredictions,
     winRateStats, loading, isSystemGenerating, systemError

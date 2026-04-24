@@ -1,7 +1,7 @@
 # nixpacks.toml — Railway build configuration
-# aptPkgs adds Python 3 via Ubuntu apt (runs alongside the nix Node.js setup).
-# nixPkgs pins Node.js to v20 (packages like Firebase & react-router require >=20).
+# Both Node.js and Python are now in nixPkgs so they share the same PATH.
+# This fixes the issue where python3 was not findable by the Node.js quant service runner
+# because apt-installed packages and nix packages use separate PATH environments.
 
 [phases.setup]
-nixPkgs = ["nodejs_20"]
-aptPkgs = ["python3", "python3-pip", "python3-dev"]
+nixPkgs = ["nodejs_20", "python311", "python311Packages.pip"]

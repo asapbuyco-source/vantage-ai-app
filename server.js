@@ -10,8 +10,11 @@ import fs from 'fs';
 import { spawnSync } from 'child_process';
 import pino from 'pino';
 import * as Sentry from '@sentry/node';
+import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
+
 
 // Load environment variables from .env.local if available (for local dev)
 const __filename = fileURLToPath(import.meta.url);

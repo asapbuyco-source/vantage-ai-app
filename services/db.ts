@@ -41,8 +41,9 @@ const getDateKeyDaysAgo = (daysAgo: number) => {
 /** 
  * Normalizes a raw prediction object from the Python quant_pipeline (snake_case)
  * into the camelCase shape expected by all React components.
+ * EXPORTED so VIP.tsx and other pages can call the same canonical normalizer.
  */
-const normalizeQuantPrediction = (p: any): any => {
+export const normalizeQuantPrediction = (p: any): any => {
     if (!p) return p;
     // Already normalized (has homeTeam) — skip to avoid double-mapping
     if (p.homeTeam !== undefined) return p;

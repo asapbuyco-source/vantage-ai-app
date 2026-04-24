@@ -330,7 +330,7 @@ function AppContent() {
                 >
                   <ErrorBoundary>
                     {activeTab === 'home' && <Home setTab={setActiveTab} />}
-                    {activeTab === 'free' && <FreePicks />}
+                    {activeTab === 'free' && <FreePicks setTab={setActiveTab} />}
                     {activeTab === 'vip' && <VIP setTab={setActiveTab} />}
                     {activeTab === 'guide' && <BettingGuide />}
                     {activeTab === 'profile' && <Profile />}

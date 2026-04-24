@@ -416,13 +416,22 @@ export const initScheduler = () => {
             });
 
             const db = admin.firestore();
-            await db.collection('live_scores').doc('current').set({
-                matches,
-                count: matches.length,
-                updatedAt: new Date().toISOString(),
-            });
+            // FIX: Only write to Firestore when we have actual live matches.
+            // Previously an API error or quiet period would overwrite with an empty
+            // array and wipe all live data from the dashboard immediately.
             if (matches.length > 0) {
+                await db.collection('live_scores').doc('current').set({
+                    matches,
+                    count: matches.length,
+                    updatedAt: new Date().toISOString(),
+                });
                 console.log(`[Live] ⚡ Wrote ${matches.length} live matches to Firestore`);
+            } else {
+                // No live matches — update timestamp only so the UI knows the poller ran
+                await db.collection('live_scores').doc('current').set({
+                    count: 0,
+                    updatedAt: new Date().toISOString(),
+                }, { merge: true });
             }
         } catch (e) {
             console.warn('[Scheduler] Live scores poll error:', e.message);
