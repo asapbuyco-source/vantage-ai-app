@@ -84,6 +84,7 @@ MARKET_TO_ODDS_FIELD = {
     "Over 1.5 Goals": "over15_odds",
     "Under 1.5 Goals": "under15_odds",
     "Over 2.5 Goals": "over25_odds",
+    "Under 2.5 Goals": "under25_odds",   # FIX Bug 3: was missing — market was silently skipped
     "Over 3.5 Goals": "over35_odds",
     "Under 3.5 Goals": "under35_odds",
     "BTTS": "btts_yes_odds",

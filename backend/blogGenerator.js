@@ -135,7 +135,7 @@ const injectKeywords = (text, keywords) => {
     return result.replace('{keyword}', selected[0] || 'football betting tips');
 };
 
-export const generateBlogPost = async (language = 'en') => {
+export const generateBlogPost = async (language = 'en', leagueOverride = null) => {
     const todayStr = getGlobalTodayKey();
     const db = admin.firestore();
 
@@ -170,7 +170,7 @@ export const generateBlogPost = async (language = 'en') => {
         return { status: 'skipped', reason: 'predictions_pending_analysis' };
     }
 
-    const league = selectRandom(LEAGUES);
+    const league = leagueOverride || selectRandom(LEAGUES);
 
     const titleTemplates = templates.titles.map(t => 
         t.replace('{league}', league).replace('{date}', todayStr)
@@ -236,11 +236,12 @@ export const generateBlogPost = async (language = 'en') => {
     content += `<p>${accumOutroTemplate}</p>\n`;
     content += `<p><strong>${outro}</strong></p>`;
 
-    content = injectKeywords(content, keywords);
-
     const excerpt = content.replace(/<[^>]+>/g, '').substring(0, 160).trim() + '...';
+    
+    // Unique doc ID for multiple posts
+    const docId = `${todayStr}_${language}_${league.replace(/\s+/g, '_')}`;
 
-    await db.collection('daily_blogs').doc(todayStr).set({
+    await db.collection('daily_blogs').doc(docId).set({
         title,
         content,
         excerpt,
@@ -249,6 +250,7 @@ export const generateBlogPost = async (language = 'en') => {
             hasBasketball ? 'basketball' : null,
             language === 'fr' ? 'pronostics' : 'predictions',
             language === 'fr' ? '1xbet' : 'betting',
+            league
         ].filter(Boolean),
         generatedAt: new Date().toISOString(),
         generatedBy: 'programmatic',
@@ -256,6 +258,8 @@ export const generateBlogPost = async (language = 'en') => {
         language,
         footballCount: hasFootball ? topPicks.length : 0,
         basketballCount: hasBasketball ? topPicks.filter(m => m.sport === 'basketball').length : 0,
+        // Save the date portion so the frontend can group/display properly
+        date: todayStr
     });
 
     return {
@@ -270,16 +274,20 @@ export const generateBlogPost = async (language = 'en') => {
 export const triggerBlogGeneration = async () => {
     console.log('[BlogGenerator] Starting programmatic blog generation...');
     try {
-        const enResult = await generateBlogPost('en');
-        const frResult = await generateBlogPost('fr');
+        const topLeagues = ['Premier League', 'La Liga', 'Serie A', 'Champions League'];
         
-        console.log(`[BlogGenerator] ✅ Generated English blog (${enResult.status})`);
-        console.log(`[BlogGenerator] ✅ Generated French blog (${frResult.status})`);
+        // Generate English blogs for multiple leagues
+        const results = await Promise.all(
+            topLeagues.map(league => generateBlogPost('en', league))
+        );
+        
+        results.forEach((res, i) => {
+            console.log(`[BlogGenerator] ✅ Generated English blog for ${topLeagues[i]} (${res.status})`);
+        });
         
         return {
             status: 'success',
-            english: enResult.status,
-            french: frResult.status,
+            generatedCount: results.length
         };
     } catch (e) {
         console.error('[BlogGenerator] Error:', e.message);

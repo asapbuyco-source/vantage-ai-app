@@ -271,23 +271,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             const userRef = doc(db, "profiles", user.uid);
-            await updateDoc(userRef, {
-                isVip: true,
-                vipExpiry: expiry.toISOString(),
-                vipPlan: plan,
-                totalPaid: increment(planCost)
+            const referredBy = userProfile?.referredBy;
+
+            await runTransaction(db, async (tx) => {
+                const now = new Date();
+                let expiry = new Date();
+                if (plan === 'weekly') expiry.setDate(now.getDate() + 7);
+                if (plan === 'monthly') expiry.setDate(now.getDate() + 30);
+                if (plan === 'quarterly') expiry.setDate(now.getDate() + 90);
+                if (plan === 'annual') expiry.setDate(now.getDate() + 365);
+
+                tx.update(userRef, {
+                    isVip: true,
+                    vipExpiry: expiry.toISOString(),
+                    vipPlan: plan,
+                    totalPaid: increment(planCost)
+                });
+
+                if (referredBy) {
+                    const commission = Math.floor(planCost * 0.40);
+                    if (commission > 0) {
+                        const referrerRef = doc(db, "profiles", referredBy);
+                        tx.update(referrerRef, {
+                            referralEarnings: increment(commission),
+                            lifetimeEarnings: increment(commission)
+                        });
+                    }
+                }
             });
 
-            if (userProfile?.referredBy) {
-                const commission = Math.floor(planCost * 0.40);
-                if (commission > 0) {
-                    const referrerRef = doc(db, "profiles", userProfile.referredBy);
-                    await updateDoc(referrerRef, {
-                        referralEarnings: increment(commission),
-                        lifetimeEarnings: increment(commission)
-                    });
-                }
-            }
             await fetchProfile(user);
         } catch (e) {
             console.error("Failed to upgrade VIP", e);

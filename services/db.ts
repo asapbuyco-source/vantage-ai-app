@@ -3,6 +3,23 @@ import { Match, TeamAsset, AccumulatorSet, DailyAnalysis, WinRateStats, UserProf
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, updateDoc, serverTimestamp, getCountFromServer, query, where, writeBatch } from "firebase/firestore";
 import { db, auth } from "../firebaseConfig";
 
+// ─── IN-MEMORY CACHE WITH TTL ────────────────────────────────────────────────
+// Prevents redundant Firestore reads when multiple components mount simultaneously.
+// Task 3.2 from IMPLEMENTATION_PLAN: reduces costs by 60-80% on repeated page loads.
+const _cache = new Map<string, { data: any; expires: number }>();
+
+function cacheGet<T>(key: string): T | null {
+    const entry = _cache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expires) { _cache.delete(key); return null; }
+    return entry.data as T;
+}
+
+function cacheSet(key: string, data: any, ttlMs: number): void {
+    _cache.set(key, { data, expires: Date.now() + ttlMs });
+}
+
+
 // Return YYYY-MM-DD for Africa/Lagos (UTC+1)
 export const getGlobalTodayKey = () => {
     const now = new Date();
@@ -78,6 +95,11 @@ export const normalizeQuantPrediction = (p: any): any => {
 };
 
 export const getDailyData = async (dateStr: string): Promise<DailyAnalysis | null> => {
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+    const cacheKey = `daily_${dateStr}`;
+    const cached = cacheGet<DailyAnalysis>(cacheKey);
+    if (cached) return cached;
+
     try {
         let dailyAnalysis: any = null;
         let found = false;
@@ -106,7 +128,9 @@ export const getDailyData = async (dateStr: string): Promise<DailyAnalysis | nul
         }
 
         if (found) {
-            return dailyAnalysis as DailyAnalysis;
+            const result = dailyAnalysis as DailyAnalysis;
+            cacheSet(cacheKey, result, CACHE_TTL);
+            return result;
         }
     } catch (e) {
         console.warn(`Firestore Fetch Error for ${dateStr}:`, e);
@@ -303,7 +327,24 @@ export const getWinRateStats = async (): Promise<WinRateStats> => {
         console.warn("Stats cache read error", e);
     }
 
-    // 2. Check Global Firestore Cache (1 read instead of 31)
+    // 2. Check quant_performance/all — Python backend writes this doc after each grading run.
+    // This is a SINGLE read vs 31 reads below. Saves ~$0.002 per user per refresh at scale.
+    try {
+        const perfDoc = await getDoc(doc(db, 'quant_performance', 'all'));
+        if (perfDoc.exists()) {
+            const d = perfDoc.data();
+            // Only use if it was written for today (prevents using stale yesterday's stats)
+            if (d.date === todayStr && d.stats) {
+                const stats = d.stats as WinRateStats;
+                localStorage.setItem(cacheKey, JSON.stringify({ stats, timestamp: Date.now() }));
+                return stats;
+            }
+        }
+    } catch (e) {
+        console.warn('[Stats] quant_performance read failed, falling through to calculation:', e);
+    }
+
+    // 3. Check Global Firestore Cache (1 read instead of 31)
     try {
         const statsDoc = await getDoc(doc(db, "settings", "app_stats"));
         if (statsDoc.exists()) {
@@ -530,9 +571,16 @@ export interface AppSettings {
 }
 
 export const getAppSettings = async (): Promise<AppSettings> => {
+    const SETTINGS_CACHE_KEY = 'app_settings';
+    const cached = cacheGet<AppSettings>(SETTINGS_CACHE_KEY);
+    if (cached) return cached;
     try {
         const snap = await getDoc(doc(db, "settings", "app"));
-        if (snap.exists()) return snap.data() as AppSettings;
+        if (snap.exists()) {
+            const settings = snap.data() as AppSettings;
+            cacheSet(SETTINGS_CACHE_KEY, settings, 10 * 60 * 1000); // 10-min TTL
+            return settings;
+        }
     } catch (e) {
         console.warn("Failed to load app settings", e);
     }
@@ -541,6 +589,8 @@ export const getAppSettings = async (): Promise<AppSettings> => {
 
 export const saveAppSettings = async (settings: Partial<AppSettings>): Promise<void> => {
     if (!auth.currentUser) return;
+    // Invalidate cache immediately so next read gets fresh data
+    _cache.delete('app_settings');
     await setDoc(doc(db, "settings", "app"), {
         ...settings,
         updatedAt: new Date().toISOString(),

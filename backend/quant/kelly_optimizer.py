@@ -47,8 +47,9 @@ def kelly_stake(probability: float, decimal_odds: float, fraction: float = KELLY
 
     frac_kelly = full_kelly * fraction
 
-    # Clamp to [MIN_STAKE_PCT, MAX_STAKE_PCT]
-    return round(min(MAX_STAKE_PCT, max(MIN_STAKE_PCT, frac_kelly)), 4)
+    # Clamp to [0, MAX_STAKE_PCT] — do NOT enforce a minimum floor.
+    # Forcing MIN_STAKE_PCT=0.5% would place bets even when edge rounds to near-zero.
+    return round(min(MAX_STAKE_PCT, frac_kelly), 4)
 
 
 def kelly_stake_pct(probability: float, decimal_odds: float) -> float:

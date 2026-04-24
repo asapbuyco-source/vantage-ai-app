@@ -51,8 +51,10 @@ export const initiateSelarPayment = async (
         throw new Error(`Selar product link for plan "${plan}" is not configured. Please set VITE_SELAR_${plan.toUpperCase()}_LINK in your environment variables.`);
     }
 
-    // Generate a unique reference tied to this user+session
-    const reference = `VAN_${userId.slice(0, 8)}_${plan}_${Date.now()}`;
+    // Generate an opaque, cryptographically random reference.
+    // Using randomUUID() means the reference cannot be guessed or iterated.
+    // Plan and userId are stored in Firestore only — NOT embedded in the reference.
+    const reference = `VAN_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
 
     // Write pending token to Firestore (expires in 2 hours — enforced on read)
     // Collection: selar_pending/{reference}

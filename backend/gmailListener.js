@@ -146,10 +146,12 @@ export const checkRecentSelarEmails = async () => {
             const isWeekly = textToLower.includes('weekly');
 
             let plan = 'weekly'; // default fallback
-            if (isQuarterly) plan = 'quarterly';
-            if (isWeekly) plan = 'weekly';
-            if (isMonthly) plan = 'monthly';
+            // IMPORTANT: Check most-specific plan FIRST (annual > quarterly > monthly > weekly)
+            // Previously this was reversed, causing monthly emails to be granted weekly access.
             if (isAnnual) plan = 'annual';
+            else if (isQuarterly) plan = 'quarterly';
+            else if (isMonthly) plan = 'monthly';
+            else if (isWeekly) plan = 'weekly';
 
             console.log(`[Gmail Listener] Parsed → Customer email: ${customerEmail || 'NOT FOUND'} | Plan: ${plan}`);
 

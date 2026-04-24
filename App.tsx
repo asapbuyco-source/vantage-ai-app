@@ -26,6 +26,7 @@ import { BlogPost } from './pages/BlogPost';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
+import { SpecialOfferPopup } from './components/SpecialOfferPopup';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<NavigationTab>(() => {
@@ -349,6 +350,7 @@ function AppContent() {
           {activeTab !== 'admin' && <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />}
 
           {/* Global UI overlays */}
+          <SpecialOfferPopup />
           <BetSlip />
           <ToastContainer />
 

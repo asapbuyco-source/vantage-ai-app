@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { getAppSettings } from '../services/db';
 import { TeamLogo } from '../components/TeamLogo';
 import { NavigationTab, Match } from '../types';
+import { SpecialOfferBanner } from '../components/SpecialOfferBanner';
 
 interface FreePicksProps {
   setTab: (tab: NavigationTab) => void;
@@ -387,9 +388,12 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
 
       {/* ── Header with match count ── */}
       <div className="flex flex-col space-y-2">
-        <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white">
+        <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white mb-2">
           {language === 'fr' ? 'Analyse' : 'Match'} <span className="text-vantage-cyan">{language === 'fr' ? 'des Matchs' : 'Analysis'}</span>
         </h1>
+
+        {/* ── Special Offer Banner ── */}
+        <SpecialOfferBanner onClick={() => setTab('vip')} />
 
         {/* Live match count banner */}
         {!loading && totalAnalyzed > 0 && (

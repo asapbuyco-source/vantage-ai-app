@@ -65,13 +65,34 @@ def _get_firestore():
     try:
         import firebase_admin
         from firebase_admin import firestore as fs, credentials
+        
         if not firebase_admin._apps:
+            # 1. Try env var first (works in Railway)
             sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
+            
+            # 2. Manual parsing for local Windows testing (bypasses python-dotenv multiline bugs)
+            if not sa_json and os.path.exists("../../.env.local"):
+                with open("../../.env.local", "r", encoding="utf-8") as f:
+                    content = f.read()
+                    if "FIREBASE_SERVICE_ACCOUNT=" in content:
+                        val = content.split("FIREBASE_SERVICE_ACCOUNT=")[1]
+                        # Extract the JSON string handling potential surrounding quotes
+                        if val.strip().startswith("'"):
+                            sa_json = val.split("'")[1]
+                        elif val.strip().startswith('"'):
+                            sa_json = val.split('"')[1]
+                        else:
+                            # It might just be raw until the next newline
+                            sa_json = val.split("\n")[0]
+
             if sa_json:
-                cred = credentials.Certificate(json.loads(sa_json))
+                # Need strict replacement because env files sometimes escape newlines
+                clean_json = sa_json.replace("\\n", "\n")
+                cred = credentials.Certificate(json.loads(clean_json))
             else:
                 cred = credentials.ApplicationDefault()
             firebase_admin.initialize_app(cred)
+            
         return fs.client()
     except Exception as e:
         print(f"[Backtester] Firestore unavailable: {e}", file=sys.stderr)
@@ -147,7 +168,19 @@ def run_backtest(
             all_bets.append(bet_info)
 
             # Financial simulation
-            stake = current_bankroll * max(kelly, 0.01)  # Min 1% stake
+            # FIX: Only bet when Kelly > 0. The old max(kelly, 0.01) forced a 1%
+            # stake even with zero edge, inflating simulated ROI by ~5-10%.
+            if kelly <= 0:
+                result.total_bets += 1
+                # Count it statistically but don't simulate a financial position
+                if market not in result.market_stats:
+                    result.market_stats[market] = {"wins": 0, "losses": 0, "voids": 0, "total": 0, "staked": 0, "returned": 0}
+                result.market_stats[market]["total"] += 1
+                if status == "won": result.market_stats[market]["wins"] += 1
+                elif status == "lost": result.market_stats[market]["losses"] += 1
+                continue
+
+            stake = current_bankroll * kelly
             result.total_staked += stake
 
             if status == "won":

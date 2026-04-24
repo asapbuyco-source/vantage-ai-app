@@ -20,6 +20,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { TrialOfferPopup } from '../components/TrialOfferPopup';
 import { PaymentModal } from '../components/PaymentModal';
+import { SpecialOfferBanner } from '../components/SpecialOfferBanner';
 
 interface HomeProps {
   setTab: (tab: NavigationTab) => void;
@@ -266,6 +267,9 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
           </div>
         </div>
       </div>
+
+      {/* ── Special Offer Banner ── */}
+      <SpecialOfferBanner onClick={() => setTab('vip')} />
 
       {/* ── Date Bar ── */}
       <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 px-4 py-2.5 rounded-xl border border-black/5 dark:border-white/5 text-xs">
@@ -602,10 +606,10 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                     )}
                                   </>
                                 ) : (
-                                  <button onClick={(e) => { e.stopPropagation(); setTab('vip'); }} className="flex items-center gap-1 text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded cursor-pointer hover:bg-vantage-purple/20 transition-colors">
+                                  <div onClick={(e) => { e.stopPropagation(); setTab('vip'); }} className="flex items-center gap-1 text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded cursor-pointer hover:bg-vantage-purple/20 transition-colors">
                                     <Lock size={9} />
                                     {language === 'fr' ? 'Stats Détaillées VIP' : 'Unlock Detailed Stats'}
-                                  </button>
+                                  </div>
                                 )}
                               </div>
                             )}

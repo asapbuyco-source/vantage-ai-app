@@ -153,6 +153,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
     label: string;
     badge: string | null;
+    price: string;
     icon: React.ReactNode;
     features: string[];
     color: string;
@@ -160,17 +161,29 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   }> = [
       {
         id: 'weekly',
-        label: isFirstTime ? `Trial ${t('vip.plan_weekly')}` : t('vip.plan_weekly'),
-        badge: isFirstTime ? '🎁 1-WEEK TRIAL' : null,
+        label: t('vip.plan_weekly'),
+        badge: '⚡ 1-WEEK TRIAL',
+        price: '2000',
         icon: <Zap size={20} />,
         features: [t('vip.feat_1'), 'Accumulator Access'],
         color: 'border-slate-700 bg-slate-800/50',
         claimColor: 'bg-slate-600 hover:bg-slate-500 text-white',
       },
       {
+        id: 'annual',
+        label: t('vip.plan_yearly'),
+        badge: '👑 SAVE 70% vs WEEKLY',
+        price: '40000',
+        icon: <Crown size={20} />,
+        features: ['Full Year Access (365 days)', 'All VIP Features', 'VIP WhatsApp Group'],
+        color: 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_30px_rgba(234,179,8,0.15)]',
+        claimColor: 'bg-yellow-500 hover:bg-yellow-400 text-slate-900',
+      },
+      {
         id: 'monthly',
         label: t('vip.plan_monthly'),
-        badge: isFirstTime ? '⚡ 50% OFF' : '🔥 MOST POPULAR',
+        badge: '🔥 MOST POPULAR',
+        price: '5000',
         icon: <Star size={20} />,
         features: [t('vip.feat_1'), 'Accumulator Access', 'VIP WhatsApp'],
         color: 'border-vantage-purple bg-vantage-purple/10 shadow-[0_0_30px_rgba(168,85,247,0.15)]',
@@ -180,19 +193,11 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
         id: 'quarterly',
         label: t('vip.plan_quarterly'),
         badge: '💎 BEST VALUE',
+        price: '12000',
         icon: <ShieldCheck size={20} />,
         features: ['3 Months Access', 'All Features', 'VIP WhatsApp'],
         color: 'border-vantage-cyan bg-vantage-cyan/10 shadow-[0_0_30px_rgba(34,211,238,0.15)]',
         claimColor: 'bg-vantage-cyan hover:bg-cyan-400 text-slate-900',
-      },
-      {
-        id: 'annual',
-        label: t('vip.plan_yearly'),
-        badge: '👑 BEST DEAL',
-        icon: <Crown size={20} />,
-        features: ['Full Year Access (365 days)', 'All VIP Features', 'VIP WhatsApp Group'],
-        color: 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_30px_rgba(234,179,8,0.15)]',
-        claimColor: 'bg-yellow-500 hover:bg-yellow-400 text-slate-900',
       },
     ];
 
@@ -981,10 +986,14 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                         </div>
                       </div>
 
-                      {/* Claim CTA */}
+                      {/* Pricing CTA */}
                       <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-sm transition-all ${plan.claimColor} shadow-lg shrink-0`}>
                         <Zap size={14} />
-                        <span>Claim</span>
+                        <span>
+                          {getPricingForCountry(Number(plan.price), userProfile?.country || 'other').symbol}
+                          {getPricingForCountry(Number(plan.price), userProfile?.country || 'other').amount.toLocaleString()}
+                          {getPricingForCountry(Number(plan.price), userProfile?.country || 'other').code === 'FCFA' ? ' FCFA' : ` ${getPricingForCountry(Number(plan.price), userProfile?.country || 'other').code}`}
+                        </span>
                       </div>
                     </div>
 

@@ -35,9 +35,12 @@ export async function getRecentBlogPosts(count = 10): Promise<Omit<BlogPost, 'co
         const snap = await getDocs(q);
         return snap.docs.map(d => {
             const data = d.data();
+            // Fallback to substring if data.date is somehow missing
+            const actualDate = data.date || d.id.substring(0, 10);
             return {
-                date: d.id,
-                title: data.title || `Pronostics du ${d.id}`,
+                date: actualDate,
+                id: d.id,
+                title: data.title || `Predictions for ${actualDate}`,
                 excerpt: data.excerpt || '',
                 tags: data.tags || [],
                 generatedAt: data.generatedAt || d.id,

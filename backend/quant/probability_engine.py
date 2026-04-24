@@ -99,6 +99,15 @@ def compute_combined(
     _afs = getattr(away_stats, 'form_score', 0.5) if away_stats else 0.5
     adj_mu_home = max(0.20, mu_home * (0.90 + _hfs * 0.20))  # 0.90–1.10×
     adj_mu_away = max(0.20, mu_away * (0.90 + _afs * 0.20))
+
+    # UPGRADE B: League-aware Home Advantage
+    # Real football has systemic home advantage. We apply a multiplier to the 
+    # home team's expected goals based on league tier.
+    # Default to 1.08 (8% boost) if tier isn't provided (backwards compat).
+    league_tier = getattr(home_stats, 'league_tier', 2) if home_stats else 2
+    HOME_ADVANTAGE = {1: 1.10, 2: 1.08, 3: 1.05, 4: 1.03, 5: 1.00}
+    adj_mu_home *= HOME_ADVANTAGE.get(league_tier, 1.08)
+
     poisson: MarketProbabilities = compute_probabilities(adj_mu_home, adj_mu_away, rho)
 
     # ── Model 2: Elo ───────────────────────────────────────────────────────
@@ -165,7 +174,10 @@ def compute_combined(
     # Average agreement across home/draw/away — not just home_win (was a bug).
     def _oa(a: float, b: float, c: float) -> float:
         m = (a + b + c) / 3.0
-        return max(0.0, 1.0 - (((a-m)**2 + (b-m)**2 + (c-m)**2) / 3.0)**0.5 / 0.3)
+        # Reduced divisor from 0.30 to 0.25: makes model slightly more 
+        # sensitive to disagreement, resulting in lower confidence scores
+        # when models heavily diverge.
+        return max(0.0, 1.0 - (((a-m)**2 + (b-m)**2 + (c-m)**2) / 3.0)**0.5 / 0.25)
     agreement = (
         _oa(poisson.home_win, elo["home_win"], form.home_win)
         + _oa(poisson.draw,     elo["draw"],     form.draw)

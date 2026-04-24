@@ -7,6 +7,7 @@ import { useAppContext } from '../context/AppContext';
 
 type PostMeta = {
     date: string;
+    id?: string;
     title: string;
     excerpt: string;
     tags?: string[];
@@ -74,13 +75,13 @@ export const BlogIndex: React.FC = () => {
                         const isToday = post.date === today;
                         return (
                             <motion.div
-                                key={post.date}
+                                key={post.id || post.date}
                                 initial={{ opacity: 0, y: 12 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.04, duration: 0.25 }}
                             >
                                 <Link
-                                    to={`/blog/${post.date}`}
+                                    to={`/blog/${post.id || post.date}`}
                                     className={`flex items-start gap-4 p-4 rounded-2xl border transition-all hover:bg-white/5 active:scale-[0.99] group
                     ${isToday
                                             ? 'bg-vantage-cyan/5 border-vantage-cyan/20'
