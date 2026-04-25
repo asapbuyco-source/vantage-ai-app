@@ -381,22 +381,37 @@ export const initScheduler = () => {
                 // Map ALL event types: goals, yellow/red cards, substitutions, VAR, penalties
                 const EVENT_TYPE_MAP = {
                     'GOAL': 'goal', 'OWN-GOAL': 'own_goal', 'PENALTY': 'penalty',
-                    'MISSED-PENALTY': 'missed_penalty', 'YELLOW-CARD': 'yellow_card',
-                    'YELLOWRED-CARD': 'second_yellow', 'RED-CARD': 'red_card',
+                    'MISSED-PENALTY': 'missed_penalty', 'YELLOW-CARD': 'yellowcard', // Fixed key mapping
+                    'YELLOWRED-CARD': 'redcard', 'RED-CARD': 'redcard',
                     'SUBST': 'substitution', 'VAR': 'var',
                 };
-                const events = (item.events || []).map(ev => ({
-                    id: ev.id,
-                    type: EVENT_TYPE_MAP[ev.type?.developer_name] || ev.type?.code || ev.type?.name || 'event',
-                    name: ev.type?.name || '',
-                    playerName: ev.player?.name || ev.related_player?.name || '',
-                    playerNameOut: ev.related_player?.name || '', // For substitutions
-                    minute: ev.minute || 0,
-                    extraMinute: ev.extra_minute || 0,
-                    teamId: ev.participant_id,
-                    isHome: ev.participant_id === home.id,
-                    result: ev.result || '', // Score at time of goal e.g. "1-0"
-                }));
+                const events = (item.events || []).map(ev => {
+                    const rawName = ev.type?.name || ev.type?.code || ev.type?.developer_name || 'Event';
+                    let mappedType = EVENT_TYPE_MAP[ev.type?.developer_name] || EVENT_TYPE_MAP[ev.type?.code] || 'event';
+                    
+                    // Fallback heuristics if map misses
+                    if (mappedType === 'event') {
+                        const str = rawName.toLowerCase();
+                        if (str.includes('goal') || str.includes('penalty')) mappedType = 'goal';
+                        else if (str.includes('yellow')) mappedType = 'yellowcard';
+                        else if (str.includes('red')) mappedType = 'redcard';
+                        else if (str.includes('subst')) mappedType = 'substitution';
+                        else if (str.includes('var')) mappedType = 'var';
+                    }
+                    
+                    return {
+                        id: ev.id,
+                        type: mappedType,
+                        name: rawName,
+                        playerName: ev.player?.name || ev.related_player?.name || '',
+                        playerNameOut: ev.related_player?.name || '', // For substitutions
+                        minute: ev.minute || 0,
+                        extraMinute: ev.extra_minute || 0,
+                        teamId: ev.participant_id,
+                        isHome: ev.participant_id === home.id,
+                        result: ev.result || '', // Score at time of goal e.g. "1-0"
+                    };
+                });
                 return {
                     id: String(item.id),
                     homeTeam: home.name || 'Unknown',
@@ -427,6 +442,41 @@ export const initScheduler = () => {
                     updatedAt: new Date().toISOString(),
                 });
                 console.log(`[Live] ⚡ Wrote ${matches.length} live matches to Firestore`);
+                
+                // ── AUTO-UPDATE PREDICTIONS SCORE ──
+                try {
+                    // Match the quant_predictions date key (Lagos time)
+                    const lagosTime = new Date(Date.now() + 3600000);
+                    const todayStr = lagosTime.toISOString().split('T')[0];
+                    const qDocRef = db.collection('quant_predictions').doc(todayStr);
+                    const qDoc = await qDocRef.get();
+                    if (qDoc.exists) {
+                        const data = qDoc.data();
+                        let updated = false;
+                        const preds = data.predictions || [];
+                        for (const pred of preds) {
+                            const liveMatch = matches.find(m => 
+                                String(m.homeTeamId) === String(pred.home_team_id || pred.homeTeamId || pred.home_team_id) || 
+                                m.homeTeam === pred.home_team || 
+                                m.homeTeam === pred.homeTeam
+                            );
+                            if (liveMatch) {
+                                const newScore = `${liveMatch.homeScore} - ${liveMatch.awayScore}`;
+                                if (pred.score !== newScore) {
+                                    pred.score = newScore;
+                                    updated = true;
+                                }
+                            }
+                        }
+                        if (updated) {
+                            await qDocRef.update({ predictions: preds });
+                            console.log(`[Live] 🔄 Auto-updated prediction scores for ${todayStr}`);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Live] Error auto-updating prediction scores:', e.message);
+                }
+
             } else {
                 // No live matches — update timestamp only so the UI knows the poller ran
                 await db.collection('live_scores').doc('current').set({

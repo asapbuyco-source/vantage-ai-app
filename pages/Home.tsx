@@ -560,10 +560,17 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                 </div>
                               </div>
 
-                              {/* VS + xG badge */}
+                              {/* VS + xG badge / Score Badge */}
                               <div className="shrink-0 flex flex-col items-center">
-                                <span className="text-[11px] font-black font-orbitron text-gray-300 dark:text-gray-600 px-2">VS</span>
-                                {(match.expected_goals_home > 0 || match.expected_goals_away > 0) && (
+                                {match.score ? (
+                                  <span className="text-[13px] font-black font-orbitron text-vantage-cyan px-2 tracking-widest bg-vantage-cyan/10 rounded border border-vantage-cyan/20">
+                                    {match.score.replace('-', ' - ')}
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] font-black font-orbitron text-gray-300 dark:text-gray-600 px-2">VS</span>
+                                )}
+                                
+                                {!match.score && (match.expected_goals_home > 0 || match.expected_goals_away > 0) && (
                                   <span className="text-[9px] font-bold text-vantage-cyan mt-0.5">
                                     {(match.expected_goals_home || 0).toFixed(1)} - {(match.expected_goals_away || 0).toFixed(1)}
                                   </span>
