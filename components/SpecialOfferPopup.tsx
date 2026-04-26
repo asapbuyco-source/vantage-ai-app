@@ -53,7 +53,7 @@ export const SpecialOfferPopup: React.FC = () => {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-sm bg-[#1a1d26] border border-vantage-purple/30 rounded-2xl overflow-hidden shadow-2xl"
+              className="relative w-full max-w-sm bg-white dark:bg-[#1a1d26] border border-vantage-purple/30 rounded-2xl overflow-hidden shadow-2xl"
             >
               <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-vantage-cyan to-vantage-purple" />
               <button 

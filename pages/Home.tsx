@@ -273,7 +273,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
 
       {/* Rolling Results Ticker */}
       {predictions.some(m => m.status === 'won' || m.status === 'lost') && (
-        <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 border border-white/5">
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5">
           {(() => {
             const won = predictions.filter(m => m.status === 'won').length;
             const lost = predictions.filter(m => m.status === 'lost').length;

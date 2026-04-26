@@ -50,7 +50,7 @@ function AppContent() {
   const [renewalDaysLeft, setRenewalDaysLeft] = useState(0);
 
   const { theme, language, showToast } = useAppContext();
-  const { user, userProfile, verifyTransaction, loading: authLoading } = useAuth();
+  const { user, userProfile, verifyTransaction, loading: authLoading, isAdmin } = useAuth();
 
   // Show onboarding for first-time users
   useEffect(() => {

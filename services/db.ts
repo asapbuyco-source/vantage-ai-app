@@ -62,8 +62,16 @@ const getDateKeyDaysAgo = (daysAgo: number) => {
  */
 export const normalizeQuantPrediction = (p: any): any => {
     if (!p) return p;
-    // Already normalized (has homeTeam) — skip to avoid double-mapping
-    if (p.homeTeam !== undefined) return p;
+    // Already has homeTeam - merge missing fields to avoid early return
+    if (p.homeTeam !== undefined) {
+        return { 
+            ...p, 
+            status: p.status ?? 'pending',
+            score: p.score ?? '',
+            graded_at: p.graded_at ?? '',
+            graded_by: p.graded_by ?? '',
+        };
+    }
 
     return {
         ...p,
@@ -529,10 +537,8 @@ export const getResultsHistory = async (days: number = 30): Promise<DayResult[]>
         const d = new Date();
         d.setDate(d.getDate() - daysAgo);
         const LagosTimeZone = 'Africa/Lagos';
-        const year = d.toLocaleDateString('en-CA', { timeZone: LagosTimeZone }).split('-')[0];
-        const month = d.toLocaleDateString('en-CA', { timeZone: LagosTimeZone }).split('-')[1];
-        const day = d.toLocaleDateString('en-CA', { timeZone: LagosTimeZone }).split('-')[2];
-        return `${year}-${month}-${day}`;
+        const parts = d.toLocaleDateString('en-CA', { timeZone: LagosTimeZone }).split('-');
+        return `${parts[0]}-${parts[1]}-${parts[2]}`;
     };
     
     const fetchPromises = Array.from({ length: days }, (_, i) => {

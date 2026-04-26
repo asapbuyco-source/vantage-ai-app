@@ -15,6 +15,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Flame, Zap, Clock } from 'lucide-react';
+import { useAppContext } from '../context/AppContext';
 
 const STORAGE_KEY_EXPIRY   = 'vantage_trial_expiry';
 const STORAGE_KEY_CLAIMED  = 'vantage_trial_claimed';
@@ -48,10 +49,22 @@ function getOrCreateExpiry(): number | null {
 }
 
 export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip = false }) => {
+  const { language } = useAppContext();
   const [visible, setVisible]   = useState(false);
   const [expiry, setExpiry]     = useState<number | null>(null);
   const [remaining, setRemaining] = useState(OFFER_DURATION_MS);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Translations
+  const t = {
+    limited: language === 'fr' ? 'Offre Limitée' : 'Limited Offer',
+    trial: language === 'fr' ? 'Essai VIP 1 Semaine' : '1-Week VIP Trial',
+    claim: language === 'fr' ? 'PROFITER MAINTENANT' : 'CLAIM NOW',
+    features: language === 'fr' 
+      ? ['✓ Prédictions complètes', '✓ Accumulateurs', '✓ Mises Kelly', '✓ Toutes ligues']
+      : ['✓ Full predictions', '✓ Accumulators', '✓ Kelly stakes', '✓ All leagues'],
+    expires: language === 'fr' ? "L'offre expire automatiquement" : 'Offer expires automatically when timer ends',
+  };
 
   // Initialise on mount
   useEffect(() => {
@@ -232,22 +245,22 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
                   <Flame size={13} color="#f97316" />
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#f97316',
                     textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    Limited Offer
+                    {t.limited}
                   </span>
                 </div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', lineHeight: 1.2,
                   marginBottom: 4 }}>
-                  1-Week VIP Trial
+                  {t.trial}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 20, fontWeight: 900, color: '#f97316' }}>
-                    1 000 FCFA
+                    2 000FCFA
                   </span>
                   <span style={{
                     fontSize: 12, color: '#6b7280',
                     textDecoration: 'line-through',
                   }}>
-                    2 000 FCFA
+                    4 000FCFA
                   </span>
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: '#10b981',
@@ -290,7 +303,7 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
               }}
             >
               <Zap size={15} fill="white" />
-              CLAIM NOW →
+              {t.claim}
             </motion.button>
 
             {/* Urgency footer */}
@@ -298,7 +311,7 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
               gap: 5, marginTop: 8 }}>
               <Clock size={10} color="#6b7280" />
               <span style={{ fontSize: 10, color: '#6b7280' }}>
-                Offer expires automatically when timer ends
+                {t.expires}
               </span>
             </div>
           </div>
