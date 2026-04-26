@@ -209,12 +209,12 @@ function AppContent() {
           <div className="min-h-screen overflow-x-hidden selection:bg-vantage-cyan/30 font-sans">
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
               <div className={`
-                absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-lg h-64 
+                absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 
                 blur-[100px] rounded-full mix-blend-screen transition-colors duration-500
                 ${theme === 'dark' ? 'bg-vantage-cyan/5' : 'bg-blue-200/40'}
                 `} />
             </div>
-            <main className="relative z-10 container mx-auto max-w-md px-4 pt-6 min-h-screen">
+            <main className="relative z-10 container mx-auto max-w-md md:max-w-6xl px-4 pt-6 min-h-screen">
               <AnimatePresence mode="wait">
                 {authView === 'landing' ? (
                   // @ts-ignore
@@ -249,7 +249,9 @@ function AppContent() {
                 ) : (
                   // @ts-ignore
                   <motion.div key="auth" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
-                    <Profile initialMode={authView === 'login' ? 'login' : 'signup'} onBack={() => setAuthView('landing')} />
+                    <div className="max-w-md mx-auto">
+                      <Profile initialMode={authView === 'login' ? 'login' : 'signup'} onBack={() => setAuthView('landing')} />
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>

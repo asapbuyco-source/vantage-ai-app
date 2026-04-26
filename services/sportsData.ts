@@ -26,7 +26,8 @@ function _mcGet<T>(key: string): T | null {
 }
 function _mcSet(key: string, data: any) { _memCache.set(key, { data, ts: Date.now() }); }
 
-
+import { MatchStatsData } from '../types';
+export type { MatchStatsData };
 
 // The API token is securely appended by the backend proxy.
 // No longer needed on the frontend.
@@ -653,8 +654,6 @@ export const getH2HFromDB = async (homeId: number, awayId: number): Promise<H2HR
     // Fallback: fetch from backend proxy (uses 1 SportMonks API call)
     return getH2H(homeId, awayId);
 };
-
-import { MatchStatsData } from '../types';
 
 /**
  * Read today's pre-match / in-play statistics for a specific fixture.

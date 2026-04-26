@@ -261,7 +261,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         try {
             await toggleUserVip(user.uid, user.isVip, selectedPlan);
             // Optimistic update
-            setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: !u.isVip, vipPlan: user.isVip ? null : selectedPlan } : u));
+            setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: !u.isVip, vipPlan: user.isVip ? undefined : selectedPlan } : u));
             setUserStats(prev => ({
                 ...prev,
                 vip: prev.vip + (user.isVip ? -1 : 1),

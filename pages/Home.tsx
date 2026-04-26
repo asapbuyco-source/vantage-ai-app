@@ -599,7 +599,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
 
                               {/* VS + xG badge / Score Badge */}
                               <div className="shrink-0 flex flex-col items-center">
-                                {match.score ? (
+                                {match.score && (match.status !== 'pending' || match.live_state) ? (
                                   <div className="flex flex-col items-center gap-0.5">
                                     <span className="text-[13px] font-black font-orbitron text-vantage-cyan px-2 tracking-widest bg-vantage-cyan/10 rounded border border-vantage-cyan/20">
                                       {match.score.replace('-', ' - ')}
@@ -610,8 +610,10 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                     {match.status === 'lost' && (
                                       <span className="text-[8px] font-black text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded-full border border-red-500/30 uppercase tracking-wider">✗ LOST</span>
                                     )}
-                                    {match.status === 'pending' && match.score && (
-                                      <span className="text-[8px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full border border-amber-400/20 uppercase tracking-wider">LIVE</span>
+                                    {match.status === 'pending' && match.live_state && (
+                                      <span className="text-[8px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full border border-amber-400/20 uppercase tracking-wider">
+                                        {['FT','AET','PEN'].includes(match.live_state) ? 'FT' : `LIVE ${match.live_minute || ''}'`}
+                                      </span>
                                     )}
                                   </div>
                                 ) : (

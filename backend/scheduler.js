@@ -381,8 +381,8 @@ export const initScheduler = () => {
                 // Map ALL event types: goals, yellow/red cards, substitutions, VAR, penalties
                 const EVENT_TYPE_MAP = {
                     'GOAL': 'goal', 'OWN-GOAL': 'own_goal', 'PENALTY': 'penalty',
-                    'MISSED-PENALTY': 'missed_penalty', 'YELLOW-CARD': 'yellowcard', // Fixed key mapping
-                    'YELLOWRED-CARD': 'redcard', 'RED-CARD': 'redcard',
+                    'MISSED-PENALTY': 'penalty_miss', 'YELLOW-CARD': 'yellow_card', 
+                    'YELLOWRED-CARD': 'red_card', 'RED-CARD': 'red_card',
                     'SUBST': 'substitution', 'VAR': 'var',
                 };
                 const events = (item.events || []).map(ev => {
@@ -392,9 +392,12 @@ export const initScheduler = () => {
                     // Fallback heuristics if map misses
                     if (mappedType === 'event') {
                         const str = rawName.toLowerCase();
-                        if (str.includes('goal') || str.includes('penalty')) mappedType = 'goal';
-                        else if (str.includes('yellow')) mappedType = 'yellowcard';
-                        else if (str.includes('red')) mappedType = 'redcard';
+                        if (str.includes('goal') && !str.includes('own')) mappedType = 'goal';
+                        else if (str.includes('own') && str.includes('goal')) mappedType = 'own_goal';
+                        else if (str.includes('penalty') && !str.includes('miss')) mappedType = 'penalty';
+                        else if (str.includes('penalty') && str.includes('miss')) mappedType = 'penalty_miss';
+                        else if (str.includes('yellow')) mappedType = 'yellow_card';
+                        else if (str.includes('red')) mappedType = 'red_card';
                         else if (str.includes('subst')) mappedType = 'substitution';
                         else if (str.includes('var')) mappedType = 'var';
                     }
@@ -455,15 +458,21 @@ export const initScheduler = () => {
                         const preds = data.predictions || [];
                         const normalize = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
                         for (const pred of preds) {
+                            // STRICT: Only match by fixture_id — team name matching causes cross-match contamination
                             const liveMatch = matches.find(m => 
-                                String(m.id) === String(pred.fixture_id) ||
-                                String(m.homeTeamId) === String(pred.home_team_id) ||
-                                normalize(m.homeTeam) === normalize(pred.home_team)
+                                String(m.id) === String(pred.fixture_id)
                             );
                             if (liveMatch) {
+                                // Only write scores for matches that are actually in play or finished
+                                const activeStates = ['1H', '2H', 'HT', 'ET', 'PEN', 'FT', 'AET', 'LIVE', 'BREAK'];
+                                const matchState = (liveMatch.stateShort || '').toUpperCase();
+                                if (!activeStates.includes(matchState)) continue;  // Skip NS, WAIT, POSTP, etc.
+                                
                                 const newScore = `${liveMatch.homeScore} - ${liveMatch.awayScore}`;
-if (pred.score !== newScore) {
+                                if (pred.score !== newScore) {
                                     pred.score = newScore;
+                                    pred.live_state = matchState;
+                                    pred.live_minute = liveMatch.minute || 0;
                                     updated = true;
                                 }
                             }
@@ -482,10 +491,9 @@ if (pred.score !== newScore) {
                             for (const pred of preds) {
                                 if (pred.status && pred.status !== 'pending') continue;
                                 
+                                // STRICT: Only grade by fixture_id to prevent cross-match grading errors
                                 const ftMatch = ftMatches.find(m =>
-                                    String(m.id) === String(pred.fixture_id) ||
-                                    String(m.homeTeamId) === String(pred.home_team_id) ||
-                                    normalize(m.homeTeam) === normalize(pred.home_team)
+                                    String(m.id) === String(pred.fixture_id)
                                 );
                                 
                                 if (!ftMatch) continue;
@@ -531,6 +539,7 @@ if (pred.score !== newScore) {
                                     pred.status = status;
                                     pred.graded_at = new Date().toISOString();
                                     pred.graded_by = 'live_auto';
+                                    pred.live_state = 'FT';
                                     updated = true;
                                     console.log(`[Live] ✅ Auto-graded: ${pred.home_team} vs ${pred.away_team} → ${status} (${hg}-${ag})`);
                                 }
@@ -696,9 +705,44 @@ if (pred.score !== newScore) {
             console.warn('[Scheduler] Tomorrow fixtures fetch error:', e.message);
         }
     }, { timezone: 'Africa/Lagos' });
-    console.log('📅 Tomorrow fixture pre-fetch scheduled at 23:00 Lagos');
-
-    console.log('⏳ Scheduler initialized. Config sync runs every 5 minutes.');
-    console.log('📧 Selar Gmail listener polls every 2 minutes.');
+console.log('📅 Tomorrow fixture pre-fetch scheduled at 23:00 Lagos');
 };
+
+export async function repairCorruptedPredictions(db, dateStr) {
+    const docRef = db.collection('quant_predictions').doc(dateStr);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+        console.log(`[Repair] No predictions found for ${dateStr}`);
+        return 0;
+    }
+    
+    const data = doc.data();
+    const preds = data.predictions || [];
+    let fixed = 0;
+    const now = new Date();
+    
+    for (const pred of preds) {
+        if (pred.graded_by === 'live_auto') {
+            const kickoff = new Date(pred.kickoff_utc);
+            if (kickoff > now) {
+                pred.status = 'pending';
+                pred.score = null;
+                pred.live_state = null;
+                pred.live_minute = null;
+                delete pred.graded_at;
+                delete pred.graded_by;
+                fixed++;
+            }
+        }
+    }
+    
+    if (fixed > 0) {
+        await docRef.update({ predictions: preds });
+        console.log(`[Repair] ✅ Fixed ${fixed} corrupted predictions for ${dateStr}`);
+    }
+    return fixed;
+};
+
+console.log('⏳ Scheduler initialized. Config sync runs every 5 minutes.');
+console.log('📧 Selar Gmail listener polls every 2 minutes.');
 

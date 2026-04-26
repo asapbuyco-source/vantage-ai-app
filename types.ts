@@ -34,6 +34,8 @@ export interface Match {
   score?: string; // e.g. "2-1"
   graded_at?: string;
   graded_by?: 'live_auto' | 'grading_engine' | 'chatgpt' | 'admin';
+  live_state?: string; // e.g. "1H", "2H", "FT", "NS"
+  live_minute?: number; // e.g. 45, 67, 90
   // Match Details / AI Generated Stats
   homeForm?: string;
   awayForm?: string;
@@ -194,7 +196,7 @@ export interface UserProfile {
   isBlocked?: boolean;
   country?: string;
   vipExpiry?: string;
-  vipPlan?: 'daily' | 'weekly' | 'monthly' | 'annual';
+  vipPlan?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
   totalPaid?: number;
   createdAt?: string;
   // Referral System

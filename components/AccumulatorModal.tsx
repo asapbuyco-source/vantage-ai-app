@@ -11,17 +11,41 @@ interface AccumulatorModalProps {
   initialTier?: string;
 }
 
-const TIER_META: Record<string, { label: string; icon: any; color: string; desc: string }> = {
-  baseline: { label: 'The Baseline', icon: ShieldCheck, color: 'text-emerald-500', desc: 'Highest probability treble' },
-  alpha_edge: { label: 'The Alpha Edge', icon: Zap, color: 'text-vantage-cyan', desc: 'Highest expected value' },
-  syndicate: { label: 'The Syndicate', icon: Target, color: 'text-vantage-purple', desc: '4-leg balanced combo' },
-  variance_play: { label: 'Variance Play', icon: Rocket, color: 'text-orange-500', desc: 'High-yield moonshot' },
-};
+function getTierMeta(lang: string): Record<string, { label: string; icon: any; color: string; desc: string }> {
+  const fr = lang === 'fr';
+  return {
+    baseline: { 
+      label: fr ? 'La Base' : 'The Baseline', 
+      icon: ShieldCheck, 
+      color: 'text-emerald-500', 
+      desc: fr ? 'Triplé haute probabilité' : 'Highest probability treble' 
+    },
+    alpha_edge: { 
+      label: fr ? "L'Avantage Alpha" : 'The Alpha Edge', 
+      icon: Zap, 
+      color: 'text-vantage-cyan', 
+      desc: fr ? 'Meilleure valeur attendue' : 'Highest expected value' 
+    },
+    syndicate: { 
+      label: fr ? 'Le Syndicat' : 'The Syndicate', 
+      icon: Target, 
+      color: 'text-vantage-purple', 
+      desc: fr ? 'Combiné 4 pattes équilibré' : '4-leg balanced combo' 
+    },
+    variance_play: { 
+      label: fr ? 'Jeu de Variance' : 'Variance Play', 
+      icon: Rocket, 
+      color: 'text-orange-500', 
+      desc: fr ? 'Pari audacieux haut rendement' : 'High-yield moonshot' 
+    },
+  };
+}
 
 export const AccumulatorModal: React.FC<AccumulatorModalProps> = ({ isOpen, onClose, accumulators, initialTier = 'baseline' }) => {
   const [activeTier, setActiveTier] = useState<string>(initialTier);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const { language } = useAppContext();
+  const TIER_META = getTierMeta(language);
   
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -147,15 +171,16 @@ export const AccumulatorModal: React.FC<AccumulatorModalProps> = ({ isOpen, onCl
                         transition={{ delay: idx * 0.05 }}
                         className="flex flex-col p-3 rounded-xl border bg-slate-50/50 dark:bg-white/5 border-slate-200 dark:border-white/5"
                       >
-                        <div className="flex justify-between items-center mb-2 border-b border-black/5 dark:border-white/5 pb-2">
-                           <div className="flex items-center gap-2 truncate">
-                             <TeamLogo src={leg.home_team_logo} teamName={leg.home_team} className="w-5 h-5" />
-                             <span className="text-xs font-bold text-slate-700 dark:text-gray-300 truncate font-orbitron">
-                               {leg.home_team} vs {leg.away_team}
-                             </span>
-                             <TeamLogo src={leg.away_team_logo} teamName={leg.away_team} className="w-5 h-5" />
-                           </div>
-                           <button 
+<div className="flex justify-between items-center mb-2 border-b border-black/5 dark:border-white/5 pb-2">
+                            <div className="flex items-center gap-2 truncate">
+                              <TeamLogo src={leg.home_team_logo} teamName={leg.home_team} className="w-5 h-5" />
+                              <span className="text-xs font-bold text-slate-700 dark:text-gray-300 truncate font-orbitron">
+                                {leg.home_team} vs {leg.away_team}
+                              </span>
+                              <TeamLogo src={leg.away_team_logo} teamName={leg.away_team} className="w-5 h-5" />
+                            </div>
+                            <span className="text-[8px] text-gray-500 shrink-0 ml-1">{leg.league}</span>
+                            <button
                               onClick={() => handleCopy(`${leg.home_team} vs ${leg.away_team} — ${leg.market} @ ${leg.odds}x`, `leg-${idx}`)}
                               className="ml-2 p-1 rounded bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-gray-500 dark:text-gray-400 shrink-0"
                             >
@@ -191,12 +216,27 @@ export const AccumulatorModal: React.FC<AccumulatorModalProps> = ({ isOpen, onCl
                         </div>
                     </div>
                     
+                    <div className="flex gap-2">
+                    <button 
+                        onClick={() => {
+                            const text = activeLegs.map((l, i) => 
+                                `${i+1}. ${l.home_team} vs ${l.away_team} — ${l.market} @ ${l.odds}x`
+                            ).join('\n') + `\n\nTotal Odds: ${activeTicketInfo?.combined_odds?.toFixed(2)}x`;
+                            handleCopy(text, 'full-ticket');
+                        }}
+                        className="px-4 py-2.5 rounded-xl font-bold text-sm bg-vantage-cyan text-white hover:bg-vantage-cyan/90"
+                    >
+                        {copiedId === 'full-ticket' ? <Check size={16} /> : <Copy size={16} />}
+                        <span className="ml-1">{language === 'fr' ? 'Copier Tout' : 'Copy All'}</span>
+                    </button>
+                    
                     <button 
                         onClick={onClose}
                         className="px-6 py-2.5 rounded-xl font-bold text-sm text-slate-700 dark:text-white bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 shadow-sm transition-all active:scale-95"
                     >
                         <span>{language === 'fr' ? 'Fermer' : 'Close'}</span>
                     </button>
+                    </div>
                 </div>
               </motion.div>
             }

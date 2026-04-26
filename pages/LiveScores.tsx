@@ -23,12 +23,48 @@ const STATE_CONFIG: Record<string, { label: string; color: string; bg: string }>
 
 const EVENT_ICONS: Record<string, string> = {
   'goal':         '⚽',
-  'yellowcard':   '🟨',
-  'redcard':      '🟥',
+  'yellow_card': '🟨',
+  'yellowcard':  '🟨',
+  'red_card':    '🟥',
+  'redcard':    '🟥',
   'substitution': '🔄',
   'var':          '📺',
   'penalty':      '🎯',
+  'own_goal':     '🤕',
+  'penalty_miss': '❌',
 };
+
+function getEventIcon(type: string): string {
+  return EVENT_ICONS[type] || '•';
+}
+
+function getEventDisplay(ev: any): string {
+  // Goal/penalty: show player + result
+  if (ev.type === 'goal' || ev.type === 'penalty') {
+    return `${ev.playerName || 'Goal'}${ev.result ? ` (${ev.result})` : ''}`;
+  }
+  // Substitution: show player in/out
+  if (ev.type === 'substitution') {
+    return `${ev.playerName || '?'} ↔ ${ev.playerNameOut || '?'}`;
+  }
+  // Cards: show player name or card type
+  if (ev.type === 'yellow_card' || ev.type === 'red_card' || ev.type === 'yellowcard' || ev.type === 'redcard') {
+    if (ev.playerName) return ev.playerName;
+    if (ev.name) return ev.name;
+    return (ev.type === 'redcard' || ev.type === 'red_card') ? 'Red Card' : 'Yellow Card';
+  }
+  // For any other event type, show playerName, then name, then a nice label
+  if (ev.playerName) return ev.playerName;
+  if (ev.name) return ev.name;
+  // Fallback to nice labels based on type
+  const labels: Record<string, string> = {
+    'var': 'VAR',
+    'event': 'Event',
+    'own_goal': 'Own Goal',
+    'penalty_miss': 'Penalty Miss',
+  };
+  return labels[ev.type] || 'Event';
+}
 
 function getStateConfig(short: string) {
   const key = short?.toUpperCase();
@@ -138,8 +174,15 @@ const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number }> = ({ match, idx
               {match.events.slice(0, 10).map((ev, i) => (
                 <div key={ev.id || i} className="flex items-center gap-2 text-xs">
                   <span className="text-[10px] text-gray-500 font-mono w-6 text-right shrink-0">{ev.minute}'</span>
-                  <span>{EVENT_ICONS[ev.type] || '•'}</span>
-                  <span className="text-gray-300 font-medium truncate">{ev.playerName || ev.name || ev.type}</span>
+                  <span>{getEventIcon(ev.type)}</span>
+                  <span className="text-gray-300 font-medium truncate">
+                    {getEventDisplay(ev)}
+                  </span>
+                  {ev.isHome !== undefined && (
+                    <span className={`text-[9px] ${ev.isHome ? 'text-vantage-cyan' : 'text-vantage-purple'}`}>
+                      {ev.isHome ? 'H' : 'A'}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

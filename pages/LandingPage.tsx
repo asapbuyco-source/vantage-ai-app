@@ -141,7 +141,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
             </div>
 
             {/* Main Content Row */}
-            <div className="flex-1 flex flex-col md:flex-row md:gap-12 md:px-8 md:items-center">
+            <div className="flex-1 flex flex-col md:flex-row md:gap-16 lg:gap-24 md:px-8 lg:px-16 md:items-center w-full">
                 {/* Left Column - Text */}
                 <div className="flex-1 px-2 md:px-0">
                     <div className="text-center md:text-left space-y-4 mb-8">
@@ -289,7 +289,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
             </div>
 
             {/* Feature Grid */}
-            <div className="grid grid-cols-3 gap-3 mb-10 px-2 md:px-8 mt-8 md:mt-16">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-6 mb-10 px-2 md:px-8 mt-8 md:mt-16">
                 <div className="flex flex-col items-center text-center space-y-2">
                     <div className="p-3 bg-blue-500/10 rounded-xl text-blue-500">
                         <PlayCircle size={20} />
@@ -307,6 +307,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                         <Star size={20} />
                     </div>
                     <span className="text-xs font-bold text-slate-700 dark:text-gray-300">Daily VIP Tips</span>
+                </div>
+                {/* Desktop-only features */}
+                <div className="hidden md:flex flex-col items-center text-center space-y-2">
+                    <div className="p-3 bg-green-500/10 rounded-xl text-green-500">
+                        <TrendingUp size={20} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-gray-300">Kelly Staking</span>
+                </div>
+                <div className="hidden md:flex flex-col items-center text-center space-y-2">
+                    <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-500">
+                        <Zap size={20} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-gray-300">AI Analysis</span>
+                </div>
+                <div className="hidden md:flex flex-col items-center text-center space-y-2">
+                    <div className="p-3 bg-red-500/10 rounded-xl text-red-500">
+                        <Star size={20} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-gray-300">Accumulators</span>
                 </div>
             </div>
 

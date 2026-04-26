@@ -505,11 +505,12 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
             {(['baseline', 'alpha_edge', 'syndicate', 'variance_play'] as const).map(tierKey => {
               const tierTickets = quantAccumulators[tierKey] || [];
               const ticket = tierTickets[0];
+              const fr = language === 'fr';
               const tierMeta: Record<string, { icon: string; label: string; gradient: string; border: string }> = {
-                baseline: { icon: '🛡️', label: 'The Baseline', gradient: 'from-emerald-500/10 to-emerald-500/5', border: 'border-emerald-500/30 hover:border-emerald-500/50' },
-                alpha_edge: { icon: '⚡', label: 'The Alpha Edge', gradient: 'from-vantage-cyan/10 to-blue-500/5', border: 'border-vantage-cyan/30 hover:border-vantage-cyan/50' },
-                syndicate: { icon: '🎯', label: 'The Syndicate', gradient: 'from-vantage-purple/10 to-purple-500/5', border: 'border-vantage-purple/30 hover:border-vantage-purple/50' },
-                variance_play: { icon: '🚀', label: 'The Variance Play', gradient: 'from-orange-500/10 to-amber-500/5', border: 'border-orange-500/30 hover:border-orange-500/50' },
+                baseline: { icon: '🛡️', label: fr ? 'La Base' : 'The Baseline', gradient: 'from-emerald-500/10 to-emerald-500/5', border: 'border-emerald-500/30 hover:border-emerald-500/50' },
+                alpha_edge: { icon: '⚡', label: fr ? "L'Avantage Alpha" : 'The Alpha Edge', gradient: 'from-vantage-cyan/10 to-blue-500/5', border: 'border-vantage-cyan/30 hover:border-vantage-cyan/50' },
+                syndicate: { icon: '🎯', label: fr ? 'Le Syndicat' : 'The Syndicate', gradient: 'from-vantage-purple/10 to-purple-500/5', border: 'border-vantage-purple/30 hover:border-vantage-purple/50' },
+                variance_play: { icon: '🚀', label: fr ? 'Jeu de Variance' : 'The Variance Play', gradient: 'from-orange-500/10 to-amber-500/5', border: 'border-orange-500/30 hover:border-orange-500/50' },
               };
               const meta = tierMeta[tierKey];
 

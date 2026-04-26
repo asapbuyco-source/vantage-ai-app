@@ -294,7 +294,7 @@ export const Results: React.FC = () => {
                                                         <p className="text-[10px] text-gray-500 flex items-center gap-2">
                                                             <span className="flex items-center gap-1 text-green-500"><Trophy size={10} />{wonCount} Won</span>
                                                             <span className="flex items-center gap-1 text-red-400"><XCircle size={10} />{lostCount} Lost</span>
-                                                            <span>{gradedCount} graded</span>
+                                                            <span>{gradedCount}/{effectiveMatches.length} graded</span>
                                                             {hasUnsavedChanges && (
                                                                 <span className="text-vantage-cyan animate-pulse">· unsaved</span>
                                                             )}
@@ -391,6 +391,12 @@ export const Results: React.FC = () => {
                                                             <span className={`text-xs font-bold font-orbitron ${statusColor[status]}`}>
                                                                 {statusLabel[status]}
                                                             </span>
+                                                            {/* Show live state badge for today's matches */}
+                                                            {match.live_state && status === 'pending' && (
+                                                                <span className="text-[8px] font-bold text-amber-400 bg-amber-400/10 px-1 py-0.5 rounded-full">
+                                                                    {['FT','AET','PEN'].includes(match.live_state) ? 'FT' : `LIVE ${match.live_minute || ''}'`}
+                                                                </span>
+                                                            )}
                                                             {/* Show graded score when available, otherwise show odds */}
                                                             {match.score ? (
                                                                 <span className="text-[10px] text-gray-500">{match.score}</span>

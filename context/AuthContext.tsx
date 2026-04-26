@@ -101,6 +101,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     setError("Votre compte a été suspendu par l'administrateur.");
                     return;
                 }
+                // Session expiry: force re-login after 12 hours
+                const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+                const lastLogin = profileData.lastLoginAt ? new Date(profileData.lastLoginAt).getTime() : 0;
+                const sessionAge = Date.now() - lastLogin;
+                if (sessionAge > SESSION_MAX_AGE_MS && lastLogin > 0) {
+                    console.log('[Auth] Session expired, forcing re-login');
+                    await signOut(auth);
+                    setUser(null);
+                    setUserProfile(null);
+                    setError("Votre session a expiré. Veuillez vous reconnecter.");
+                    return;
+                }
+                // Update lastLoginAt on each successful auth
+                await updateDoc(userRef, { lastLoginAt: new Date().toISOString() });
                 if (!profileData.referralCode) {
                     const newCode = generateReferralCode(profileData.displayName || profileData.email);
                     await updateDoc(userRef, { referralCode: newCode });
