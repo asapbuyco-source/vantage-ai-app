@@ -32,6 +32,8 @@ export interface Match {
   // Grading Fields
   status?: 'won' | 'lost' | 'void' | 'pending';
   score?: string; // e.g. "2-1"
+  graded_at?: string;
+  graded_by?: 'live_auto' | 'grading_engine' | 'chatgpt' | 'admin';
   // Match Details / AI Generated Stats
   homeForm?: string;
   awayForm?: string;

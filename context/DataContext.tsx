@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { Match, AccumulatorSet, WinRateStats } from '../types';
 import {
     deleteTodaysPredictions, getGlobalTodayKey,
     saveTodaysPredictions, saveAccumulatorsForDate,
-    getDailyData, getWinRateStats, getTodaysBasketballPredictions, saveBasketballPredictions,
+    getDailyData, getWinRateStats, getTodaysBasketballPredictions, saveBasketballPredictions, normalizeQuantPrediction,
 } from '../services/db';
+import { db } from '../firebaseConfig';
 import { generateSmartAccumulators } from '../services/gemini';
 import { useAuth } from './AuthContext';
 
@@ -35,6 +38,7 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user, loading: authLoading, isAdmin } = useAuth();
+    const location = useLocation();
     const [activeDate, setActiveDate] = useState<string>(getGlobalTodayKey());
     const [predictions, setPredictions] = useState<Match[]>([]);
     const [rawFixtures, setRawFixtures] = useState<Match[]>([]);
@@ -199,7 +203,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setWinRateStats(DEFAULT_WIN_RATES);
             setLoading(false);
         }
-    }, [authLoading, user]);
+    }, [authLoading, user, location.pathname]);
+
+    // Real-time listener for today's predictions (scores + statuses)
+    useEffect(() => {
+        if (!user || authLoading) return;
+        const todayKey = getGlobalTodayKey();
+        
+        const unsub = onSnapshot(
+            doc(db, 'quant_predictions', todayKey),
+            (snap) => {
+                if (!snap.exists() || !mountedRef.current) return;
+                const data = snap.data();
+                const matches = (data.predictions || []).map(normalizeQuantPrediction);
+                if (matches.length > 0) {
+                    setPredictions(matches);
+                }
+            },
+            (err) => console.warn('[DataContext] Prediction listener error:', err)
+        );
+        
+        return () => unsub();
+    }, [user, authLoading]);
 
     return (
         <DataContext.Provider value={{

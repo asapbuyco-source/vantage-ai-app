@@ -261,6 +261,8 @@ def update_ratings(
 
     # MODEL-03: league-specific K-factor
     k = LEAGUE_K_FACTOR.get(league_id, K_FACTOR) if league_id else K_FACTOR
+    # Ensure minimum K of 20 for tier 3+ leagues to prevent Elo stagnation
+    k = max(20.0, k)
 
     new_ra = ra + k * k_mult * (sa - ea)
     new_rb = rb + k * k_mult * (sb - eb)

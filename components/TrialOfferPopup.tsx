@@ -25,6 +25,8 @@ const CIRCUMFERENCE        = 2 * Math.PI * RADIUS;
 interface TrialOfferPopupProps {
   /** Called immediately when the user clicks "CLAIM NOW" */
   onClaim: () => void;
+  /** If true, never show to VIP users */
+  isVip?: boolean;
 }
 
 function getOrCreateExpiry(): number | null {
@@ -45,7 +47,7 @@ function getOrCreateExpiry(): number | null {
   return expiry;
 }
 
-export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim }) => {
+export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip = false }) => {
   const [visible, setVisible]   = useState(false);
   const [expiry, setExpiry]     = useState<number | null>(null);
   const [remaining, setRemaining] = useState(OFFER_DURATION_MS);
@@ -53,6 +55,9 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim }) => 
 
   // Initialise on mount
   useEffect(() => {
+    // Never show to VIP users
+    if (isVip) return;
+    
     const ts = getOrCreateExpiry();
     if (!ts) return;
 
@@ -68,7 +73,7 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim }) => 
     // Small delay so the page renders first, then popup slides in
     const showTimer = setTimeout(() => setVisible(true), 1800);
     return () => clearTimeout(showTimer);
-  }, []);
+  }, [isVip]);
 
   // Tick countdown
   useEffect(() => {

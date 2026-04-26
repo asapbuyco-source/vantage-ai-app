@@ -59,6 +59,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
               className={`relative flex flex-col md:flex-row items-center justify-center md:justify-start w-full h-full md:h-14 space-y-0.5 md:space-y-0 md:space-x-4 transition-all duration-200 md:rounded-xl md:px-4 ${isActive && 'md:bg-vantage-cyan/10'
                 }`}
             >
+              {/* Active sliding indicator bar */}
+              {isActive && (
+                <motion.div
+                  className="absolute bottom-0 left-2 right-2 h-0.5 bg-vantage-cyan rounded-full md:block"
+                  layoutId="activeTab"
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                />
+              )}
               {/* Active background pill — sits behind everything, covers entire button */}
               {isActive && (
                 // @ts-ignore

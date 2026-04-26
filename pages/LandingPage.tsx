@@ -143,7 +143,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                     <div className="absolute -top-10 -right-10 w-40 h-40 bg-vantage-purple/30 rounded-full blur-[60px] animate-pulse-slow" />
                     <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-vantage-cyan/30 rounded-full blur-[60px] animate-pulse-slow" />
 
-                    <GlassCard className="border-vantage-cyan/50 relative overflow-hidden transform rotate-[-1deg]">
+                    <GlassCard className="border-vantage-cyan/50 relative overflow-hidden">
                         {/* Live / Today badge */}
                         <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-lg flex items-center gap-1 animate-pulse">
                             <span className="w-1.5 h-1.5 bg-white rounded-full" />

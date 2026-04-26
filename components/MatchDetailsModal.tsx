@@ -98,7 +98,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-[100] flex items-start justify-center p-0">
+            <div className="fixed inset-0 z-[100] flex items-end justify-center p-0 md:items-start">
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -108,11 +108,11 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                 />
 
                 <motion.div
-                    initial={{ y: "-100%", opacity: 0 }}
+                    initial={{ y: "100%", opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: "-100%", opacity: 0 }}
+                    exit={{ y: "100%", opacity: 0 }}
                     transition={{ type: "spring", damping: 28, stiffness: 320 }}
-                    className="relative w-full max-w-md bg-[#12141A] rounded-b-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col border border-white/10 border-t-0"
+                    className="relative w-full max-w-md bg-[#12141A] rounded-t-3xl md:rounded-b-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col border border-white/10 border-b-0"
                 >
                     {/* Header */}
                     <div className="p-5 border-b border-slate-200 dark:border-white/5 relative shrink-0">
@@ -592,8 +592,8 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                         )}
                     </div>
 
-                    {/* VIP CTA Footer */}
-                    {setTab && (
+                    {/* VIP CTA Footer — only show to NON-VIP users */}
+                    {setTab && !isVipUser && (
                         <div className="p-4 border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5 shrink-0">
                             <button
                                 onClick={() => {

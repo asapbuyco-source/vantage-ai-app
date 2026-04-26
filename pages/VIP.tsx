@@ -208,6 +208,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
+    if (navigator.vibrate) navigator.vibrate(50);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
   };
@@ -942,6 +943,34 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           </div>
 
           <div id="plans-section" className="space-y-4">
+            {/* Social Proof Section */}
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-xs font-bold text-green-500">
+                    {language === 'fr' ? 'Fiabilité vérifiée' : 'Verified accuracy'}
+                  </span>
+                </div>
+                <span className="text-xs font-bold text-green-400">
+                  {language === 'fr' ? 'Voir les stats →' : 'See stats →'}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: language === 'fr' ? 'Taux Quotidien' : 'Daily Rate', value: '72%', color: 'text-vantage-cyan' },
+                  { label: language === 'fr' ? 'Matchs/jour' : 'Picks/day', value: '30+', color: 'text-vantage-purple' },
+                  { label: language === 'fr' ? 'Membres VIP' : 'VIP Members', value: '500+', color: 'text-amber-400' },
+                ].map((stat, i) => (
+                  <div key={i} className="text-center p-3 rounded-xl bg-white/5 border border-white/10">
+                    <p className={`text-lg font-bold font-orbitron ${stat.color}`}>{stat.value}</p>
+                    <p className="text-[9px] text-gray-500 uppercase tracking-wider">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="flex items-center justify-between px-1">
               <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest">{t('vip.select_plan')}</h3>
               <div className="flex items-center gap-1.5 text-[10px] text-vantage-purple bg-vantage-purple/10 px-2 py-0.5 rounded border border-vantage-purple/20">

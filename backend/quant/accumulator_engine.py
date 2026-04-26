@@ -99,6 +99,14 @@ class Accumulator:
                 self.combined_odds *= l.odds
                 self.combined_prob *= l.model_prob
 
+            # Same-league correlation penalty: reduce combined probability for legs from same league
+            # (correlated outcomes inflate EV when multiple games from same league are simultaneous)
+            league_counts = {}
+            for l in self.legs:
+                league_counts[l.league] = league_counts.get(l.league, 0) + 1
+            duplicate_count = sum(max(0, c - 1) for c in league_counts.values())
+            self.combined_prob *= (0.98 ** duplicate_count)
+
             self.combined_odds = round(self.combined_odds, 2)
             self.combined_prob = round(self.combined_prob, 4)
             self.combined_ev = round((self.combined_prob * self.combined_odds) - 1.0, 4)

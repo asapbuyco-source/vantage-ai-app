@@ -524,10 +524,19 @@ export interface DayResult {
 
 export const getResultsHistory = async (days: number = 30): Promise<DayResult[]> => {
     const results: DayResult[] = [];
-    const fetchPromises = Array.from({ length: days }, (_, i) => {
+    
+    const getDateKeyDaysAgo = (daysAgo: number): string => {
         const d = new Date();
-        d.setDate(d.getDate() - (i + 1));
-        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        d.setDate(d.getDate() - daysAgo);
+        const LagosTimeZone = 'Africa/Lagos';
+        const year = d.toLocaleDateString('en-CA', { timeZone: LagosTimeZone }).split('-')[0];
+        const month = d.toLocaleDateString('en-CA', { timeZone: LagosTimeZone }).split('-')[1];
+        const day = d.toLocaleDateString('en-CA', { timeZone: LagosTimeZone }).split('-')[2];
+        return `${year}-${month}-${day}`;
+    };
+    
+    const fetchPromises = Array.from({ length: days }, (_, i) => {
+        const dateKey = i === 0 ? getGlobalTodayKey() : getDateKeyDaysAgo(i);
         return getPredictionsForDate(dateKey).then(matches => ({ dateKey, matches }));
     });
 

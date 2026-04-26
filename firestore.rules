@@ -47,9 +47,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
-    // Generation Locks: Authenticated users can orchestrate AI generation
+    // Generation Locks: Only admins can write (prevents unauthorized data manipulation)
     match /generation_locks/{dateStr} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
     }
     
     // Team Assets: Publicly readable for team logos

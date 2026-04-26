@@ -2,15 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Gift, Zap, ArrowRight } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { PaymentModal } from './PaymentModal';
 
 export const SpecialOfferPopup: React.FC = () => {
   const { language } = useAppContext();
+  const { userProfile, isAdmin } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
 
+  const isVip = userProfile?.isVip || isAdmin;
+
   useEffect(() => {
-    // Show popup after 2 seconds if not seen in this session
+    // Never show to VIP users or admins
+    if (isVip) return;
     if (!sessionStorage.getItem('offerPopupSeen')) {
       const timer = setTimeout(() => {
         setIsOpen(true);
@@ -18,7 +23,7 @@ export const SpecialOfferPopup: React.FC = () => {
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [isVip]);
 
   const handleClaim = () => {
     setIsOpen(false);
@@ -28,7 +33,7 @@ export const SpecialOfferPopup: React.FC = () => {
   const trialPlan = {
     id: 'weekly',
     label: language === 'fr' ? 'Essai VIP (1 Semaine)' : 'VIP Trial (1 Week)',
-    price: '1000',
+    price: '2000',
     features: ['Accumulator Access', 'Sure Bet Matches'],
   };
 
@@ -67,14 +72,14 @@ export const SpecialOfferPopup: React.FC = () => {
                 </h2>
                 <p className="text-sm text-gray-400 mb-6">
                   {language === 'fr' 
-                    ? 'Débloquez 1 Semaine d\'essai VIP pour seulement 1000 FCFA. De plus, profitez de 50% de bonus sur le plan mensuel !'
-                    : 'Unlock 1 Week VIP Trial for just 1000 FCFA. Plus, get 50% bonus on the monthly plan!'}
+                    ? 'Débloquez 1 Semaine d\'essai VIP pour seulement 2000 FCFA. De plus, profitez de 50% de bonus sur le plan mensuel !'
+                    : 'Unlock 1 Week VIP Trial for just 2000 FCFA. Plus, get 50% bonus on the monthly plan!'}
                 </p>
 
                 <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6 text-left">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-bold text-gray-300">1-Week Trial</span>
-                    <span className="text-lg font-bold text-vantage-purple">1000 FCFA</span>
+                    <span className="text-lg font-bold text-vantage-purple">2000 FCFA</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-1">
                     <Zap size={12} className="text-vantage-cyan" /> Access to daily accumulators

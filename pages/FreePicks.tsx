@@ -61,7 +61,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
   const { userProfile, isAdmin } = useAuth();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAllLeans, setShowAllLeans] = useState(false);
-  const [freePicksCount, setFreePicksCount] = useState(2);
+  const [freePicksCount, setFreePicksCount] = useState(3);
 
   React.useEffect(() => {
     getAppSettings().then(s => {
@@ -73,6 +73,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
+    if (navigator.vibrate) navigator.vibrate(50);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
   };

@@ -293,11 +293,10 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
 
             # ── Kelly stake (ISSUE-01 fixed) ────────────────────────────────
             if best_bet:
-                # ISSUE-01: Full Kelly (1.0x) for safe bets was reckless.
-                # Cap all single bets at quarter-Kelly (0.25). Accas use 0.10.
-                kelly_fraction = 0.25
+                # Kelly already applies kelly_fraction=0.25 internally in kelly_stake_pct().
+                # Don't apply it again here.
                 base_kelly = kelly_stake_pct(best_bet.model_prob, best_bet.odds)
-                kelly = round(max(0, base_kelly * staleness_mult * kelly_fraction), 2)
+                kelly = round(max(0, base_kelly * staleness_mult), 2)
             else:
                 kelly = 0.0
 

@@ -143,6 +143,7 @@ def derive_markets(grid: dict[tuple[int, int], float]) -> MarketProbabilities:
             mp.away_win += prob
 
         if total > 1.5: mp.over15 += prob
+        if total <= 1.5: mp.under15 += prob
         if total > 2.5: mp.over25 += prob
         if total < 2.5: mp.under25 += prob
         if total > 3.5: mp.over35 += prob

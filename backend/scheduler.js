@@ -443,26 +443,26 @@ export const initScheduler = () => {
                 });
                 console.log(`[Live] ⚡ Wrote ${matches.length} live matches to Firestore`);
                 
-                // ── AUTO-UPDATE PREDICTIONS SCORE ──
+// ── AUTO-UPDATE PREDICTIONS SCORE ──
                 try {
                     // Match the quant_predictions date key (Lagos time)
-                    const lagosTime = new Date(Date.now() + 3600000);
-                    const todayStr = lagosTime.toISOString().split('T')[0];
+                    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
                     const qDocRef = db.collection('quant_predictions').doc(todayStr);
                     const qDoc = await qDocRef.get();
                     if (qDoc.exists) {
                         const data = qDoc.data();
                         let updated = false;
                         const preds = data.predictions || [];
+                        const normalize = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
                         for (const pred of preds) {
                             const liveMatch = matches.find(m => 
-                                String(m.homeTeamId) === String(pred.home_team_id || pred.homeTeamId || pred.home_team_id) || 
-                                m.homeTeam === pred.home_team || 
-                                m.homeTeam === pred.homeTeam
+                                String(m.id) === String(pred.fixture_id) ||
+                                String(m.homeTeamId) === String(pred.home_team_id) ||
+                                normalize(m.homeTeam) === normalize(pred.home_team)
                             );
                             if (liveMatch) {
                                 const newScore = `${liveMatch.homeScore} - ${liveMatch.awayScore}`;
-                                if (pred.score !== newScore) {
+if (pred.score !== newScore) {
                                     pred.score = newScore;
                                     updated = true;
                                 }
@@ -471,6 +471,70 @@ export const initScheduler = () => {
                         if (updated) {
                             await qDocRef.update({ predictions: preds });
                             console.log(`[Live] 🔄 Auto-updated prediction scores for ${todayStr}`);
+                        }
+
+                        // ── AUTO-GRADE FINISHED MATCHES ──
+                        const ftMatches = matches.filter(m => 
+                            ['FT', 'AET', 'PEN'].includes((m.stateShort || '').toUpperCase())
+                        );
+
+                        if (ftMatches.length > 0) {
+                            for (const pred of preds) {
+                                if (pred.status && pred.status !== 'pending') continue;
+                                
+                                const ftMatch = ftMatches.find(m =>
+                                    String(m.id) === String(pred.fixture_id) ||
+                                    String(m.homeTeamId) === String(pred.home_team_id) ||
+                                    normalize(m.homeTeam) === normalize(pred.home_team)
+                                );
+                                
+                                if (!ftMatch) continue;
+                                
+                                const hg = ftMatch.homeScore;
+                                const ag = ftMatch.awayScore;
+                                const total = hg + ag;
+                                const market = (pred.bet_type || '').toLowerCase();
+                                let status = 'void';
+                                
+                                if (market.includes('home win') && !market.includes('draw no bet') && !market.includes('double'))
+                                    status = hg > ag ? 'won' : 'lost';
+                                else if (market.includes('away win') && !market.includes('draw no bet') && !market.includes('double'))
+                                    status = ag > hg ? 'won' : 'lost';
+                                else if (market === 'draw')
+                                    status = hg === ag ? 'won' : 'lost';
+                                else if (market.includes('double chance (1x)'))
+                                    status = hg >= ag ? 'won' : 'lost';
+                                else if (market.includes('double chance (x2)'))
+                                    status = ag >= hg ? 'won' : 'lost';
+                                else if (market.includes('double chance (12)'))
+                                    status = hg !== ag ? 'won' : 'lost';
+                                else if (market.includes('draw no bet (home)'))
+                                    status = hg === ag ? 'void' : (hg > ag ? 'won' : 'lost');
+                                else if (market.includes('draw no bet (away)'))
+                                    status = hg === ag ? 'void' : (ag > hg ? 'won' : 'lost');
+                                else if (market.includes('over 1.5'))
+                                    status = total > 1 ? 'won' : 'lost';
+                                else if (market.includes('over 2.5'))
+                                    status = total > 2 ? 'won' : 'lost';
+                                else if (market.includes('under 2.5'))
+                                    status = total < 3 ? 'won' : 'lost';
+                                else if (market.includes('over 3.5'))
+                                    status = total > 3 ? 'won' : 'lost';
+                                else if (market.includes('under 3.5'))
+                                    status = total < 4 ? 'won' : 'lost';
+                                else if (market.includes('btts') && !market.includes('no'))
+                                    status = (hg > 0 && ag > 0) ? 'won' : 'lost';
+                                else if (market.includes('btts') && market.includes('no'))
+                                    status = (hg === 0 || ag === 0) ? 'won' : 'lost';
+                                
+                                if ((status !== 'void' || ftMatch.time) && status !== 'void') {
+                                    pred.status = status;
+                                    pred.graded_at = new Date().toISOString();
+                                    pred.graded_by = 'live_auto';
+                                    updated = true;
+                                    console.log(`[Live] ✅ Auto-graded: ${pred.home_team} vs ${pred.away_team} → ${status} (${hg}-${ag})`);
+                                }
+                            }
                         }
                     }
                 } catch (e) {

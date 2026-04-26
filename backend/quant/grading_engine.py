@@ -381,6 +381,14 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
         "clv_sample_size": clv_count,
     }, merge=True)
 
+    # Wire calibration into grading
+    try:
+        from calibration import compute_calibration, save_calibration
+        cal_data = compute_calibration(predictions)
+        save_calibration(date_str, cal_data)
+    except Exception as e:
+        print(f"[Grading] Calibration failed (non-fatal): {e}", file=sys.stderr)
+
     clv_str = f" | Avg CLV: {avg_clv:+.2%} ({clv_count} bets)" if avg_clv is not None else ""
     print(f"[Grading] Graded {graded_count}/{len(predictions)} predictions for {date_str}.{clv_str}")
     return {"status": "success", "total": len(predictions), "graded": graded_count,

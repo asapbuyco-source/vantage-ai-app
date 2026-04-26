@@ -74,7 +74,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
 
   // Load the scheduled football gen time from Firestore settings (for display only)
   const [scheduledTime, setScheduledTime] = useState('08:00');
-  const [freePicksCount, setFreePicksCount] = useState(2);
+  const [freePicksCount, setFreePicksCount] = useState(3);
+  const [visibleCount, setVisibleCount] = useState(15);
   useEffect(() => {
     getAppSettings().then(s => {
       if (s.footballGenTime) setScheduledTime(s.footballGenTime);
@@ -103,7 +104,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const WEEKLY_TRIAL_PLAN = {
     id: 'weekly' as const,
     label: language === 'fr' ? 'Essai 1 Semaine' : '1-Week Trial',
-    price: '1000',
+    price: '2000',
     features: [
       language === 'fr' ? 'Toutes les prédictions IA' : 'All AI predictions',
       language === 'fr' ? 'Accumulateurs Kelly' : 'Kelly accumulators',
@@ -116,6 +117,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
+    if (navigator.vibrate) navigator.vibrate(50);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
   };
@@ -155,8 +157,9 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
     }
 
     if (isToday) {
-      const currentTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      result = result.filter(match => !match.time || match.time >= currentTimeStr);
+      // Don't filter out started matches — show them with live scores.
+      // Only filter out if status is explicitly 'void' (cancelled).
+      result = result.filter(match => match.status !== 'void');
     }
 
     if (searchQuery.trim()) {
@@ -268,6 +271,36 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         </div>
       </div>
 
+      {/* Rolling Results Ticker */}
+      {predictions.some(m => m.status === 'won' || m.status === 'lost') && (
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 border border-white/5">
+          {(() => {
+            const won = predictions.filter(m => m.status === 'won').length;
+            const lost = predictions.filter(m => m.status === 'lost').length;
+            const total = won + lost;
+            const rate = total > 0 ? Math.round((won / total) * 100) : 0;
+            return (
+              <>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-black text-green-500">{won}W</span>
+                  <span className="text-[10px] text-gray-600">-</span>
+                  <span className="text-[10px] font-black text-red-400">{lost}L</span>
+                </div>
+                <div className="h-3 w-px bg-white/10" />
+                <span className={`text-[10px] font-black ${rate >= 60 ? 'text-green-500' : 'text-amber-400'}`}>
+                  {rate}% today
+                </span>
+                {won >= 3 && (
+                  <span className="text-[10px] font-black text-orange-500 animate-pulse flex items-center gap-0.5">
+                    🔥 {won} streak
+                  </span>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {/* ── Special Offer Banner ── */}
       <SpecialOfferBanner onClick={() => setTab('vip')} />
 
@@ -282,6 +315,11 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         <div className="flex items-center gap-1.5 text-vantage-cyan font-bold">
           <Calendar size={12} />
           <span className="uppercase">{todayDisplay}</span>
+          {predictions.length > 0 && (
+            <span className="text-[9px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+              {language === 'fr' ? '✓ Publié aujourd\'hui' : '✓ Published today'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -496,7 +534,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
               )}
 
               <AnimatePresence>
-                {groupedMatches[groupKey].map((match, idx) => {
+                {groupedMatches[groupKey].slice(0, visibleCount).map((match, idx) => {
                   const cat = (CATEGORY_CONFIG as any)[match.category] || CATEGORY_CONFIG.value;
                   const hasConfidence = match.confidence && match.confidence > 0;
                   const hasOdds = match.odds && match.odds > 1;
@@ -508,7 +546,6 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                     // @ts-ignore
                     <motion.div
                       key={match.id}
-                      layout
                       initial={{ opacity: 0, y: 14 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.96 }}
@@ -521,10 +558,10 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                         }}
                         className="w-full text-left group"
                       >
-                        <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-[#1a1d26] hover:border-vantage-cyan/40 hover:bg-[#1e2230] transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-vantage-cyan/5 group-hover:ring-1 group-hover:ring-vantage-cyan/10">
+                        <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-white dark:bg-[#1a1d26] hover:border-vantage-cyan/40 hover:bg-slate-50 dark:hover:bg-[#1e2230] transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-vantage-cyan/5 group-hover:ring-1 group-hover:ring-vantage-cyan/10">
 
                           {/* Subtle gradient glow top edge */}
-                          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-vantage-cyan/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-vantage-cyan/20 dark:via-vantage-cyan/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
                           {/* Category badge top-right */}
                           {hasPrediction && (
@@ -563,9 +600,20 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                               {/* VS + xG badge / Score Badge */}
                               <div className="shrink-0 flex flex-col items-center">
                                 {match.score ? (
-                                  <span className="text-[13px] font-black font-orbitron text-vantage-cyan px-2 tracking-widest bg-vantage-cyan/10 rounded border border-vantage-cyan/20">
-                                    {match.score.replace('-', ' - ')}
-                                  </span>
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <span className="text-[13px] font-black font-orbitron text-vantage-cyan px-2 tracking-widest bg-vantage-cyan/10 rounded border border-vantage-cyan/20">
+                                      {match.score.replace('-', ' - ')}
+                                    </span>
+                                    {match.status === 'won' && (
+                                      <span className="text-[8px] font-black text-green-500 bg-green-500/15 px-1.5 py-0.5 rounded-full border border-green-500/30 uppercase tracking-wider animate-pulse">✓ WON</span>
+                                    )}
+                                    {match.status === 'lost' && (
+                                      <span className="text-[8px] font-black text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded-full border border-red-500/30 uppercase tracking-wider">✗ LOST</span>
+                                    )}
+                                    {match.status === 'pending' && match.score && (
+                                      <span className="text-[8px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full border border-amber-400/20 uppercase tracking-wider">LIVE</span>
+                                    )}
+                                  </div>
                                 ) : (
                                   <span className="text-[11px] font-black font-orbitron text-gray-300 dark:text-gray-600 px-2">VS</span>
                                 )}
@@ -674,6 +722,18 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                   );
                 })}
               </AnimatePresence>
+
+              {filteredMatches.length > visibleCount && (
+                <button
+                  onClick={() => setVisibleCount(v => v + 15)}
+                  className="w-full py-3 rounded-xl border border-white/10 text-xs font-bold text-gray-400 hover:text-vantage-cyan transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <ChevronDown size={14} />
+                  {language === 'fr'
+                    ? `Afficher ${Math.min(15, filteredMatches.length - visibleCount)} de plus`
+                    : `Show ${Math.min(15, filteredMatches.length - visibleCount)} more`}
+                </button>
+              )}
             </div>
           ))
         )}
@@ -720,6 +780,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
       {showTrialPopup && (
         <TrialOfferPopup
           onClaim={() => setShowTrialPayment(true)}
+          isVip={isVip}
         />
       )}
 

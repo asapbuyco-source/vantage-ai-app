@@ -69,18 +69,24 @@ def _performance_score(stats: 'TeamStats') -> float:
     Computes a True Dominance score (0–1) based on underlying performance metrics.
     Looks at xG created vs conceded, average possession, and shots on target.
     """
+    # Handle zero stats - return neutral 0.5 instead of dividing by zero
+    xg = getattr(stats, 'avg_xg_created', 0) or 0
+    xg_conceded = getattr(stats, 'avg_xg_conceded', 0) or 0
+    poss = getattr(stats, 'avg_possession', 0) or 0
+    sot = getattr(stats, 'avg_shots_on_target', 0) or 0
+    
+    if xg == 0 and xg_conceded == 0 and poss == 0 and sot == 0:
+        return 0.5
+    
     # 1. xG Dominance (0–1)
-    # If a team creates 2.0 xG and concedes 1.0 xG, their ratio is 0.66
-    xg_sum = stats.avg_xg_created + stats.avg_xg_conceded
-    xg_ratio = (stats.avg_xg_created / xg_sum) if xg_sum > 0 else 0.5
+    xg_sum = xg + xg_conceded
+    xg_ratio = (xg / xg_sum) if xg_sum > 0 else 0.5
     
     # 2. Match Control (0–1)
-    # 50% possession = 0.5, 70% possession = 0.7
-    poss_score = min(1.0, max(0.0, stats.avg_possession / 100.0))
+    poss_score = min(1.0, max(0.0, poss / 100.0))
     
     # 3. Attacking Threat (0–1)
-    # 8 Shots on Target average is considered highly dominant (1.0)
-    sot_score = min(1.0, stats.avg_shots_on_target / 8.0)
+    sot_score = min(1.0, sot / 8.0)
     
     # True Dominance: 60% xG, 20% Possession, 20% SOT
     true_dominance = (xg_ratio * 0.6) + (poss_score * 0.2) + (sot_score * 0.2)

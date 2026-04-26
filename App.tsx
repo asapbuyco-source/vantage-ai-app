@@ -349,15 +349,16 @@ function AppContent() {
 
           {activeTab !== 'admin' && <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />}
 
-          {/* Global UI overlays */}
-          <SpecialOfferPopup />
+          {/* Popup priority system: only one at a time */}
+          <AnimatePresence>
+          {showOnboarding ? (
+            <Onboarding onComplete={handleOnboardingComplete} />
+          ) : !userProfile?.isVip && !isAdmin ? (
+            <SpecialOfferPopup />
+          ) : null}
+          </AnimatePresence>
           <BetSlip />
           <ToastContainer />
-
-          {/* First-Launch Onboarding */}
-          <AnimatePresence>
-            {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
-          </AnimatePresence>
         </div>
       } />
     </Routes>

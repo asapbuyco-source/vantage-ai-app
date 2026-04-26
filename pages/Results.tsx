@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { doc, onSnapshot } from 'firebase/firestore';
 import {
     History, ChevronDown, ChevronUp, CheckCircle2, XCircle,
     Loader2, Trophy, AlertCircle, Pencil, Save, X, MinusCircle
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
-import { getResultsHistory, DayResult, savePredictionsForDate, getPredictionsForDate } from '../services/db';
+import { getResultsHistory, DayResult, savePredictionsForDate, getPredictionsForDate, getGlobalTodayKey, normalizeQuantPrediction } from '../services/db';
+import { db } from '../firebaseConfig';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Match } from '../types';
@@ -42,6 +44,34 @@ export const Results: React.FC = () => {
     }, []);
 
     useEffect(() => { loadHistory(); }, [loadHistory]);
+
+    // Live listener for today's rolling results
+    useEffect(() => {
+        const todayKey = getGlobalTodayKey();
+        const unsub = onSnapshot(
+            doc(db, 'quant_predictions', todayKey),
+            (snap) => {
+                if (!snap.exists()) return;
+                const data = snap.data();
+                const matches = (data.predictions || []).map(normalizeQuantPrediction);
+                
+                setHistory(prev => {
+                    const existing = prev.filter(d => d.date !== todayKey);
+                    const graded = matches.filter(m => m.status === 'won' || m.status === 'lost');
+                    const todayEntry = {
+                        date: todayKey,
+                        matches,
+                        wonCount: graded.filter(m => m.status === 'won').length,
+                        lostCount: graded.filter(m => m.status === 'lost').length,
+                        totalGraded: graded.length,
+                    };
+                    return [todayEntry, ...existing];
+                });
+            },
+            (err) => console.warn('[Results] Live listener error:', err)
+        );
+        return () => unsub();
+    }, []);
 
     // ── Derived summary stats ──────────────────────────────────────────────────
     const getEffectiveStatus = (date: string, match: Match): MatchStatus =>
@@ -254,7 +284,13 @@ export const Results: React.FC = () => {
                                                         {dayRate}%
                                                     </div>
                                                     <div className="text-left">
-                                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{formatDate(day.date)}</p>
+                                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{formatDate(day.date)}
+                                                            {day.date === getGlobalTodayKey() && (
+                                                                <span className="ml-1.5 text-[8px] font-black text-red-500 bg-red-500/15 px-1.5 py-0.5 rounded-full border border-red-500/30 animate-pulse uppercase">
+                                                                    LIVE
+                                                                </span>
+                                                            )}
+                                                        </p>
                                                         <p className="text-[10px] text-gray-500 flex items-center gap-2">
                                                             <span className="flex items-center gap-1 text-green-500"><Trophy size={10} />{wonCount} Won</span>
                                                             <span className="flex items-center gap-1 text-red-400"><XCircle size={10} />{lostCount} Lost</span>
