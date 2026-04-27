@@ -101,11 +101,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     setError("Votre compte a été suspendu par l'administrateur.");
                     return;
                 }
-                // Session expiry: force re-login after 12 hours
+                // Session expiry: force re-login after 12 hours only if lastLoginAt exists
                 const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
                 const lastLogin = profileData.lastLoginAt ? new Date(profileData.lastLoginAt).getTime() : 0;
-                const sessionAge = Date.now() - lastLogin;
-                if (sessionAge > SESSION_MAX_AGE_MS && lastLogin > 0) {
+                const sessionAge = lastLogin > 0 ? Date.now() - lastLogin : 0;
+                if (lastLogin > 0 && sessionAge > SESSION_MAX_AGE_MS) {
                     console.log('[Auth] Session expired, forcing re-login');
                     await signOut(auth);
                     setUser(null);

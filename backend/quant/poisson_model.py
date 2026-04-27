@@ -50,6 +50,7 @@ class MarketProbabilities:
     draw: float = 0.0
     away_win: float = 0.0
     over15: float = 0.0
+    under15: float = 0.0
     over25: float = 0.0
     under25: float = 0.0
     over35: float = 0.0
