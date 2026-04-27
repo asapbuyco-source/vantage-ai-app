@@ -40,7 +40,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
 
         // Simulate AI "thinking"
         setTimeout(() => {
-            const targetOdds = parseFloat(goal) / parseFloat(stake);
+            const targetOdds = (parseFloat(goal) || 5000) / (parseFloat(stake) || 1);
             const ticket = findBestCombination(allMatches, targetOdds, risk);
             setGeneratedTicket(ticket);
             setIsGenerating(false);
@@ -65,17 +65,22 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
         let bestTicket: Match[] = [];
         let currentOdds = 1;
 
-        // Shuffle pool for variety
-        const shuffled = [...pool].sort(() => Math.random() - 0.5);
+        // Sort pool by confidence descending (always prioritize the best bets)
+        const sortedPool = [...pool].sort((a, b) => b.confidence - a.confidence);
 
-        for (const match of shuffled) {
-            if (currentOdds * match.odds <= target * 1.2) { // 20% margin
+        for (const match of sortedPool) {
+            // Prevent adding matches that push the ticket way over the target
+            if (currentOdds * match.odds <= target * 1.15) { 
                 bestTicket.push(match);
                 currentOdds *= match.odds;
-
-                if (currentOdds >= target * 0.9) break; // Close enough
+            } else if (bestTicket.length < 5 && (currentOdds * match.odds <= target * 1.3)) {
+                // If we are close and just need one more, allow slight overshoot
+                bestTicket.push(match);
+                currentOdds *= match.odds;
+                break;
             }
-            if (bestTicket.length >= 5) break; // Limit to 5 matches Max for "Smart" feel
+            if (currentOdds >= target * 0.95) break; 
+            if (bestTicket.length >= 5) break; 
         }
 
         return bestTicket.length > 0 ? bestTicket : null;

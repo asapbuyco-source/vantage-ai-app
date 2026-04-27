@@ -16,8 +16,6 @@ import { TeamLogo } from '../components/TeamLogo';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
 import { getAppSettings } from '../services/db';
 import { PWAInstallButton } from '../components/PWAInstallButton';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
 import { TrialOfferPopup } from '../components/TrialOfferPopup';
 import { PaymentModal } from '../components/PaymentModal';
 import { SpecialOfferBanner } from '../components/SpecialOfferBanner';
@@ -67,7 +65,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const { user, userProfile, isAdmin } = useAuth();
   const {
     activeDate, predictions, rawFixtures, basketballPredictions,
-    winRateStats, loading, isSystemGenerating, systemError
+    winRateStats, loading, isSystemGenerating, systemError, liveCount
   } = useData();
 
   const isVip = userProfile?.isVip || isAdmin;
@@ -96,7 +94,6 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const [sortKey, setSortKey] = useState<SortKey>('league');
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [liveCount, setLiveCount] = useState(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // ─── Trial Offer Popup state ──────────────────────────────────────────────
@@ -126,16 +123,6 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
     if (language === 'fr') return match.prediction_fr || match.prediction || '';
     return match.prediction_en || match.prediction || '';
   };
-
-  // Subscribe to live count from Firestore
-  useEffect(() => {
-    const unsub = onSnapshot(
-      doc(db, 'live_scores', 'current'),
-      (snap) => setLiveCount(snap.exists() ? (snap.data()?.count || 0) : 0),
-      () => setLiveCount(0)
-    );
-    return () => unsub();
-  }, []);
 
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 

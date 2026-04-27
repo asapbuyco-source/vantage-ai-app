@@ -30,6 +30,7 @@ interface DataContextType {
     clearData: () => Promise<void>;
     cancelAnalysis: () => void;
     systemError: string | null;
+    liveCount: number;
 }
 
 const DEFAULT_WIN_RATES: WinRateStats = { daily: 0, weekly: 0, monthly: 0, streak: 0, todayWon: 0, todayTotal: 0 };
@@ -49,6 +50,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isSystemGenerating, setIsSystemGenerating] = useState(false);
     const [isBasketballGenerating, setIsBasketballGenerating] = useState(false);
     const [systemError, setSystemError] = useState<string | null>(null);
+    const [liveCount, setLiveCount] = useState(0);
+
+    // Singleton live count listener - only one subscription across the app
+    useEffect(() => {
+        const unsub = onSnapshot(
+            doc(db, 'live_scores', 'current'),
+            (snap) => setLiveCount(snap.exists() ? (snap.data()?.count || 0) : 0),
+            () => setLiveCount(0)
+        );
+        return () => unsub();
+    }, []);
 
     const fetchPromiseRef = useRef<Promise<void> | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -203,7 +215,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setWinRateStats(DEFAULT_WIN_RATES);
             setLoading(false);
         }
-    }, [authLoading, user, location.pathname]);
+    }, [authLoading, user]);
 
     // Real-time listener for today's predictions (scores + statuses)
     useEffect(() => {
@@ -245,7 +257,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             generateBasketballData,
             clearData,
             cancelAnalysis,
-            systemError
+            systemError,
+            liveCount
         }}>
             {children}
         </DataContext.Provider>

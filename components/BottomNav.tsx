@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { Home, Unlock, Lock, User, Sparkles, History, Radio } from 'lucide-react';
 import { NavigationTab } from '../types';
 import { useAppContext } from '../context/AppContext';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { useData } from '../context/DataContext';
 
 interface BottomNavProps {
   activeTab: NavigationTab;
@@ -13,17 +12,7 @@ interface BottomNavProps {
 
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
   const { t, language } = useAppContext();
-  const [liveCount, setLiveCount] = useState(0);
-
-  // Subscribe to live match count from Firestore (written by backend every 60s)
-  useEffect(() => {
-    const unsub = onSnapshot(
-      doc(db, 'live_scores', 'current'),
-      (snap) => { setLiveCount(snap.exists() ? (snap.data()?.count || 0) : 0); },
-      () => setLiveCount(0)
-    );
-    return () => unsub();
-  }, []);
+  const { liveCount } = useData();
 
   const navItems = [
     { id: 'home', icon: Home, label: t('nav.home') },

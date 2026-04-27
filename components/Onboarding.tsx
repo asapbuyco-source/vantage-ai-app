@@ -101,7 +101,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 await updateUserCountry(selectedCountry);
             } catch (e) {
                 console.error('Failed to save country', e);
-                // Don't block progress even if save fails
+                showToast(language === 'fr' ? 'Pays non enregistré, vous pourrez le modifier plus tard.' : 'Country save failed, you can update it later in Profile.', 'error');
             } finally {
                 setIsSaving(false);
             }

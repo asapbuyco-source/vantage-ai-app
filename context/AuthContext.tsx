@@ -136,8 +136,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             } else {
                 // Profile document doesn't exist yet (race condition on new signup).
-                // createProfile() will write it. Return early to avoid setUserProfile(undefined).
-                return;
+                // Create minimal skeleton profile immediately so UI is not in indeterminate state.
+                const skeletonProfile = {
+                    uid: firebaseUser.uid,
+                    email: firebaseUser.email,
+                    isVip: false,
+                    isAdmin: import.meta.env?.VITE_ADMIN_EMAIL ? firebaseUser.email === import.meta.env.VITE_ADMIN_EMAIL : false,
+                    displayName: firebaseUser.displayName,
+                    isBlocked: false,
+                    referralCode: generateReferralCode(firebaseUser.displayName || firebaseUser.email),
+                    referralCount: 0,
+                    referralEarnings: 0,
+                    lifetimeEarnings: 0
+                };
+                await setDoc(userRef, skeletonProfile);
+                profileData = skeletonProfile;
             }
 
             // Bootstrap: if the env-configured admin email matches, grant isAdmin on first setup

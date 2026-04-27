@@ -611,7 +611,13 @@ app.use(async (req, res, next) => {
             return res.status(404).send('Vantage AI Frontend build not found. Please run npm run build.');
         }
 
-        let html = fs.readFileSync(indexPath, 'utf-8');
+        let html = "";
+        try {
+            // Asynchronous read to prevent event loop blocking
+            html = await fs.promises.readFile(indexPath, 'utf-8');
+        } catch (err) {
+            return res.status(404).send('Vantage AI Frontend build not found. Please run npm run build.');
+        }
 
         // Fetch Admin Settings for Google Site Verification
         let googleTag = '';

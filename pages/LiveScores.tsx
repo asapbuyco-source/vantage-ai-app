@@ -35,45 +35,57 @@ const EVENT_ICONS: Record<string, string> = {
 };
 
 function getEventIcon(type: string): string {
-  return EVENT_ICONS[type] || '•';
+  const normalized = type.toLowerCase().replace(/\s+/g, '_');
+  return EVENT_ICONS[normalized] || '•';
 }
 
-function getEventDisplay(ev: any): string {
-  // Goal/penalty: show player + result
+function getEventDisplay(ev: any, language: string): string {
   if (ev.type === 'goal' || ev.type === 'penalty') {
-    return `${ev.playerName || 'Goal'}${ev.result ? ` (${ev.result})` : ''}`;
+    const lbl = language === 'fr' ? 'But' : 'Goal';
+    return `${ev.playerName || lbl}${ev.result ? ` (${ev.result})` : ''}`;
   }
-  // Substitution: show player in/out
   if (ev.type === 'substitution') {
-    return `${ev.playerName || '?'} ↔ ${ev.playerNameOut || '?'}`;
+    const out = ev.playerNameOut || ev.related_player_name || '?';
+    return `${ev.playerName || '?'} ↔ ${out}`;
   }
-  // Cards: show player name or card type
   if (ev.type === 'yellow_card' || ev.type === 'red_card' || ev.type === 'yellowcard' || ev.type === 'redcard') {
     if (ev.playerName) return ev.playerName;
     if (ev.name) return ev.name;
-    return (ev.type === 'redcard' || ev.type === 'red_card') ? 'Red Card' : 'Yellow Card';
+    const isRed = (ev.type === 'redcard' || ev.type === 'red_card');
+    if (language === 'fr') return isRed ? 'Carton Rouge' : 'Carton Jaune';
+    return isRed ? 'Red Card' : 'Yellow Card';
   }
-  // For any other event type, show playerName, then name, then a nice label
   if (ev.playerName) return ev.playerName;
   if (ev.name) return ev.name;
-  // Fallback to nice labels based on type
-  const labels: Record<string, string> = {
-    'var': 'VAR',
-    'event': 'Event',
-    'own_goal': 'Own Goal',
-    'penalty_miss': 'Penalty Miss',
+  
+  const labels: Record<string, any> = {
+    'var': { en: 'VAR', fr: 'VAR' },
+    'event': { en: 'Event', fr: 'Événement' },
+    'own_goal': { en: 'Own Goal', fr: 'Contre son camp' },
+    'penalty_miss': { en: 'Penalty Miss', fr: 'Penalty raté' },
   };
-  return labels[ev.type] || 'Event';
+  return labels[ev.type]?.[language] || labels[ev.type]?.en || 'Event';
 }
 
-function getStateConfig(short: string) {
+function getStateConfig(short: string, language: string) {
   const key = short?.toUpperCase();
-  return STATE_CONFIG[key] || { label: short || 'LIVE', color: 'text-green-400', bg: 'bg-green-400/15 border-green-400/30' };
+  const config = { ...(STATE_CONFIG[key] || { label: short || 'LIVE', color: 'text-green-400', bg: 'bg-green-400/15 border-green-400/30' }) };
+  
+  // Apply French overrides
+  if (language === 'fr') {
+      if (key === '1H') config.label = '1ÈRE MI-TEMPS';
+      else if (key === '2H') config.label = '2ÈME MI-TEMPS';
+      else if (key === 'HT') config.label = 'MI-TEMPS';
+      else if (key === 'ET') config.label = 'PROLONGATION';
+      else if (key === 'PEN') config.label = 'TIRS AU BUT';
+      else if (key === 'FT') config.label = 'TERMINÉ';
+  }
+  return config;
 }
 
-const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number }> = ({ match, idx }) => {
+const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number; language: string }> = ({ match, idx, language }) => {
   const [expanded, setExpanded] = useState(false);
-  const stateConf = getStateConfig(match.stateShort);
+  const stateConf = getStateConfig(match.stateShort, language);
   const isLive = !['FT', 'NS', 'POSTP'].includes(match.stateShort?.toUpperCase());
 
   return (
@@ -176,7 +188,7 @@ const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number }> = ({ match, idx
                   <span className="text-[10px] text-gray-500 font-mono w-6 text-right shrink-0">{ev.minute}'</span>
                   <span>{getEventIcon(ev.type)}</span>
                   <span className="text-gray-300 font-medium truncate">
-                    {getEventDisplay(ev)}
+                    {getEventDisplay(ev, language)}
                   </span>
                   {ev.isHome !== undefined && (
                     <span className={`text-[9px] ${ev.isHome ? 'text-vantage-cyan' : 'text-vantage-purple'}`}>
@@ -339,7 +351,7 @@ export const LiveScores: React.FC<LiveScoresProps> = ({ setTab }) => {
               )}
               <AnimatePresence>
                 {leagueMatches.map((m, idx) => (
-                  <LiveMatchCard key={m.id} match={m} idx={idx} />
+                  <LiveMatchCard key={m.id} match={m} idx={idx} language={language} />
                 ))}
               </AnimatePresence>
             </div>

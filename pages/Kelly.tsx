@@ -31,7 +31,7 @@ export const Kelly: React.FC<KellyProps> = ({ setTab }) => {
     const parsedProb = parseFloat(prob) / 100 || 0;
 
     const kelly = useMemo(() => {
-        if (parsedOdds <= 1 || parsedProb <= 0 || parsedProb >= 1) return null;
+        if (parsedOdds <= 1.01 || parsedProb <= 0 || parsedProb >= 1) return null;
         const b = parsedOdds - 1;
         const q = 1 - parsedProb;
         const k = (b * parsedProb - q) / b;
