@@ -220,7 +220,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Real-time listener for today's predictions (scores + statuses)
     useEffect(() => {
         if (!user || authLoading) return;
-        const todayKey = getGlobalTodayKey();
+        const todayKey = getGlobalTodayKey(); // captured at mount; re-runs when auth changes
         
         const unsub = onSnapshot(
             doc(db, 'quant_predictions', todayKey),

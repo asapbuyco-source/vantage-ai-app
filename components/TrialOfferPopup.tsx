@@ -19,7 +19,8 @@ import { useAppContext } from '../context/AppContext';
 
 const STORAGE_KEY_EXPIRY   = 'vantage_trial_expiry';
 const STORAGE_KEY_CLAIMED  = 'vantage_trial_claimed';
-const OFFER_DURATION_MS    = 60 * 60 * 1000; // 1 hour
+const STORAGE_KEY_MINI     = 'vantage_trial_mini'; // collapsed to icon
+const OFFER_DURATION_MS    = 24 * 60 * 60 * 1000; // 24 hours
 const RADIUS               = 28;
 const CIRCUMFERENCE        = 2 * Math.PI * RADIUS;
 
@@ -113,9 +114,17 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
   }, [onClaim]);
 
   const handleDismiss = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY_EXPIRY, 'expired');
+    // Collapse to mini icon instead of fully dismissing
+    localStorage.setItem(STORAGE_KEY_MINI, 'true');
     setVisible(false);
   }, []);
+
+  // Mini icon state — shown after dismiss, until claimed or expired
+  const [showMini, setShowMini] = useState(() => {
+    if (localStorage.getItem(STORAGE_KEY_CLAIMED) === 'true') return false;
+    if (localStorage.getItem(STORAGE_KEY_EXPIRY) === 'expired') return false;
+    return localStorage.getItem(STORAGE_KEY_MINI) === 'true';
+  });
 
   // ── SVG Ring helpers ──────────────────────────────────────────────────────
   const totalSeconds = OFFER_DURATION_MS / 1000;
@@ -126,11 +135,12 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
   const mm = String(Math.floor(remaining / 60000)).padStart(2, '0');
   const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0');
 
-  // Urgency colour: orange → red in last 10 minutes
-  const isUrgent = remaining < 10 * 60 * 1000;
+  // Urgency colour: orange → red in last 2 hours
+  const isUrgent = remaining < 2 * 60 * 60 * 1000;
   const ringColour = isUrgent ? '#ef4444' : '#f97316';
 
   return (
+  <>
     <AnimatePresence>
       {visible && (
         <motion.div
@@ -254,13 +264,13 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
                 </div>
 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 20, fontWeight: 900, color: '#f97316' }}>
-                    2 000FCFA
+                    1 000FCFA
                   </span>
                   <span style={{
                     fontSize: 12, color: '#6b7280',
                     textDecoration: 'line-through',
                   }}>
-                    4 000FCFA
+                    2 000FCFA
                   </span>
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: '#10b981',
@@ -318,7 +328,62 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
         </motion.div>
       )}
     </AnimatePresence>
-  );
+
+    {/* ── Mini floating icon (after dismiss, before expiry) ── */}
+    <AnimatePresence>
+      {!isVip && showMini && !visible && (
+        <motion.button
+          key="trial-mini"
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+          onClick={() => {
+            setShowMini(false);
+            localStorage.removeItem(STORAGE_KEY_MINI);
+            setVisible(true);
+          }}
+          aria-label="Reopen trial offer"
+          style={{
+            position: 'fixed',
+            bottom: '90px',
+            right: '16px',
+            zIndex: 9998,
+            width: 54,
+            height: 54,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #f97316, #ef4444)',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 20px rgba(249,115,22,0.5)',
+          }}
+        >
+          {/* Pulsing ring */}
+          <motion.div
+            animate={{ scale: [1, 1.25, 1], opacity: [0.7, 0, 0.7] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+            style={{
+              position: 'absolute',
+              inset: -4,
+              borderRadius: '50%',
+              border: '2px solid #f97316',
+              pointerEvents: 'none',
+            }}
+          />
+          {/* Countdown badge */}
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 10, fontWeight: 900, color: '#fff', lineHeight: 1 }}>
+              {Math.floor(remaining / (3600 * 1000))}h
+            </div>
+            <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.7)' }}>left</div>
+          </div>
+        </motion.button>
+      )}
+    </AnimatePresence>
+  </>);
 };
 
 export default TrialOfferPopup;

@@ -59,6 +59,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
   const { t, language } = useAppContext();
   const { predictions, loading } = useData();
   const { userProfile, isAdmin } = useAuth();
+  const isVip = userProfile?.isVip || isAdmin;
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAllLeans, setShowAllLeans] = useState(false);
   const [freePicksCount, setFreePicksCount] = useState(3);
@@ -68,8 +69,6 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
       if (s.freePicksCount !== undefined) setFreePicksCount(s.freePicksCount);
     });
   }, []);
-
-  const isVip = userProfile?.isVip || isAdmin;
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -218,7 +217,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
                     </div>
                     <div className="flex flex-col items-end">
                       <span className="text-[10px] text-gray-500 uppercase tracking-wide">{t('free.prob_label')}</span>
-                      <span className="text-lg font-bold text-green-500">{confidence}%</span>
+                      <span className="text-lg font-bold text-green-500">--</span>
                     </div>
                   </div>
                 </div>
@@ -394,7 +393,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
         </h1>
 
         {/* ── Special Offer Banner ── */}
-        <SpecialOfferBanner onClick={() => setTab('vip')} />
+        {!isVip && <SpecialOfferBanner onClick={() => setTab('vip')} />}
 
         {/* Live match count banner */}
         {!loading && totalAnalyzed > 0 && (

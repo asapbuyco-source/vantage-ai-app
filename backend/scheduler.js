@@ -367,7 +367,7 @@ export const initScheduler = () => {
 
             const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
-            const url = `https://api.sportmonks.com/v3/football/livescores/latest?include=league;participants;scores;events;state&api_token=${token}`;
+            const url = `https://api.sportmonks.com/v3/football/livescores/latest?include=league;participants;scores;events.type;events.player;events.related_player;state&api_token=${token}`;
             const res = await fetch(url);
             if (!res.ok) return;
             const json = await res.json();

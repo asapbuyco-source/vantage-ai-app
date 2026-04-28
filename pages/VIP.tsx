@@ -981,6 +981,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
 
             <div className="flex flex-col gap-4">
             {plans.map((plan) => {
+                const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
                 return (
                   <motion.button
                     key={plan.id}
@@ -1020,9 +1021,9 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                       <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-sm transition-all ${plan.claimColor} shadow-lg shrink-0`}>
                         <Zap size={14} />
                         <span>
-                          {getPricingForCountry(Number(plan.price), userProfile?.country || 'other').symbol}
-                          {getPricingForCountry(Number(plan.price), userProfile?.country || 'other').amount.toLocaleString()}
-                          {getPricingForCountry(Number(plan.price), userProfile?.country || 'other').code === 'FCFA' ? ' FCFA' : ` ${getPricingForCountry(Number(plan.price), userProfile?.country || 'other').code}`}
+                          {pricing.symbol}
+                          {pricing.amount.toLocaleString()}
+                          {pricing.code === 'FCFA' ? ' FCFA' : ` ${pricing.code}`}
                         </span>
                       </div>
                     </div>

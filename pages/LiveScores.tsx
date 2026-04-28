@@ -86,7 +86,7 @@ function getStateConfig(short: string, language: string) {
 const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number; language: string }> = ({ match, idx, language }) => {
   const [expanded, setExpanded] = useState(false);
   const stateConf = getStateConfig(match.stateShort, language);
-  const isLive = !['FT', 'NS', 'POSTP'].includes(match.stateShort?.toUpperCase());
+  const isLive = !['FT', 'NS', 'POSTP', 'ABD', 'CANC', 'TBD'].includes(match.stateShort?.toUpperCase());
 
   return (
     <motion.div

@@ -69,6 +69,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const [whatsappSaved, setWhatsappSaved] = useState(false);
     const [botSettingsSaved, setBotSettingsSaved] = useState(false);
 
+    // App Download Link
+    const [appDownloadUrl, setAppDownloadUrl] = useState('');
+    const [savingDownloadUrl, setSavingDownloadUrl] = useState(false);
+    const [downloadUrlSaved, setDownloadUrlSaved] = useState(false);
+
     // Auto-scheduler Settings
     // Scheduler & SEO Settings
     const [footballGenTime, setFootballGenTime] = useState('08:00');
@@ -105,6 +110,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             if (s.blogGenTime) setBlogGenTime(s.blogGenTime);
             if (s.googleSiteVerificationTag) setGoogleSiteVerificationTag(s.googleSiteVerificationTag);
             if (s.freePicksCount !== undefined) setFreePicksCount(s.freePicksCount);
+            if (s.appDownloadUrl) setAppDownloadUrl(s.appDownloadUrl);
         });
         return () => { isMounted.current = false; };
     }, []);
@@ -138,6 +144,19 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             console.error('Failed to save bot settings', e);
         } finally {
             setSavingBotSettings(false);
+        }
+    };
+
+    const handleSaveDownloadUrl = async () => {
+        setSavingDownloadUrl(true);
+        try {
+            await saveAppSettings({ appDownloadUrl: appDownloadUrl.trim() });
+            setDownloadUrlSaved(true);
+            setTimeout(() => setDownloadUrlSaved(false), 3000);
+        } catch (e) {
+            console.error('Failed to save download URL', e);
+        } finally {
+            setSavingDownloadUrl(false);
         }
     };
 
@@ -1556,6 +1575,38 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                 When a user signs up using another user's referral link, the referrer earns {referralRewardDays} free VIP day(s). You can fulfil these manually from the Users tab by toggling their VIP status.
                             </p>
                         </div>
+                    </GlassCard>
+
+                    {/* App Download Link */}
+                    <GlassCard className="border-vantage-cyan/20 bg-vantage-cyan/5">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Link size={16} className="text-vantage-cyan" />
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white">App Download / Install Link</h3>
+                                <p className="text-[10px] text-gray-500">Shown when users tap "Install" on the home screen. Paste an APK, Play Store, or PWA URL.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <input
+                                type="url"
+                                placeholder="https://play.google.com/... or https://yourapp.com/app.apk"
+                                value={appDownloadUrl}
+                                onChange={e => setAppDownloadUrl(e.target.value)}
+                                className="flex-1 bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg py-2 px-3 text-sm font-mono focus:ring-1 focus:ring-vantage-cyan outline-none text-slate-900 dark:text-white"
+                            />
+                            <button
+                                onClick={handleSaveDownloadUrl}
+                                disabled={savingDownloadUrl}
+                                className={`px-4 font-bold rounded-lg text-sm transition-colors disabled:opacity-50 ${downloadUrlSaved ? 'bg-vantage-cyan text-slate-900' : 'bg-vantage-cyan/20 hover:bg-vantage-cyan/30 text-vantage-cyan border border-vantage-cyan/30'}`}
+                            >
+                                {savingDownloadUrl ? <RefreshCw size={14} className="animate-spin" /> : downloadUrlSaved ? '✓ Saved' : 'Save'}
+                            </button>
+                        </div>
+                        {appDownloadUrl && (
+                            <p className="mt-2 text-[10px] text-gray-500 truncate">
+                                Current: <span className="text-vantage-cyan font-mono">{appDownloadUrl}</span>
+                            </p>
+                        )}
                     </GlassCard>
 
                     {/* WhatsApp Group */}

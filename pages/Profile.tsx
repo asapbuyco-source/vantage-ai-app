@@ -736,7 +736,7 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
             </button>
 
             <div className="text-center pt-4">
-                <p className="text-[10px] text-gray-500">Vantage AI v4.0.2 • Build 2024</p>
+                <p className="text-[10px] text-gray-500">Vantage AI v4.0.2 • Build 2026</p>
             </div>
         </div>
     );

@@ -46,13 +46,10 @@ export const getGlobalYesterdayKey = () => {
 };
 
 /** Helper to get a date key for N days ago (Africa/Lagos timezone) */
-const getDateKeyDaysAgo = (daysAgo: number) => {
-    const now = new Date();
-    const lagosOffset = 60;
-    const localMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
-    const date = new Date(localMs);
-    date.setDate(date.getDate() - daysAgo);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const getDateKeyDaysAgo = (daysAgo: number): string => {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    return d.toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
 };
 
 /** 
@@ -102,11 +99,18 @@ export const normalizeQuantPrediction = (p: any): any => {
     };
 };
 
-export const getDailyData = async (dateStr: string): Promise<DailyAnalysis | null> => {
-    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+export const getDailyData = async (dateStr: string, bustCache = false): Promise<DailyAnalysis | null> => {
+    const todayKey = getGlobalTodayKey();
+    // Today's data can get graded at any time — use 30s TTL; historical = 5 min.
+    const CACHE_TTL = dateStr === todayKey ? 30 * 1000 : 5 * 60 * 1000;
     const cacheKey = `daily_${dateStr}`;
-    const cached = cacheGet<DailyAnalysis>(cacheKey);
-    if (cached) return cached;
+
+    if (!bustCache) {
+        const cached = cacheGet<DailyAnalysis>(cacheKey);
+        if (cached) return cached;
+    } else {
+        _cache.delete(cacheKey);
+    }
 
     try {
         let dailyAnalysis: any = null;
@@ -130,7 +134,21 @@ export const getDailyData = async (dateStr: string): Promise<DailyAnalysis | nul
             // The python script writes to 'predictions' instead of 'matches'
             // Normalize snake_case → camelCase so all components work correctly
             const rawPreds = data.predictions || dailyAnalysis.matches || [];
-            dailyAnalysis.matches = rawPreds.map(normalizeQuantPrediction);
+            // Merge graded statuses from quant_predictions into daily_predictions matches
+            const dailyStatusMap: Record<string, string> = {};
+            (dailyAnalysis.matches || []).forEach((m: any) => {
+                const key = String(m.fixture_id ?? m.id ?? '');
+                if (key && m.status && m.status !== 'pending') dailyStatusMap[key] = m.status;
+            });
+            dailyAnalysis.matches = rawPreds.map((p: any) => {
+                const normalized = normalizeQuantPrediction(p);
+                // Prefer quant status if it's graded; fall back to daily_predictions graded status
+                const key = String(p.fixture_id ?? p.id ?? '');
+                if (normalized.status === 'pending' && dailyStatusMap[key]) {
+                    normalized.status = dailyStatusMap[key];
+                }
+                return normalized;
+            });
             if (data.accumulators) dailyAnalysis.accumulators = data.accumulators;
             found = true;
         }
@@ -160,6 +178,9 @@ export const getAccumulatorsForDate = async (dateStr: string): Promise<Accumulat
 export const savePredictionsForDate = async (dateStr: string, matches: Match[]): Promise<void> => {
     try {
         if (!auth.currentUser) return;
+
+        // Clear cache so next read gets fresh data
+        _cache.delete(`daily_${dateStr}`);
 
         // Use batch write for atomic updates to daily_predictions and quant_predictions
         const batch = writeBatch(db);
@@ -204,8 +225,6 @@ export const savePredictionsForDate = async (dateStr: string, matches: Match[]):
 
         await batch.commit();
         console.log(`Predictions successfully batch-updated for ${dateStr}.`);
-
-        console.log(`Predictions successfully updated for ${dateStr}.`);
     } catch (e) {
         console.error("Firestore Save Error:", e);
         throw e;
@@ -532,7 +551,7 @@ export interface DayResult {
 
 export const getResultsHistory = async (days: number = 30): Promise<DayResult[]> => {
     const results: DayResult[] = [];
-    
+
     const getDateKeyDaysAgo = (daysAgo: number): string => {
         const d = new Date();
         d.setDate(d.getDate() - daysAgo);
@@ -540,18 +559,21 @@ export const getResultsHistory = async (days: number = 30): Promise<DayResult[]>
         const parts = d.toLocaleDateString('en-CA', { timeZone: LagosTimeZone }).split('-');
         return `${parts[0]}-${parts[1]}-${parts[2]}`;
     };
-    
+
+    const todayKey = getGlobalTodayKey();
     const fetchPromises = Array.from({ length: days }, (_, i) => {
-        const dateKey = i === 0 ? getGlobalTodayKey() : getDateKeyDaysAgo(i);
-        return getPredictionsForDate(dateKey).then(matches => ({ dateKey, matches }));
+        const dateKey = i === 0 ? todayKey : getDateKeyDaysAgo(i);
+        // Bust cache for today so graded results appear immediately
+        const bust = dateKey === todayKey;
+        return getDailyData(dateKey, bust).then(data => ({ dateKey, matches: data?.matches || null }));
     });
 
     const allDays = await Promise.all(fetchPromises);
     allDays.forEach(({ dateKey, matches }) => {
         if (!matches || matches.length === 0) return;
-        
+
         const graded = matches.filter(m => m.status === 'won' || m.status === 'lost');
-        
+
         results.push({
             date: dateKey,
             matches: matches, // Return all matches so pending ones show up
@@ -561,7 +583,7 @@ export const getResultsHistory = async (days: number = 30): Promise<DayResult[]>
         });
     });
 
-    return results;
+    return results.sort((a, b) => b.date.localeCompare(a.date));
 };
 
 // ─── APP SETTINGS ─────────────────────────────────────────────────────────────
@@ -582,6 +604,7 @@ export interface AppSettings {
     blogGenTime?: string; // Daily time to generate AI SEO blog
     googleSiteVerificationTag?: string; // GSC Meta tag for injection
     gradingTime?: string;
+    appDownloadUrl?: string;   // Direct APK / PWA install URL set by admin
     updatedAt?: string;
 }
 

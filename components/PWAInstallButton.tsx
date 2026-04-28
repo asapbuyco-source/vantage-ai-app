@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Download, X, Bell, BellOff, Smartphone, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getAppSettings } from '../services/db';
 
 /**
  * PWAInstallButton v2
  * ─────────────────────────────────────────────────────────────
  * Handles:
+ *  • Admin-configured Direct App Download Link (priority)
  *  • Chrome/Android/Edge: beforeinstallprompt native dialog
  *  • iOS Safari: manual "Add to Home Screen" guide
- *  • Fallback: always shows install instructions if no prompt event
  *  • Push notification subscription via VAPID
- *  • SW version messaging (no duplicate registration conflict)
  * ─────────────────────────────────────────────────────────────
  */
 export const PWAInstallButton: React.FC = () => {
@@ -22,7 +22,15 @@ export const PWAInstallButton: React.FC = () => {
   const [swRegistration, setSwRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [installDismissed, setInstallDismissed] = useState(false);
   const [installSuccess, setInstallSuccess] = useState(false);
+  const [appDownloadUrl, setAppDownloadUrl] = useState<string>('');
   const promptCaptured = useRef(false);
+
+  // ── Fetch Admin App Download URL ─────────────────────────────────────────
+  useEffect(() => {
+    getAppSettings().then((s) => {
+      if (s.appDownloadUrl) setAppDownloadUrl(s.appDownloadUrl);
+    });
+  }, []);
 
   // ── Service Worker Registration ──────────────────────────────────────────
   useEffect(() => {
@@ -94,6 +102,12 @@ export const PWAInstallButton: React.FC = () => {
 
   // ── Install Handler ──────────────────────────────────────────────────────
   const handleInstall = async () => {
+    if (appDownloadUrl) {
+      window.open(appDownloadUrl, '_blank');
+      setInstallSuccess(true);
+      return;
+    }
+
     if (isIOS) {
       setShowIOSGuide(true);
       return;
@@ -226,7 +240,9 @@ export const PWAInstallButton: React.FC = () => {
                   Install Vantage AI App
                 </div>
                 <div className="text-[10px] text-gray-500 dark:text-gray-400">
-                  {isIOS
+                  {appDownloadUrl
+                    ? 'Get the official app directly'
+                    : isIOS
                     ? 'Tap Share → Add to Home Screen'
                     : deferredPrompt
                     ? 'One-tap install — works offline too'

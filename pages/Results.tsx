@@ -47,6 +47,7 @@ export const Results: React.FC = () => {
 
     // Live listener for today's rolling results
     useEffect(() => {
+        if (!isAdmin) return; // Only run listener for authenticated/admin users; non-admins load from cache
         const todayKey = getGlobalTodayKey();
         const unsub = onSnapshot(
             doc(db, 'quant_predictions', todayKey),
@@ -71,7 +72,7 @@ export const Results: React.FC = () => {
             (err) => console.warn('[Results] Live listener error:', err)
         );
         return () => unsub();
-    }, []);
+    }, [isAdmin]);
 
     // ── Derived summary stats ──────────────────────────────────────────────────
     const getEffectiveStatus = (date: string, match: Match): MatchStatus =>

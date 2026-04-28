@@ -11,7 +11,7 @@ export const SpecialOfferPopup: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
 
-  const isVip = userProfile?.isVip || isAdmin;
+  const isVip = userProfile?.isVip === true || isAdmin;
 
   useEffect(() => {
     // Never show to VIP users or admins
@@ -33,7 +33,7 @@ export const SpecialOfferPopup: React.FC = () => {
   const trialPlan = {
     id: 'weekly',
     label: language === 'fr' ? 'Essai VIP (1 Semaine)' : 'VIP Trial (1 Week)',
-    price: '2000',
+    price: '1000',
     features: ['Accumulator Access', 'Sure Bet Matches'],
   };
 
@@ -79,7 +79,7 @@ export const SpecialOfferPopup: React.FC = () => {
                 <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6 text-left">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-bold text-gray-300">1-Week Trial</span>
-                    <span className="text-lg font-bold text-vantage-purple">2000 FCFA</span>
+                    <span className="text-lg font-bold text-vantage-purple">1 000 FCFA</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-1">
                     <Zap size={12} className="text-vantage-cyan" /> Access to daily accumulators

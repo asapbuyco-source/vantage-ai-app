@@ -101,7 +101,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const WEEKLY_TRIAL_PLAN = {
     id: 'weekly' as const,
     label: language === 'fr' ? 'Essai 1 Semaine' : '1-Week Trial',
-    price: '2000',
+    price: '1000',
     features: [
       language === 'fr' ? 'Toutes les prédictions IA' : 'All AI predictions',
       language === 'fr' ? 'Accumulateurs Kelly' : 'Kelly accumulators',
@@ -289,7 +289,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
       )}
 
       {/* ── Special Offer Banner ── */}
-      <SpecialOfferBanner onClick={() => setTab('vip')} />
+      {!isVip && <SpecialOfferBanner onClick={() => setTab('vip')} />}
 
       {/* ── Date Bar ── */}
       <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 px-4 py-2.5 rounded-xl border border-black/5 dark:border-white/5 text-xs">
