@@ -13,7 +13,9 @@ enabling detection of systematic over/under-estimation of probabilities.
 import os
 import sys
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+LAGOS_TZ = timezone(timedelta(hours=1))
 
 
 def compute_calibration(predictions: list[dict], bucket_size: float = 0.10) -> dict:
@@ -131,13 +133,12 @@ def compute_rolling_calibration(days: int = 30) -> dict:
     try:
         import firebase_admin
         from firebase_admin import firestore as fs
-        from datetime import timedelta
         
         db = fs.client()
         all_predictions = []
         
         for i in range(days):
-            date_str = (datetime.now(timezone.utc) - timedelta(days=i+1)).strftime("%Y-%m-%d")
+            date_str = (datetime.now(LAGOS_TZ) - timedelta(days=i+1)).strftime("%Y-%m-%d")
             doc = db.collection("quant_predictions").document(date_str).get()
             if doc.exists:
                 data = doc.to_dict()

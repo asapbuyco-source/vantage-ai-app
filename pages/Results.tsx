@@ -47,7 +47,6 @@ export const Results: React.FC = () => {
 
     // Live listener for today's rolling results
     useEffect(() => {
-        if (!isAdmin) return; // Only run listener for authenticated/admin users; non-admins load from cache
         const todayKey = getGlobalTodayKey();
         const unsub = onSnapshot(
             doc(db, 'quant_predictions', todayKey),
@@ -72,7 +71,7 @@ export const Results: React.FC = () => {
             (err) => console.warn('[Results] Live listener error:', err)
         );
         return () => unsub();
-    }, [isAdmin]);
+    }, []);
 
     // ── Derived summary stats ──────────────────────────────────────────────────
     const getEffectiveStatus = (date: string, match: Match): MatchStatus =>
@@ -383,7 +382,7 @@ export const Results: React.FC = () => {
                                                             <StatusIcon status={status} />
                                                             <div className="flex flex-col min-w-0">
                                                                 <span className="font-bold text-slate-900 dark:text-white truncate text-xs">
-                                                                    {match.homeTeam} vs {match.awayTeam}
+                                                                    {match.homeTeam || match.home_team} vs {match.awayTeam || match.away_team}
                                                                 </span>
                                                                 <span className="text-[10px] text-gray-500 truncate">{match.league} · {pred}</span>
                                                             </div>

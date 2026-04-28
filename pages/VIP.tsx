@@ -9,7 +9,7 @@ import { PaymentModal } from '../components/PaymentModal';
 import { NavigationTab, Match } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { AccumulatorModal } from '../components/AccumulatorModal';
-import { getAppSettings } from '../services/db';
+import { getAppSettings, getGlobalTodayKey } from '../services/db';
 import { normalizeQuantPrediction } from '../services/db';
 import { getTomorrowFixturesFromDB } from '../services/sportsData';
 import { Calendar } from 'lucide-react';
@@ -91,8 +91,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     setQuantLoading(true);
     const loadQuant = async () => {
       try {
-        const utcNow = new Date();
-        const dateKey = `${utcNow.getUTCFullYear()}-${String(utcNow.getUTCMonth() + 1).padStart(2, '0')}-${String(utcNow.getUTCDate()).padStart(2, '0')}`;
+        const dateKey = getGlobalTodayKey();
         const snap = await getDoc(doc(db, 'quant_predictions', dateKey));
         if (snap.exists()) {
           const data = snap.data();

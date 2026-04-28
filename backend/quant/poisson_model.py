@@ -11,7 +11,8 @@ from dataclasses import dataclass
 
 
 # ── Score grid config ─────────────────────────────────────────────────────────
-MAX_GOALS = 8          # Fix #8: raised from 6 — correctly prices Over 3.5 in EPL/Bundesliga
+MAX_GOALS = 12         # Fix #7: raised from 8 — correctly prices Over 3.5 in high-scoring fixtures
+MAX_XG_CAP = 4.5      # Cap extreme xG values to prevent Poisson truncation issues
 DIXON_COLES_RHO = -0.13  # Default rho for low-score bias correction
 
 
@@ -103,6 +104,9 @@ def compute_score_grid(mu_home: float, mu_away: float, rho: float | None = None)
     import sys
     if rho is None:
         rho = DIXON_COLES_RHO
+    # Apply xG cap to prevent Poisson truncation issues for high-scoring fixtures
+    mu_home = min(mu_home, MAX_XG_CAP)
+    mu_away = min(mu_away, MAX_XG_CAP)
     grid: dict[tuple[int, int], float] = {}
     for h in range(MAX_GOALS + 1):
         for a in range(MAX_GOALS + 1):

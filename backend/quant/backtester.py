@@ -21,6 +21,8 @@ import os
 import sys
 import json
 from datetime import datetime, timedelta, timezone
+
+LAGOS_TZ = timezone(timedelta(hours=1))
 from dataclasses import dataclass, field
 
 
@@ -128,7 +130,7 @@ def run_backtest(
     _safe_print(f"[Backtester] Starting bankroll: {bankroll:,.0f}")
 
     for i in range(days):
-        date_str = (datetime.now(timezone.utc) - timedelta(days=i+1)).strftime("%Y-%m-%d")
+        date_str = (datetime.now(LAGOS_TZ) - timedelta(days=i+1)).strftime("%Y-%m-%d")
         doc = db.collection("quant_predictions").document(date_str).get()
         if not doc.exists:
             continue
@@ -316,7 +318,7 @@ def save_backtest_to_firestore(result: BacktestResult, days: int):
             "computed_at": datetime.now(timezone.utc).isoformat(),
             "lookback_days": days,
         }
-        date_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_key = datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
         db.collection("backtests").document(f"{date_key}_{days}d").set(doc)
         _safe_print(f"[Backtester] 💾 Saved to Firestore backtests/{date_key}_{days}d")
     except Exception as e:

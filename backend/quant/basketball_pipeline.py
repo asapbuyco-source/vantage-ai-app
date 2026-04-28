@@ -65,8 +65,9 @@ NBA_STATS_SEASON = "2023-2024"
 # ─────────────────────────────────────────────────────────────────────────────
 def get_lagos_date(offset_days=0):
     """Return YYYY-MM-DD for today (or +offset days) in Africa/Lagos (UTC+1)."""
-    utc_now = datetime.datetime.utcnow()
-    lagos = utc_now + datetime.timedelta(hours=1, days=offset_days)
+    from datetime import timezone as _tz, timedelta as _td
+    lagos_tz = _tz(_td(hours=1))
+    lagos = datetime.datetime.now(lagos_tz) + datetime.timedelta(days=offset_days)
     return lagos.strftime("%Y-%m-%d")
 
 

@@ -165,7 +165,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="text-sm font-bold text-slate-900 dark:text-white truncate">{match.homeTeam || match.home_team}</span>
-                <FormDots form={match.home_form} />
+                <FormDots form={match.homeForm || match.home_form} />
               </div>
             </div>
             <div className="flex flex-col items-center shrink-0 px-2">
@@ -180,7 +180,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
               </div>
               <div className="flex flex-col items-end min-w-0">
                 <span className="text-sm font-bold text-slate-900 dark:text-white truncate text-right">{match.awayTeam || match.away_team}</span>
-                <FormDots form={match.away_form} />
+                <FormDots form={match.awayForm || match.away_form} />
               </div>
             </div>
           </div>
@@ -393,7 +393,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
         </h1>
 
         {/* ── Special Offer Banner ── */}
-        {!isVip && <SpecialOfferBanner onClick={() => setTab('vip')} />}
+        {!isVip && localStorage.getItem('vantage_trial_claimed') !== 'true' && <SpecialOfferBanner onClick={() => setTab('vip')} />}
 
         {/* Live match count banner */}
         {!loading && totalAnalyzed > 0 && (

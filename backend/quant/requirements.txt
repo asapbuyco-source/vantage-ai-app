@@ -11,5 +11,8 @@ requests>=2.31.0
 # Firebase Admin (for Firestore read/write from Python)
 firebase-admin>=6.2.0
 
+# gRPC with pre-built wheels (avoids native compilation on Railway)
+grpcio>=1.59.0
+
 # Utilities
 python-dateutil>=2.8.2 # Date parsing helpers

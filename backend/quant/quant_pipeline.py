@@ -27,7 +27,7 @@ import os
 import sys
 import json
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ── Local imports ─────────────────────────────────────────────────────────────
 from data_pipeline import fetch_matches, MatchData, TeamStats
@@ -132,7 +132,7 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
     Returns a summary dict with status, generated count, and predictions.
     """
     if date_str is None:
-        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_str = datetime.now(timezone(timedelta(hours=1))).strftime("%Y-%m-%d")
 
     _safe_print(f"[QuantPipeline] 🚀 Starting quant pipeline for {date_str} (dry_run={dry_run})")
 

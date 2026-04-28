@@ -10,7 +10,7 @@ import {
     onAuthStateChanged,
     User
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDoc, orderBy, runTransaction, limit, getDocs, query } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDoc, orderBy, runTransaction, limit, getDocs, query, where } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
 import { checkPaymentStatus } from "../services/fapshi";
@@ -366,13 +366,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const getPayoutRequests = async (): Promise<PayoutRequest[]> => {
-        if (!isAdmin) return [];
         try {
-            const q = query(collection(db, "payout_requests"), orderBy("date", "desc"));
-            const snapshot = await getDocs(q);
-            const requests: PayoutRequest[] = [];
-            snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() } as PayoutRequest));
-            return requests;
+            if (isAdmin) {
+                const q = query(collection(db, "payout_requests"), orderBy("date", "desc"));
+                const snapshot = await getDocs(q);
+                const requests: PayoutRequest[] = [];
+                snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() } as PayoutRequest));
+                return requests;
+            } else if (user?.uid) {
+                const q = query(collection(db, "payout_requests"), where("userId", "==", user.uid), orderBy("date", "desc"));
+                const snapshot = await getDocs(q);
+                const requests: PayoutRequest[] = [];
+                snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() } as PayoutRequest));
+                return requests;
+            }
+            return [];
         } catch (e) {
             return [];
         }

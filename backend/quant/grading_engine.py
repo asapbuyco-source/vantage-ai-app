@@ -9,8 +9,9 @@ Fetches final results from Sportmonks and updates each prediction with:
 
 import os
 import sys
+import json
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 # ── Sportmonks helper ─────────────────────────────────────────────────────────
@@ -398,8 +399,11 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
 if __name__ == "__main__":
     date = sys.argv[1] if len(sys.argv) > 1 else None
     if not date:
-        from datetime import timedelta
-        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+        yesterday = (datetime.now(timezone(timedelta(hours=1))) - timedelta(days=1)).strftime("%Y-%m-%d")
         date = yesterday
-    result = grade_predictions(date)
-    print(result)
+    try:
+        result = grade_predictions(date)
+        print(json.dumps(result))
+    except Exception as e:
+        print(json.dumps({"status": "error", "error": str(e)}))
+        sys.exit(1)

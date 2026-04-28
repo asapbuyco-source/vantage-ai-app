@@ -21,28 +21,14 @@ function cacheSet(key: string, data: any, ttlMs: number): void {
 
 
 // Return YYYY-MM-DD for Africa/Lagos (UTC+1)
-export const getGlobalTodayKey = () => {
-    const now = new Date();
-    const lagosOffset = 60;
-    const localMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
-    const d = new Date(localMs);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
+export const getGlobalTodayKey = (): string =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
 
 // Return YYYY-MM-DD for Yesterday (Africa/Lagos timezone)
-export const getGlobalYesterdayKey = () => {
-    const now = new Date();
-    const lagosOffset = 60;
-    const localMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
-    const d = new Date(localMs);
+export const getGlobalYesterdayKey = (): string => {
+    const d = new Date();
     d.setDate(d.getDate() - 1);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return d.toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
 };
 
 /** Helper to get a date key for N days ago (Africa/Lagos timezone) */

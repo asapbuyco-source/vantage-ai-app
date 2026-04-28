@@ -26,7 +26,8 @@ import { BlogPost } from './pages/BlogPost';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
-import { SpecialOfferPopup } from './components/SpecialOfferPopup';
+import { TrialOfferPopup } from './components/TrialOfferPopup';
+
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<NavigationTab>(() => {
@@ -355,11 +356,16 @@ function AppContent() {
           <AnimatePresence>
           {showOnboarding ? (
             <Onboarding onComplete={handleOnboardingComplete} />
-          ) : !userProfile?.isVip && !isAdmin ? (
-            <SpecialOfferPopup />
           ) : null}
           </AnimatePresence>
           <BetSlip />
+          {/* Trial Offer Popup — only on home/free tabs, only for non-VIP */}
+          {!showOnboarding && (activeTab === 'home' || activeTab === 'free') && (
+            <TrialOfferPopup
+              isVip={!!(userProfile?.isVip || isAdmin)}
+              onClaim={() => setActiveTab('vip')}
+            />
+          )}
           <ToastContainer />
         </div>
       } />

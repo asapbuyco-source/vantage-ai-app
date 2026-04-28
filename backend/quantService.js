@@ -265,11 +265,28 @@ export const runQuantGrading = async (dateStr = null) => {
             }
         );
 
-        const gradedMatch = result.match(/Graded (\d+)\/(\d+)/);
+        let graded = 0;
+        let total = 0;
+
+        // Try JSON parse first (grading_engine.py outputs {"status": "error"} or "Graded X/Y")
+        try {
+            const parsed = JSON.parse(result.trim().split('\n').pop());
+            if (parsed.status === 'error') throw new Error(parsed.error);
+            if (parsed.graded !== undefined) {
+                graded = parsed.graded;
+                total = parsed.total ?? 0;
+            }
+        } catch (_) {
+            // Fall back to regex
+            const gradedMatch = result.match(/Graded (\d+)\/(\d+)/);
+            graded = gradedMatch ? parseInt(gradedMatch[1]) : 0;
+            total = gradedMatch ? parseInt(gradedMatch[2]) : 0;
+        }
+
         return {
             status: 'success',
-            graded: gradedMatch ? parseInt(gradedMatch[1]) : 0,
-            total: gradedMatch ? parseInt(gradedMatch[2]) : 0,
+            graded,
+            total,
         };
     } catch (err) {
         console.error(`[QuantService] Grading error: ${err.message}`);

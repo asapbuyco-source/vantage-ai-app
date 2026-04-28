@@ -13,8 +13,10 @@ Reads all graded quant_predictions from Firestore and computes:
 """
 
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from collections import defaultdict
+
+LAGOS_TZ = timezone(timedelta(hours=1))
 
 
 def _get_firestore():
@@ -151,10 +153,10 @@ def compute_and_save_performance() -> dict:
     overall["computed_at"] = datetime.now(timezone.utc).isoformat()
 
     # Weekly stats (last 7 days)
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
     from datetime import timedelta
     week_dates = {
-        (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
+        (datetime.now(LAGOS_TZ) - timedelta(days=i)).strftime("%Y-%m-%d")
         for i in range(7)
     }
     weekly_preds = [p for p in all_preds if p.get("_date") in week_dates]
@@ -162,7 +164,7 @@ def compute_and_save_performance() -> dict:
 
     # Monthly stats (last 30 days)
     month_dates = {
-        (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
+        (datetime.now(LAGOS_TZ) - timedelta(days=i)).strftime("%Y-%m-%d")
         for i in range(30)
     }
     monthly_preds = [p for p in all_preds if p.get("_date") in month_dates]

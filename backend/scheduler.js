@@ -55,7 +55,8 @@ export const triggerQuantPipeline = async (dateStr = null, dryRun = false) => {
 export const triggerQuantGrading = async (dateStr = null) => {
     try {
         const result = await runQuantGrading(dateStr);
-        console.log(`[Scheduler] ✅ Quant Grading: ${result?.graded ?? 0} bets graded.`);
+        const emoji = (result?.graded ?? 0) > 0 ? '✅' : '⚠️';
+        console.log(`[Scheduler] ${emoji} Quant Grading: ${result?.graded ?? 0} bets graded.`);
         return result;
     } catch (e) {
         console.error('[Scheduler] Quant Grading error:', e.message);
@@ -149,10 +150,9 @@ const isWithinScheduleWindow = (scheduledTime) => {
     if (!scheduledTime) return false;
     const [expectedH, expectedM] = scheduledTime.split(':').map(Number);
     const now = new Date();
-    // Africa/Lagos is always UTC+1, no DST
-    const lagosMs = now.getTime() + (60 - now.getTimezoneOffset()) * 60000;
-    const lagos = new Date(lagosMs);
-    const currentMins = lagos.getUTCHours() * 60 + lagos.getUTCMinutes();
+    const lagosStr = now.toLocaleString('en-US', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit', hour12: false });
+    const [lagosH, lagosM] = lagosStr.split(':').map(Number);
+    const currentMins = lagosH * 60 + lagosM;
     const scheduledMins = expectedH * 60 + expectedM;
     const diff = Math.abs(currentMins - scheduledMins);
     return diff <= 10; // allow ±10 minute window
@@ -483,27 +483,28 @@ export const initScheduler = () => {
                         }
 
                         // ── AUTO-GRADE FINISHED MATCHES ──
-                        const ftMatches = matches.filter(m => 
+                        const ftMatches = matches.filter(m =>
                             ['FT', 'AET', 'PEN'].includes((m.stateShort || '').toUpperCase())
                         );
 
+                        let gradingUpdated = false;
                         if (ftMatches.length > 0) {
                             for (const pred of preds) {
                                 if (pred.status && pred.status !== 'pending') continue;
-                                
+
                                 // STRICT: Only grade by fixture_id to prevent cross-match grading errors
                                 const ftMatch = ftMatches.find(m =>
                                     String(m.id) === String(pred.fixture_id)
                                 );
-                                
+
                                 if (!ftMatch) continue;
-                                
+
                                 const hg = ftMatch.homeScore;
                                 const ag = ftMatch.awayScore;
                                 const total = hg + ag;
                                 const market = (pred.bet_type || '').toLowerCase();
                                 let status = 'void';
-                                
+
                                 if (market.includes('home win') && !market.includes('draw no bet') && !market.includes('double'))
                                     status = hg > ag ? 'won' : 'lost';
                                 else if (market.includes('away win') && !market.includes('draw no bet') && !market.includes('double'))
@@ -534,16 +535,22 @@ export const initScheduler = () => {
                                     status = (hg > 0 && ag > 0) ? 'won' : 'lost';
                                 else if (market.includes('btts') && market.includes('no'))
                                     status = (hg === 0 || ag === 0) ? 'won' : 'lost';
-                                
+
                                 if ((status !== 'void' || ftMatch.time) && status !== 'void') {
                                     pred.status = status;
                                     pred.graded_at = new Date().toISOString();
                                     pred.graded_by = 'live_auto';
                                     pred.live_state = 'FT';
-                                    updated = true;
+                                    gradingUpdated = true;
                                     console.log(`[Live] ✅ Auto-graded: ${pred.home_team} vs ${pred.away_team} → ${status} (${hg}-${ag})`);
                                 }
                             }
+                        }
+
+                        // Persist graded statuses back to Firestore (this was missing)
+                        if (gradingUpdated) {
+                            await qDocRef.update({ predictions: preds });
+                            console.log(`[Live] 💾 Persisted auto-graded results for ${todayStr}`);
                         }
                     }
                 } catch (e) {

@@ -117,6 +117,7 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
     // Collapse to mini icon instead of fully dismissing
     localStorage.setItem(STORAGE_KEY_MINI, 'true');
     setVisible(false);
+    setShowMini(true);
   }, []);
 
   // Mini icon state — shown after dismiss, until claimed or expired
@@ -264,13 +265,13 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
                 </div>
 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 20, fontWeight: 900, color: '#f97316' }}>
-                    1 000FCFA
+                    1 000 FCFA
                   </span>
                   <span style={{
                     fontSize: 12, color: '#6b7280',
                     textDecoration: 'line-through',
                   }}>
-                    2 000FCFA
+                    2 000 FCFA
                   </span>
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: '#10b981',
@@ -284,7 +285,7 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
 
             {/* Feature pills */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 13 }}>
-              {['✓ Full predictions', '✓ Accumulators', '✓ Kelly stakes', '✓ All leagues'].map(f => (
+              {t.features.map(f => (
                 <span key={f} style={{
                   fontSize: 10, color: '#d1d5db',
                   background: 'rgba(255,255,255,0.05)',

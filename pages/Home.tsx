@@ -16,8 +16,6 @@ import { TeamLogo } from '../components/TeamLogo';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
 import { getAppSettings } from '../services/db';
 import { PWAInstallButton } from '../components/PWAInstallButton';
-import { TrialOfferPopup } from '../components/TrialOfferPopup';
-import { PaymentModal } from '../components/PaymentModal';
 import { SpecialOfferBanner } from '../components/SpecialOfferBanner';
 
 interface HomeProps {
@@ -96,21 +94,6 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // ─── Trial Offer Popup state ──────────────────────────────────────────────
-  const [showTrialPayment, setShowTrialPayment] = useState(false);
-  const WEEKLY_TRIAL_PLAN = {
-    id: 'weekly' as const,
-    label: language === 'fr' ? 'Essai 1 Semaine' : '1-Week Trial',
-    price: '1000',
-    features: [
-      language === 'fr' ? 'Toutes les prédictions IA' : 'All AI predictions',
-      language === 'fr' ? 'Accumulateurs Kelly' : 'Kelly accumulators',
-      language === 'fr' ? 'Toutes les ligues' : 'All leagues',
-      language === 'fr' ? 'Alertes en temps réel' : 'Real-time alerts',
-    ],
-  };
-  // Show popup only to logged-in non-VIP non-admin users
-  const showTrialPopup = !!user && !isVip && !isAdmin;
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -580,7 +563,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                   <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight line-clamp-1 text-left">
                                     {match.homeTeam}
                                   </span>
-                                  <FormDots form={match.home_form} />
+                                  <FormDots form={match.homeForm || match.home_form} />
                                 </div>
                               </div>
 
@@ -623,7 +606,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                   <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight line-clamp-1 text-right">
                                     {match.awayTeam}
                                   </span>
-                                  <FormDots form={match.away_form} />
+                                  <FormDots form={match.awayForm || match.away_form} />
                                 </div>
                               </div>
                             </div>
@@ -763,22 +746,6 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         match={selectedMatch}
         onClose={() => setSelectedMatch(null)}
         setTab={setTab}
-      />
-
-      {/* ─── Trial Offer Popup ─── */}
-      {showTrialPopup && (
-        <TrialOfferPopup
-          onClaim={() => setShowTrialPayment(true)}
-          isVip={isVip}
-        />
-      )}
-
-      {/* ─── Trial Payment Modal ─── */}
-      <PaymentModal
-        isOpen={showTrialPayment}
-        onClose={() => setShowTrialPayment(false)}
-        plan={WEEKLY_TRIAL_PLAN}
-        onSuccess={() => setShowTrialPayment(false)}
       />
     </div>
   );

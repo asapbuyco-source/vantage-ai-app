@@ -11,6 +11,8 @@ import math
 import time
 import requests
 from datetime import datetime, timedelta, timezone
+
+LAGOS_TZ = timezone(timedelta(hours=1))
 from dataclasses import dataclass, field
 from typing import Optional
 from league_config import APPROVED_LEAGUE_IDS, get_league_info, get_priority_score
@@ -591,7 +593,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
     Returns a list of MatchData sorted by league tier, up to MAX_MATCHES.
     """
     if date_str is None:
-        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_str = datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
 
     print(f"[DataPipeline] Fetching fixtures for {date_str}...")
     raw = _get_paginated(
@@ -698,7 +700,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
     print(f"[DataPipeline] Final fixtures for analysis: {len(approved)}")
 
     # ── Enrich each fixture with team stats + H2H ──────────────────────────
-    from_date = (datetime.now(timezone.utc) - timedelta(days=RECENT_DAYS)).strftime("%Y-%m-%d")
+    from_date = (datetime.now(LAGOS_TZ) - timedelta(days=RECENT_DAYS)).strftime("%Y-%m-%d")
     matches: list[MatchData] = []
 
     for entry in approved:
