@@ -146,15 +146,14 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
       {visible && (
         <motion.div
           key="trial-popup"
-          initial={{ y: 120, opacity: 0 }}
-          animate={{ y: 0,   opacity: 1 }}
-          exit={{ y: 140,  opacity: 0 }}
+          initial={{ y: 120, x: "-50%", opacity: 0 }}
+          animate={{ y: 0,   x: "-50%", opacity: 1 }}
+          exit={{ y: 140,  x: "-50%", opacity: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 28 }}
           style={{
             position: 'fixed',
             bottom: '80px',        // above bottom nav
             left: '50%',
-            transform: 'translateX(-50%)',
             width: 'min(96vw, 420px)',
             zIndex: 9999,
           }}
