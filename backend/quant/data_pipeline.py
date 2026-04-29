@@ -616,10 +616,8 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
                 # Filter out matches starting within 30 minutes to avoid late predictions
                 if kick > (now_utc + timedelta(minutes=30)):
                     future_raw.append(item)
-                continue
             except Exception:
                 pass
-        future_raw.append(item)
     raw = future_raw
 
     print(f"[DataPipeline] Raw fixtures (future only): {len(raw)}")

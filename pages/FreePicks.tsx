@@ -393,7 +393,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
         </h1>
 
         {/* ── Special Offer Banner ── */}
-        {!isVip && localStorage.getItem('vantage_trial_claimed') !== 'true' && <SpecialOfferBanner onClick={() => setTab('vip')} />}
+        {!isVip && <SpecialOfferBanner onClick={() => setTab('vip')} />}
 
         {/* Live match count banner */}
         {!loading && totalAnalyzed > 0 && (

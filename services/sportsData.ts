@@ -502,31 +502,30 @@ import { db } from '../firebaseConfig';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { LiveMatch, MatchNews } from '../types';
 
+// DB-1 FIX: Use Africa/Lagos timezone to match the backend's date key convention.
+// Old version used device local time — wrong date for users outside the Lagos timezone.
 function getTodayKey() {
-    const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
 }
 function getTomorrowKey() {
-    const n = new Date();
-    n.setDate(n.getDate() + 1);
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
 }
 
 /**
- * Read live scores from Firestore (written by backend every 60 seconds).
+ * Read live scores from Firestore (written by backend every 2 minutes). // SPORTSDATA-1 FIX: was "60 seconds"
  * Returns empty array if no live matches are written yet.
  */
 export const getLiveMatchesFromDB = async (): Promise<LiveMatch[]> => {
-    const cacheKey = 'live_matches';
-    const cached = _mcGet<LiveMatch[]>(cacheKey);
-    if (cached) return cached;
+    // DB-2 FIX: Do NOT use the 5-minute memory cache for live matches.
+    // This is a fallback for when the onSnapshot listener fails — caching for 5 minutes
+    // defeats the purpose by serving stale data instead of the freshest available.
     try {
         const snap = await getDoc(doc(db, 'live_scores', 'current'));
         if (snap.exists()) {
             const data = snap.data() as { matches: LiveMatch[]; updatedAt: string };
-            const result = data.matches || [];
-            _mcSet(cacheKey, result);
-            return result;
+            return data.matches || [];
         }
     } catch (e) {
         console.warn('[DB] getLiveMatchesFromDB error:', e);

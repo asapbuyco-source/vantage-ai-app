@@ -325,7 +325,7 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
     
     pending_preds = []
 
-    for pred in predictions:
+    for pred in to_grade:
         fid = str(pred.get("fixture_id", ""))
         result = results_map.get(fid)
         if not result:

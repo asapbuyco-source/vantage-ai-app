@@ -217,10 +217,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [authLoading, user]);
 
+    // BUG-9 FIX: todayKey must be reactive so the listener re-subscribes at midnight.
+    // A 1-minute interval checks if the date has rolled over; if so, the effect re-runs.
+    const [todayKey, setTodayKey] = useState(getGlobalTodayKey);
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const current = getGlobalTodayKey();
+            setTodayKey(prev => prev !== current ? current : prev);
+        }, 60_000);
+        return () => clearInterval(interval);
+    }, []);
+
     // Real-time listener for today's predictions (scores + statuses)
     useEffect(() => {
         if (!user || authLoading) return;
-        const todayKey = getGlobalTodayKey(); // captured at mount; re-runs when auth changes
         
         const unsub = onSnapshot(
             doc(db, 'quant_predictions', todayKey),
@@ -236,7 +246,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         );
         
         return () => unsub();
-    }, [user, authLoading]);
+    }, [user, authLoading, todayKey]);
 
     return (
         <DataContext.Provider value={{

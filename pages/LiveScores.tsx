@@ -210,7 +210,7 @@ export const LiveScores: React.FC<LiveScoresProps> = ({ setTab }) => {
   const [matches, setMatches] = useState<LiveMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(60);
+  const [countdown, setCountdown] = useState(120); // BUG-4 FIX: backend polls every 2 min, not 60s
   const [groupByLeague, setGroupByLeague] = useState(false);
 
   // Real-time Firestore listener — no polling needed, Firestore pushes updates
@@ -223,7 +223,7 @@ export const LiveScores: React.FC<LiveScoresProps> = ({ setTab }) => {
           const data = snapshot.data() as { matches: LiveMatch[]; updatedAt: string; count: number };
           setMatches(data.matches || []);
           setLastUpdated(data.updatedAt);
-          setCountdown(60); // reset countdown when data arrives
+          setCountdown(120); // reset countdown when data arrives (2-min cycle)
         } else {
           setMatches([]);
         }
@@ -241,7 +241,7 @@ export const LiveScores: React.FC<LiveScoresProps> = ({ setTab }) => {
   // Countdown to next backend refresh (backend writes every 60s)
   useEffect(() => {
     const interval = setInterval(() => {
-      setCountdown(c => c > 0 ? c - 1 : 60);
+      setCountdown(c => c > 0 ? c - 1 : 120);
     }, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -279,7 +279,7 @@ export const LiveScores: React.FC<LiveScoresProps> = ({ setTab }) => {
         {/* Countdown / last updated */}
         <div className="flex flex-col items-end gap-1">
           <div className="flex items-center gap-1 text-[10px] text-gray-500">
-            <RefreshCw size={9} className={countdown < 5 ? 'animate-spin text-vantage-cyan' : ''} />
+            <RefreshCw size={9} className={countdown < 10 ? 'animate-spin text-vantage-cyan' : ''} />
             <span className="font-mono">{countdown}s</span>
           </div>
           {lastUpdated && (

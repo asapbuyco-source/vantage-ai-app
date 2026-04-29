@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
@@ -12,7 +12,7 @@ import { AccumulatorModal } from '../components/AccumulatorModal';
 import { getAppSettings, getGlobalTodayKey } from '../services/db';
 import { normalizeQuantPrediction } from '../services/db';
 import { getTomorrowFixturesFromDB } from '../services/sportsData';
-import { Calendar } from 'lucide-react';
+
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 

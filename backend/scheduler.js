@@ -15,7 +15,9 @@ import { sendDailyPredictionsToTelegram } from './telegramService.js';
  */
 export const triggerAccumulatorGeneration = async () => {
     try {
-        const result = await runQuantPipeline(null, false, true);
+        // BUG-6 FIX: runQuantPipeline only accepts 2 params. The 3rd arg was silently ignored.
+        // Accumulators are already generated as part of the full pipeline, so just call it normally.
+        const result = await runQuantPipeline(null, false);
         if (result && result.status === 'success') {
             console.log(`[Scheduler] ✅ Accumulators generated: safe=${result.accumulators?.safe?.length}, medium=${result.accumulators?.medium?.length}, high=${result.accumulators?.high?.length}`);
         } else {
@@ -84,8 +86,10 @@ export const triggerFootballGeneration = async () => {
     try {
         const result = await runQuantPipeline();
         if (result && result.status === 'success') {
-            console.log(`[Scheduler] ✅ Quant Pipeline done: ${result.generated} bets from ${result.matches_analyzed} matches.`);
-            await triggerAccumulatorGeneration();
+            // SCH-1 FIX: Accumulators are already generated inside runQuantPipeline — do NOT call
+            // triggerAccumulatorGeneration() here as that would run the full pipeline a SECOND
+            // time, doubling Sportmonks API usage and potentially overwriting good results.
+            console.log(`[Scheduler] ✅ Quant Pipeline done (accumulators included): ${result.generated} bets from ${result.matches_analyzed} matches.`);
         } else {
             console.warn(`[Scheduler] ⚠️ Quant Pipeline: ${result?.status} — ${result?.reason || result?.error}`);
         }
@@ -141,17 +145,22 @@ export const triggerTelegramBroadcast = async () => {
     }
 };
 
-// ── Time-gate guard ──────────────────────────────────────────────────────────
-// Checks whether the current Africa/Lagos time is within ±10 minutes of the
-// expected schedule time (HH:MM string). This prevents generation from running
-// if the cron fires unexpectedly early/late, or if the server restarts close
-// to (but not at) the scheduled time.
+// BUG-7 FIX: The old implementation used toLocaleString which returns "24:00" for midnight
+// in some environments (not "00:00"), breaking the window calculation.
+// Now using Intl.DateTimeFormat with individual hour/minute parts for robustness.
 const isWithinScheduleWindow = (scheduledTime) => {
     if (!scheduledTime) return false;
     const [expectedH, expectedM] = scheduledTime.split(':').map(Number);
     const now = new Date();
-    const lagosStr = now.toLocaleString('en-US', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit', hour12: false });
-    const [lagosH, lagosM] = lagosStr.split(':').map(Number);
+    const lagosFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Africa/Lagos',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+    });
+    const parts = lagosFormatter.formatToParts(now);
+    const lagosH = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10) % 24;
+    const lagosM = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10);
     const currentMins = lagosH * 60 + lagosM;
     const scheduledMins = expectedH * 60 + expectedM;
     const diff = Math.abs(currentMins - scheduledMins);
@@ -359,11 +368,13 @@ export const initScheduler = () => {
         try {
             // ── Time-gate: only poll during match hours (13:00–23:59 Lagos UTC+1) ──
             // Previously 11:00–01:00 which burned API quota before any matches started.
-            const nowMs = Date.now();
-            const lagosHour = new Date(nowMs + (60 - new Date().getTimezoneOffset()) * 60000).getUTCHours();
-            // Allow 13:00–23:59 only — reduces wasted calls significantly
-            const inMatchHours = lagosHour >= 13 && lagosHour <= 23;
-            if (!inMatchHours) return;
+        // LIVE-2 FIX: Old formula was fragile (dependent on server timezone offset).
+        // Use Intl.DateTimeFormat for reliable Africa/Lagos hour extraction.
+        const lagosFormatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Lagos', hour: 'numeric', hour12: false });
+        const lagosHour = parseInt(lagosFormatter.format(new Date()), 10) % 24;
+        // LIVE-3 FIX: Allow 11:00–23:59 AND 00:00 Lagos to track matches that finish past midnight
+        const inMatchHours = (lagosHour >= 11 && lagosHour <= 23) || lagosHour === 0;
+        if (!inMatchHours) return;
 
             const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
@@ -406,13 +417,16 @@ export const initScheduler = () => {
                         id: ev.id,
                         type: mappedType,
                         name: rawName,
-                        playerName: ev.player?.name || ev.related_player?.name || '',
-                        playerNameOut: ev.related_player?.name || '', // For substitutions
+                        // LIVE-1 FIX: Sportmonks standard plan returns player data as flat fields
+                        // (ev.player_name / ev.related_player_name), NOT as nested objects (ev.player.name).
+                        // ev.player is either undefined or just a numeric ID on this plan.
+                        playerName: ev.player_name || ev.player?.name || ev.related_player?.name || '',
+                        playerNameOut: ev.related_player_name || ev.related_player?.name || '',
                         minute: ev.minute || 0,
                         extraMinute: ev.extra_minute || 0,
                         teamId: ev.participant_id,
                         isHome: ev.participant_id === home.id,
-                        result: ev.result || '', // Score at time of goal e.g. "1-0"
+                        result: ev.result || ev.score_name || '', // Score at time of goal e.g. "1-0"
                     };
                 });
                 return {
@@ -490,7 +504,10 @@ export const initScheduler = () => {
                         let gradingUpdated = false;
                         if (ftMatches.length > 0) {
                             for (const pred of preds) {
-                                if (pred.status && pred.status !== 'pending') continue;
+                                // BUG-5 FIX: Only skip predictions already graded as won or lost.
+                                // Previously skipped 'void' and any non-pending status, preventing
+                                // re-grading of rescheduled/postponed matches.
+                                if (pred.status === 'won' || pred.status === 'lost') continue;
 
                                 // STRICT: Only grade by fixture_id to prevent cross-match grading errors
                                 const ftMatch = ftMatches.find(m =>
@@ -568,7 +585,7 @@ export const initScheduler = () => {
             console.warn('[Scheduler] Live scores poll error:', e.message);
         }
     });
-    console.log('⚡ Live scores poller started (every 60 seconds → Firestore)');
+    console.log('⚡ Live scores poller started (every 2 minutes → Firestore)'); // BUG-12 FIX: was incorrectly saying 60s
 
     // ── Pre-Match News Fetcher (once daily at 07:30 Lagos time) ──────────────
     // Fetches all pre-match news and stores in Firestore match_news/{dateKey}

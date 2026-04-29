@@ -174,10 +174,36 @@ export interface MatchStatsData {
   stats: MatchStats;
 }
 
+export interface AccumulatorLeg {
+  fixture_id: string;
+  home_team: string;
+  away_team: string;
+  market: string;
+  odds: number;
+  model_prob: number;
+  expected_value: number;
+  league: string;
+}
+
+export interface AccumulatorTicket {
+  tier: string;
+  tier_label: string;
+  tier_description: string;
+  tier_icon: string;
+  leg_count: number;
+  combined_odds: number;
+  combined_prob: number;
+  combined_ev: number;
+  kelly_stake: number;
+  kelly_stake_unit: string;
+  legs: AccumulatorLeg[];
+}
+
 export interface AccumulatorSet {
-  safe: string[]; // Array of Match IDs
-  medium: string[];
-  high: string[];
+  baseline?: AccumulatorTicket[];
+  alpha_edge?: AccumulatorTicket[];
+  syndicate?: AccumulatorTicket[];
+  variance_play?: AccumulatorTicket[];
 }
 
 export interface UserStats {

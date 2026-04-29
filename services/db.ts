@@ -48,7 +48,9 @@ export const normalizeQuantPrediction = (p: any): any => {
     // Already has homeTeam - merge missing fields to avoid early return
     if (p.homeTeam !== undefined) {
         return { 
-            ...p, 
+            ...p,
+            // BUG-3 FIX: always guarantee an `id` so React keys are never undefined
+            id: p.id ?? p.fixture_id ?? `${p.homeTeam}_${p.awayTeam}`.replace(/\s+/g, '-').toLowerCase(),
             status: p.status ?? 'pending',
             score: p.score ?? '',
             graded_at: p.graded_at ?? '',

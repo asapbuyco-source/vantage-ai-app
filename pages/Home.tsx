@@ -94,6 +94,9 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // BUG-11 FIX: Reset visibleCount when switching sports to prevent stale offset
+  useEffect(() => { setVisibleCount(15); }, [activeSport]);
+
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);

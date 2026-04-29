@@ -88,6 +88,9 @@ function AppContent() {
   useEffect(() => {
     if (user) {
       localStorage.setItem('vantage_active_tab', activeTab);
+    } else {
+      // APP-1 FIX: Prevent next unauthenticated user from seeing previous user's tab (like admin)
+      localStorage.removeItem('vantage_active_tab');
     }
   }, [activeTab, user]);
 
