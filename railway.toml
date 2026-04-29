@@ -2,7 +2,7 @@
 builder = "NIXPACKS"
 # We only need to install dependencies for the backend. 
 # We explicitly override the build command to prevent Railway from running the Vite frontend 'build' script.
-buildCommand = "npm install && python3 -m pip install --no-cache-dir -r backend/quant/requirements.txt"
+buildCommand = "npm install && pip3 install --no-cache-dir -r backend/quant/requirements.txt"
 
 [deploy]
 # Start the Express server
