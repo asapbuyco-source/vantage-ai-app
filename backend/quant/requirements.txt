@@ -10,6 +10,7 @@ requests>=2.31.0
 
 # Firebase Admin (for Firestore read/write from Python)
 firebase-admin>=6.2.0
+google-cloud-firestore>=2.11.1
 
 # gRPC with pre-built wheels (avoids native compilation on Railway)
 grpcio>=1.59.0

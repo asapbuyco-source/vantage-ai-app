@@ -67,6 +67,8 @@ const PYTHON_BIN = resolvePythonBin();
 function buildPythonEnv() {
     return {
         ...process.env,
+        // Force Python binary wheels to find Nixpacks C++ standard libraries
+        LD_LIBRARY_PATH: '/nix/var/nix/profiles/default/lib:/root/.nix-profile/lib:/usr/lib/x86_64-linux-gnu:' + (process.env.LD_LIBRARY_PATH || ''),
         SPORTMONKS_API_TOKEN: process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN || '',
         API_FOOTBALL_KEY: process.env.VITE_FOOTBALL_API_KEY || process.env.API_FOOTBALL_KEY || '',
         VITE_API_BASKETBALL_KEY: process.env.VITE_API_BASKETBALL_KEY || '',
