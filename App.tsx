@@ -27,6 +27,7 @@ import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { TrialOfferPopup } from './components/TrialOfferPopup';
+import { PaymentModal } from './components/PaymentModal';
 
 
 function AppContent() {
@@ -49,6 +50,8 @@ function AppContent() {
   // VIP renewal reminder
   const [showRenewalBanner, setShowRenewalBanner] = useState(false);
   const [renewalDaysLeft, setRenewalDaysLeft] = useState(0);
+  // Trial offer payment modal
+  const [showTrialPayment, setShowTrialPayment] = useState(false);
 
   const { theme, language, showToast } = useAppContext();
   const { user, userProfile, verifyTransaction, loading: authLoading, isAdmin } = useAuth();
@@ -366,7 +369,25 @@ function AppContent() {
           {!showOnboarding && (activeTab === 'home' || activeTab === 'free') && (
             <TrialOfferPopup
               isVip={!!(userProfile?.isVip || isAdmin)}
-              onClaim={() => setActiveTab('vip')}
+              onClaim={() => setShowTrialPayment(true)}
+            />
+          )}
+          {showTrialPayment && (
+            <PaymentModal
+              isOpen={showTrialPayment}
+              onClose={() => setShowTrialPayment(false)}
+              plan={{
+                id: 'weekly',
+                label: language === 'fr' ? 'Essai VIP 1 Semaine' : '1-Week VIP Trial',
+                price: '1000',
+                features: [
+                  language === 'fr' ? 'Prédictions complètes' : 'Full predictions',
+                  language === 'fr' ? 'Accumulateurs IA' : 'AI Accumulators',
+                  language === 'fr' ? 'Mises Kelly' : 'Kelly stakes',
+                  language === 'fr' ? 'Toutes les ligues' : 'All leagues',
+                ],
+              }}
+              onSuccess={() => { setShowTrialPayment(false); setActiveTab('vip'); }}
             />
           )}
           <ToastContainer />

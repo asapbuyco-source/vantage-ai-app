@@ -130,5 +130,25 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if false;
     }
+
+    // ── Fapshi Transactions (idempotency guard — prevent double VIP grant) ──────
+    // AuthContext reads this to check if a transId was already used before granting VIP.
+    // Users can only read their own records. Writes are client-initiated (create only, no update).
+    match /fapshi_transactions/{transId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ── Push Subscriptions (server-only via Admin SDK) ───────────────────────
+    match /push_subscriptions/{subId} {
+      allow read, write: if false; // Admin SDK only
+    }
+
+    // ── Match Stats (publicly readable, server-only write) ───────────────────
+    match /match_stats/{dateStr} {
+      allow read: if true;
+      allow write: if false; // Backend Admin SDK only
+    }
   }
 }

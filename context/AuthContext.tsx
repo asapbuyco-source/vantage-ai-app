@@ -504,8 +504,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     if (amount >= 70000) plan = 'annual';
                     else if (amount >= 18000) plan = 'quarterly';
                     else if (amount >= 6500) plan = 'monthly';
-                    else if (amount >= 2000) plan = 'weekly';
-                    else plan = storedPlan || 'weekly';
+                    else if (amount >= 1000) plan = 'weekly'; // covers both 1,000 FCFA trial & 2,000 FCFA regular weekly
                 } else {
                     plan = storedPlan || 'weekly';
                 }
