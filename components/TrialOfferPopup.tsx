@@ -347,7 +347,7 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
           style={{
             position: 'fixed',
             bottom: '90px',
-            right: '16px',
+            left: '16px',
             zIndex: 9998,
             width: 54,
             height: 54,
