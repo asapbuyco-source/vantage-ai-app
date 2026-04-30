@@ -613,6 +613,8 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         if starting_at:
             try:
                 kick = datetime.fromisoformat(starting_at.replace("Z", "+00:00"))
+                if kick.tzinfo is None:
+                    kick = kick.replace(tzinfo=timezone.utc)
                 # Filter out matches starting within 30 minutes to avoid late predictions
                 if kick > (now_utc + timedelta(minutes=30)):
                     future_raw.append(item)
