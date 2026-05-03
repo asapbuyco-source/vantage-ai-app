@@ -8,14 +8,18 @@ export type Language = 'en' | 'fr';
 
 export const translations = {
   fr: {
-    nav: {
+nav: {
       home: 'Accueil',
       free: 'Gratuits',
       vip: 'VIP',
       guide: 'Guide',
       kelly: 'Calculatrice',
       concierge: 'Smart Ticket',
-      profile: 'Profil'
+      profile: 'Profil',
+      admin: 'Admin',
+      stats: 'Statistiques',
+      results: 'Résultats',
+      live: 'En Direct'
     },
     home: {
       system: 'SYSTEME PREDICTIF V.4.0',
@@ -175,7 +179,11 @@ export const translations = {
       guide: 'Guide',
       kelly: 'Calculator',
       concierge: 'Smart Ticket',
-      profile: 'Profile'
+      profile: 'Profile',
+      admin: 'Admin',
+      stats: 'Statistics',
+      results: 'Results',
+      live: 'Live'
     },
     home: {
       system: 'PREDICTIVE SYSTEM V.4.0',

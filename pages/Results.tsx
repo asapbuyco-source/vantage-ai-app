@@ -25,6 +25,7 @@ export const Results: React.FC = () => {
     const [history, setHistory] = useState<DayResult[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedDay, setExpandedDay] = useState<string | null>(null);
+    const [liveError, setLiveError] = useState<string | null>(null);
 
     // Admin edit state — keyed by date
     const [editMode, setEditMode] = useState<Record<string, boolean>>({});
@@ -53,22 +54,27 @@ export const Results: React.FC = () => {
             (snap) => {
                 if (!snap.exists()) return;
                 const data = snap.data();
-                const matches = (data.predictions || []).map(normalizeQuantPrediction);
-                
+                const allMatches = (data.predictions || []).map(normalizeQuantPrediction);
+                // Only show graded matches on the Results page (won/lost/void)
+                const matches = allMatches.filter(m => m.status === 'won' || m.status === 'lost' || m.status === 'void');
+                if (matches.length === 0) return;
+
                 setHistory(prev => {
                     const existing = prev.filter(d => d.date !== todayKey);
-                    const graded = matches.filter(m => m.status === 'won' || m.status === 'lost');
                     const todayEntry = {
                         date: todayKey,
                         matches,
-                        wonCount: graded.filter(m => m.status === 'won').length,
-                        lostCount: graded.filter(m => m.status === 'lost').length,
-                        totalGraded: graded.length,
+                        wonCount: matches.filter(m => m.status === 'won').length,
+                        lostCount: matches.filter(m => m.status === 'lost').length,
+                        totalGraded: matches.length,
                     };
                     return [todayEntry, ...existing];
                 });
             },
-            (err) => console.warn('[Results] Live listener error:', err)
+            (err) => {
+                console.warn('[Results] Live listener error:', err);
+                setLiveError(language === 'fr' ? 'Connexion en temps réel perdue. Les résultats peuvent ne pas être à jour.' : 'Real-time connection lost. Results may be outdated.');
+            }
         );
         return () => unsub();
     }, []);
@@ -199,6 +205,27 @@ export const Results: React.FC = () => {
                     )}
                 </p>
             </div>
+
+            {/* Live connection error banner */}
+            <AnimatePresence>
+                {liveError && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg"
+                    >
+                        <AlertCircle size={18} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                        <p className="text-sm text-amber-800 dark:text-amber-200">{liveError}</p>
+                        <button
+                            onClick={() => setLiveError(null)}
+                            className="ml-auto text-amber-600 hover:text-amber-800 dark:hover:text-amber-300"
+                        >
+                            <X size={16} />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Summary Banner */}
             {!loading && totalGraded > 0 && (

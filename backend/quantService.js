@@ -27,52 +27,49 @@ const logger = pino({
         : undefined,
 });
 
-// Resolve the correct Python binary name (python3 preferred, fall back to python)
-// Also tries absolute paths for Nixpacks / nix-store environments (Railway, Render).
-function resolvePythonBin() {
-    const candidates = [
-        'python3',
-        'python',
-        // Nixpacks (Railway) nix-store paths for python3.11
-        '/nix/var/nix/profiles/default/bin/python3',
-        '/root/.nix-profile/bin/python3',
-        '/usr/bin/python3',
-        '/usr/local/bin/python3',
-        '/usr/bin/python',
-    ];
+// ── Async Python binary resolution (cached after first call) ─────────────────
+const PYTHON_CANDIDATES = [
+    'python3', 'python',
+    '/nix/var/nix/profiles/default/bin/python3',
+    '/root/.nix-profile/bin/python3',
+    '/usr/bin/python3',
+    '/usr/local/bin/python3',
+    '/usr/bin/python',
+];
 
-    for (const candidate of candidates) {
+let _pythonBin = null;
+
+async function resolvePythonBin() {
+    if (_pythonBin) return _pythonBin;
+    for (const candidate of PYTHON_CANDIDATES) {
         try {
             const result = spawnSync(candidate, ['--version'], { encoding: 'utf8', timeout: 3000 });
             if (result.status === 0) {
                 const ver = (result.stdout || result.stderr || '').trim();
                 logger.info(`[QuantService] ✅ Python binary resolved: ${candidate} (${ver})`);
-                return candidate;
+                _pythonBin = candidate;
+                return _pythonBin;
             }
-        } catch (_) { /* binary not available */ }
+        } catch (_) { /* not available */ }
     }
-
-    // None found — log a detailed diagnostic
     const pathEnv = process.env.PATH || '(not set)';
-    logger.error(`[QuantService] ❌ CRITICAL: No Python binary found in PATH or absolute locations.`);
-    logger.error(`[QuantService]   PATH = ${pathEnv}`);
-    logger.error(`[QuantService]   Tried: ${candidates.join(', ')}`);
-    logger.error(`[QuantService]   Fix: ensure nixpacks.toml includes python311 and railway.toml runs pip install.`);
-    return 'python3'; // will surface a clear ENOENT error at spawn time
+    logger.error(`[QuantService] ❌ No Python binary found. PATH = ${pathEnv}`);
+    _pythonBin = 'python3'; // surface a clear ENOENT at spawn time
+    return _pythonBin;
 }
 
-const PYTHON_BIN = resolvePythonBin();
-
-// ── Env forward to Python process ─────────────────────────────────────────────
+// ── Env forward to Python process (scoped whitelist) ─────────────────────────
 function buildPythonEnv() {
     return {
-        ...process.env,
+        // Only forward the API tokens and config that Python needs
+        SPORTMONKS_API_TOKEN: process.env.SPORTMONKS_API_TOKEN || '',
+        API_FOOTBALL_KEY: process.env.API_FOOTBALL_KEY || '',
+        VITE_API_BASKETBALL_KEY: process.env.VITE_API_BASKETBALL_KEY || '',
+        GOOGLE_GENAI_API_KEY: process.env.GOOGLE_GENAI_API_KEY || '',
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+        FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT || '',
         // Force Python binary wheels to find Nixpacks C++ standard libraries
         LD_LIBRARY_PATH: '/nix/var/nix/profiles/default/lib:/root/.nix-profile/lib:' + (process.env.LD_LIBRARY_PATH || ''),
-        SPORTMONKS_API_TOKEN: process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN || '',
-        API_FOOTBALL_KEY: process.env.VITE_FOOTBALL_API_KEY || process.env.API_FOOTBALL_KEY || '',
-        VITE_API_BASKETBALL_KEY: process.env.VITE_API_BASKETBALL_KEY || '',
-        FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT || '',
         PYTHONUNBUFFERED: '1',         // Ensure real-time stdout
         PYTHONPATH: path.join(__dirname, 'quant'),
     };
@@ -122,14 +119,15 @@ async function withExponentialBackoff(fn, opts = {}) {
 
 // ── Spawn Python quant pipeline ───────────────────────────────────────────────
 async function spawnPythonPipeline(dateStr = null, dryRun = false) {
+    const pythonBin = await resolvePythonBin();
     return new Promise((resolve, reject) => {
         const args = ['quant_pipeline.py'];
         if (dateStr) args.push(dateStr);
         if (dryRun) args.push('--dry-run');
 
-        logger.info(`[QuantService] Spawning Python pipeline: ${PYTHON_BIN} ${args.join(' ')}`);
+        logger.info(`[QuantService] Spawning Python pipeline: ${pythonBin} ${args.join(' ')}`);
 
-        const py = spawn(PYTHON_BIN, args, {
+        const py = spawn(pythonBin, args, {
             cwd: path.join(__dirname, 'quant'),
             env: buildPythonEnv(),
         });
@@ -239,11 +237,12 @@ export const runQuantGrading = async (dateStr = null) => {
     try {
         const result = await withExponentialBackoff(
             async () => {
+                const pythonBin = await resolvePythonBin();
                 return new Promise((resolve, reject) => {
                     const args = ['grading_engine.py'];
                     if (dateStr) args.push(dateStr);
 
-                    const py = spawn(PYTHON_BIN, args, {
+                    const py = spawn(pythonBin, args, {
                         cwd: path.join(__dirname, 'quant'),
                         env: buildPythonEnv(),
                     });
@@ -304,8 +303,9 @@ export const runQuantPerformance = async () => {
     try {
         await withExponentialBackoff(
             async () => {
+                const pythonBin = await resolvePythonBin();
                 return new Promise((resolve, reject) => {
-                    const py = spawn(PYTHON_BIN, ['performance_tracker.py'], {
+                    const py = spawn(pythonBin, ['performance_tracker.py'], {
                         cwd: path.join(__dirname, 'quant'),
                         env: buildPythonEnv(),
                     });
@@ -351,14 +351,15 @@ export const runBasketballPipeline = async (dateStr = null, dryRun = false) => {
     try {
         const { stdout } = await withExponentialBackoff(
             async () => {
+                const pythonBin = await resolvePythonBin();
                 return new Promise((resolve, reject) => {
                     const args = ['basketball_pipeline.py'];
                     if (dateStr) args.push(dateStr);
                     if (dryRun) args.push('--dry-run');
 
-                    logger.info(`[QuantService] Spawning: ${PYTHON_BIN} ${args.join(' ')}`);
+                    logger.info(`[QuantService] Spawning: ${pythonBin} ${args.join(' ')}`);
 
-                    const py = spawn(PYTHON_BIN, args, {
+                    const py = spawn(pythonBin, args, {
                         cwd: path.join(__dirname, 'quant'),
                         env: buildPythonEnv(),
                     });
@@ -434,11 +435,7 @@ export const runBasketballPipeline = async (dateStr = null, dryRun = false) => {
     }
 };
 
-// ── Lagos date helper (mirror of scheduler.js) ────────────────────────────────
+// ── Lagos date helper ─────────────────────────────────────────────────────────
 function getLagosDateKey() {
-    const now = new Date();
-    const lagosOffset = 60; // UTC+1
-    const localMs = now.getTime() + (lagosOffset - now.getTimezoneOffset()) * 60000;
-    const d = new Date(localMs);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
 }

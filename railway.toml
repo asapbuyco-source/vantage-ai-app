@@ -1,14 +1,14 @@
 [build]
 builder = "NIXPACKS"
-# We only need to install dependencies for the backend. 
-# We explicitly override the build command to prevent Railway from running the Vite frontend 'build' script.
 buildCommand = "npm install && pip3 install --no-cache-dir --break-system-packages -r backend/quant/requirements.txt"
 
 [deploy]
-# Start the Express server
 startCommand = "npm start"
 restartPolicyType = "ON_FAILURE"
 
 [env]
-# Railway will dynamically assign a PORT, but we set a default fallback
 PORT = "8080"
+
+[deploy.healthcheck]
+path = "/health"
+timeout = 30

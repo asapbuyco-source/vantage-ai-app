@@ -167,26 +167,19 @@ const isWithinScheduleWindow = (scheduledTime) => {
     return diff <= 10; // allow ±10 minute window
 };
 
+// Module-level task registry so stopScheduler can access it
+const tasks = new Map();
+let currentFootballTime = null;
+let currentBasketballTime = null;
+let currentGradingTime = null;
+let currentBlogTime = null;
+let currentTelegramTime = null;
+let currentQuantTime = null;
+let currentQuantGradingTime = null;
+
 // We'll export an initialization function so server.js can start it
 export const initScheduler = () => {
     console.log('🕒 Initializing Scheduler (Quant Engine ACTIVE | AI Predictions DISABLED | Blog + Telegram active)...');
-
-    // Track current tasks so we can destroy and recreate them if times change
-    let footballTask = null;
-    let basketballTask = null;
-    let gradingTask = null;
-    let blogTask = null;
-    let telegramTask = null;
-    let quantTask = null;
-    let quantGradingTask = null;
-
-    let currentFootballTime = null;
-    let currentBasketballTime = null;
-    let currentGradingTime = null;
-    let currentBlogTime = null;
-    let currentTelegramTime = null;
-    let currentQuantTime = null;
-    let currentQuantGradingTime = null;
 
     // Function to check for updated times in Firestore
     const syncSchedules = async () => {
@@ -215,7 +208,7 @@ export const initScheduler = () => {
             // ══════════════════════════════════════════════════════════════════
             /*
             if (footballTime !== currentFootballTime) {
-                if (footballTask) footballTask.stop();
+                if (tasks.get('football')) tasks.get('football').stop();
                 currentFootballTime = footballTime;
                 const [fHour, fMin] = footballTime.split(':');
 
@@ -227,17 +220,18 @@ export const initScheduler = () => {
                     console.log(`⚽ Running scheduled Football Generation at ${footballTime}...`);
                     await triggerFootballGeneration();
                 }, { timezone: "Africa/Lagos" });
+                tasks.set('football', footballTask);
                 console.log(`✅ Scheduled Football Gen for ${footballTime} (OpenAI→Gemini fallback)`);
             }
             */
 
             // ── Basketball Quant Scheduler (Quant Pipeline → OpenAI → Gemini) ────
             if (basketballTime !== currentBasketballTime) {
-                if (basketballTask) basketballTask.stop();
+                if (tasks.get('basketball')) tasks.get('basketball').stop();
                 currentBasketballTime = basketballTime;
                 const [bHour, bMin] = basketballTime.split(':');
 
-                basketballTask = cron.schedule(`${bMin} ${bHour} * * *`, async () => {
+                const basketballTask = cron.schedule(`${bMin} ${bHour} * * *`, async () => {
                     if (!isWithinScheduleWindow(currentBasketballTime)) {
                         console.warn(`[Scheduler] ⛔ Basketball time-gate blocked: not within window of ${currentBasketballTime}`);
                         return;
@@ -245,6 +239,7 @@ export const initScheduler = () => {
                     console.log(`🏀 Running Basketball Quant Pipeline at ${basketballTime}...`);
                     await triggerBasketballGeneration();
                 }, { timezone: "Africa/Lagos" });
+                tasks.set('basketball', basketballTask);
                 console.log(`✅ Scheduled Basketball Quant for ${basketballTime} (Quant→OpenAI→Gemini)`);
             }
 
@@ -254,7 +249,7 @@ export const initScheduler = () => {
             // ══════════════════════════════════════════════════════════════════
             /*
             if (gradingTime !== currentGradingTime) {
-                if (gradingTask) gradingTask.stop();
+                if (tasks.get('grading')) tasks.get('grading').stop();
                 currentGradingTime = gradingTime;
                 const [gHour, gMin] = gradingTime.split(':');
 
@@ -266,17 +261,18 @@ export const initScheduler = () => {
                     console.log(`📊 Running scheduled Grading at ${gradingTime}...`);
                     await triggerGrading(null, false);
                 }, { timezone: "Africa/Lagos" });
+                tasks.set('grading', gradingTask);
                 console.log(`✅ Scheduled Grading for ${gradingTime} (OpenAI→Gemini fallback)`);
             }
             */
 
             // ── Blog Scheduler ────────────────────────────────────────────────
             if (blogTime !== currentBlogTime) {
-                if (blogTask) blogTask.stop();
+                if (tasks.get('blog')) tasks.get('blog').stop();
                 currentBlogTime = blogTime;
                 const [blogHour, blogMin] = blogTime.split(':');
 
-                blogTask = cron.schedule(`${blogMin} ${blogHour} * * *`, async () => {
+                const blogTask = cron.schedule(`${blogMin} ${blogHour} * * *`, async () => {
                     if (!isWithinScheduleWindow(currentBlogTime)) {
                         console.warn(`[Scheduler] ⛔ Blog time-gate blocked: not within window of ${currentBlogTime}`);
                         return;
@@ -284,16 +280,17 @@ export const initScheduler = () => {
                     console.log(`✍️ Running scheduled Programmatic Blog Generation at ${blogTime}...`);
                     await triggerBlogGen();
                 }, { timezone: "Africa/Lagos" });
+                tasks.set('blog', blogTask);
                 console.log(`✅ Scheduled Programmatic Blog Gen for ${blogTime}`);
             }
 
             // ── Telegram Broadcast Scheduler ─────────────────────────────────
             if (telegramTime !== currentTelegramTime) {
-                if (telegramTask) telegramTask.stop();
+                if (tasks.get('telegram')) tasks.get('telegram').stop();
                 currentTelegramTime = telegramTime;
                 const [tHour, tMin] = telegramTime.split(':');
 
-                telegramTask = cron.schedule(`${tMin} ${tHour} * * *`, async () => {
+                const telegramTask = cron.schedule(`${tMin} ${tHour} * * *`, async () => {
                     if (!isWithinScheduleWindow(currentTelegramTime)) {
                         console.warn(`[Scheduler] ⛔ Telegram time-gate blocked: not within window of ${currentTelegramTime}`);
                         return;
@@ -301,17 +298,18 @@ export const initScheduler = () => {
                     console.log(`📨 Running scheduled Telegram Broadcast at ${telegramTime}...`);
                     await triggerTelegramBroadcast();
                 }, { timezone: "Africa/Lagos" });
+                tasks.set('telegram', telegramTask);
                 console.log(`✅ Scheduled Telegram Broadcast for ${telegramTime}`);
             }
 
             // ── Quant Pipeline Scheduler ───────────────────────────────────────────
             const quantTime = safeTime(config.quantGenTime, '07:00');
             if (quantTime !== currentQuantTime) {
-                if (quantTask) quantTask.stop();
+                if (tasks.get('quant')) tasks.get('quant').stop();
                 currentQuantTime = quantTime;
                 const [qHour, qMin] = quantTime.split(':');
 
-                quantTask = cron.schedule(`${qMin} ${qHour} * * *`, async () => {
+                const quantTask = cron.schedule(`${qMin} ${qHour} * * *`, async () => {
                     if (!isWithinScheduleWindow(currentQuantTime)) {
                         console.warn(`[Scheduler] ⛔ Quant time-gate blocked: not within window of ${currentQuantTime}`);
                         return;
@@ -319,22 +317,24 @@ export const initScheduler = () => {
                     console.log(`📊 Running scheduled Quant Pipeline at ${quantTime}...`);
                     await triggerQuantPipeline();
                 }, { timezone: 'Africa/Lagos' });
+                tasks.set('quant', quantTask);
                 console.log(`✅ Scheduled Quant Pipeline for ${quantTime} (pure statistical models)`);
             }
 
             // ── Quant Grading Scheduler (runs after main grading) ─────────────────
             const quantGradingTime = safeTime(config.quantGradingTime, '06:30');
             if (quantGradingTime !== currentQuantGradingTime) {
-                if (quantGradingTask) quantGradingTask.stop();
+                if (tasks.get('quantGrading')) tasks.get('quantGrading').stop();
                 currentQuantGradingTime = quantGradingTime;
                 const [qgHour, qgMin] = quantGradingTime.split(':');
 
-                quantGradingTask = cron.schedule(`${qgMin} ${qgHour} * * *`, async () => {
+                const quantGradingTask = cron.schedule(`${qgMin} ${qgHour} * * *`, async () => {
                     if (!isWithinScheduleWindow(currentQuantGradingTime)) return;
                     console.log(`📊 Running scheduled Quant Grading at ${quantGradingTime}...`);
                     await triggerQuantGrading();
                     await triggerQuantPerformance();
                 }, { timezone: 'Africa/Lagos' });
+                tasks.set('quantGrading', quantGradingTask);
                 console.log(`✅ Scheduled Quant Grading for ${quantGradingTime}`);
             }
 
@@ -346,25 +346,35 @@ export const initScheduler = () => {
     // syncSchedules() only READS settings from Firestore and sets up cron job schedules.
     // It NEVER triggers generation itself — generation only happens when the cron fires
     // at the exact scheduled time AND passes the time-gate check above.
-    cron.schedule('*/5 * * * *', syncSchedules);
+    const syncTask = cron.schedule('*/5 * * * *', syncSchedules);
+    tasks.set('sync', syncTask);
     syncSchedules(); // On startup: reads schedule times and registers cron jobs — does NOT generate
 
     // ── Selar Payment Email Listener ──────────────────────────────────────────
     // Runs every 2 minutes to check for new VIP purchases (was: every 30s which risked quota limits)
-    cron.schedule('*/2 * * * *', async () => {
+    const selarTask = cron.schedule('*/2 * * * *', async () => {
         try {
             await checkRecentSelarEmails();
         } catch (e) {
             console.error('[Scheduler] Error in Selar Gmail Listener:', e);
         }
     });
+    tasks.set('selar', selarTask);
 
     // ── Live Scores Poller (every 90 seconds → saves ~480 API calls/day vs 60s) ──
     // We store the whole list in ONE Firestore document so frontend reads 1 doc.
     // Uses ~960 SportMonks API calls/day during matchdays; zero on quiet days.
-    let liveScoreTask = cron.schedule('*/2 * * * *', async () => {
-        // Inner 90s gate: cron fires every 2 min but we skip alternate runs
-        // to achieve ~90s effective interval without a non-standard cron expression.
+    const liveScoreTask = cron.schedule('*/2 * * * *', async () => {
+        // ── Concurrency guard: skip if previous run still active (max 3 min TTL) ──
+        const lockKey = `live_grading_${new Date().toISOString().split('T')[0]}`;
+        const db = admin.firestore();
+        const lockRef = db.collection('generation_locks').doc(lockKey);
+        const lockSnap = await lockRef.get();
+        const isStale = lockSnap.exists && lockSnap.data()?.lockedAt &&
+            (Date.now() - lockSnap.data().lockedAt.toDate().getTime()) > 3 * 60 * 1000;
+        if (lockSnap.exists && !isStale) return;
+        await lockRef.set({ lockedAt: new Date() }, { merge: true });
+
         try {
             // ── Time-gate: only poll during match hours (13:00–23:59 Lagos UTC+1) ──
             // Previously 11:00–01:00 which burned API quota before any matches started.
@@ -470,11 +480,11 @@ export const initScheduler = () => {
                         const data = qDoc.data();
                         let updated = false;
                         const preds = data.predictions || [];
-                        const normalize = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
                         for (const pred of preds) {
-                            // STRICT: Only match by fixture_id — team name matching causes cross-match contamination
-                            const liveMatch = matches.find(m => 
-                                String(m.id) === String(pred.fixture_id)
+                            const liveMatch = matches.find(m =>
+                                String(m.id) === String(pred.fixture_id) ||
+                                (pred.home_team_id && m.homeTeamId &&
+                                 Number(m.homeTeamId) === Number(pred.home_team_id))
                             );
                             if (liveMatch) {
                                 // Only write scores for matches that are actually in play or finished
@@ -540,6 +550,8 @@ export const initScheduler = () => {
                                     status = hg === ag ? 'void' : (ag > hg ? 'won' : 'lost');
                                 else if (market.includes('over 1.5'))
                                     status = total > 1 ? 'won' : 'lost';
+                                else if (market.includes('under 1.5'))
+                                    status = total < 2 ? 'won' : 'lost';
                                 else if (market.includes('over 2.5'))
                                     status = total > 2 ? 'won' : 'lost';
                                 else if (market.includes('under 2.5'))
@@ -548,6 +560,8 @@ export const initScheduler = () => {
                                     status = total > 3 ? 'won' : 'lost';
                                 else if (market.includes('under 3.5'))
                                     status = total < 4 ? 'won' : 'lost';
+                                else if (market.includes('btts') && market.includes('over 2.5'))
+                                    status = (hg > 0 && ag > 0 && total > 2) ? 'won' : 'lost';
                                 else if (market.includes('btts') && !market.includes('no'))
                                     status = (hg > 0 && ag > 0) ? 'won' : 'lost';
                                 else if (market.includes('btts') && market.includes('no'))
@@ -583,14 +597,18 @@ export const initScheduler = () => {
             }
         } catch (e) {
             console.warn('[Scheduler] Live scores poll error:', e.message);
+        } finally {
+            // Release concurrency lock so next poll can acquire it
+            try { await lockRef.delete(); } catch (_) {}
         }
     });
+    tasks.set('liveScore', liveScoreTask);
     console.log('⚡ Live scores poller started (every 2 minutes → Firestore)'); // BUG-12 FIX: was incorrectly saying 60s
 
     // ── Pre-Match News Fetcher (once daily at 07:30 Lagos time) ──────────────
     // Fetches all pre-match news and stores in Firestore match_news/{dateKey}
     // ~1 SportMonks API call per day
-    cron.schedule('30 7 * * *', async () => {
+    const newsTask = cron.schedule('30 7 * * *', async () => {
         try {
             const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
@@ -609,7 +627,7 @@ export const initScheduler = () => {
             }));
 
             const db = admin.firestore();
-            const dateKey = new Date().toISOString().split('T')[0];
+            const dateKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
             await db.collection('match_news').doc(dateKey).set({
                 items,
                 fetchedAt: new Date().toISOString(),
@@ -619,17 +637,18 @@ export const initScheduler = () => {
             console.warn('[Scheduler] News fetch error:', e.message);
         }
     }, { timezone: 'Africa/Lagos' });
+    tasks.set('news', newsTask);
     console.log('📰 Pre-match news fetcher scheduled at 07:30 Lagos');
 
     // ── Daily Match Statistics Fetcher (07:45 Lagos) ─────────────────────────
     // Fetches ball possession, shots on target, corners, fouls for today's fixtures.
     // Stored in Firestore match_stats/{dateKey} for quant engine and MatchDetailsModal.
     // Cost: ~1 SportMonks API call per day
-    cron.schedule('45 7 * * *', async () => {
+    const statsTask = cron.schedule('45 7 * * *', async () => {
         try {
             const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
-            const dateKey = new Date().toISOString().split('T')[0];
+            const dateKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
             const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateKey}?include=statistics;participants&api_token=${token}`;
             const res = await fetch(url);
             if (!res.ok) { console.warn('[Stats] API error:', res.status); return; }
@@ -678,12 +697,13 @@ export const initScheduler = () => {
             console.warn('[Scheduler] Match stats fetch error:', e.message);
         }
     }, { timezone: 'Africa/Lagos' });
+    tasks.set('stats', statsTask);
     console.log('📊 Match statistics fetcher scheduled at 07:45 Lagos');
 
     // ── Tomorrow's Fixture Pre-Fetch (daily at 23:00 Lagos) ─────────────────
     // Fetches tomorrow's fixtures and stores odds for VIP tomorrow preview.
     // ~1 API call per day
-    cron.schedule('0 23 * * *', async () => {
+    const tomorrowTask = cron.schedule('0 23 * * *', async () => {
         try {
             const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
@@ -729,7 +749,23 @@ export const initScheduler = () => {
             console.warn('[Scheduler] Tomorrow fixtures fetch error:', e.message);
         }
     }, { timezone: 'Africa/Lagos' });
-console.log('📅 Tomorrow fixture pre-fetch scheduled at 23:00 Lagos');
+    tasks.set('tomorrow', tomorrowTask);
+    console.log('📅 Tomorrow fixture pre-fetch scheduled at 23:00 Lagos');
+};
+
+/**
+ * Stop all scheduled cron tasks. Call this during graceful shutdown.
+ */
+export const stopScheduler = () => {
+    const allTasks = [
+        'sync', 'selar', 'liveScore', 'news', 'stats', 'tomorrow',
+        'basketball', 'blog', 'telegram', 'quant', 'quantGrading'
+    ];
+    for (const name of allTasks) {
+        const task = tasks.get(name);
+        if (task) { task.stop(); tasks.delete(name); }
+    }
+    console.log('[Scheduler] All cron tasks stopped.');
 };
 
 export async function repairCorruptedPredictions(db, dateStr) {

@@ -23,8 +23,8 @@ export const SpecialOfferBanner: React.FC<{ onClick: () => void }> = ({ onClick 
           </h3>
           <p className="text-white/80 text-xs">
             {language === 'fr' 
-              ? 'Essai VIP à 1000 FCFA — Offre limitée 24h' 
-              : '1000 FCFA Trial — Limited 24h Offer'}
+              ? 'Essai VIP à 2 000 FCFA — Essai limité 24h' 
+              : '2 000 FCFA VIP Trial — Limited 24h Offer'}
           </p>
         </div>
       </div>

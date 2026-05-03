@@ -28,6 +28,15 @@ service cloud.firestore {
       allow update: if (request.auth != null && request.auth.uid == userId && doesNotTouchProtectedFields())
         || isAdmin();
     }
+
+    // Referral Codes: Users can read all (for referral lookup), create their own code,
+    // but cannot update or delete others' codes.
+    match /referral_codes/{code} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null 
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if false;
+    }
     
     // Daily Predictions: Publicly readable. Writes are admin-only (via Admin SDK).
     match /daily_predictions/{dateStr} {
@@ -61,8 +70,13 @@ service cloud.firestore {
     
     // Settings / App Stats: Publicly readable. Only admins can write.
     match /settings/{docId} {
-      allow read: if true;
+      allow read: if docId in ['app', 'app_stats'];
       allow write: if isAdmin();
+    }
+
+    // Settings / Internal: Admin-only read/write for secrets (telegram tokens, etc.)
+    match /settings/internal {
+      allow read, write: if isAdmin();
     }
     
     // Payouts (legacy collection, kept for backwards compat)
@@ -143,6 +157,13 @@ service cloud.firestore {
     // ── Push Subscriptions (server-only via Admin SDK) ───────────────────────
     match /push_subscriptions/{subId} {
       allow read, write: if false; // Admin SDK only
+    }
+
+    // ── Processed Emails (idempotency guard for Gmail listener) ─────────────
+    // Written by backend only (Gmail listener). Read allowed for admin debugging.
+    match /processed_emails/{msgId} {
+      allow read: if isAdmin();
+      allow write: if false; // Backend Admin SDK only
     }
 
     // ── Match Stats (publicly readable, server-only write) ───────────────────

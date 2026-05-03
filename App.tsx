@@ -27,6 +27,7 @@ import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { TrialOfferPopup } from './components/TrialOfferPopup';
+import { WEEKLY_TRIAL_PRICE } from './src/constants/pricing';
 import { PaymentModal } from './components/PaymentModal';
 
 
@@ -379,7 +380,7 @@ function AppContent() {
               plan={{
                 id: 'weekly',
                 label: language === 'fr' ? 'Essai VIP 1 Semaine' : '1-Week VIP Trial',
-                price: '1000',
+                price: String(WEEKLY_TRIAL_PRICE),
                 features: [
                   language === 'fr' ? 'Prédictions complètes' : 'Full predictions',
                   language === 'fr' ? 'Accumulateurs IA' : 'AI Accumulators',

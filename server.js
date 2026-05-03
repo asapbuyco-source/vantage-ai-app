@@ -12,7 +12,9 @@ import pino from 'pino';
 import * as Sentry from '@sentry/node';
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
-import { initScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance } from './backend/scheduler.js';
+import sanitizeHtml from 'sanitize-html';
+import jwt from 'jsonwebtoken';
+import { initScheduler, stopScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance, repairCorruptedPredictions } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
 
 
@@ -81,6 +83,22 @@ try {
     } else {
         logger.warn('[Server] FIREBASE_SERVICE_ACCOUNT not found. Auto-generation scheduler will not work.');
     }
+
+    // ── Graceful Shutdown ─────────────────────────────────────────────────────
+    const shutdown = (signal) => {
+        logger.info(`[Server] ${signal} received — shutting down gracefully...`);
+        stopScheduler();
+        server.close(() => {
+            logger.info('[Server] HTTP server closed.');
+            process.exit(0);
+        });
+        setTimeout(() => {
+            logger.error('[Server] Forced shutdown after timeout.');
+            process.exit(1);
+        }, 15000);
+    };
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
 } catch (error) {
     logger.error({ error }, '[Server] Failed to initialize Firebase Admin');
     Sentry.captureException(error);
@@ -283,22 +301,76 @@ app.post('/api/gemini/generate', geminiLimiter, async (req, res) => {
 // ADMIN TRIGGER ENDPOINTS
 // ══════════════════════════════════════════════════════════════════════
 
-// Admin authentication middleware — requires x-admin-token header matching ADMIN_API_SECRET env var.
+// Admin authentication middleware — accepts either:
+// 1. x-admin-token header matching ADMIN_API_SECRET (legacy)
+// 2. Authorization: Bearer <JWT> signed with ADMIN_API_SECRET or ADMIN_JWT_SECRET
 const adminAuth = (req, res, next) => {
-    const token = req.headers['x-admin-token'];
     const secret = process.env.ADMIN_API_SECRET;
+    const jwtSecret = process.env.ADMIN_JWT_SECRET || secret;
+    const bearerToken = req.headers['authorization']?.replace('Bearer ', '');
+    const headerToken = req.headers['x-admin-token'];
+
     if (!secret) {
-        console.warn('[AdminAuth] ADMIN_API_SECRET not set!');
-        if (process.env.NODE_ENV !== 'development') {
-            return res.status(401).json({ error: 'Unauthorized — Admin secret not configured in production.' });
-        }
-        return next(); // fail-open only if dev mode
+        logger.error('[AdminAuth] ADMIN_API_SECRET is not set — admin endpoints are DISABLED');
+        return res.status(503).json({ error: 'Admin functionality is not configured on this server.' });
     }
-    if (!token || token !== secret) {
-        return res.status(401).json({ error: 'Unauthorized — missing or invalid x-admin-token header' });
+
+    // Legacy token auth
+    if (headerToken && headerToken === secret) return next();
+
+    // JWT auth
+    if (bearerToken) {
+        try {
+            const payload = jwt.verify(bearerToken, jwtSecret);
+            if (payload.role === 'admin') return next();
+        } catch (_) { /* invalid or expired */ }
     }
-    next();
+
+    return res.status(401).json({ error: 'Unauthorized — valid x-admin-token or Bearer JWT required' });
 };
+
+// GET /api/admin/token — exchange a Firebase ID token for a short-lived admin JWT.
+// The caller must be authenticated with Firebase and have isAdmin:true in Firestore.
+// This removes the need for VITE_ADMIN_API_SECRET in the browser bundle entirely.
+app.get('/api/admin/token', async (req, res) => {
+    if (!process.env.ADMIN_API_SECRET) {
+        return res.status(503).json({ error: 'Admin functionality is not configured on this server.' });
+    }
+
+    // Support legacy x-admin-token for server-to-server calls (cron, Railway health checks)
+    const headerToken = req.headers['x-admin-token'];
+    if (headerToken && headerToken === process.env.ADMIN_API_SECRET) {
+        const jwtSecret = process.env.ADMIN_JWT_SECRET || process.env.ADMIN_API_SECRET;
+        const token = jwt.sign({ role: 'admin' }, jwtSecret, { expiresIn: '15m' });
+        logger.info('[AdminAuth] JWT issued via legacy x-admin-token');
+        return res.json({ token, expiresIn: 900 });
+    }
+
+    // Primary path: verify Firebase ID token sent as Bearer
+    const idToken = req.headers['authorization']?.replace('Bearer ', '');
+    if (!idToken) {
+        return res.status(401).json({ error: 'Unauthorized — provide a Firebase ID token as Bearer or x-admin-token header' });
+    }
+
+    try {
+        if (!admin.apps.length) {
+            return res.status(503).json({ error: 'Firebase Admin not initialized' });
+        }
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        const profileSnap = await admin.firestore().collection('profiles').doc(decoded.uid).get();
+        if (!profileSnap.exists || profileSnap.data()?.isAdmin !== true) {
+            logger.warn({ uid: decoded.uid }, '[AdminAuth] Token request denied — not an admin');
+            return res.status(403).json({ error: 'Forbidden — account is not an admin' });
+        }
+        const jwtSecret = process.env.ADMIN_JWT_SECRET || process.env.ADMIN_API_SECRET;
+        const token = jwt.sign({ role: 'admin', uid: decoded.uid }, jwtSecret, { expiresIn: '15m' });
+        logger.info({ uid: decoded.uid }, '[AdminAuth] JWT issued for verified admin user');
+        return res.json({ token, expiresIn: 900 });
+    } catch (e) {
+        logger.warn({ err: e.message }, '[AdminAuth] Firebase ID token verification failed');
+        return res.status(401).json({ error: 'Unauthorized — invalid or expired Firebase ID token' });
+    }
+});
 
 // ⛔ AI Football prediction endpoint is DISABLED — system now uses the Quant Engine.
 // To re-enable: restore the original handler below.
@@ -386,6 +458,14 @@ app.post('/api/admin/telegram-test', adminAuth, async (req, res) => {
 app.post('/api/admin/trigger-quant', adminAuth, async (req, res) => {
     try {
         const { date, dryRun } = req.body || {};
+        
+        // Validate date format if provided (YYYY-MM-DD)
+        if (date !== null && date !== undefined && date !== '') {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+                return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+            }
+        }
+        
         logger.info({ date: date || 'today', dryRun: !!dryRun }, '[API] Quant Pipeline triggered');
         const result = await triggerQuantPipeline(date || null, !!dryRun);
         res.json(result);
@@ -400,6 +480,14 @@ app.post('/api/admin/trigger-quant', adminAuth, async (req, res) => {
 app.post('/api/admin/grade-quant', adminAuth, async (req, res) => {
     try {
         const { date } = req.body || {};
+        
+        // Validate date format if provided (YYYY-MM-DD)
+        if (date !== null && date !== undefined && date !== '') {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+                return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+            }
+        }
+        
         logger.info({ date: date || 'yesterday' }, '[API] Quant Grading triggered');
         const result = await triggerQuantGrading(date || null);
         res.json(result);
@@ -507,12 +595,92 @@ app.post('/api/openai/generate', openaiLimiter, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════
+// FAPSHI PAYMENT PROXY
+// Keeps FAPSHI_USER_TOKEN and FAPSHI_API_KEY server-side only.
+// Frontend calls /api/fapshi/* — credentials never reach the browser bundle.
+// ══════════════════════════════════════════════════════════════════════
+
+const fapshiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many payment requests from this IP, please try again in 15 minutes' }
+});
+
+const FAPSHI_API_BASE = 'https://live.fapshi.com';
+
+// POST /api/fapshi/initiate — proxy Fapshi payment initiation
+app.post('/api/fapshi/initiate', fapshiLimiter, async (req, res) => {
+    const userToken = process.env.FAPSHI_USER_TOKEN;
+    const apiKey = process.env.FAPSHI_API_KEY;
+    if (!userToken || !apiKey) {
+        return res.status(503).json({ error: 'Fapshi payment gateway is not configured on this server.' });
+    }
+    try {
+        const { amount, email, userId, redirectUrl } = req.body;
+        if (!amount || !email) {
+            return res.status(400).json({ error: 'amount and email are required' });
+        }
+        const externalId = `${userId || 'anon'}_${Date.now()}`;
+        const response = await fetch(`${FAPSHI_API_BASE}/initiate-pay`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apiuser': userToken,
+                'apikey': apiKey,
+            },
+            body: JSON.stringify({ amount, email, externalId, redirectUrl }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            logger.warn({ status: response.status }, '[Fapshi] Initiate payment upstream error');
+            return res.status(response.status).json({ error: data.message || 'Fapshi initiation failed' });
+        }
+        res.json({ link: data.link, transId: data.transId });
+    } catch (e) {
+        logger.error({ error: e }, '[Fapshi] Initiate payment proxy error');
+        res.status(500).json({ error: 'Payment gateway request failed', details: e.message });
+    }
+});
+
+// GET /api/fapshi/status/:transId — proxy Fapshi payment status check
+app.get('/api/fapshi/status/:transId', fapshiLimiter, async (req, res) => {
+    const userToken = process.env.FAPSHI_USER_TOKEN;
+    const apiKey = process.env.FAPSHI_API_KEY;
+    if (!userToken || !apiKey) {
+        return res.status(503).json({ error: 'Fapshi payment gateway is not configured on this server.' });
+    }
+    try {
+        const { transId } = req.params;
+        if (!transId || !/^[a-zA-Z0-9_-]+$/.test(transId)) {
+            return res.status(400).json({ error: 'Invalid transId format' });
+        }
+        const response = await fetch(`${FAPSHI_API_BASE}/payment-status/${transId}`, {
+            method: 'GET',
+            headers: { 'apiuser': userToken, 'apikey': apiKey },
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            return res.status(response.status).json({ status: 'UNKNOWN', error: data.message });
+        }
+        res.json({ status: data.status, amount: data.amount });
+    } catch (e) {
+        logger.error({ error: e }, '[Fapshi] Status check proxy error');
+        res.status(500).json({ status: 'UNKNOWN', error: 'Gateway request failed' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════════
 // PUSH NOTIFICATIONS
 // ══════════════════════════════════════════════════════════════════════
-// A valid fallback public key is provided for dev/test to prevent frontend DOMException crashes
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuB220o_Ew8S_Z2hN2-7xMhOOs';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 
 app.get('/api/push/vapid-key', (req, res) => {
+    if (!VAPID_PUBLIC_KEY) {
+        logger.warn('[Server] VAPID_PUBLIC_KEY is not set — push notifications are disabled');
+        return res.status(503).json({ error: 'Push notifications are not configured on this server.' });
+    }
     res.json({ publicKey: VAPID_PUBLIC_KEY });
 });
 
@@ -679,19 +847,28 @@ app.use(async (req, res, next) => {
                 // Replace the default title and placeholders
                 html = html.replace(/<title>.*?<\/title>/, seoTags);
 
-                // Inject the raw HTML blog into a hidden NOSCRIPT or hidden div so crawlers index it 
+// Inject the raw HTML blog into a hidden NOSCRIPT or hidden div so crawlers index it
                 // but React can mount cleanly around it (React replaces the root div content anyway).
                 // We must put it OUTSIDE of `<div id="root"></div>` to prevent React hydration errors.
                 if (blogContent) {
-                    // M-7: Sanitize AI-generated blog content to prevent XSS.
-                    // Only allow safe formatting tags — strip all script/event-handler/iframe tags.
-                    const allowedTags = ['p', 'h2', 'h3', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'br', 'span', 'a'];
-                    const sanitized = blogContent
-                        .replace(/<script[\s\S]*?<\/script>/gi, '')
-                        .replace(/on\w+="[^"]*"/gi, '')
-                        .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-                        .replace(/<object[\s\S]*?<\/object>/gi, '')
-                        .replace(/<embed[\s\S]*?>/gi, '');
+                    // Use sanitize-html for XSS-safe blog content injection
+                    const sanitized = sanitizeHtml(blogContent, {
+                        allowedTags: ['p', 'h2', 'h3', 'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'br', 'span', 'a'],
+                        allowedAttributes: {
+                            'a': ['href', 'target'],
+                            'span': ['style'],
+                        },
+                        // Force all URLs to use https protocol
+                        transformTags: {
+                            'a': (tagName, attribs) => {
+                                const href = attribs.href || '';
+                                if (href && !href.match(/^https?:\/\//)) {
+                                    return { tagName, attribs: { ...attribs, href: '#' } };
+                                }
+                                return { tagName, attribs };
+                            },
+                        },
+                    });
                     const blogInjection = `
                     <div id="vantage-seo-content" style="display:none;" aria-hidden="true">
                         ${sanitized}

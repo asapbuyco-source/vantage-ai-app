@@ -1,7 +1,11 @@
 import fetch from 'node-fetch';
 
 async function run() {
-    const token = 'jFxFL5OlyrkkV9Aa1WcgwNV5kPpMuCCGfvNgmgLx5FGJ21joEHsHG47809Bn';
+    const token = process.env.SPORTMONKS_API_TOKEN;
+    if (!token) {
+        console.error('SPORTMONKS_API_TOKEN environment variable is not set');
+        process.exit(1);
+    }
     const path = '/fixtures/date/2026-02-28?include=league;participants;scores';
 
     let allData = [];

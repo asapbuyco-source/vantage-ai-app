@@ -7,7 +7,7 @@ const options = {
     method: 'GET',
     headers: {
         'x-rapidapi-host': 'free-livescore-api.p.rapidapi.com',
-        'x-rapidapi-key': '9a760334c6msh67e4033f2f737c0p18e3f1jsnab6aa5197889'
+        'x-rapidapi-key': process.env.RAPIDAPI_KEY
     }
 };
 

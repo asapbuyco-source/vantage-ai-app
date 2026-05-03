@@ -1,7 +1,11 @@
 import fetch from 'node-fetch';
 
 async function run() {
-    const token = 'm55Ud6uKvc3rpzuU3tOKJi46oIZ5YOTK1T8i0kRrcYoAldJ9vTEEKjTa4FBS';
+    const token = process.env.SPORTMONKS_API_TOKEN;
+    if (!token) {
+        console.error('SPORTMONKS_API_TOKEN environment variable is not set');
+        process.exit(1);
+    }
     
     // Just fetch first few pages of leagues and find them
     for (let i = 1; i <= 3; i++) {

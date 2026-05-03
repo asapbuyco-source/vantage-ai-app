@@ -16,6 +16,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Flame, Zap, Clock } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { WEEKLY_TRIAL_PRICE } from '../src/constants/pricing';
 
 const STORAGE_KEY_EXPIRY   = 'vantage_trial_expiry';
 const STORAGE_KEY_CLAIMED  = 'vantage_trial_claimed';
@@ -264,20 +265,14 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
                 </div>
 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 20, fontWeight: 900, color: '#f97316' }}>
-                    1 000 FCFA
-                  </span>
-                  <span style={{
-                    fontSize: 12, color: '#6b7280',
-                    textDecoration: 'line-through',
-                  }}>
-                    2 000 FCFA
+                    {WEEKLY_TRIAL_PRICE.toLocaleString()} FCFA
                   </span>
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: '#10b981',
                     background: 'rgba(16,185,129,0.15)',
                     border: '1px solid rgba(16,185,129,0.3)',
                     borderRadius: 999, padding: '1px 6px',
-                  }}>-50%</span>
+                  }}>TRIAL</span>
                 </div>
               </div>
             </div>

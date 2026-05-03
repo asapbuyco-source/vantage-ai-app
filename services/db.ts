@@ -7,6 +7,7 @@ import { db, auth } from "../firebaseConfig";
 // Prevents redundant Firestore reads when multiple components mount simultaneously.
 // Task 3.2 from IMPLEMENTATION_PLAN: reduces costs by 60-80% on repeated page loads.
 const _cache = new Map<string, { data: any; expires: number }>();
+let _lastCleanup = 0;
 
 function cacheGet<T>(key: string): T | null {
     const entry = _cache.get(key);
@@ -15,8 +16,18 @@ function cacheGet<T>(key: string): T | null {
     return entry.data as T;
 }
 
+function cacheCleanup(): void {
+    const now = Date.now();
+    if (now - _lastCleanup < 60000) return; // Only run cleanup once per minute max
+    _lastCleanup = now;
+    for (const [key, entry] of _cache) {
+        if (now > entry.expires) _cache.delete(key);
+    }
+}
+
 function cacheSet(key: string, data: any, ttlMs: number): void {
     _cache.set(key, { data, expires: Date.now() + ttlMs });
+    cacheCleanup(); // Proactively remove stale entries
 }
 
 
@@ -549,22 +560,30 @@ export const getResultsHistory = async (days: number = 30): Promise<DayResult[]>
     };
 
     const todayKey = getGlobalTodayKey();
-    const fetchPromises = Array.from({ length: days }, (_, i) => {
-        const dateKey = i === 0 ? todayKey : getDateKeyDaysAgo(i);
-        // Bust cache for today so graded results appear immediately
-        const bust = dateKey === todayKey;
-        return getDailyData(dateKey, bust).then(data => ({ dateKey, matches: data?.matches || null }));
-    });
+    const BATCH_SIZE = 5;
+    const allDays: { dateKey: string; matches: any[] | null }[] = [];
 
-    const allDays = await Promise.all(fetchPromises);
+    for (let i = 0; i < days; i += BATCH_SIZE) {
+        const batch = Array.from({ length: Math.min(BATCH_SIZE, days - i) }, (_, j) => {
+            const idx = i + j;
+            const dateKey = idx === 0 ? todayKey : getDateKeyDaysAgo(idx);
+            const bust = dateKey === todayKey;
+            return getDailyData(dateKey, bust).then(data => ({ dateKey, matches: data?.matches || null }));
+        });
+        const batchResults = await Promise.all(batch);
+        allDays.push(...batchResults);
+    }
+
     allDays.forEach(({ dateKey, matches }) => {
         if (!matches || matches.length === 0) return;
 
-        const graded = matches.filter(m => m.status === 'won' || m.status === 'lost');
+        // Results page only shows graded matches (won/lost/void)
+        const graded = matches.filter(m => m.status === 'won' || m.status === 'lost' || m.status === 'void');
+        if (graded.length === 0) return;
 
         results.push({
             date: dateKey,
-            matches: matches, // Return all matches so pending ones show up
+            matches: graded,
             wonCount: graded.filter(m => m.status === 'won').length,
             lostCount: graded.filter(m => m.status === 'lost').length,
             totalGraded: graded.length,
@@ -577,9 +596,6 @@ export const getResultsHistory = async (days: number = 30): Promise<DayResult[]>
 // ─── APP SETTINGS ─────────────────────────────────────────────────────────────
 
 export interface AppSettings {
-    whatsappGroupUrl?: string;
-    telegramBotToken?: string;
-    telegramChannelId?: string;
     telegramEnabled?: boolean;
     telegramSendTime?: string;      // HH:MM — time for daily predictions broadcast
     telegramLastSentAt?: string;    // ISO timestamp of last successful send
@@ -593,7 +609,15 @@ export interface AppSettings {
     googleSiteVerificationTag?: string; // GSC Meta tag for injection
     gradingTime?: string;
     appDownloadUrl?: string;   // Direct APK / PWA install URL set by admin
+    quantGenTime?: string;
+    quantGradingTime?: string;
     updatedAt?: string;
+}
+
+export interface InternalSettings {
+    telegramBotToken?: string;
+    telegramChannelId?: string;
+    whatsappGroupUrl?: string;
 }
 
 export const getAppSettings = async (): Promise<AppSettings> => {
@@ -621,6 +645,23 @@ export const saveAppSettings = async (settings: Partial<AppSettings>): Promise<v
         ...settings,
         updatedAt: new Date().toISOString(),
     }, { merge: true });
+};
+
+export const getInternalSettings = async (): Promise<InternalSettings> => {
+    try {
+        const snap = await getDoc(doc(db, "settings", "internal"));
+        if (snap.exists()) {
+            return snap.data() as InternalSettings;
+        }
+    } catch (e) {
+        console.warn("Failed to load internal settings", e);
+    }
+    return {};
+};
+
+export const saveInternalSettings = async (settings: Partial<InternalSettings>): Promise<void> => {
+    if (!auth.currentUser) return;
+    await setDoc(doc(db, "settings", "internal"), settings, { merge: true });
 };
 
 // ─── GENERATION LOCK (prevents concurrent Gemini calls by multiple users) ──────

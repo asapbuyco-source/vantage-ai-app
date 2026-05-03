@@ -157,7 +157,12 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
                                 <div className="p-3 bg-vantage-purple/5 border border-vantage-purple/10 rounded-lg flex items-start gap-3">
                                     <Info size={16} className="text-vantage-purple shrink-0 mt-0.5" />
                                     <p className="text-[11px] text-gray-500 italic">
-                                        L'IA analysera les cotes disponibles pour atteindre votre objectif de <span className="text-vantage-purple font-bold">{goal} FCFA</span> avec une mise de <span className="text-vantage-purple font-bold">{stake} FCFA</span>.
+                                        {language === 'fr'
+                                          ? `L'IA analysera les cotes disponibles pour atteindre votre objectif de `
+                                          : `AI will analyze available odds to reach your goal of `}
+                                        <span className="text-vantage-purple font-bold">{goal} FCFA</span>
+                                        {language === 'fr' ? ' avec une mise de ' : ' with a stake of '}
+                                        <span className="text-vantage-purple font-bold">{stake} FCFA</span>.
                                     </p>
                                 </div>
                             </div>
@@ -224,7 +229,11 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
                                             {r.label}
                                         </span>
                                         <span className="text-[10px] text-gray-500 uppercase tracking-tighter">
-                                            {r.id === 'low' ? 'Confiance > 80%' : (r.id === 'med' ? 'Optimisé pour le profit' : 'Priorité aux grosses cotes')}
+                                            {r.id === 'low'
+                                                ? (language === 'fr' ? 'Confiance > 80%' : 'Confidence > 80%')
+                                                : r.id === 'med'
+                                                    ? (language === 'fr' ? 'Optimisé pour le profit' : 'Optimized for profit')
+                                                    : (language === 'fr' ? 'Priorité aux grosses cotes' : 'High odds priority')}
                                         </span>
                                     </div>
                                     {risk === r.id && <div className={`ml-auto w-6 h-6 rounded-full ${r.bg} ${r.color} flex items-center justify-center`}><Check size={14} /></div>}
@@ -237,7 +246,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
                                 onClick={() => setStep(1)}
                                 className="flex-1 py-4 bg-slate-100 dark:bg-white/5 text-gray-500 font-bold rounded-2xl border border-slate-200 dark:border-white/10 transition-all active:scale-[0.98]"
                             >
-                                Retour
+                                {language === 'fr' ? 'Retour' : 'Back'}
                             </button>
                             <button
                                 onClick={generateTicket}
@@ -316,10 +325,14 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
 
                                     <div className="p-4 bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
                                         <div className="flex items-center justify-between text-xs">
-                                            <span className="text-gray-500 italic">Mise recommandée: {stake} FCFA</span>
+                                            <span className="text-gray-500 italic">
+                                                {language === 'fr' ? 'Mise recommandée:' : 'Recommended stake:'} {stake} FCFA
+                                            </span>
                                             <div className="flex items-center gap-1 text-vantage-purple">
                                                 <Sparkles size={12} />
-                                                <span className="font-bold">Analysé par Vantage AI</span>
+                                                <span className="font-bold">
+                                                    {language === 'fr' ? 'Analysé par Vantage AI' : 'Analyzed by Vantage AI'}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>

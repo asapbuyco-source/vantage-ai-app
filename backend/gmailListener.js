@@ -8,7 +8,7 @@ dotenv.config({ path: '.env.local' });
 const oauth2Client = new google.auth.OAuth2(
     process.env.GMAIL_CLIENT_ID,
     process.env.GMAIL_CLIENT_SECRET,
-    "http://localhost:3000/oauth2callback"
+    process.env.GMAIL_REDIRECT_URI || 'http://localhost:3000/oauth2callback'
 );
 
 // We must set the credentials using the long-lived refresh token
@@ -104,6 +104,14 @@ export const checkRecentSelarEmails = async () => {
 
         // 2. Loop through each message
         for (const msg of messages) {
+            // ── Idempotency guard: skip if already processed ──────────────────
+            const processedRef = db.collection('processed_emails').doc(msg.id);
+            const processedSnap = await processedRef.get();
+            if (processedSnap.exists()) {
+                console.log(`[Gmail Listener] Msg ${msg.id} already processed — skipping.`);
+                continue;
+            }
+
             const messageData = await gmail.users.messages.get({
                 userId: 'me',
                 id: msg.id,
@@ -165,6 +173,7 @@ export const checkRecentSelarEmails = async () => {
                 });
                 // Mark as read so we don't retry endlessly
                 await markAsRead(gmail, msg.id);
+                await processedRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
                 continue;
             }
 
@@ -202,6 +211,7 @@ export const checkRecentSelarEmails = async () => {
                     rawEmails: allEmailsInBody
                 });
                 await markAsRead(gmail, msg.id);
+                await processedRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
                 continue;
             }
 
@@ -220,10 +230,23 @@ export const checkRecentSelarEmails = async () => {
             }
 
             // Add time based on plan
+            const originalDay = newExpiry.getDate();
             if (plan === 'weekly') newExpiry.setDate(newExpiry.getDate() + 7);
-            else if (plan === 'monthly') newExpiry.setMonth(newExpiry.getMonth() + 1);
-            else if (plan === 'quarterly') newExpiry.setMonth(newExpiry.getMonth() + 3);
-            else if (plan === 'annual') newExpiry.setFullYear(newExpiry.getFullYear() + 1);
+            else if (plan === 'monthly') {
+                newExpiry.setDate(1); // avoid overflow: start at day 1 of month
+                newExpiry.setMonth(newExpiry.getMonth() + 1);
+                newExpiry.setDate(Math.min(originalDay, new Date(newExpiry.getFullYear(), newExpiry.getMonth() + 1, 0).getDate()));
+            }
+            else if (plan === 'quarterly') {
+                newExpiry.setDate(1);
+                newExpiry.setMonth(newExpiry.getMonth() + 3);
+                newExpiry.setDate(Math.min(originalDay, new Date(newExpiry.getFullYear(), newExpiry.getMonth() + 1, 0).getDate()));
+            }
+            else if (plan === 'annual') {
+                newExpiry.setDate(1);
+                newExpiry.setFullYear(newExpiry.getFullYear() + 1);
+                newExpiry.setDate(Math.min(originalDay, new Date(newExpiry.getFullYear(), newExpiry.getMonth() + 1, 0).getDate()));
+            }
             else newExpiry.setDate(newExpiry.getDate() + 7); // fallback to 1 week
 
             await userDoc.ref.update({
@@ -237,6 +260,9 @@ export const checkRecentSelarEmails = async () => {
 
             // 6. Mark the email as READ so we don't process it again
             await markAsRead(gmail, msg.id);
+
+            // 7. Record processed email for idempotency (prevents re-processing on retry)
+            await processedRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
         }
 
     } catch (error) {

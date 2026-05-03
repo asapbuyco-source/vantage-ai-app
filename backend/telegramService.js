@@ -29,37 +29,52 @@ const getDateKey = (offsetDays = 0) => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-/** Reads Telegram settings from Firestore settings/app */
+/** Reads Telegram settings from Firestore settings/internal (secrets) and settings/app (config) */
 const getTelegramSettings = async () => {
     const db = admin.firestore();
-    const snap = await db.collection('settings').doc('app').get();
-    if (!snap.exists) return null;
-    const data = snap.data();
+    const [internalSnap, appSnap] = await Promise.all([
+        db.collection('settings').doc('internal').get(),
+        db.collection('settings').doc('app').get(),
+    ]);
+    const internal = internalSnap.data() || {};
+    const app = appSnap.data() || {};
     return {
-        token: data?.telegramBotToken || '',
-        chatId: data?.telegramChannelId || '',
-        enabled: data?.telegramEnabled === true,
+        token: internal?.telegramBotToken || '',
+        chatId: internal?.telegramChannelId || '',
+        enabled: app?.telegramEnabled === true,
     };
 };
 
-/** Calls the Telegram sendMessage API */
+/** Calls the Telegram sendMessage API with a 30-second timeout */
 const sendMessage = async (token, chatId, text, parseMode = 'HTML') => {
     const url = `${TELEGRAM_API}${token}/sendMessage`;
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            chat_id: chatId,
-            text,
-            parse_mode: parseMode,
-            disable_web_page_preview: true,
-        }),
-    });
-    const result = await response.json();
-    if (!result.ok) {
-        throw new Error(`Telegram API error: ${result.description || JSON.stringify(result)}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text,
+                parse_mode: parseMode,
+                disable_web_page_preview: true,
+            }),
+            signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        const result = await response.json();
+        if (!result.ok) {
+            throw new Error(`Telegram API error: ${result.description || JSON.stringify(result)}`);
+        }
+        return result;
+    } catch (err) {
+        clearTimeout(timeout);
+        if (err.name === 'AbortError') {
+            throw new Error('Telegram API request timed out after 30 seconds');
+        }
+        throw err;
     }
-    return result;
 };
 
 /** Category → emoji labelling */

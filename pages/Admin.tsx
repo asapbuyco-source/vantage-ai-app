@@ -7,7 +7,8 @@ import { UserProfile, NavigationTab, Match, PayoutRequest, TeamAsset } from '../
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
 import { testGeminiConnection, enrichMatchStats, setGeminiModel, getGeminiModel, AVAILABLE_MODELS } from '../services/gemini';
-import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, saveTodaysPredictions, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount } from '../services/db';
+import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, saveTodaysPredictions, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount, getInternalSettings, saveInternalSettings } from '../services/db';
+import { auth } from '../firebaseConfig';
 import { TeamLogo } from '../components/TeamLogo';
 
 interface AdminProps {
@@ -40,6 +41,8 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     // OpenAI Test State
     const [openAITest, setOpenAITest] = useState<{ status: 'success' | 'error'; latency: number; model: string; message: string } | null>(null);
     const [testingOpenAI, setTestingOpenAI] = useState(false);
+    // Admin JWT for backend API auth
+    const [adminJwt, setAdminJwt] = useState<string | null>(() => sessionStorage.getItem('admin_jwt'));
     // Enrich Stats State
     const [isEnrichingStats, setIsEnrichingStats] = useState(false);
     const [enrichResult, setEnrichResult] = useState<string | null>(null);
@@ -91,12 +94,9 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
     useEffect(() => {
         isMounted.current = true;
-        // Load all settings
+        // Load public settings
         getAppSettings().then(s => {
             if (!isMounted.current) return;
-            if (s.whatsappGroupUrl) setWhatsappUrl(s.whatsappGroupUrl);
-            if (s.telegramBotToken) setTelegramBotToken(s.telegramBotToken);
-            if (s.telegramChannelId) setTelegramChannelId(s.telegramChannelId);
             if (s.telegramEnabled !== undefined) setTelegramEnabled(s.telegramEnabled);
             if (s.telegramSendTime) setTelegramSendTime(s.telegramSendTime);
             if (s.telegramLastSentAt) setTelegramLastSentAt(s.telegramLastSentAt);
@@ -112,13 +112,48 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             if (s.freePicksCount !== undefined) setFreePicksCount(s.freePicksCount);
             if (s.appDownloadUrl) setAppDownloadUrl(s.appDownloadUrl);
         });
+        // Load internal (secret) settings
+        getInternalSettings().then(s => {
+            if (!isMounted.current) return;
+            if (s.whatsappGroupUrl) setWhatsappUrl(s.whatsappGroupUrl);
+            if (s.telegramBotToken) setTelegramBotToken(s.telegramBotToken);
+            if (s.telegramChannelId) setTelegramChannelId(s.telegramChannelId);
+        });
         return () => { isMounted.current = false; };
     }, []);
+
+    // Fetch a fresh JWT on mount using the current user's Firebase ID token.
+    // This removes the need for VITE_ADMIN_API_SECRET in the browser bundle.
+    useEffect(() => {
+        if (adminJwt) return; // Already have one (from sessionStorage)
+        const backendUrl = import.meta.env.VITE_BACKEND_URL;
+        if (!backendUrl) return;
+
+        const currentUser = auth.currentUser;
+        if (!currentUser) return;
+
+        currentUser.getIdToken()
+            .then(idToken =>
+                fetch(`${backendUrl}/api/admin/token`, {
+                    headers: { 'Authorization': `Bearer ${idToken}` },
+                })
+            )
+            .then(r => r.json())
+            .then(data => {
+                if (data.token) {
+                    setAdminJwt(data.token);
+                    sessionStorage.setItem('admin_jwt', data.token);
+                } else {
+                    console.warn('[Admin] JWT request denied:', data.error);
+                }
+            })
+            .catch(e => console.warn('[Admin] Failed to fetch admin JWT:', e));
+    }, [adminJwt]);
 
     const handleSaveWhatsApp = async () => {
         setSavingWhatsapp(true);
         try {
-            await saveAppSettings({ whatsappGroupUrl: whatsappUrl.trim() });
+            await saveInternalSettings({ whatsappGroupUrl: whatsappUrl.trim() });
             setWhatsappSaved(true);
             setTimeout(() => setWhatsappSaved(false), 3000);
         } catch (e) {
@@ -131,13 +166,10 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const handleSaveBotSettings = async () => {
         setSavingBotSettings(true);
         try {
-            await saveAppSettings({
-                telegramBotToken: telegramBotToken.trim(),
-                telegramChannelId: telegramChannelId.trim(),
-                telegramEnabled,
-                telegramSendTime: telegramSendTime.trim(),
-                referralRewardDays,
-            });
+            await Promise.all([
+                saveAppSettings({ telegramEnabled, telegramSendTime: telegramSendTime.trim(), referralRewardDays }),
+                saveInternalSettings({ telegramBotToken: telegramBotToken.trim(), telegramChannelId: telegramChannelId.trim() }),
+            ]);
             setBotSettingsSaved(true);
             setTimeout(() => setBotSettingsSaved(false), 3000);
         } catch (e) {
@@ -356,7 +388,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
             const response = await fetch(`${backendUrl}/api/admin/trigger-quant`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` },
                 body: JSON.stringify({})
             });
 
@@ -399,7 +431,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
             const response = await fetch(`${backendUrl}/api/admin/generate-basketball`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` },
                 body: JSON.stringify({})
             });
 
@@ -433,7 +465,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
             const response = await fetch(`${backendUrl}/api/admin/quant-performance`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` }
             });
 
             if (!response.ok) throw new Error('Quant performance request failed');
@@ -476,7 +508,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
             const response = await fetch(`${backendUrl}/api/admin/grade-quant`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` },
                 body: JSON.stringify({ date: targetDate })
             });
 
@@ -532,7 +564,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
             const res = await fetch(`${backendUrl}/api/admin/test-openai`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` }
             });
             const data = await res.json();
             if (isMounted.current) setOpenAITest(data);
@@ -766,7 +798,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                         const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
                                         const res = await fetch(`${backendUrl}/api/admin/generate-blog`, {
                                             method: 'POST',
-                                            headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
+                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` }
                                         });
                                         const data = await res.json();
                                         if (!res.ok) throw new Error(data.error || 'Failed to generate blog');
@@ -1478,7 +1510,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                             const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
                                             const res = await fetch(`${backendUrl}/api/admin/telegram-test`, {
                                                 method: 'POST',
-                                                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
+                                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` }
                                             });
                                             const data = await res.json();
                                             setTelegramActionResult(data.status === 'success' ? '✅ Test message sent!' : `❌ ${data.error}`);
@@ -1503,7 +1535,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                             const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
                                             const res = await fetch(`${backendUrl}/api/admin/telegram-broadcast`, {
                                                 method: 'POST',
-                                                headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken }
+                                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` }
                                             });
                                             const data = await res.json();
                                             if (data.status === 'success') {

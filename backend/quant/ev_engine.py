@@ -120,7 +120,7 @@ def devig_1x2(home_odds: float, draw_odds: float, away_odds: float) -> tuple[flo
     return (1/home_odds)/overround, (1/draw_odds)/overround, (1/away_odds)/overround
 
 
-def devig_ouright(odds: float, market_odds: list[float]) -> float:
+def devig_outright(odds: float, market_odds: list[float]) -> float:
     """
     Remove vig for any market given a list of all selection odds for that market.
     E.g. for BTTS: market_odds = [btts_yes_odds, btts_no_odds]
@@ -211,22 +211,22 @@ def evaluate_all_markets(
         market_devig["Draw No Bet (Away)"] = (1/odds.dnb_away_odds) / dnb_total
     # Over/Under 1.5
     if odds.over15_odds > 1.0 and odds.under15_odds > 1.0:
-        market_devig["Over 1.5 Goals"] = devig_ouright(odds.over15_odds, [odds.over15_odds, odds.under15_odds])
-        market_devig["Under 1.5 Goals"] = devig_ouright(odds.under15_odds, [odds.over15_odds, odds.under15_odds])
+        market_devig["Over 1.5 Goals"] = devig_outright(odds.over15_odds, [odds.over15_odds, odds.under15_odds])
+        market_devig["Under 1.5 Goals"] = devig_outright(odds.under15_odds, [odds.over15_odds, odds.under15_odds])
     # Over/Under 2.5
     if odds.over25_odds > 1.0 and odds.under25_odds > 1.0:
-        ov_dv = devig_ouright(odds.over25_odds, [odds.over25_odds, odds.under25_odds])
-        un_dv = devig_ouright(odds.under25_odds, [odds.over25_odds, odds.under25_odds])
+        ov_dv = devig_outright(odds.over25_odds, [odds.over25_odds, odds.under25_odds])
+        un_dv = devig_outright(odds.under25_odds, [odds.over25_odds, odds.under25_odds])
         market_devig["Over 2.5 Goals"] = ov_dv
         market_devig["Under 2.5 Goals"] = un_dv
     # Over/Under 3.5
     if odds.over35_odds > 1.0 and odds.under35_odds > 1.0:
-        market_devig["Over 3.5 Goals"] = devig_ouright(odds.over35_odds, [odds.over35_odds, odds.under35_odds])
-        market_devig["Under 3.5 Goals"] = devig_ouright(odds.under35_odds, [odds.over35_odds, odds.under35_odds])
+        market_devig["Over 3.5 Goals"] = devig_outright(odds.over35_odds, [odds.over35_odds, odds.under35_odds])
+        market_devig["Under 3.5 Goals"] = devig_outright(odds.under35_odds, [odds.over35_odds, odds.under35_odds])
     # BTTS
     if odds.btts_yes_odds > 1.0 and odds.btts_no_odds > 1.0:
-        market_devig["BTTS"] = devig_ouright(odds.btts_yes_odds, [odds.btts_yes_odds, odds.btts_no_odds])
-        market_devig["BTTS No"] = devig_ouright(odds.btts_no_odds, [odds.btts_yes_odds, odds.btts_no_odds])
+        market_devig["BTTS"] = devig_outright(odds.btts_yes_odds, [odds.btts_yes_odds, odds.btts_no_odds])
+        market_devig["BTTS No"] = devig_outright(odds.btts_no_odds, [odds.btts_yes_odds, odds.btts_no_odds])
 
     for market, prob_attr in MARKET_TO_PROB.items():
         model_prob = getattr(probs, prob_attr, None)

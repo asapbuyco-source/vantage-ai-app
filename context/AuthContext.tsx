@@ -10,10 +10,11 @@ import {
     onAuthStateChanged,
     User
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDoc, orderBy, runTransaction, limit, getDocs, query, where } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDoc, orderBy, runTransaction, limit, getDocs, query, where, startAfter } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
 import { checkPaymentStatus } from "../services/fapshi";
+import { WEEKLY_TRIAL_PRICE, WEEKLY_REGULAR_PRICE, MONTHLY_PRICE, QUARTERLY_PRICE, ANNUAL_PRICE, REFERRAL_COMMISSION_PERCENT } from '../src/constants/pricing';
 
 interface AuthContextType {
     user: User | null;
@@ -29,7 +30,7 @@ interface AuthContextType {
     deleteAccount: () => Promise<void>;
     clearError: () => void;
     upgradeToVip: (plan: 'weekly' | 'monthly' | 'quarterly' | 'annual') => Promise<void>;
-    getAllUsers: () => Promise<UserProfile[]>;
+    getAllUsers: (lastDoc?: any, pageSize?: number) => Promise<{ users: UserProfile[]; lastDoc: any }>;
     toggleUserVip: (uid: string, currentStatus: boolean, plan?: 'weekly'|'monthly'|'quarterly'|'annual') => Promise<void>;
     toggleUserAdmin: (uid: string, currentStatus: boolean) => Promise<void>;
     toggleUserBlock: (uid: string, currentStatus: boolean) => Promise<void>;
@@ -130,7 +131,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     uid: firebaseUser.uid,
                     email: firebaseUser.email,
                     isVip: false,
-                    isAdmin: import.meta.env?.VITE_ADMIN_EMAIL ? firebaseUser.email === import.meta.env.VITE_ADMIN_EMAIL : false,
+                    isAdmin: false,
                     displayName: firebaseUser.displayName,
                     isBlocked: false,
                     referralCode: generateReferralCode(firebaseUser.displayName || firebaseUser.email),
@@ -140,13 +141,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 };
                 await setDoc(userRef, skeletonProfile);
                 profileData = skeletonProfile;
-            }
-
-            // Bootstrap: if the env-configured admin email matches, grant isAdmin on first setup
-            const adminEmail = import.meta.env?.VITE_ADMIN_EMAIL;
-            if (adminEmail && firebaseUser.email === adminEmail && !profileData?.isAdmin) {
-                await setDoc(userRef, { isAdmin: true }, { merge: true });
-                if (profileData) profileData.isAdmin = true;
             }
 
             setUserProfile(profileData as UserProfile);
@@ -166,7 +160,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
                 isVip: false,
-                isAdmin: import.meta.env?.VITE_ADMIN_EMAIL ? firebaseUser.email === import.meta.env.VITE_ADMIN_EMAIL : false,
+                isAdmin: false,
                 displayName: firebaseUser.displayName,
                 isBlocked: false,
                 referralCode: newReferralCode,
@@ -278,12 +272,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (plan === 'annual') expiry.setDate(now.getDate() + 365);
         
         const isFirstTime = !userProfile?.totalPaid || userProfile.totalPaid === 0;
-        let planCost = plan === 'weekly' ? 2000 : plan === 'monthly' ? 6500 : plan === 'quarterly' ? 18000 : 70000;
-        
-        if (isFirstTime) {
-            if (plan === 'weekly') planCost = 1000;
-            if (plan === 'monthly') planCost = 3250;
-        }
+        const basePrice = plan === 'weekly' ? WEEKLY_REGULAR_PRICE : plan === 'monthly' ? MONTHLY_PRICE : plan === 'quarterly' ? QUARTERLY_PRICE : ANNUAL_PRICE;
+        const planCost = (isFirstTime && plan === 'weekly') ? WEEKLY_TRIAL_PRICE : basePrice;
 
         try {
             const userRef = doc(db, "profiles", user.uid);
@@ -305,7 +295,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
 
                 if (referredBy) {
-                    const commission = Math.floor(planCost * 0.40);
+                    const commission = Math.floor(planCost * REFERRAL_COMMISSION_PERCENT / 100);
                     if (commission > 0) {
                         const referrerRef = doc(db, "profiles", referredBy);
                         tx.update(referrerRef, {
@@ -438,16 +428,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await updateDoc(doc(db, "profiles", uid), { isBlocked: !currentStatus });
     };
 
-    const getAllUsers = async (): Promise<UserProfile[]> => {
-        if (!isAdmin) return [];
+    const getAllUsers = async (lastDoc?: any, pageSize: number = 100): Promise<{ users: UserProfile[]; lastDoc: any }> => {
+        if (!isAdmin) return { users: [], lastDoc: null };
         try {
-            const q = query(collection(db, "profiles"), limit(500));
+            let q = query(collection(db, "profiles"), limit(pageSize));
+            if (lastDoc) {
+                q = query(collection(db, "profiles"), startAfter(lastDoc), limit(pageSize));
+            }
             const querySnapshot = await getDocs(q);
             const profiles: UserProfile[] = [];
-            querySnapshot.forEach((doc) => profiles.push(doc.data() as UserProfile));
-            return profiles;
+            let newLastDoc: any = null;
+            querySnapshot.forEach((doc) => {
+                profiles.push(doc.data() as UserProfile);
+                newLastDoc = doc;
+            });
+            return { users: profiles, lastDoc: newLastDoc };
         } catch (e) {
-            return [];
+            return { users: [], lastDoc: null };
         }
     };
 

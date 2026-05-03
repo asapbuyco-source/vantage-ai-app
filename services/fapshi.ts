@@ -1,111 +1,77 @@
-interface FapshiInitResponse {
-  link: string;
-  transId: string;
-}
-
 export interface PaymentStatusResponse {
   status: 'SUCCESSFUL' | 'FAILED' | 'PENDING' | 'EXPIRED' | 'CREATED' | 'UNKNOWN';
   amount?: number;
 }
 
-const API_BASE = "https://live.fapshi.com";
+interface FapshiInitResponse {
+  link: string;
+  transId: string;
+}
 
 /**
- * Get Fapshi credentials from environment variables only.
- * Throws a descriptive error if variables are missing.
+ * Fapshi Integration — Backend Proxy Version
+ *
+ * All API calls go through the Express backend (/api/fapshi/*).
+ * FAPSHI_USER_TOKEN and FAPSHI_API_KEY are server-side only env vars.
+ * No payment credentials ever reach the browser bundle.
  */
-const getCredentials = () => {
-  const userToken = import.meta.env?.VITE_FAPSHI_USER_TOKEN;
-  const apiKey = import.meta.env?.VITE_FAPSHI_API_KEY;
-  if (!userToken || !apiKey) {
-    throw new Error(
-      "Missing Fapshi credentials. Set VITE_FAPSHI_USER_TOKEN and " +
-      "VITE_FAPSHI_API_KEY in your .env.local file."
-    );
-  }
-  return { userToken, apiKey };
+const getBackendUrl = (): string => {
+  const url = import.meta.env?.VITE_BACKEND_URL;
+  if (!url) throw new Error('[Fapshi] VITE_BACKEND_URL is not configured.');
+  return url.replace(/\/$/, '');
 };
 
 /**
- * Initiates a payment with Fapshi.
+ * Initiates a Fapshi MoMo payment via the backend proxy.
+ * Backend calls live.fapshi.com with server-side credentials.
  */
 export const initiatePayment = async (
   amount: number,
   email: string,
   userId: string
 ): Promise<FapshiInitResponse> => {
-  const { userToken, apiKey } = getCredentials();
+  const backendUrl = getBackendUrl();
+  const redirectUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
 
-  const externalId = `${userId}_${Date.now()}`;
-  const baseUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
+  const response = await fetch(`${backendUrl}/api/fapshi/initiate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount, email, userId, redirectUrl }),
+  });
 
-  try {
-    const response = await fetch(`${API_BASE}/initiate-pay`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apiuser': userToken,
-        'apikey': apiKey
-      },
-      body: JSON.stringify({
-        amount: amount,
-        email: email,
-        externalId: externalId,
-        redirectUrl: baseUrl
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error("Fapshi Init Error:", response.status, errorData);
-      throw new Error(errorData.message || `Payment initiation failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return {
-      link: data.link,
-      transId: data.transId
-    };
-  } catch (error) {
-    console.error("Fapshi Payment Error:", error);
-    throw error;
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || `Payment initiation failed: ${response.status}`);
   }
+
+  const data = await response.json();
+  return { link: data.link, transId: data.transId };
 };
 
 /**
- * Checks the status of a payment
+ * Checks Fapshi payment status via the backend proxy.
+ * Returns UNKNOWN on any network or configuration error.
+ * The backend holds credentials server-side — no tokens in the bundle.
  */
 export const checkPaymentStatus = async (transId: string): Promise<PaymentStatusResponse> => {
-  let credentials: { userToken: string; apiKey: string };
   try {
-    credentials = getCredentials();
-  } catch {
-    return { status: 'UNKNOWN' };
-  }
-
-  try {
-    const response = await fetch(`${API_BASE}/payment-status/${transId}`, {
+    const backendUrl = getBackendUrl();
+    const response = await fetch(`${backendUrl}/api/fapshi/status/${encodeURIComponent(transId)}`, {
       method: 'GET',
-      headers: {
-        'apiuser': credentials.userToken,
-        'apikey': credentials.apiKey
-      }
     });
 
     if (!response.ok) {
-      console.warn(`Fapshi Status Check HTTP ${response.status} for ${transId}`);
+      console.warn(`[Fapshi] Proxy status HTTP ${response.status} for ${transId}`);
       return { status: 'PENDING' };
     }
 
     const data = await response.json();
-    console.log(`Fapshi Status Response for ${transId}:`, data.status);
-
     return {
-      status: data.status,
-      amount: data.amount ? Number(data.amount) : undefined
+      status: data.status ?? 'UNKNOWN',
+      amount: data.amount !== undefined ? Number(data.amount) : undefined,
     };
   } catch (e) {
-    console.error("Fapshi Status Check Network Error:", e);
+    console.error('[Fapshi] Status check network error:', e);
     return { status: 'UNKNOWN' };
   }
 };

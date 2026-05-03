@@ -22,6 +22,76 @@ FINISHED_STATES = {"FT", "AET", "PEN", "FINS"}
 VOIDED_STATES = {"CANCL", "POSTP", "INT", "ABANDONED", "TBA", "NS"}
 
 
+# ── Market type enum ─────────────────────────────────────────────────────────
+class MarketType:
+    HOME_WIN = "home_win"
+    AWAY_WIN = "away_win"
+    DRAW = "draw"
+    DOUBLE_CHANCE_1X = "double_chance_1x"
+    DOUBLE_CHANCE_X2 = "double_chance_x2"
+    DOUBLE_CHANCE_12 = "double_chance_12"
+    DRAW_NO_BET_HOME = "draw_no_bet_home"
+    DRAW_NO_BET_AWAY = "draw_no_bet_away"
+    OVER_1_5 = "over_1_5"
+    OVER_2_5 = "over_2_5"
+    OVER_3_5 = "over_3_5"
+    UNDER_2_5 = "under_2_5"
+    UNDER_3_5 = "under_3_5"
+    BTTS_YES = "btts_yes"
+    BTTS_NO = "btts_no"
+    UNKNOWN = "unknown"
+
+
+def resolveMarket(market: str) -> MarketType:
+    """
+    Normalize a free-text market string to a MarketType enum value.
+    Handles Sportmonks labels, lower/upper case, and common shorthand.
+    """
+    m = market.lower().strip()
+
+    # Home/Away Win (exclude draw no bet and double chance)
+    if "home win" in m and "draw no bet" not in m and "double" not in m:
+        return MarketType.HOME_WIN
+    if "away win" in m and "draw no bet" not in m and "double" not in m:
+        return MarketType.AWAY_WIN
+    if m == "draw":
+        return MarketType.DRAW
+
+    # Double Chance
+    if "double chance (1x)" in m or (("double" in m or "chance" in m) and ("1x" in m or ("home" in m and "draw" in m))):
+        return MarketType.DOUBLE_CHANCE_1X
+    if "double chance (x2)" in m or (("double" in m or "chance" in m) and ("x2" in m or ("away" in m and "draw" in m))):
+        return MarketType.DOUBLE_CHANCE_X2
+    if "double chance (12)" in m or (("double" in m or "chance" in m) and ("12" in m)):
+        return MarketType.DOUBLE_CHANCE_12
+
+    # Draw No Bet
+    if "draw no bet (home)" in m or "dnb home" in m:
+        return MarketType.DRAW_NO_BET_HOME
+    if "draw no bet (away)" in m or "dnb away" in m:
+        return MarketType.DRAW_NO_BET_AWAY
+
+    # Over/Under
+    if "over 1.5" in m or "over 1.5" in market.lower():
+        return MarketType.OVER_1_5
+    if "over 2.5" in m or "over 2.5" in market.lower():
+        return MarketType.OVER_2_5
+    if "over 3.5" in m or "over 3.5" in market.lower():
+        return MarketType.OVER_3_5
+    if "under 2.5" in m or "under 2.5" in market.lower():
+        return MarketType.UNDER_2_5
+    if "under 3.5" in m or "under 3.5" in market.lower():
+        return MarketType.UNDER_3_5
+
+    # BTTS
+    if "btts" in m and "no" not in m:
+        return MarketType.BTTS_YES
+    if "btts" in m and "no" in m:
+        return MarketType.BTTS_NO
+
+    return MarketType.UNKNOWN
+
+
 def _sm_get(path: str, params: dict | None = None) -> dict | None:
     if not SM_TOKEN:
         return None
@@ -158,39 +228,39 @@ def _compute_clv(pick_odds: float, closing_odds: float) -> float:
 def _grade_bet(market: str, home_goals: int, away_goals: int) -> str:
     """Return 'won', 'lost', or 'void' for a specific bet given the result."""
     total = home_goals + away_goals
-    m = market.lower()
+    mt = resolveMarket(market)
 
-    if "home win" in m and "draw no bet" not in m and "double" not in m:
+    if mt == MarketType.HOME_WIN:
         return "won" if home_goals > away_goals else "lost"
-    if "away win" in m and "draw no bet" not in m and "double" not in m:
+    if mt == MarketType.AWAY_WIN:
         return "won" if away_goals > home_goals else "lost"
-    if m == "draw":
+    if mt == MarketType.DRAW:
         return "won" if home_goals == away_goals else "lost"
-    if "double chance (1x)" in m:
+    if mt == MarketType.DOUBLE_CHANCE_1X:
         return "won" if home_goals >= away_goals else "lost"
-    if "double chance (x2)" in m:
+    if mt == MarketType.DOUBLE_CHANCE_X2:
         return "won" if away_goals >= home_goals else "lost"
-    if "double chance (12)" in m:
+    if mt == MarketType.DOUBLE_CHANCE_12:
         return "won" if home_goals != away_goals else "lost"
-    if "draw no bet (home)" in m:
+    if mt == MarketType.DRAW_NO_BET_HOME:
         if home_goals == away_goals: return "void"
         return "won" if home_goals > away_goals else "lost"
-    if "draw no bet (away)" in m:
+    if mt == MarketType.DRAW_NO_BET_AWAY:
         if home_goals == away_goals: return "void"
         return "won" if away_goals > home_goals else "lost"
-    if "over 1.5" in m:
+    if mt == MarketType.OVER_1_5:
         return "won" if total > 1 else "lost"
-    if "over 2.5" in m:
+    if mt == MarketType.OVER_2_5:
         return "won" if total > 2 else "lost"
-    if "under 2.5" in m:
+    if mt == MarketType.UNDER_2_5:
         return "won" if total < 3 else "lost"
-    if "over 3.5" in m:
+    if mt == MarketType.OVER_3_5:
         return "won" if total > 3 else "lost"
-    if "under 3.5" in m:
+    if mt == MarketType.UNDER_3_5:
         return "won" if total < 4 else "lost"
-    if "btts" in m and "no" not in m:
+    if mt == MarketType.BTTS_YES:
         return "won" if home_goals > 0 and away_goals > 0 else "lost"
-    if "btts no" in m or ("btts" in m and "no" in m):
+    if mt == MarketType.BTTS_NO:
         return "won" if home_goals == 0 or away_goals == 0 else "lost"
 
     return "void"  # Unknown market

@@ -275,19 +275,28 @@ export const triggerBlogGeneration = async () => {
     console.log('[BlogGenerator] Starting programmatic blog generation...');
     try {
         const topLeagues = ['Premier League', 'La Liga', 'Serie A', 'Champions League'];
-        
-        // Generate English blogs for multiple leagues
-        const results = await Promise.all(
+
+        // Generate English blogs for multiple leagues — use allSettled so one league failure doesn't block others
+        const results = await Promise.allSettled(
             topLeagues.map(league => generateBlogPost('en', league))
         );
-        
+
+        const succeeded = [];
+        const failed = [];
         results.forEach((res, i) => {
-            console.log(`[BlogGenerator] ✅ Generated English blog for ${topLeagues[i]} (${res.status})`);
+            if (res.status === 'fulfilled') {
+                succeeded.push(topLeagues[i]);
+                console.log(`[BlogGenerator] ✅ Generated English blog for ${topLeagues[i]} (${res.value.status})`);
+            } else {
+                failed.push(topLeagues[i]);
+                console.warn(`[BlogGenerator] ⚠️ Failed to generate blog for ${topLeagues[i]}: ${res.reason?.message}`);
+            }
         });
-        
+
         return {
-            status: 'success',
-            generatedCount: results.length
+            status: succeeded.length > 0 ? 'success' : 'error',
+            generatedCount: succeeded.length,
+            failedLeagues: failed,
         };
     } catch (e) {
         console.error('[BlogGenerator] Error:', e.message);

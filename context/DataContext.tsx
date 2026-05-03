@@ -39,7 +39,6 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user, loading: authLoading, isAdmin } = useAuth();
-    const location = useLocation();
     const [activeDate, setActiveDate] = useState<string>(getGlobalTodayKey());
     const [predictions, setPredictions] = useState<Match[]>([]);
     const [rawFixtures, setRawFixtures] = useState<Match[]>([]);
@@ -51,6 +50,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isBasketballGenerating, setIsBasketballGenerating] = useState(false);
     const [systemError, setSystemError] = useState<string | null>(null);
     const [liveCount, setLiveCount] = useState(0);
+    const location = useLocation();
 
     // Singleton live count listener - only one subscription across the app
     useEffect(() => {
@@ -89,9 +89,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     //   1. The backend scheduler (runs at 8am Africa/Lagos time)
     //   2. The admin manual trigger buttons in the Admin panel
     // This prevents empty fixture fetches when users visit before 8am.
-    const fetchFromDB = async (bypassCache = false) => {
+const fetchFromDB = async (bypassCache = false) => {
         if (!user) { setLoading(false); return; }
-        if (fetchPromiseRef.current && !bypassCache) return fetchPromiseRef.current;
 
         // Check if viewing a specific date via the URL
         let targetDate = getGlobalTodayKey();
@@ -100,12 +99,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             targetDate = dateMatch[1];
         }
 
-        setActiveDate(targetDate);
+        // ── Midnight rollover: if viewing "today" but it's now a new day,
+        // silently switch to the new today key to prevent showing stale data.
         const isToday = targetDate === getGlobalTodayKey();
+        if (isToday) {
+            const nowKey = getGlobalTodayKey();
+            if (nowKey !== targetDate) {
+                targetDate = nowKey;
+            }
+        }
+
+        setActiveDate(targetDate);
 
         if (abortControllerRef.current) abortControllerRef.current.abort();
         abortControllerRef.current = new AbortController();
         const signal = abortControllerRef.current.signal;
+
+        // Return existing promise if one is already in flight (prevents race conditions)
+        if (fetchPromiseRef.current && !bypassCache) return fetchPromiseRef.current;
 
         fetchPromiseRef.current = (async () => {
             if (mountedRef.current) { setLoading(true); setSystemError(null); }
@@ -134,6 +145,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Load basketball predictions passively (read-only)
                 if (isToday) {
                     const bball = await getTodaysBasketballPredictions();
+                    if (signal.aborted) return;
                     if (mountedRef.current) setBasketballPredictions(bball || []);
                 } else {
                     if (mountedRef.current) setBasketballPredictions([]);
@@ -215,7 +227,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setWinRateStats(DEFAULT_WIN_RATES);
             setLoading(false);
         }
-    }, [authLoading, user]);
+    }, [authLoading, user, location.pathname]);
 
     // BUG-9 FIX: todayKey must be reactive so the listener re-subscribes at midnight.
     // A 1-minute interval checks if the date has rolled over; if so, the effect re-runs.
