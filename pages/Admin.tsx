@@ -243,10 +243,16 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const fetchUsers = useCallback(async () => {
         setLoading(true);
         try {
-            const [data, countData] = await Promise.all([
+            // getAllUsers() returns { users: UserProfile[], lastDoc: any } — destructure correctly
+            const [result, countData] = await Promise.all([
                 getAllUsers(),
                 getUserCount()
             ]);
+            const data: UserProfile[] = Array.isArray((result as any)?.users)
+                ? (result as any).users
+                : Array.isArray(result)
+                    ? (result as any)
+                    : [];
             if (isMounted.current) {
                 setUsers(data);
                 setUserStats({

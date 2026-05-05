@@ -80,7 +80,7 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
                     if (typeof window !== 'undefined' && (window as any).fbq) {
                         (window as any).fbq('track', 'CompleteRegistration');
                     }
-                } catch(err) { console.error('Pixel error', err); }
+                } catch (err) { console.error('Pixel error', err); }
             }
         } catch (e) {
             // Error handled by AuthContext
@@ -119,7 +119,7 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
     };
 
     const openWhatsApp = () => {
-        window.open('https://wa.me/237657960690', '_blank');
+        window.open('https://wa.me/237688203629', '_blank');
     };
 
     const copyReferralCode = () => {
