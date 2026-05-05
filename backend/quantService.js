@@ -41,9 +41,19 @@ let _pythonBin = null;
 
 async function resolvePythonBin() {
     if (_pythonBin) return _pythonBin;
+    const probeEnv = {
+        PATH: [
+            '/nix/var/nix/profiles/default/bin',
+            '/root/.nix-profile/bin',
+            '/usr/local/bin',
+            '/usr/bin',
+            '/bin',
+            process.env.PATH || '',
+        ].join(':'),
+    };
     for (const candidate of PYTHON_CANDIDATES) {
         try {
-            const result = spawnSync(candidate, ['--version'], { encoding: 'utf8', timeout: 3000 });
+            const result = spawnSync(candidate, ['--version'], { encoding: 'utf8', timeout: 3000, env: probeEnv });
             if (result.status === 0) {
                 const ver = (result.stdout || result.stderr || '').trim();
                 logger.info(`[QuantService] ✅ Python binary resolved: ${candidate} (${ver})`);
@@ -61,6 +71,15 @@ async function resolvePythonBin() {
 // ── Env forward to Python process (scoped whitelist) ─────────────────────────
 function buildPythonEnv() {
     return {
+        // Forward PATH with Nix profile dirs prepended — CRITICAL FIX for ENOENT
+        PATH: [
+            '/nix/var/nix/profiles/default/bin',
+            '/root/.nix-profile/bin',
+            '/usr/local/bin',
+            '/usr/bin',
+            '/bin',
+            process.env.PATH || '',
+        ].join(':'),
         // Only forward the API tokens and config that Python needs
         SPORTMONKS_API_TOKEN: process.env.SPORTMONKS_API_TOKEN || '',
         API_FOOTBALL_KEY: process.env.API_FOOTBALL_KEY || '',
@@ -72,6 +91,8 @@ function buildPythonEnv() {
         LD_LIBRARY_PATH: '/nix/var/nix/profiles/default/lib:/root/.nix-profile/lib:' + (process.env.LD_LIBRARY_PATH || ''),
         PYTHONUNBUFFERED: '1',         // Ensure real-time stdout
         PYTHONPATH: path.join(__dirname, 'quant'),
+        // Include HOME so Python can locate user site-packages if needed
+        HOME: process.env.HOME || '/root',
     };
 }
 
@@ -167,6 +188,15 @@ async function spawnPythonPipeline(dateStr = null, dryRun = false) {
         }, 10 * 60 * 1000);
     });
 }
+
+// ── Startup probe: resolve Python binary at module load time ─────────────────
+// This runs when server.js imports quantService.js, logging success/failure
+// immediately at startup rather than waiting for the 07:00 cron job.
+resolvePythonBin().then(bin => {
+    logger.info(`[QuantService] 🐍 Python probe complete. Active binary: ${bin}`);
+}).catch(err => {
+    logger.error(`[QuantService] 💀 Python probe FAILED at startup: ${err.message}`);
+});
 
 // ── Main exported function ────────────────────────────────────────────────────
 
@@ -439,3 +469,12 @@ export const runBasketballPipeline = async (dateStr = null, dryRun = false) => {
 function getLagosDateKey() {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
 }
+
+// ── Startup probe: resolve Python binary at module load time ──────────────────
+// Runs when server.js imports quantService.js — logs success/failure
+// immediately at container boot instead of waiting for the 07:00 cron job.
+resolvePythonBin().then(bin => {
+    logger.info(`[QuantService] 🐍 Python probe complete. Active binary: ${bin}`);
+}).catch(err => {
+    logger.error(`[QuantService] 💀 Python probe FAILED at startup: ${err.message}`);
+});

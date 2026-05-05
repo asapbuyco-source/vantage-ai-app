@@ -8,3 +8,8 @@ nixPkgs = ["nodejs_20", "python311", "python311Packages.pip", "stdenv.cc.cc.lib"
 
 [phases.build]
 cmds = ["python3 -m pip install -r backend/quant/requirements.txt"]
+
+# Inject Nix profile paths into the runtime environment so `python3` is
+# resolvable by the Node.js process that spawns Python child processes.
+[variables]
+PATH = "/nix/var/nix/profiles/default/bin:/root/.nix-profile/bin:/usr/local/bin:/usr/bin:/bin"
