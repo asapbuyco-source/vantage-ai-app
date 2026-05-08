@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
     GoogleAuthProvider,
-    signInWithRedirect,
-    getRedirectResult,
+    signInWithPopup,
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     sendPasswordResetEmail,
@@ -192,24 +191,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         let unsubscribe: () => void;
 
-        // Handle the result of a signInWithRedirect flow (Google Sign-In).
-        // This must run BEFORE the onAuthStateChanged listener so that when
-        // the listener fires, createProfile has already been called for new users.
-        getRedirectResult(auth)
-            .then(async (result) => {
-                if (result?.user) {
-                    // New Google sign-in via redirect — ensure profile exists.
-                    // Retrieve any referral code that was stored before the redirect.
-                    const pendingReferral = localStorage.getItem('pendingReferralCode') || undefined;
-                    localStorage.removeItem('pendingReferralCode');
-                    await createProfile(result.user, pendingReferral);
-                }
-            })
-            .catch((e) => {
-                console.error("[Auth] getRedirectResult error:", e);
-                setError(e.message);
-            });
-
         try {
             unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
                 if (currentUser) {
@@ -237,12 +218,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const signInWithGoogle = async (referralCode?: string) => {
         setError(null);
         try {
-            // Store referral code so createProfile can use it after the redirect returns.
-            if (referralCode) localStorage.setItem('pendingReferralCode', referralCode);
             const provider = new GoogleAuthProvider();
-            // Use redirect instead of popup — popup is broken by COOP headers and the
-            // Firebase auth iframe is blocked by a restrictive frame-src CSP policy.
-            await signInWithRedirect(auth, provider);
+            // Use popup mode — the COOP header is now set to unsafe-none and the
+            // Firebase auth domain is whitelisted in frame-src, so popup works correctly.
+            const result = await signInWithPopup(auth, provider);
+            if (result.user) await createProfile(result.user, referralCode);
         } catch (e: any) {
             setError(e.message);
         }
