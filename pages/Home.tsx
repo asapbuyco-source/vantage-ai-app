@@ -248,10 +248,17 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
       {predictions.some(m => m.status === 'won' || m.status === 'lost') && (
         <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5">
           {(() => {
-            const won = predictions.filter(m => m.status === 'won').length;
-            const lost = predictions.filter(m => m.status === 'lost').length;
+            const graded = predictions.filter(m => m.status === 'won' || m.status === 'lost');
+            const won = graded.filter(m => m.status === 'won').length;
+            const lost = graded.filter(m => m.status === 'lost').length;
             const total = won + lost;
             const rate = total > 0 ? Math.round((won / total) * 100) : 0;
+            const sorted = [...graded].sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+            let streak = 0;
+            for (const m of sorted) {
+              if (m.status === 'won') streak++;
+              else break;
+            }
             return (
               <>
                 <div className="flex items-center gap-1">
@@ -263,9 +270,9 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                 <span className={`text-[10px] font-black ${rate >= 60 ? 'text-green-500' : 'text-amber-400'}`}>
                   {rate}% today
                 </span>
-                {won >= 3 && (
+                {streak >= 3 && (
                   <span className="text-[10px] font-black text-orange-500 animate-pulse flex items-center gap-0.5">
-                    🔥 {won} streak
+                    🔥 {streak} streak
                   </span>
                 )}
               </>

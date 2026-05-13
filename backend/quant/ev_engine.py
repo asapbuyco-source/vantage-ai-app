@@ -14,6 +14,7 @@ This removes the bookmaker's overround before comparing to model probability,
 preventing the system from overstating its edge by 5-8%.
 """
 
+import math
 from dataclasses import dataclass
 from typing import Optional
 from probability_engine import CombinedProbabilities
@@ -108,30 +109,59 @@ class ValueBet:
 
 def devig_1x2(home_odds: float, draw_odds: float, away_odds: float) -> tuple[float, float, float]:
     """
-    Remove the bookmaker's vig from 1X2 odds using the standard normalization method.
-    Returns (p_home, p_draw, p_away) summing to 1.0.
+    Remove the bookmaker's vig from 1X2 odds using the Power (Logarithmic) method.
+    This naturally shifts more margin onto longshots, correctly modelling 
+    the bookmaker's favorite-longshot bias.
     """
     if home_odds <= 1.0 or draw_odds <= 1.0 or away_odds <= 1.0:
         # Fallback: raw implied probs
         raw = [1/o if o > 1 else 0 for o in [home_odds, draw_odds, away_odds]]
         total = sum(raw) or 1.0
         return tuple(r / total for r in raw)  # type: ignore
-    overround = (1/home_odds) + (1/draw_odds) + (1/away_odds)
-    return (1/home_odds)/overround, (1/draw_odds)/overround, (1/away_odds)/overround
+        
+    implied = [1/home_odds, 1/draw_odds, 1/away_odds]
+    overround = sum(implied)
+    
+    if overround <= 1.001:
+        return tuple(implied)
+
+    # Binary search to find power 'k' where sum(implied^k) = 1.0
+    low, high = 0.0, 2.0
+    for _ in range(20):
+        k = (low + high) / 2.0
+        if sum(math.pow(p, k) for p in implied) > 1.0:
+            low = k
+        else:
+            high = k
+            
+    k = (low + high) / 2.0
+    return math.pow(implied[0], k), math.pow(implied[1], k), math.pow(implied[2], k)
 
 
 def devig_outright(odds: float, market_odds: list[float]) -> float:
     """
-    Remove vig for any market given a list of all selection odds for that market.
-    E.g. for BTTS: market_odds = [btts_yes_odds, btts_no_odds]
+    Remove vig for any market using the Power method.
     """
     valid = [o for o in market_odds if o > 1.0]
     if not valid:
         return 1.0 / odds if odds > 1.0 else 0.0
-    overround = sum(1/o for o in valid)
-    if overround <= 0:
-        return 0.0
-    return (1/odds) / overround
+        
+    implied = [1/o for o in valid]
+    overround = sum(implied)
+    
+    if overround <= 1.001:
+        return 1.0 / odds
+        
+    low, high = 0.0, 2.0
+    for _ in range(20):
+        k = (low + high) / 2.0
+        if sum(math.pow(p, k) for p in implied) > 1.0:
+            low = k
+        else:
+            high = k
+            
+    k = (low + high) / 2.0
+    return math.pow(1/odds, k)
 
 
 def implied_prob(odds: float) -> float:

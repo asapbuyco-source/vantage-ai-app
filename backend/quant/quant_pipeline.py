@@ -126,10 +126,11 @@ def _mock_matches() -> list[MatchData]:
 
 
 # ── Core pipeline ─────────────────────────────────────────────────────────────
-def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
+def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_override: dict | None = None, preloaded_matches: list | None = None) -> dict:
     """
     Run the full quantitative pipeline for the given date.
     Returns a summary dict with status, generated count, and predictions.
+    Accepts weights_override and preloaded_matches for fast grid search execution.
     """
     if date_str is None:
         date_str = datetime.now(timezone(timedelta(hours=1))).strftime("%Y-%m-%d")
@@ -142,7 +143,13 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
         load_ratings_from_firestore()
 
     # ── Step 1: Fetch matches ──────────────────────────────────────────────
-    if dry_run:
+    # Upgrade #11: If date_str is provided and not "today", we likely want REAL data 
+    # even in dry_run (for backtesting), but we still skip the Firestore save.
+    is_today = date_str == datetime.now(timezone(timedelta(hours=1))).strftime("%Y-%m-%d")
+    
+    if preloaded_matches is not None:
+        matches = preloaded_matches
+    elif dry_run and is_today:
         matches = _mock_matches()
         print(f"[QuantPipeline] [DRY RUN] Using {len(matches)} mock matches.")
     else:
@@ -195,8 +202,13 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False) -> dict:
                 h2h_home_wins=match.h2h_home_wins,
                 h2h_away_wins=match.h2h_away_wins,
                 h2h_draws=match.h2h_draws,
+                home_sidelined=match.home_sidelined_count,
+                away_sidelined=match.away_sidelined_count,
                 rho=rho,
+                weights_override=weights_override,
+                match=match,
             )
+
 
             # ── Evaluate ALL markets for this match (FIX: was undefined) ────
             all_value_bets = evaluate_all_markets(probs, match.odds)

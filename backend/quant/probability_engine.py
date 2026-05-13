@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from poisson_model import MarketProbabilities, compute_probabilities
 from elo_rating import match_probabilities as elo_match_probs
 from form_model import compute_form_probabilities, FormProbabilities
+import math
 
 if TYPE_CHECKING:
     from data_pipeline import TeamStats
@@ -72,7 +73,11 @@ def compute_combined(
     h2h_home_wins: int = 0,
     h2h_away_wins: int = 0,
     h2h_draws: int = 0,
+    home_sidelined: int = 0,
+    away_sidelined: int = 0,
     rho: float | None = None,
+    weights_override: dict | None = None,
+    match=None,
 ) -> CombinedProbabilities:
     """
     Combine Poisson + Elo + Form + H2H into final probabilities.
@@ -83,22 +88,59 @@ def compute_combined(
         mu_away: Expected goals for away team
         home_team_id: Sportmonks team ID (for Elo lookup)
         away_team_id:
-        home_form: Form string like "W D W W L"
-        away_form: Form string like "L W D L W"
+        home_stats: TeamStats object
+        away_stats: TeamStats object
+        home_opp_strengths: list of opponent Elo ratings
+        away_opp_strengths: 
         h2h_home_wins: Number of H2H wins for home team (last 8 meetings)
         h2h_away_wins: Number of H2H wins for away team
         h2h_draws: Number of H2H draws
+        home_sidelined: Count of injured/suspended players for home team
+        away_sidelined: Count of injured/suspended players for away team
+        rho: Dixon-Coles rho
+        weights_override: dict of model weights (poisson, elo, form, h2h)
 
     Returns:
         CombinedProbabilities with all markets filled.
     """
+    
+    # Apply weights override if provided
+    w_poisson = weights_override.get('poisson', W_POISSON) if weights_override else W_POISSON
+    w_elo = weights_override.get('elo', W_ELO) if weights_override else W_ELO
+    w_form = weights_override.get('form', W_FORM) if weights_override else W_FORM
+    w_h2h = weights_override.get('h2h', W_H2H) if weights_override else W_H2H
+
+    W_SM = 0.10
+    has_sm = match is not None and getattr(match, 'sm_pred_available', False)
+    if has_sm:
+        scale = 1.0 - W_SM
+        w_poisson = w_poisson * scale
+        w_elo = w_elo * scale
+        w_form = w_form * scale
+
+    # Normalize weights to ensure they sum to exactly 1.0
+    w_total = w_poisson + w_elo + w_form + w_h2h
+    if w_total > 0:
+        w_poisson /= w_total
+        w_elo /= w_total
+        w_form /= w_total
+        w_h2h /= w_total
+
     # ── Model 1: Poisson (MODEL-01: form-adjusted xG before grid) ────────
     # Multiplicative xG form scaling applied before Poisson grid so the full
     # probability distribution stays coherent (old additive tweak did not).
     _hfs = getattr(home_stats, 'form_score', 0.5) if home_stats else 0.5
     _afs = getattr(away_stats, 'form_score', 0.5) if away_stats else 0.5
-    adj_mu_home = max(0.20, mu_home * (0.90 + _hfs * 0.20))  # 0.90–1.10×
-    adj_mu_away = max(0.20, mu_away * (0.90 + _afs * 0.20))
+    
+    # UPGRADE #13: Sidelined (Injury) Penalty
+    # Every missing player reduces expected goals by ~3%. 
+    # If more than 4 players are missing, it signals a deeper squad crisis.
+    home_injury_penalty = min(0.25, home_sidelined * 0.03 + (0.05 if home_sidelined > 4 else 0.0))
+    away_injury_penalty = min(0.25, away_sidelined * 0.03 + (0.05 if away_sidelined > 4 else 0.0))
+    
+    adj_mu_home = max(0.20, mu_home * (0.90 + _hfs * 0.20) * (1.0 - home_injury_penalty))
+    adj_mu_away = max(0.20, mu_away * (0.90 + _afs * 0.20) * (1.0 - away_injury_penalty))
+
 
     # UPGRADE B: League-aware Home Advantage
     # Real football has systemic home advantage. We apply a multiplier to the 
@@ -131,12 +173,19 @@ def compute_combined(
         h2h_p_away = poisson.away_win
 
     # ── Weighted combination of 1x2 probabilities ──────────────────────────
-    p_home = (W_POISSON * poisson.home_win + W_ELO * elo["home_win"]
-              + W_FORM * form.home_win + W_H2H * h2h_p_home)
-    p_draw = (W_POISSON * poisson.draw + W_ELO * elo["draw"]
-              + W_FORM * form.draw + W_H2H * h2h_p_draw)
-    p_away = (W_POISSON * poisson.away_win + W_ELO * elo["away_win"]
-              + W_FORM * form.away_win + W_H2H * h2h_p_away)
+    sm_home = getattr(match, 'sm_pred_home_win', 0.0) if has_sm else 0.0
+    sm_draw = getattr(match, 'sm_pred_draw', 0.0) if has_sm else 0.0
+    sm_away = getattr(match, 'sm_pred_away_win', 0.0) if has_sm else 0.0
+
+    p_home = (w_poisson * poisson.home_win + w_elo * elo["home_win"]
+              + w_form * form.home_win + w_h2h * h2h_p_home
+              + (W_SM * sm_home if has_sm else 0.0))
+    p_draw = (w_poisson * poisson.draw + w_elo * elo["draw"]
+              + w_form * form.draw + w_h2h * h2h_p_draw
+              + (W_SM * sm_draw if has_sm else 0.0))
+    p_away = (w_poisson * poisson.away_win + w_elo * elo["away_win"]
+              + w_form * form.away_win + w_h2h * h2h_p_away
+              + (W_SM * sm_away if has_sm else 0.0))
 
     p_home, p_draw, p_away = _normalize(p_home, p_draw, p_away)
 
@@ -170,19 +219,15 @@ def compute_combined(
     dnb_home = p_home / non_draw if non_draw > 0 else 0.5
     dnb_away = p_away / non_draw if non_draw > 0 else 0.5
 
-    # ── Model agreement → confidence score (MODEL-02) ─────────────────────
-    # Average agreement across home/draw/away — not just home_win (was a bug).
-    def _oa(a: float, b: float, c: float) -> float:
-        m = (a + b + c) / 3.0
-        # Reduced divisor from 0.30 to 0.25: makes model slightly more 
-        # sensitive to disagreement, resulting in lower confidence scores
-        # when models heavily diverge.
-        return max(0.0, 1.0 - (((a-m)**2 + (b-m)**2 + (c-m)**2) / 3.0)**0.5 / 0.25)
-    agreement = (
-        _oa(poisson.home_win, elo["home_win"], form.home_win)
-        + _oa(poisson.draw,     elo["draw"],     form.draw)
-        + _oa(poisson.away_win, elo["away_win"], form.away_win)
-    ) / 3.0
+    # ── Model agreement → confidence score (Shannon Entropy) ──────────────
+    # A lower entropy means the model is mathematically more certain of the outcome.
+    def shannon_entropy(probs: list[float]) -> float:
+        return -sum(p * math.log2(p) for p in probs if p > 0)
+
+    entropy = shannon_entropy([p_home, p_draw, p_away])
+    # Max entropy for 3 outcomes is log2(3) ≈ 1.585
+    # Normalize to 0-1 (1 means total certainty, 0 means total randomness)
+    agreement = max(0.0, min(1.0, 1.0 - (entropy / 1.585)))
 
     cp = CombinedProbabilities(
         home_win=round(p_home, 4),
@@ -201,8 +246,8 @@ def compute_combined(
         double_chance_12=round(dc_12, 4),
         draw_no_bet_home=round(dnb_home, 4),
         draw_no_bet_away=round(dnb_away, 4),
-        # OPP-01: Composite — P(BTTS AND Over 2.5) = P(BTTS) × P(O2.5) assuming near-independence
-        btts_and_over25=round(btts * over25, 4),
+        # OPP-01: Composite — Exact joint probability from the Poisson grid
+        btts_and_over25=round(poisson.btts_and_over25, 4),
         poisson_home=round(poisson.home_win, 4),
         elo_home=round(elo["home_win"], 4),
         form_home=round(form.home_win, 4),

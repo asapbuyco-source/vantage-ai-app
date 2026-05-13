@@ -50,6 +50,7 @@ class TeamStats:
     avg_xg_conceded: float = 0.0
     avg_possession: float = 50.0
     avg_shots_on_target: float = 0.0
+    sidelined_count: int = 0  # Upgrade #13: Count of injured/suspended players
 
 
 @dataclass
@@ -103,6 +104,8 @@ class MatchData:
     away_logo: str = ""
     home_stats: Optional[TeamStats] = None
     away_stats: Optional[TeamStats] = None
+    home_sidelined_count: int = 0
+    away_sidelined_count: int = 0
     h2h_home_wins: int = 0
     h2h_away_wins: int = 0
     h2h_draws: int = 0
@@ -112,6 +115,10 @@ class MatchData:
     # Derived fields (filled by model pipeline)
     expected_goals_home: float = 0.0
     expected_goals_away: float = 0.0
+    sm_pred_home_win: float = 0.0
+    sm_pred_draw: float = 0.0
+    sm_pred_away_win: float = 0.0
+    sm_pred_available: bool = False
 
 
 # ── API Helpers ───────────────────────────────────────────────────────────────
@@ -160,6 +167,28 @@ def _get_paginated(path: str, params: dict | None = None, max_pages: int = 5) ->
         if not pagination.get("has_more", False):
             break
     return all_data
+
+
+def fetch_sportmonks_prediction(fixture_id: int) -> dict | None:
+    """Fetch Sportmonks' own pre-built probability model for a fixture.
+    Returns dict with keys: home_win, draw, away_win (0-1 floats) or None."""
+    try:
+        result = _get(f"/predictions/probabilities/fixture/{fixture_id}")
+        if not result or not result.get("data"):
+            return None
+        data = result["data"]
+        if isinstance(data, list):
+            data = data[0] if data else {}
+        predictions = data.get("predictions", {})
+        hw = float(predictions.get("home_win_percentage", 0)) / 100.0
+        d  = float(predictions.get("draw_percentage", 0)) / 100.0
+        aw = float(predictions.get("away_win_percentage", 0)) / 100.0
+        if hw + d + aw < 0.5:
+            return None
+        return {"home_win": hw, "draw": d, "away_win": aw}
+    except Exception as e:
+        print(f"[DataPipeline] Sportmonks prediction fetch failed for {fixture_id}: {e}", file=sys.stderr)
+        return None
 
 
 # ── League average goals (fallback) ───────────────────────────────────────────
@@ -239,7 +268,7 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
             try:
                 val = float(val)
                 has_stats = True
-                if tid == 34:
+                if tid == 42:
                     if s_loc == loc_str: my_xg = val
                     elif s_loc == opp_loc: opp_xg = val
                 elif tid == 45 and s_loc == loc_str:
@@ -248,12 +277,14 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
                     my_sot = val
             except (TypeError, ValueError):
                 pass
-                
+
         if has_stats:
-            total_xg_created += my_xg
-            total_xg_conceded += opp_xg
+            my_xg_norm = round(my_xg * 0.35, 3)
+            opp_xg_norm = round(opp_xg * 0.35, 3)
+            total_xg_created += my_xg_norm
+            total_xg_conceded += opp_xg_norm
             total_possession += my_poss
-            total_sot += my_sot
+            total_sot += my_xg
             stats_matches += 1
 
     n = len(results)
@@ -596,31 +627,39 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         date_str = datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
 
     print(f"[DataPipeline] Fetching fixtures for {date_str}...")
+    # Upgrade #10: Include lineups and sidelined for richer "Valid Test" data
+    # Note: Only available in Sportmonks Pro/Enterprise plans.
+    include_str = "league;participants;scores;odds;statistics;lineups;sidelined"
+    
     raw = _get_paginated(
         f"/fixtures/date/{date_str}",
-        params={"include": "league;participants;scores;odds;statistics", "per_page": 100},
+        params={"include": include_str, "per_page": 100},
         max_pages=3,
     )
     if not raw:
         print("[DataPipeline] No fixtures returned.", file=sys.stderr)
         return []
 
-    # ── 🚨 Global Past Match Filter ────────────────────────────────────────
-    future_raw = []
-    now_utc = datetime.now(timezone.utc)
-    for item in raw:
-        starting_at = item.get("starting_at", "")
-        if starting_at:
-            try:
-                kick = datetime.fromisoformat(starting_at.replace("Z", "+00:00"))
-                if kick.tzinfo is None:
-                    kick = kick.replace(tzinfo=timezone.utc)
-                # Filter out matches starting within 30 minutes to avoid late predictions
-                if kick > (now_utc + timedelta(minutes=30)):
-                    future_raw.append(item)
-            except Exception:
-                pass
-    raw = future_raw
+    # ── 🚨 Global Past Match Filter (Bypassed if date_str is in the past) ──
+    is_today = date_str == datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
+    if is_today:
+        future_raw = []
+        now_utc = datetime.now(timezone.utc)
+        for item in raw:
+            starting_at = item.get("starting_at", "")
+            if starting_at:
+                try:
+                    kick = datetime.fromisoformat(starting_at.replace("Z", "+00:00"))
+                    if kick.tzinfo is None:
+                        kick = kick.replace(tzinfo=timezone.utc)
+                    # Filter out matches starting within 30 minutes to avoid late predictions
+                    if kick > (now_utc + timedelta(minutes=30)):
+                        future_raw.append(item)
+                except Exception:
+                    pass
+        raw = future_raw
+    else:
+        print(f"[DataPipeline] Past date requested ({date_str}). Bypassing future filter.")
 
     print(f"[DataPipeline] Raw fixtures (future only): {len(raw)}")
 
@@ -736,10 +775,29 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
             away_logo=away_p.get("image_path", ""),
         )
 
+        # Try fetching Sportmonks' own probability model
+        sm_pred = fetch_sportmonks_prediction(int(md.fixture_id))
+        if sm_pred:
+            md.sm_pred_home_win = sm_pred["home_win"]
+            md.sm_pred_draw = sm_pred["draw"]
+            md.sm_pred_away_win = sm_pred["away_win"]
+            md.sm_pred_available = True
+
         # Parse odds (now includes DC, DNB, O/U 1.5/3.5, AH, line movement)
         raw_odds = item.get("odds") or []
         odds_list = raw_odds if isinstance(raw_odds, list) else (raw_odds.get("data", []) if isinstance(raw_odds, dict) else [])
         md.odds = _parse_odds(odds_list)
+
+        # ── Extract sidelined (injury) counts (Upgrade #13) ────────────
+        raw_sidelined = item.get("sidelined") or []
+        sidelined_list = raw_sidelined if isinstance(raw_sidelined, list) else (raw_sidelined.get("data", []) if isinstance(raw_sidelined, dict) else [])
+        for s in sidelined_list:
+            s_team_id = s.get("team_id")
+            if s_team_id == home_id:
+                md.home_sidelined_count += 1
+            elif s_team_id == away_id:
+                md.away_sidelined_count += 1
+
 
         # ── Extract xG from Sportmonks statistics (Upgrade #1) ─────────
         xg_home, xg_away = None, None
@@ -826,7 +884,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
             xg_source = "model"
 
         matches.append(md)
-        print(f"[DataPipeline]   ✓ {md.home_team} vs {md.away_team} (xG: {md.expected_goals_home:.2f}–{md.expected_goals_away:.2f} [{xg_source}])")
+        print(f"[DataPipeline]   [OK] {md.home_team} vs {md.away_team} (xG: {md.expected_goals_home:.2f}-{md.expected_goals_away:.2f} [{xg_source}])")
 
     print(f"[DataPipeline] Pipeline complete: {len(matches)} enriched matches.")
     return matches

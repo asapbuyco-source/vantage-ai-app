@@ -9,6 +9,7 @@ import { triggerBlogGeneration } from './blogGenerator.js';
 
 import { checkRecentSelarEmails } from './gmailListener.js';
 import { sendDailyPredictionsToTelegram } from './telegramService.js';
+import { seedStaticData } from './staticDataSeeder.js';
 
 /**
  * Standalone accumulator trigger (Quant Engine based)
@@ -195,7 +196,7 @@ export const initScheduler = () => {
             const safeTime = (val, fallback) => (typeof val === 'string' && /^\d{1,2}:\d{2}$/.test(val) ? val : fallback);
 
             // Look for times in HH:MM format (safe defaults if Firestore value is missing/malformed)
-            const footballTime = safeTime(config.footballGenTime, '08:00');
+            const footballTime = safeTime(config.quantGenTime || config.footballGenTime, '07:00');
             const basketballTime = safeTime(config.basketballGenTime, '10:00');
             const gradingTime = safeTime(config.gradingTime, '06:00');
             const blogTime = safeTime(config.blogGenTime, '09:00');
@@ -605,6 +606,109 @@ export const initScheduler = () => {
     tasks.set('liveScore', liveScoreTask);
     console.log('⚡ Live scores poller started (every 2 minutes → Firestore)'); // BUG-12 FIX: was incorrectly saying 60s
 
+    // ── Match Facts Fetcher (once daily at 08:00 Lagos) ───────────────────────
+    // Fetches Sportmonks matchFacts for today's fixtures: pre-computed streaks,
+    // H2H context, and form trends. Stored in Firestore match_facts/{dateKey}.
+    // ZERO extra API cost — just add ?include=matchFacts to the fixture call.
+    const matchFactsTask = cron.schedule('0 8 * * *', async () => {
+        try {
+            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            if (!token) return;
+            const dateKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+            const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateKey}?include=matchFacts;participants&api_token=${token}`;
+            const res = await fetch(url);
+            if (!res.ok) { console.warn('[MatchFacts] API error:', res.status); return; }
+            const json = await res.json();
+            const raw = json.data || [];
+
+            const factsMap = {};
+            for (const item of raw) {
+                const facts = item.matchFacts || item.match_facts || [];
+                if (!Array.isArray(facts) || facts.length === 0) continue;
+                factsMap[String(item.id)] = {
+                    fixtureId: item.id,
+                    facts: facts.map(f => ({
+                        id: f.id,
+                        type: f.type || 'info',
+                        fact: f.data?.fact || f.fact || f.comment || '',
+                        importance: f.data?.importance || 'normal',
+                    })).filter(f => f.fact),
+                };
+            }
+
+            if (Object.keys(factsMap).length > 0) {
+                const db = admin.firestore();
+                await db.collection('match_facts').doc(dateKey).set({
+                    fixtures: factsMap,
+                    fetchedAt: new Date().toISOString(),
+                    count: Object.keys(factsMap).length,
+                });
+                console.log(`[MatchFacts] 🔍 Stored facts for ${Object.keys(factsMap).length} fixtures on ${dateKey}`);
+            } else {
+                console.log(`[MatchFacts] No match facts available for ${dateKey} (may require premium add-on)`);
+            }
+        } catch (e) {
+            console.warn('[Scheduler] Match facts fetch error:', e.message);
+        }
+    }, { timezone: 'Africa/Lagos' });
+    tasks.set('matchFacts', matchFactsTask);
+    console.log('🔍 Match facts fetcher scheduled at 08:00 Lagos');
+
+    // ── Lineup Fetcher (once daily at 11:00 Lagos — ~1h before most matches) ──
+    // Fetches expected starting XIs for today's fixtures and stores in Firestore
+    // lineups/{fixtureId} — powers the Lineup tab in MatchDetailsModal.
+    // ~1 SportMonks API call per day
+    const lineupTask = cron.schedule('0 11 * * *', async () => {
+        try {
+            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            if (!token) return;
+            const dateKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+            const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateKey}?include=lineups.player;participants&api_token=${token}`;
+            const res = await fetch(url);
+            if (!res.ok) { console.warn('[Lineup] API error:', res.status); return; }
+            const json = await res.json();
+            const raw = json.data || [];
+
+            const db = admin.firestore();
+            let saved = 0;
+            for (const item of raw) {
+                const lineups = item.lineups || [];
+                if (!Array.isArray(lineups) || lineups.length === 0) continue;
+                const home = item.participants?.find(p => p.meta?.location === 'home') || {};
+                const away = item.participants?.find(p => p.meta?.location === 'away') || {};
+                const homePlayers = lineups.filter(l => l.team_id === home.id).map(l => ({
+                    name: l.player?.display_name || l.player?.name || 'Unknown',
+                    number: l.jersey_number || null,
+                    position: l.position?.name || '',
+                    teamId: home.id,
+                    teamName: home.name || '',
+                    isHome: true,
+                }));
+                const awayPlayers = lineups.filter(l => l.team_id === away.id).map(l => ({
+                    name: l.player?.display_name || l.player?.name || 'Unknown',
+                    number: l.jersey_number || null,
+                    position: l.position?.name || '',
+                    teamId: away.id,
+                    teamName: away.name || '',
+                    isHome: false,
+                }));
+                if (homePlayers.length + awayPlayers.length === 0) continue;
+                await db.collection('lineups').doc(String(item.id)).set({
+                    home: homePlayers,
+                    away: awayPlayers,
+                    fetchedAt: new Date().toISOString(),
+                });
+                saved++;
+            }
+            if (saved > 0) console.log(`[Lineup] 👥 Stored lineups for ${saved} fixtures on ${dateKey}`);
+            else console.log(`[Lineup] No lineups announced yet for ${dateKey}`);
+        } catch (e) {
+            console.warn('[Scheduler] Lineup fetch error:', e.message);
+        }
+    }, { timezone: 'Africa/Lagos' });
+    tasks.set('lineup', lineupTask);
+    console.log('👥 Lineup fetcher scheduled at 11:00 Lagos');
+
     // ── Pre-Match News Fetcher (once daily at 07:30 Lagos time) ──────────────
     // Fetches all pre-match news and stores in Firestore match_news/{dateKey}
     // ~1 SportMonks API call per day
@@ -644,7 +748,7 @@ export const initScheduler = () => {
     // Fetches ball possession, shots on target, corners, fouls for today's fixtures.
     // Stored in Firestore match_stats/{dateKey} for quant engine and MatchDetailsModal.
     // Cost: ~1 SportMonks API call per day
-    const statsTask = cron.schedule('45 7 * * *', async () => {
+    const statsTask = cron.schedule('30 23 * * *', async () => {
         try {
             const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
@@ -698,7 +802,7 @@ export const initScheduler = () => {
         }
     }, { timezone: 'Africa/Lagos' });
     tasks.set('stats', statsTask);
-    console.log('📊 Match statistics fetcher scheduled at 07:45 Lagos');
+    console.log('📊 Match statistics fetcher scheduled at 23:30 Lagos');
 
     // ── Tomorrow's Fixture Pre-Fetch (daily at 23:00 Lagos) ─────────────────
     // Fetches tomorrow's fixtures and stores odds for VIP tomorrow preview.
@@ -732,10 +836,12 @@ export const initScheduler = () => {
                     awayTeamLogo: away.image_path || '',
                     league: item.league?.name || 'Unknown League',
                     time: timeStr,
-                    category: 'value',
+                    category: 'no_edge',
                     confidence: 0,
                     odds: 0,
-                    prediction: '',
+                    prediction: 'Preview — Analysis runs at 07:00',
+                    prediction_en: 'Preview — Vantage AI analysis runs at 07:00 Lagos',
+                    prediction_fr: 'Aperçu — L\'analyse IA est disponible à 07h00',
                 };
             });
 
@@ -751,6 +857,37 @@ export const initScheduler = () => {
     }, { timezone: 'Africa/Lagos' });
     tasks.set('tomorrow', tomorrowTask);
     console.log('📅 Tomorrow fixture pre-fetch scheduled at 23:00 Lagos');
+
+    // ── Daily Prediction Repair (03:00 Lagos) ────────────────────────────────
+    // Resets any predictions that were prematurely graded (e.g., postponed match
+    // auto-graded as lost by the live score engine before kickoff).
+    const repairTask = cron.schedule('0 3 * * *', async () => {
+        try {
+            const db = admin.firestore();
+            const dateKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+            const fixed = await repairCorruptedPredictions(db, dateKey);
+            if (fixed > 0) console.log(`[Repair] 🔧 Fixed ${fixed} corrupted predictions for ${dateKey}`);
+        } catch (e) {
+            console.warn('[Scheduler] Repair task error:', e.message);
+        }
+    }, { timezone: 'Africa/Lagos' });
+    tasks.set('repair', repairTask);
+    console.log('🔧 Prediction repair task scheduled at 03:00 Lagos');
+
+    // ── Weekly Static Data Seeder (Sunday 02:00 Lagos) ────────────────────────
+    // Re-seeds Firestore with semi-permanent Sportmonks data: leagues, seasons,
+    // team metadata, standings, top scorers. Saves ~200+ API calls/week.
+    const seederTask = cron.schedule('0 2 * * 0', async () => {
+        try {
+            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            const db = admin.firestore();
+            await seedStaticData(db, token);
+        } catch (e) {
+            console.warn('[Scheduler] Static data seed error:', e.message);
+        }
+    }, { timezone: 'Africa/Lagos' });
+    tasks.set('seeder', seederTask);
+    console.log('🌱 Static data seeder scheduled at 02:00 every Sunday Lagos');
 };
 
 /**
@@ -759,7 +896,8 @@ export const initScheduler = () => {
 export const stopScheduler = () => {
     const allTasks = [
         'sync', 'selar', 'liveScore', 'news', 'stats', 'tomorrow',
-        'basketball', 'blog', 'telegram', 'quant', 'quantGrading'
+        'basketball', 'blog', 'telegram', 'quant', 'quantGrading', 'repair', 'seeder',
+        'matchFacts', 'lineup'
     ];
     for (const name of allTasks) {
         const task = tasks.get(name);

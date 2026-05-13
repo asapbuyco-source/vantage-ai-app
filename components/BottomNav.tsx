@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Home, Unlock, Lock, User, Sparkles, History, Radio } from 'lucide-react';
+import { Home, Unlock, Lock, User, Sparkles, History, Radio, Trophy } from 'lucide-react';
 import { NavigationTab } from '../types';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
@@ -18,6 +18,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
     { id: 'home', icon: Home, label: t('nav.home') },
     { id: 'free', icon: Unlock, label: t('nav.free') },
     { id: 'live', icon: Radio, label: language === 'fr' ? 'Live' : 'Live', badge: liveCount > 0 ? liveCount : undefined },
+    { id: 'tables', icon: Trophy, label: language === 'fr' ? 'Classements' : 'Tables' },
     { id: 'results', icon: History, label: language === 'fr' ? 'Archive' : 'Results' },
     { id: 'vip', icon: Lock, label: t('nav.vip') },
     { id: 'concierge', icon: Sparkles, label: t('nav.concierge') },

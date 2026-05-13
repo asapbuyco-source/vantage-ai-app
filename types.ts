@@ -1,5 +1,5 @@
 
-export type NavigationTab = 'home' | 'free' | 'vip' | 'guide' | 'profile' | 'admin' | 'kelly' | 'concierge' | 'stats' | 'results' | 'live';
+export type NavigationTab = 'home' | 'free' | 'vip' | 'guide' | 'profile' | 'admin' | 'kelly' | 'concierge' | 'stats' | 'results' | 'live' | 'tables';
 
 export type Language = 'en' | 'fr';
 

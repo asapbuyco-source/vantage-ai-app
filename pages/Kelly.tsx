@@ -32,9 +32,10 @@ export const Kelly: React.FC<KellyProps> = ({ setTab }) => {
 
     const kelly = useMemo(() => {
         if (parsedOdds <= 1.01 || parsedProb <= 0 || parsedProb >= 1) return null;
-        const b = parsedOdds - 1;
-        const q = 1 - parsedProb;
-        const k = (b * parsedProb - q) / b;
+        const clampedOdds = Math.max(1.01, parsedOdds);
+        const clampedProb = Math.min(0.99, Math.max(0.01, parsedProb));
+        const b = clampedOdds - 1;
+        const k = (b * clampedProb - (1 - clampedProb)) / b;
         return Math.max(0, k);
     }, [parsedOdds, parsedProb]);
 
@@ -161,6 +162,7 @@ export const Kelly: React.FC<KellyProps> = ({ setTab }) => {
                             <input
                                 type="number"
                                 step="0.01"
+                                min="1.01"
                                 value={odds}
                                 onChange={e => setOdds(e.target.value)}
                                 placeholder="ex: 1.85"

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Activity, Scale, ShieldAlert, Zap, Loader2, Trophy, Crosshair, Target, BarChart3, Newspaper, Users, CheckCircle2 } from 'lucide-react';
 import { NavigationTab, Match, MatchNews } from '../types';
-import { getLiveOddsFromDB, getH2HFromDB, getMatchNewsFromDB, getFixtureLineupsFromDB, getMatchStatsFromDB, LineupPlayer, TeamForm, H2HRecord, MatchOdds, InjuryReport, MatchStatsData } from '../services/sportsData';
+import { getLiveOddsFromDB, getH2HFromDB, getMatchNewsFromDB, getMatchNewsForDate, getFixtureLineupsFromDB, getMatchStatsFromDB, getMatchFactsFromDB, LineupPlayer, TeamForm, H2HRecord, MatchOdds, InjuryReport, MatchStatsData, MatchFact } from '../services/sportsData';
 import { TeamLogo } from './TeamLogo';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +26,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
     const [news, setNews] = useState<MatchNews[]>([]);
     const [lineup, setLineup] = useState<{ home: LineupPlayer[]; away: LineupPlayer[] } | null>(null);
     const [matchStats, setMatchStats] = useState<MatchStatsData | null>(null);
+    const [matchFacts, setMatchFacts] = useState<MatchFact[]>([]);
 
     useEffect(() => {
         if (!match) return;
@@ -37,6 +38,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
         setNews([]);
         setLineup(null);
         setMatchStats(null);
+        setMatchFacts([]);
 
         document.body.style.overflow = 'hidden';
 
@@ -44,12 +46,13 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
             try {
                 const fixtureId = Number(match.fixtureId || match.id) || 0;
 
-                const [od, h2hData, newsData, lineupData, statsData] = await Promise.all([
+                const [od, h2hData, newsData, lineupData, statsData, factsData] = await Promise.all([
                     fixtureId ? getLiveOddsFromDB(fixtureId) : null,
                     (match.homeTeamId && match.awayTeamId) ? getH2HFromDB(match.homeTeamId, match.awayTeamId) : null,
                     fixtureId ? getMatchNewsFromDB(fixtureId) : [],
                     fixtureId ? getFixtureLineupsFromDB(fixtureId) : null,
                     fixtureId ? getMatchStatsFromDB(fixtureId) : null,
+                    fixtureId ? getMatchFactsFromDB(fixtureId) : [],
                 ]);
 
                 if (isMounted) {
@@ -58,6 +61,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                     setNews(newsData);
                     setLineup(lineupData);
                     setMatchStats(statsData);
+                    setMatchFacts(factsData || []);
                     setLoading(false);
                 }
             } catch (e) {
@@ -383,6 +387,26 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                             <span className="text-xs text-gray-500">{odds.away.toFixed(2)}</span>
                                                         </div>
                                                     </div>
+                                                </div>
+                                            )}
+
+                                            {/* Match Facts — Sportmonks pre-computed streaks/trends */}
+                                            {matchFacts.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+                                                        <Zap size={12} /> {language === 'fr' ? 'Faits du Match' : 'Match Facts'}
+                                                        <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-vantage-cyan/15 text-vantage-cyan border border-vantage-cyan/30">AI DATA</span>
+                                                    </h4>
+                                                    {matchFacts.map((fact, i) => (
+                                                        <div key={fact.id || i} className={`p-3 rounded-xl text-xs leading-relaxed border ${
+                                                            fact.importance === 'high'
+                                                                ? 'bg-vantage-cyan/5 border-vantage-cyan/20 text-vantage-cyan'
+                                                                : 'bg-white/5 border-white/10 text-gray-300'
+                                                        }`}>
+                                                            {fact.importance === 'high' && <span className="font-black mr-1">⚡</span>}
+                                                            {fact.fact}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             )}
                                         </>

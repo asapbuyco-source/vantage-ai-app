@@ -23,6 +23,7 @@ import { Results } from './pages/Results';
 import { LiveScores } from './pages/LiveScores';
 import { BlogIndex } from './pages/BlogIndex';
 import { BlogPost } from './pages/BlogPost';
+import { LeagueTables } from './pages/LeagueTables';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
@@ -351,6 +352,7 @@ function AppContent() {
                     {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
                     {activeTab === 'results' && <Results />}
                     {activeTab === 'live' && <LiveScores setTab={setActiveTab} />}
+                    {activeTab === 'tables' && <LeagueTables setTab={setActiveTab} />}
                   </ErrorBoundary>
                 </motion.div>
               }

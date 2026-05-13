@@ -58,6 +58,7 @@ class MarketProbabilities:
     under35: float = 0.0
     btts: float = 0.0
     btts_no: float = 0.0
+    btts_and_over25: float = 0.0
     double_chance_1x: float = 0.0   # Home or Draw
     double_chance_x2: float = 0.0   # Away or Draw
     double_chance_12: float = 0.0   # Home or Away (no draw)
@@ -156,6 +157,7 @@ def derive_markets(grid: dict[tuple[int, int], float]) -> MarketProbabilities:
 
         if h >= 1 and a >= 1: mp.btts += prob
         if h == 0 or a == 0: mp.btts_no += prob
+        if h >= 1 and a >= 1 and total > 2.5: mp.btts_and_over25 += prob
 
     # Compound markets
     mp.double_chance_1x = mp.home_win + mp.draw

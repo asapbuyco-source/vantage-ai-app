@@ -679,3 +679,152 @@ export const getMatchStatsFromDB = async (fixtureId: number): Promise<MatchStats
     }
     return null;
 };
+
+export const getMatchNewsForDate = async (dateKey: string): Promise<MatchNews[]> => {
+    try {
+        const snap = await getDoc(doc(db, 'match_news', dateKey));
+        if (!snap.exists()) return [];
+        return (snap.data()?.items || []) as MatchNews[];
+    } catch {
+        return [];
+    }
+};
+
+/** Read match facts (pre-computed streaks/trends from Sportmonks) for a fixture. */
+export interface MatchFact {
+    id: number;
+    type: string;
+    fact: string;
+    importance: 'high' | 'normal' | string;
+}
+
+export const getMatchFactsFromDB = async (fixtureId: number): Promise<MatchFact[]> => {
+    const todayKey = getTodayKey();
+    const cacheKey = `facts_${fixtureId}_${todayKey}`;
+    const cached = _mcGet<MatchFact[]>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'match_facts', todayKey));
+        if (snap.exists()) {
+            const data = snap.data() as { fixtures: Record<string, { facts: MatchFact[] }> };
+            const factsForFixture = data.fixtures?.[String(fixtureId)]?.facts || [];
+            if (factsForFixture.length > 0) _mcSet(cacheKey, factsForFixture);
+            return factsForFixture;
+        }
+    } catch (e) {
+        console.warn('[DB] getMatchFactsFromDB error:', e);
+    }
+    return [];
+};
+
+
+// STATIC CACHE READERS — reads from Firestore static_cache/{key}
+// Seeded weekly by backend/staticDataSeeder.js — ZERO live API calls.
+// ══════════════════════════════════════════════════════════════════════
+
+export interface StandingRow {
+    position: number;
+    teamId: number;
+    teamName: string;
+    teamLogo: string;
+    played: number;
+    won: number;
+    drawn: number;
+    lost: number;
+    goalsFor: number;
+    goalsAgainst: number;
+    goalDiff: number;
+    points: number;
+    form: string;
+}
+
+export interface TopScorerRow {
+    rank: number;
+    playerId: number;
+    playerName: string;
+    teamName: string;
+    teamLogo: string;
+    goals: number;
+    assists: number;
+    appearances: number;
+}
+
+export interface LeagueMeta {
+    id: number;
+    name: string;
+    shortCode: string;
+    logo: string;
+    country: string;
+    countryFlag: string;
+}
+
+/** Get league table for a given league ID from the weekly-seeded Firestore cache. */
+export const getStandingsFromCache = async (leagueId: number): Promise<StandingRow[]> => {
+    const cacheKey = `standings_${leagueId}`;
+    const cached = _mcGet<StandingRow[]>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'static_cache', 'standings'));
+        if (snap.exists()) {
+            const rows = (snap.data()?.data?.[leagueId] || []) as StandingRow[];
+            if (rows.length > 0) _mcSet(cacheKey, rows);
+            return rows;
+        }
+    } catch (e) {
+        console.warn('[StaticCache] getStandingsFromCache error:', e);
+    }
+    return [];
+};
+
+/** Get top 10 scorers for a given league ID from the weekly-seeded Firestore cache. */
+export const getTopScorersFromCache = async (leagueId: number): Promise<TopScorerRow[]> => {
+    const cacheKey = `topscorers_${leagueId}`;
+    const cached = _mcGet<TopScorerRow[]>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'static_cache', 'topscorers'));
+        if (snap.exists()) {
+            const rows = (snap.data()?.data?.[leagueId] || []) as TopScorerRow[];
+            if (rows.length > 0) _mcSet(cacheKey, rows);
+            return rows;
+        }
+    } catch (e) {
+        console.warn('[StaticCache] getTopScorersFromCache error:', e);
+    }
+    return [];
+};
+
+/** Get metadata for all seeded leagues (name, logo, country). */
+export const getLeaguesFromCache = async (): Promise<Record<number, LeagueMeta>> => {
+    const cacheKey = 'all_leagues_meta';
+    const cached = _mcGet<Record<number, LeagueMeta>>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'static_cache', 'leagues'));
+        if (snap.exists()) {
+            const data = (snap.data()?.data || {}) as Record<number, LeagueMeta>;
+            _mcSet(cacheKey, data);
+            return data;
+        }
+    } catch (e) {
+        console.warn('[StaticCache] getLeaguesFromCache error:', e);
+    }
+    return {};
+};
+
+/** Get team metadata (name, logo, shortName) for a specific team ID. */
+export const getTeamMetaFromCache = async (teamId: number): Promise<{ name: string; logo: string; shortName: string } | null> => {
+    const cacheKey = `team_meta_${teamId}`;
+    const cached = _mcGet<{ name: string; logo: string; shortName: string }>(cacheKey);
+    if (cached) return cached;
+    try {
+        const snap = await getDoc(doc(db, 'static_cache', 'teams'));
+        if (snap.exists()) {
+            const team = snap.data()?.data?.[teamId];
+            if (team) { _mcSet(cacheKey, team); return team; }
+        }
+    } catch (e) {
+        console.warn('[StaticCache] getTeamMetaFromCache error:', e);
+    }
+    return null;
+};

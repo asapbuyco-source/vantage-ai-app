@@ -24,8 +24,8 @@ TIER_CONFIG = {
         "icon": "🛡️",
         "max_legs": 3,
         "min_legs": 2,
-        "min_prob": 0.60,
-        "min_combined_odds": 2.00,
+        "min_prob": 0.55,  # Relaxed from 0.60
+        "min_combined_odds": 1.50, # Relaxed from 2.00
         "sort_key": "prob",   # sort by probability
         "count": 1,
     },
@@ -36,18 +36,18 @@ TIER_CONFIG = {
         "max_legs": 3,
         "min_legs": 2,
         "min_prob": 0.50,
-        "min_combined_odds": 2.50,
+        "min_combined_odds": 2.00, # Relaxed from 2.50
         "sort_key": "ev",     # sort by expected value
         "count": 1,
     },
     "syndicate": {
         "label": "The Syndicate",
-        "description": "4-leg balanced combo — value meets volume",
+        "description": "Balanced combo — value meets volume",
         "icon": "🎯",
         "max_legs": 4,
-        "min_legs": 3,
+        "min_legs": 2, # Relaxed from 3
         "min_prob": 0.50,
-        "min_combined_odds": 4.00,
+        "min_combined_odds": 3.00, # Relaxed from 4.00
         "sort_key": "composite",  # sort by EV*0.5 + prob*0.5
         "count": 1,
     },
@@ -55,10 +55,10 @@ TIER_CONFIG = {
         "label": "The Variance Play",
         "description": "High-yield moonshot — big odds, calculated risk",
         "icon": "🚀",
-        "max_legs": 5,      # OPP-04: Reduced from 6 (6-leg@45% = 0.83% win prob)
-        "min_legs": 4,
-        "min_prob": 0.58,  # OPP-04: Raised from 0.45 (5-leg@58% = ~6% win prob)
-        "min_combined_odds": 8.00,
+        "max_legs": 5,      
+        "min_legs": 3, # Relaxed from 4
+        "min_prob": 0.50,  # Relaxed from 0.58
+        "min_combined_odds": 5.00, # Relaxed from 8.00
         "sort_key": "ev",
         "count": 1,
     },
@@ -186,11 +186,11 @@ def generate_accumulators(value_bets: list[dict]) -> dict[str, list[dict]]:
     """
     results = {tier: [] for tier in TIER_CONFIG}
 
-    used_fixtures = set()
-
     for tier_key, config in TIER_CONFIG.items():
         for _ in range(config["count"]):
-            legs = _select_legs(value_bets, config, used_fixtures)
+            # Pass empty set for used_fixtures to allow cross-tier overlap
+            # The different sort_keys (prob, ev, composite) will ensure variety
+            legs = _select_legs(value_bets, config, set())
 
             if len(legs) >= config["min_legs"]:
                 acca = Accumulator(
@@ -203,9 +203,6 @@ def generate_accumulators(value_bets: list[dict]) -> dict[str, list[dict]]:
 
                 if acca.combined_odds >= config["min_combined_odds"]:
                     results[tier_key].append(accumulator_to_dict(acca))
-                    # Burn fixtures for diversity across tiers
-                    for l in legs:
-                        used_fixtures.add(l["fixture_id"])
 
     return results
 

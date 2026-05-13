@@ -884,6 +884,35 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                 </div>
                             )}
                         </div>
+
+                        <div className="mt-3">
+                            <button
+                                onClick={async () => {
+                                    if (!window.confirm("Are you sure you want to run the static data seed? This uses up to 50 API calls to cache all team/league data.")) return;
+                                    setLoadingMatches(true);
+                                    try {
+                                        const backendUrl = import.meta.env.VITE_BACKEND_URL;
+                                        if (!backendUrl) throw new Error('VITE_BACKEND_URL is not defined');
+                                        const res = await fetch(`${backendUrl}/api/admin/seed-static`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` },
+                                            body: JSON.stringify({ force: true })
+                                        });
+                                        const data = await res.json();
+                                        if (!res.ok) throw new Error(data.message || 'Failed to trigger seed');
+                                        alert(`Seed started in background. Check server logs.`);
+                                    } catch (e: any) {
+                                        alert(`Seed trigger error: ${e.message}`);
+                                    } finally {
+                                        setLoadingMatches(false);
+                                    }
+                                }}
+                                disabled={isSystemGenerating || loadingMatches}
+                                className="w-full py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 rounded-lg text-xs font-bold border border-yellow-500/20 flex items-center justify-center gap-2 transition-colors active:scale-[0.98] disabled:opacity-50"
+                            >
+                                <Database size={14} /> Force Run Static Cache Seed
+                            </button>
+                        </div>
                     </GlassCard>
 
                     {/* Vantage Intelligence Unit */}

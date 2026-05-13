@@ -549,6 +549,22 @@ app.post('/api/admin/test-openai', adminAuth, async (req, res) => {
 });
 
 
+// ── Static Data Seed Trigger ─────────────────────────────────────────────────
+app.post('/api/admin/seed-static', adminAuth, async (req, res) => {
+    try {
+        const { seedStaticData } = await import('./backend/staticDataSeeder.js');
+        const db = admin.firestore();
+        const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+        const force = req.body?.force === true;
+        seedStaticData(db, token, { force }).then(() => {
+            console.log('[Admin] Static data seed completed');
+        }).catch(e => console.error('[Admin] Seed error:', e.message));
+        res.json({ status: 'started', message: `Static seed ${force ? '(forced)' : ''} started. Check server logs.` });
+    } catch (e) {
+        res.status(500).json({ status: 'error', message: e.message });
+    }
+});
+
 // ══════════════════════════════════════════════════════════════════════
 // OPENAI API PROXY
 // Keeps OPENAI_API_KEY server-side only. Same pattern as Gemini proxy.
