@@ -45,7 +45,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('weekly');
+  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual'>('weekly');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -149,7 +149,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const isFirstTime = userProfile && (!userProfile.totalPaid || userProfile.totalPaid === 0);
 
   const plans: Array<{
-    id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
+    id: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
     label: string;
     badge: string | null;
     price: string;
@@ -158,6 +158,16 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     color: string;
     claimColor: string;
   }> = [
+      {
+        id: 'daily',
+        label: t('vip.plan_daily') || 'Daily Access',
+        badge: '⚡ 24-HOUR ACCESS',
+        price: '500',
+        icon: <Zap size={20} />,
+        features: ['24 Hour Access', 'Accumulator Access'],
+        color: 'border-slate-700 bg-slate-800/50',
+        claimColor: 'bg-slate-600 hover:bg-slate-500 text-white',
+      },
       {
         id: 'weekly',
         label: t('vip.plan_weekly'),
@@ -200,7 +210,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
       },
     ];
 
-  const handlePlanClick = (planId: 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
+  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
     setSelectedPlanId(planId);
     setShowPaymentModal(true);
   };

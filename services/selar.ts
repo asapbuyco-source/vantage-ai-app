@@ -42,7 +42,7 @@ export interface SelarInitResponse {
  * The `plan` param in the redirect URL is how we know which plan to activate on return.
  */
 export const initiateSelarPayment = async (
-    plan: 'weekly' | 'monthly' | 'quarterly' | 'annual',
+    plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual',
     email: string,
     userId: string,
 ): Promise<SelarInitResponse> => {
@@ -101,7 +101,7 @@ export const initiateSelarPayment = async (
  */
 export const verifySelarOrder = async (
     reference: string
-): Promise<{ success: boolean; plan?: 'weekly' | 'monthly' | 'quarterly' | 'annual'; userId?: string }> => {
+): Promise<{ success: boolean; plan?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual'; userId?: string }> => {
     if (!reference || !reference.startsWith('VAN_')) {
         console.warn('[Selar] Invalid reference format:', reference);
         return { success: false };
@@ -109,7 +109,7 @@ export const verifySelarOrder = async (
 
     try {
         const tokenRef = doc(db, 'selar_pending', reference);
-        let resultPlan: 'weekly' | 'monthly' | 'quarterly' | 'annual' | undefined;
+        let resultPlan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | undefined;
         let resultUserId: string | undefined;
 
         // Use runTransaction for atomic read-check-write to prevent race conditions
@@ -141,7 +141,7 @@ export const verifySelarOrder = async (
             transaction.update(tokenRef, { used: true, verifiedAt: serverTimestamp() });
 
             // Capture plan and userId for return value
-            resultPlan = data.plan as 'weekly' | 'monthly' | 'quarterly' | 'annual';
+            resultPlan = data.plan as 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
             resultUserId = data.userId as string;
         });
 

@@ -302,14 +302,14 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const handleToggleVip = async (user: UserProfile) => {
         if (processingId) return;
         
-        let selectedPlan: 'weekly' | 'monthly' | 'quarterly' | 'annual' | undefined;
+        let selectedPlan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | undefined;
         if (!user.isVip) {
-            const planRes = window.prompt("Enter plan duration to grant (weekly, monthly, quarterly, annual):", "monthly");
+            const planRes = window.prompt("Enter plan duration to grant (daily, weekly, monthly, quarterly, annual):", "monthly");
             if (!planRes) return; // cancelled
-            if (['weekly', 'monthly', 'quarterly', 'annual'].includes(planRes.toLowerCase())) {
-                selectedPlan = planRes.toLowerCase() as 'weekly' | 'monthly' | 'quarterly' | 'annual';
+            if (['daily', 'weekly', 'monthly', 'quarterly', 'annual'].includes(planRes.toLowerCase())) {
+                selectedPlan = planRes.toLowerCase() as 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
             } else {
-                alert("Invalid plan. Must be weekly, monthly, quarterly, or annual.");
+                alert("Invalid plan. Must be daily, weekly, monthly, quarterly, or annual.");
                 return;
             }
         }

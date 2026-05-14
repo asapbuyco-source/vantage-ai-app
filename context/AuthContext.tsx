@@ -14,7 +14,7 @@ import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDo
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
 import { checkPaymentStatus } from "../services/fapshi";
-import { WEEKLY_TRIAL_PRICE, WEEKLY_REGULAR_PRICE, MONTHLY_PRICE, QUARTERLY_PRICE, ANNUAL_PRICE, REFERRAL_COMMISSION_PERCENT } from '../src/constants/pricing';
+import { DAILY_PRICE, WEEKLY_TRIAL_PRICE, WEEKLY_REGULAR_PRICE, MONTHLY_PRICE, QUARTERLY_PRICE, ANNUAL_PRICE, REFERRAL_COMMISSION_PERCENT } from '../src/constants/pricing';
 
 interface AuthContextType {
     user: User | null;
@@ -29,9 +29,9 @@ interface AuthContextType {
     logout: () => Promise<void>;
     deleteAccount: () => Promise<void>;
     clearError: () => void;
-    upgradeToVip: (plan: 'weekly' | 'monthly' | 'quarterly' | 'annual') => Promise<void>;
+    upgradeToVip: (plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => Promise<void>;
     getAllUsers: (lastDoc?: any, pageSize?: number) => Promise<{ users: UserProfile[]; lastDoc: any }>;
-    toggleUserVip: (uid: string, currentStatus: boolean, plan?: 'weekly'|'monthly'|'quarterly'|'annual') => Promise<void>;
+    toggleUserVip: (uid: string, currentStatus: boolean, plan?: 'daily'|'weekly'|'monthly'|'quarterly'|'annual') => Promise<void>;
     toggleUserAdmin: (uid: string, currentStatus: boolean) => Promise<void>;
     toggleUserBlock: (uid: string, currentStatus: boolean) => Promise<void>;
     verifyTransaction: (transId: string) => Promise<boolean>;
@@ -264,17 +264,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const resetPassword = async (email: string) => { await sendPasswordResetEmail(auth, email); };
 
-    const upgradeToVip = async (plan: 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
+    const upgradeToVip = async (plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
         if (!user) return;
         const now = new Date();
         let expiry = new Date();
+        if (plan === 'daily') expiry.setDate(now.getDate() + 1);
         if (plan === 'weekly') expiry.setDate(now.getDate() + 7);
         if (plan === 'monthly') expiry.setDate(now.getDate() + 30);
         if (plan === 'quarterly') expiry.setDate(now.getDate() + 90);
         if (plan === 'annual') expiry.setDate(now.getDate() + 365);
         
         const isFirstTime = !userProfile?.totalPaid || userProfile.totalPaid === 0;
-        const basePrice = plan === 'weekly' ? WEEKLY_REGULAR_PRICE : plan === 'monthly' ? MONTHLY_PRICE : plan === 'quarterly' ? QUARTERLY_PRICE : ANNUAL_PRICE;
+        const basePrice = plan === 'daily' ? DAILY_PRICE : plan === 'weekly' ? WEEKLY_REGULAR_PRICE : plan === 'monthly' ? MONTHLY_PRICE : plan === 'quarterly' ? QUARTERLY_PRICE : ANNUAL_PRICE;
         const planCost = (isFirstTime && plan === 'weekly') ? WEEKLY_TRIAL_PRICE : basePrice;
 
         try {
@@ -284,6 +285,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await runTransaction(db, async (tx) => {
                 const now = new Date();
                 let expiry = new Date();
+                if (plan === 'daily') expiry.setDate(now.getDate() + 1);
                 if (plan === 'weekly') expiry.setDate(now.getDate() + 7);
                 if (plan === 'monthly') expiry.setDate(now.getDate() + 30);
                 if (plan === 'quarterly') expiry.setDate(now.getDate() + 90);
@@ -405,12 +407,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const toggleUserVip = async (uid: string, currentStatus: boolean, plan: 'weekly' | 'monthly' | 'quarterly' | 'annual' = 'monthly') => {
+    const toggleUserVip = async (uid: string, currentStatus: boolean, plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' = 'monthly') => {
         if (!isAdmin) return;
         const userRef = doc(db, "profiles", uid);
         if (!currentStatus) {
             const expiry = new Date();
-            if (plan === 'weekly') expiry.setDate(expiry.getDate() + 7);
+            if (plan === 'daily') expiry.setDate(expiry.getDate() + 1);
+            else if (plan === 'weekly') expiry.setDate(expiry.getDate() + 7);
             else if (plan === 'quarterly') expiry.setDate(expiry.getDate() + 90);
             else if (plan === 'annual') expiry.setDate(expiry.getDate() + 365);
             else expiry.setDate(expiry.getDate() + 30);
@@ -473,7 +476,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.warn('[AuthContext] Selar token not yet verified (used !== true). Aborting VIP grant.');
                     return false;
                 }
-                const plan: 'weekly' | 'monthly' | 'quarterly' | 'annual' = data.plan || 'weekly';
+                const plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' = data.plan || 'weekly';
                 await upgradeToVip(plan);
                 localStorage.removeItem('pendingVipPlan');
                 return true;
@@ -495,7 +498,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     return false;
                 }
 
-                let plan: 'weekly' | 'monthly' | 'quarterly' | 'annual' = 'weekly';
+                let plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' = 'weekly';
                 const storedPlan = localStorage.getItem('pendingVipPlan') as any;
 
                 // Prioritise the actual amount paid over localStorage (more reliable)
@@ -504,6 +507,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     else if (amount >= 18000) plan = 'quarterly';
                     else if (amount >= 6500) plan = 'monthly';
                     else if (amount >= 1000) plan = 'weekly'; // covers both 1,000 FCFA trial & 2,000 FCFA regular weekly
+                    else if (amount >= 500) plan = 'daily';
                 } else {
                     plan = storedPlan || 'weekly';
                 }

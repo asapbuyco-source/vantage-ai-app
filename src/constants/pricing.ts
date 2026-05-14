@@ -1,6 +1,7 @@
 // Shared pricing constants for Vantage AI
 // All monetary values are in FCFA (Central African Francs)
 
+export const DAILY_PRICE = 500;
 export const WEEKLY_TRIAL_PRICE = 1000; // first-time users only
 export const WEEKLY_REGULAR_PRICE = 2000;
 export const MONTHLY_PRICE = 5000;
