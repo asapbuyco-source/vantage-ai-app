@@ -189,7 +189,7 @@ export const Vault: React.FC<VaultProps> = ({ setTab }) => {
                 <GlassCard>
                     <h3 className="text-sm font-bold mb-3 flex items-center gap-2 text-slate-900 dark:text-white">
                         <Zap size={15} className="text-vantage-cyan" />
-                        {language === 'fr' ? 'Taille de Mise Kelly' : 'Kelly Sizing Sizing'}
+                        {language === 'fr' ? 'Taille de Mise Kelly' : 'Kelly Stake Sizing'}
                     </h3>
                     <p className="text-xs text-gray-500 mb-3">
                         {language === 'fr' 

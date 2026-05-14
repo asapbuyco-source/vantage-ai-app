@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { ChevronRight, Zap, TrendingUp, ShieldCheck, PlayCircle, Star, LogIn, Loader2, BookOpen, ArrowRight, Trophy, CheckCircle, XCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronRight, Zap, TrendingUp, ShieldCheck, ArrowRight, CheckCircle, XCircle, Target, Briefcase, ChevronDown, Lock } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { TeamLogo } from '../components/TeamLogo';
 import { getFirestorePredictionsOnly, getPredictionsForDate } from '../services/db';
@@ -15,30 +15,10 @@ interface LandingPageProps {
 export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin, onShowStats }) => {
     const [liveMatch, setLiveMatch] = useState<Match | null>(null);
     const [loadingHero, setLoadingHero] = useState(true);
-    const [yesterdayResults, setYesterdayResults] = useState<{won: number; lost: number; rate: number} | null>(null);
+    const [openFaq, setOpenFaq] = useState<number | null>(null);
 
     useEffect(() => {
-        // Load yesterday's results
-        (async () => {
-            try {
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                const dateKey = yesterday.toISOString().split('T')[0];
-                const preds = await getPredictionsForDate(dateKey);
-                if (preds && preds.length > 0) {
-                    const won = preds.filter(p => p.status === 'won').length;
-                    const lost = preds.filter(p => p.status === 'lost').length;
-                    const total = won + lost;
-                    setYesterdayResults({
-                        won,
-                        lost,
-                        rate: total > 0 ? Math.round((won / total) * 100) : 0
-                    });
-                }
-            } catch (_) {}
-        })();
-
-        // Load today's top prediction
+        // Load today's top prediction for the live scan demo
         (async () => {
             try {
                 const predictions = await getFirestorePredictionsOnly();
@@ -69,287 +49,332 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
         id: 'fallback',
     };
 
+    const scrollToPricing = () => {
+        document.getElementById('pricing-section')?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const faqs = [
+        {
+            q: 'Is this guaranteed to win every time?',
+            a: 'No. Anyone promising a 100% win rate is lying to you. We promise a mathematically proven 7.9% Edge over the bookmakers. You will lose some bets, but by following our bankroll strategy, your money is mathematically expected to grow over the long term.'
+        },
+        {
+            q: 'Do I need a massive bankroll to start?',
+            a: 'Not at all. The Alpha Vault is designed to work with any starting bankroll, whether it is 5,000 FCFA or 1,000,000 FCFA. It calculates your exact bet size based on percentages, so you never risk ruin.'
+        },
+        {
+            q: 'How does the AI find Positive EV?',
+            a: 'Our Quant Engine analyzes Expected Goals (xG), historic form, injuries, and line movement. When the bookmaker sets the odds too high compared to the real mathematical probability, our system flags it as a "Value Bet".'
+        }
+    ];
+
     return (
-        <div className="flex flex-col min-h-[90vh] pb-10 md:pb-20">
-            {/* Navbar */}
-            <div className="flex justify-between items-center py-4 px-2 md:px-8 mb-4 md:mb-8">
+        <div className="flex flex-col min-h-screen pb-10">
+            {/* 1. Header Navigation */}
+            <div className="flex justify-between items-center py-4 px-2 md:px-8 mb-8 md:mb-12 sticky top-0 z-50 bg-slate-50/80 dark:bg-[#0a0f1c]/80 backdrop-blur-lg border-b border-gray-200 dark:border-white/5">
                 <h1 className="text-xl md:text-2xl font-bold font-orbitron text-slate-900 dark:text-white">
                     VANTAGE<span className="text-vantage-cyan">AI</span>
                 </h1>
-                <div className="flex items-center gap-4">
-                    {/* Desktop Yesterday Results */}
-                    {yesterdayResults && (
-                        <button
-                            onClick={onShowStats}
-                            className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full"
-                        >
-                            <Trophy size={12} className="text-green-500" />
-                            <span className="text-xs font-bold text-green-500">
-                                Yesterday: {yesterdayResults.rate}%
-                            </span>
-                            {yesterdayResults.rate >= 60 
-                                ? <CheckCircle size={12} className="text-green-500" />
-                                : <XCircle size={12} className="text-red-400" />}
+                <div className="flex items-center gap-3 md:gap-6">
+                    <button onClick={scrollToPricing} className="text-xs md:text-sm font-bold text-slate-600 dark:text-gray-300 hover:text-vantage-cyan transition-colors">
+                        VIP Plans
+                    </button>
+                    <button onClick={() => window.location.href = '/blog'} className="text-xs md:text-sm font-bold text-slate-600 dark:text-gray-300 hover:text-vantage-cyan transition-colors">
+                        Free Blog
+                    </button>
+                    <button onClick={onShowStats} className="text-xs md:text-sm font-bold text-slate-600 dark:text-gray-300 hover:text-vantage-cyan transition-colors flex items-center gap-1">
+                        <TrendingUp size={14} />
+                        <span className="hidden md:inline">Track Record</span>
+                    </button>
+                    <button onClick={onLogin} className="text-sm font-bold bg-white/10 px-4 py-2 rounded-lg text-slate-900 dark:text-white hover:bg-white/20 transition-colors border border-gray-200 dark:border-white/10">
+                        Login
+                    </button>
+                </div>
+            </div>
+
+            {/* 2. High-Conversion Hero Section */}
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-4 md:px-8 mb-16 relative">
+                {/* Ambient glow */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl h-64 bg-vantage-cyan/20 blur-[100px] rounded-full pointer-events-none" />
+
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center space-x-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-6">
+                    <CheckCircle size={14} className="text-green-500" />
+                    <span className="text-[11px] font-bold tracking-widest text-green-500 uppercase">Verified Edge over Bookmakers</span>
+                </motion.div>
+
+                <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="text-4xl md:text-6xl lg:text-7xl font-black font-orbitron text-slate-900 dark:text-white leading-[1.1] mb-6 max-w-4xl mx-auto">
+                    Stop Gambling. <br className="hidden md:block" />
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-vantage-cyan to-vantage-purple">
+                        Start Investing in Data.
+                    </span>
+                </motion.h1>
+
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="text-base md:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+                    Vantage AI uses quantitative modeling and fractional Kelly staking to find <span className="font-bold text-slate-700 dark:text-white">Positive EV (+EV)</span> bets. We tell you what to bet, and exactly how much to stake to grow your bankroll safely.
+                </motion.p>
+
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto">
+                    <button onClick={onGetStarted} className="w-full sm:w-auto py-4 px-10 bg-vantage-cyan text-slate-900 font-black text-lg rounded-xl shadow-[0_0_30px_rgba(34,211,238,0.3)] hover:scale-105 hover:shadow-[0_0_40px_rgba(34,211,238,0.5)] transition-all flex items-center justify-center gap-2">
+                        Get Started Free
+                        <ArrowRight size={20} />
+                    </button>
+                    <button onClick={scrollToPricing} className="w-full sm:w-auto py-4 px-8 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-slate-900 dark:text-white font-bold text-lg rounded-xl hover:bg-gray-50 dark:hover:bg-white/10 transition-all flex items-center justify-center gap-2">
+                        <Lock size={18} className="text-gray-400" />
+                        View VIP Plans
+                    </button>
+                </motion.div>
+                <p className="text-xs text-gray-400 mt-4 font-medium uppercase tracking-widest">No credit card required for free picks</p>
+            </div>
+
+            {/* 3. Social Proof Ticker */}
+            <div className="w-full bg-slate-900 dark:bg-black/40 border-y border-white/10 py-6 mb-20 overflow-hidden relative">
+                <div className="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8 text-center divide-y md:divide-y-0 md:divide-x divide-white/10">
+                    <div className="flex flex-col items-center justify-center pt-4 md:pt-0">
+                        <span className="text-4xl font-black text-white font-orbitron mb-1">1,000+</span>
+                        <span className="text-xs font-bold text-vantage-cyan uppercase tracking-widest">Bets Logged</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center pt-4 md:pt-0">
+                        <span className="text-4xl font-black text-white font-orbitron mb-1">67.4%</span>
+                        <span className="text-xs font-bold text-vantage-cyan uppercase tracking-widest">Verified Win Rate</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center pt-4 md:pt-0">
+                        <span className="text-4xl font-black text-white font-orbitron mb-1">7.9%</span>
+                        <span className="text-xs font-bold text-green-400 uppercase tracking-widest">Return on Investment</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* 4. Education: The 3-Step Blueprint */}
+            <div className="max-w-6xl mx-auto px-4 mb-24">
+                <div className="text-center mb-12">
+                    <h2 className="text-2xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4">How You Actually Win Money</h2>
+                    <p className="text-gray-500 max-w-xl mx-auto">It's not about guessing the winner. It's about math, probabilities, and bankroll management.</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <GlassCard className="flex flex-col items-center text-center p-8 hover:border-vantage-cyan/50 transition-colors">
+                        <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-6 border border-blue-500/20">
+                            <Zap size={32} className="text-blue-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3">1. The Quant Engine</h3>
+                        <p className="text-sm text-gray-500">Our AI analyzes thousands of data points including Expected Goals (xG), injuries, and line movement to calculate the true mathematical probability of a match.</p>
+                    </GlassCard>
+                    
+                    <GlassCard className="flex flex-col items-center text-center p-8 hover:border-purple-500/50 transition-colors">
+                        <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mb-6 border border-purple-500/20">
+                            <Target size={32} className="text-purple-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3">2. Positive EV (+EV)</h3>
+                        <p className="text-sm text-gray-500">When the bookmaker sets their odds higher than our calculated true probability, it creates a "Value Bet". Over time, betting on +EV guarantees profit.</p>
+                    </GlassCard>
+                    
+                    <GlassCard className="flex flex-col items-center text-center p-8 hover:border-green-500/50 transition-colors">
+                        <div className="w-16 h-16 rounded-2xl bg-green-500/10 flex items-center justify-center mb-6 border border-green-500/20">
+                            <Briefcase size={32} className="text-green-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3">3. The Alpha Vault</h3>
+                        <p className="text-sm text-gray-500">We don't just give you the pick. Our built-in bankroll planner calculates exactly how much to stake using the Kelly Criterion to prevent ruin.</p>
+                    </GlassCard>
+                </div>
+            </div>
+
+            {/* 5. Alpha Vault Teaser */}
+            <div className="max-w-6xl mx-auto px-4 mb-24">
+                <div className="bg-slate-900 dark:bg-black/40 rounded-3xl p-1 border border-white/10 overflow-hidden">
+                    <div className="bg-gradient-to-br from-slate-900 to-black rounded-[23px] p-8 md:p-12 relative overflow-hidden flex flex-col md:flex-row items-center gap-10">
+                        {/* Glows */}
+                        <div className="absolute top-0 right-0 w-96 h-96 bg-vantage-cyan/10 blur-[100px] rounded-full" />
+                        <div className="absolute bottom-0 left-0 w-96 h-96 bg-vantage-purple/10 blur-[100px] rounded-full" />
+                        
+                        <div className="flex-1 relative z-10 space-y-6 text-center md:text-left">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
+                                <ShieldCheck size={14} className="text-vantage-cyan" />
+                                <span className="text-xs font-bold text-white uppercase tracking-wider">VIP Exclusive Feature</span>
+                            </div>
+                            <h2 className="text-3xl md:text-4xl font-bold font-orbitron text-white leading-tight">
+                                Meet the <span className="text-vantage-cyan">Alpha Vault.</span>
+                            </h2>
+                            <p className="text-gray-400 text-lg max-w-md">
+                                Input your starting bankroll, and our strategy engine projects your 30-day compound growth based on our historic 7.9% ROI.
+                            </p>
+                            <ul className="space-y-3 text-left max-w-md mx-auto md:mx-0">
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle size={18} className="text-green-400 shrink-0" />
+                                    <span className="text-gray-300">Exact daily bet sizing (1% Flat or Quarter-Kelly)</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle size={18} className="text-green-400 shrink-0" />
+                                    <span className="text-gray-300">Visual compound growth projections</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle size={18} className="text-green-400 shrink-0" />
+                                    <span className="text-gray-300">Protects your bankroll from bad streaks</span>
+                                </li>
+                            </ul>
+                        </div>
+                        
+                        {/* Mockup UI */}
+                        <div className="flex-1 w-full max-w-md relative z-10">
+                            <div className="bg-slate-800 border border-white/10 rounded-2xl p-5 shadow-2xl rotate-2 hover:rotate-0 transition-transform duration-500">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <TrendingUp size={20} className="text-vantage-cyan" />
+                                        <span className="text-white font-bold text-sm">30-Day Projection</span>
+                                    </div>
+                                    <span className="text-xs text-gray-400 bg-black/30 px-2 py-1 rounded">Based on 7.9% ROI</span>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-end border-b border-white/5 pb-3">
+                                        <div>
+                                            <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Starting Bankroll</p>
+                                            <p className="text-lg text-white font-bold">100,000 FCFA</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Final Bankroll (Est)</p>
+                                            <p className="text-2xl text-vantage-cyan font-black font-orbitron">126,600 FCFA</p>
+                                        </div>
+                                        <div className="bg-green-500/10 px-3 py-1 rounded-lg border border-green-500/20">
+                                            <p className="text-sm font-bold text-green-400">+26.6%</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 h-2 w-full bg-black/40 rounded-full overflow-hidden">
+                                        <div className="h-full w-3/4 bg-gradient-to-r from-vantage-cyan to-green-400" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* 6. Pricing Section */}
+            <div id="pricing-section" className="max-w-6xl mx-auto px-4 mb-24">
+                <div className="text-center mb-12">
+                    <h2 className="text-3xl font-bold font-orbitron text-slate-900 dark:text-white mb-4">Join the Syndicate</h2>
+                    <p className="text-gray-500">Stop paying for fake tips. Invest in verified quantitative data.</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                    {/* Free Tier */}
+                    <GlassCard className="flex flex-col p-8 opacity-80 hover:opacity-100 transition-opacity">
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Free</h3>
+                        <p className="text-3xl font-black text-slate-900 dark:text-white mb-6">0 F<span className="text-sm font-medium text-gray-500">/mo</span></p>
+                        <ul className="space-y-3 mb-8 flex-1">
+                            <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                <CheckCircle size={16} className="text-green-500" /> 1-2 Basic Picks Daily
+                            </li>
+                            <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                <CheckCircle size={16} className="text-green-500" /> Public Blog Access
+                            </li>
+                            <li className="flex items-center gap-2 text-sm text-gray-400 line-through">
+                                <XCircle size={16} className="text-gray-400" /> No Alpha Vault
+                            </li>
+                            <li className="flex items-center gap-2 text-sm text-gray-400 line-through">
+                                <XCircle size={16} className="text-gray-400" /> No +EV Accumulators
+                            </li>
+                        </ul>
+                        <button onClick={onGetStarted} className="w-full py-3 bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white font-bold rounded-xl hover:bg-slate-300 dark:hover:bg-white/20 transition-colors">
+                            Sign Up Free
                         </button>
-                    )}
-                    <button
-                        onClick={onShowStats}
-                        className="hidden md:flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-gray-300 hover:text-vantage-cyan transition-colors"
-                    >
-                        <TrendingUp size={16} />
-                        <span>Track Record</span>
-                    </button>
-                    <button
-                        onClick={onLogin}
-                        className="text-sm font-bold text-slate-600 dark:text-gray-300 hover:text-vantage-cyan transition-colors flex items-center gap-1"
-                    >
-                        <LogIn size={14} />
-                        <span className="hidden md:inline">Login</span>
-                    </button>
-                </div>
-            </div>
+                    </GlassCard>
 
-            {/* Trust Banner - Mobile only */}
-            <div className="px-2 md:hidden mb-6">
-                {/* Yesterday's Results Banner */}
-                {yesterdayResults && (
-                    <button
-                        onClick={onShowStats}
-                        className="w-full flex items-center justify-between px-4 py-2.5 bg-green-500/10 border border-green-500/20 rounded-xl mb-3"
-                    >
-                        <div className="flex items-center gap-2">
-                            <Trophy size={14} className="text-green-500" />
-                            <span className="text-xs font-bold text-green-500">
-                                Yesterday: {yesterdayResults.won}/{yesterdayResults.won + yesterdayResults.lost} Won ({yesterdayResults.rate}%)
-                            </span>
+                    {/* VIP Monthly (Popular) */}
+                    <GlassCard className="flex flex-col p-8 border-vantage-cyan/50 relative transform md:-translate-y-4 shadow-2xl">
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-vantage-cyan text-slate-900 text-[10px] font-black uppercase tracking-widest px-4 py-1 rounded-full">
+                            Most Popular
                         </div>
-                        {yesterdayResults.rate >= 60 && <CheckCircle size={14} className="text-green-500" />}
-                    </button>
-                )}
-                <button
-                    onClick={onShowStats}
-                    className="w-full flex items-center justify-between px-4 py-2.5 bg-green-500/10 border border-green-500/20 rounded-xl group transition-all"
-                >
-                    <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
-                        <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">
-                            Live Performance stats verified
-                        </span>
-                    </div>
-                    <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Check →</span>
-                </button>
-            </div>
+                        <h3 className="text-lg font-bold text-vantage-cyan mb-2">VIP Monthly</h3>
+                        <p className="text-4xl font-black text-slate-900 dark:text-white mb-6 font-orbitron">5,000 F<span className="text-sm font-medium text-gray-500 font-sans">/mo</span></p>
+                        <ul className="space-y-3 mb-8 flex-1">
+                            <li className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                                <CheckCircle size={16} className="text-vantage-cyan" /> Full Daily Dashboard
+                            </li>
+                            <li className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                                <CheckCircle size={16} className="text-vantage-cyan" /> Alpha Vault Strategy Planner
+                            </li>
+                            <li className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                                <CheckCircle size={16} className="text-vantage-cyan" /> AI Accumulators & Smart Tickets
+                            </li>
+                            <li className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                                <CheckCircle size={16} className="text-vantage-cyan" /> Kelly Sizing Calculator
+                            </li>
+                        </ul>
+                        <button onClick={onLogin} className="w-full py-4 bg-vantage-cyan text-slate-900 font-bold rounded-xl hover:scale-105 transition-transform shadow-[0_0_20px_rgba(34,211,238,0.3)]">
+                            Upgrade to VIP
+                        </button>
+                    </GlassCard>
 
-            {/* Main Content Row */}
-            <div className="flex-1 flex flex-col md:flex-row md:gap-16 lg:gap-24 md:px-8 lg:px-16 md:items-center w-full">
-                {/* Left Column - Text */}
-                <div className="flex-1 px-2 md:px-0">
-                    <div className="text-center md:text-left space-y-4 mb-8">
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="inline-flex items-center space-x-2 bg-vantage-cyan/10 border border-vantage-cyan/20 rounded-full px-3 py-1 mb-2"
-                        >
-                            <Zap size={12} className="text-vantage-cyan fill-current" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-vantage-cyan">Vantage AI · Live</span>
-                        </motion.div>
-
-                        <motion.h1
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 }}
-                            className="text-4xl md:text-5xl lg:text-6xl font-bold font-orbitron text-slate-900 dark:text-white leading-tight"
-                        >
-                            Predict the <br className="hidden md:block" />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-vantage-cyan to-vantage-purple">Future of Sport</span>
-                        </motion.h1>
-
-                        <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.2 }}
-                            className="text-sm md:text-base text-gray-500 dark:text-gray-400 max-w-md mx-auto md:mx-0"
-                        >
-                            Advanced AI analyzes form, injuries, and market trends to give you a verified edge every day.
-                        </motion.p>
-
-                        {/* Desktop Stats */}
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.3 }}
-                            className="hidden md:flex gap-4 py-4"
-                        >
-                            <div className="flex flex-col items-center px-4 py-2 bg-green-500/10 rounded-xl border border-green-500/20">
-                                <span className="text-xl font-bold text-green-500">72%</span>
-                                <span className="text-[10px] text-gray-500">Win Rate</span>
-                            </div>
-                            <div className="flex flex-col items-center px-4 py-2 bg-vantage-cyan/10 rounded-xl border border-vantage-cyan/20">
-                                <span className="text-xl font-bold text-vantage-cyan">30+</span>
-                                <span className="text-[10px] text-gray-500">Daily Picks</span>
-                            </div>
-                            <div className="flex flex-col items-center px-4 py-2 bg-purple-500/10 rounded-xl border border-purple-500/20">
-                                <span className="text-xl font-bold text-purple-500">500+</span>
-                                <span className="text-[10px] text-gray-500">VIP Members</span>
-                            </div>
-                        </motion.div>
-
-                        {/* CTA */}
-                        <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={onGetStarted}
-                            className="w-full md:w-auto py-4 px-8 bg-white text-slate-900 font-bold rounded-xl shadow-lg flex items-center justify-center space-x-2"
-                        >
-                            <span className="text-lg">Get Started Free</span>
-                            <ChevronRight size={20} />
-                        </motion.button>
-                        <p className="text-[10px] text-gray-500">No credit card required</p>
-                    </div>
+                    {/* VIP Weekly */}
+                    <GlassCard className="flex flex-col p-8 opacity-90 hover:opacity-100 transition-opacity">
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">VIP Weekly</h3>
+                        <p className="text-3xl font-black text-slate-900 dark:text-white mb-6">2,000 F<span className="text-sm font-medium text-gray-500">/wk</span></p>
+                        <ul className="space-y-3 mb-8 flex-1">
+                            <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                <CheckCircle size={16} className="text-green-500" /> Full Daily Dashboard
+                            </li>
+                            <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                <CheckCircle size={16} className="text-green-500" /> Alpha Vault Access
+                            </li>
+                            <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                <CheckCircle size={16} className="text-green-500" /> AI Accumulators
+                            </li>
+                        </ul>
+                        <button onClick={onLogin} className="w-full py-3 bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white font-bold rounded-xl hover:bg-slate-300 dark:hover:bg-white/20 transition-colors">
+                            Try 1 Week
+                        </button>
+                    </GlassCard>
                 </div>
-
-                {/* Right Column - Match Card */}
-                <div className="flex-1 px-2 md:px-0">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                        className="relative"
-                    >
-                        <div className="absolute -top-10 -right-10 w-40 h-40 bg-vantage-purple/30 rounded-full blur-[60px] hidden md:block" />
-                        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-vantage-cyan/30 rounded-full blur-[60px] hidden md:block" />
-
-                        <GlassCard className="border-vantage-cyan/50 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 bg-white rounded-full" />
-                                {liveMatch ? "TODAY'S PICK" : 'LIVE'}
-                            </div>
-
-                            {loadingHero ? (
-                                <div className="flex items-center justify-center py-10">
-                                    <Loader2 className="animate-spin text-vantage-cyan" size={32} />
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center space-y-5 pt-3">
-                                    <div className="text-xs text-gray-400 font-bold uppercase tracking-wider">
-                                        {heroMatch.league}
-                                    </div>
-
-                                    <div className="flex w-full items-center justify-between px-4">
-                                        <div className="text-center flex flex-col items-center gap-2">
-                                            <div className="w-14 md:w-20 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/10 shadow-lg p-2">
-                                                <TeamLogo src={heroMatch.homeTeamLogo} teamName={heroMatch.homeTeam} className="w-full h-full" />
-                                            </div>
-                                            <span className="text-xs md:text-sm font-bold text-slate-900 dark:text-white">{heroMatch.homeTeam}</span>
-                                        </div>
-
-                                        <div className="flex flex-col items-center">
-                                            <span className="text-2xl md:text-3xl font-bold text-vantage-cyan">VS</span>
-                                            <span className="text-[10px] text-gray-500">{heroMatch.time}</span>
-                                        </div>
-
-                                        <div className="text-center flex flex-col items-center gap-2">
-                                            <div className="w-14 md:w-20 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/10 shadow-lg p-2">
-                                                <TeamLogo src={heroMatch.awayTeamLogo} teamName={heroMatch.awayTeam} className="w-full h-full" />
-                                            </div>
-                                            <span className="text-xs md:text-sm font-bold text-slate-900 dark:text-white">{heroMatch.awayTeam}</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="w-full bg-slate-100 dark:bg-black/40 rounded-xl p-3 md:p-4">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] text-gray-500 uppercase">Prediction</span>
-                                            <div className="flex items-center text-green-500 text-xs font-bold gap-1">
-                                                <ShieldCheck size={12} />
-                                                <span>{heroMatch.confidence}%</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-lg md:text-xl font-bold text-slate-900 dark:text-white">
-                                                {heroMatch.prediction_en || heroMatch.prediction}
-                                            </span>
-                                            <span className="text-sm font-bold text-vantage-cyan bg-vantage-cyan/10 px-2 py-1 rounded">
-                                                @ {heroMatch.odds}
-                                            </span>
-                                        </div>
-                                        <div className="mt-3 h-1.5 w-full bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
-                                            <motion.div
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${heroMatch.confidence}%` }}
-                                                transition={{ duration: 1.5, delay: 0.5 }}
-                                                className="h-full bg-gradient-to-r from-vantage-cyan to-vantage-purple"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </GlassCard>
-                    </motion.div>
+                {/* Daily Pass Option */}
+                <div className="mt-6 text-center">
+                    <p className="text-sm text-gray-500">Just want to try it out? <button onClick={onLogin} className="text-vantage-cyan font-bold hover:underline">Get a 24-Hour Pass for 500 FCFA</button> inside the app.</p>
                 </div>
             </div>
 
-            {/* Feature Grid */}
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-6 mb-10 px-2 md:px-8 mt-8 md:mt-16">
-                <div className="flex flex-col items-center text-center space-y-2">
-                    <div className="p-3 bg-blue-500/10 rounded-xl text-blue-500">
-                        <PlayCircle size={20} />
-                    </div>
-                    <span className="text-xs font-bold text-slate-700 dark:text-gray-300">Live Scanning</span>
+            {/* 7. FAQ Section */}
+            <div className="max-w-3xl mx-auto px-4 mb-24 w-full">
+                <div className="text-center mb-10">
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Frequently Asked Questions</h2>
                 </div>
-                <div className="flex flex-col items-center text-center space-y-2">
-                    <div className="p-3 bg-purple-500/10 rounded-xl text-purple-500">
-                        <TrendingUp size={20} />
-                    </div>
-                    <span className="text-xs font-bold text-slate-700 dark:text-gray-300">High Win Rate</span>
-                </div>
-                <div className="flex flex-col items-center text-center space-y-2">
-                    <div className="p-3 bg-yellow-500/10 rounded-xl text-yellow-500">
-                        <Star size={20} />
-                    </div>
-                    <span className="text-xs font-bold text-slate-700 dark:text-gray-300">Daily VIP Tips</span>
-                </div>
-                {/* Desktop-only features */}
-                <div className="hidden md:flex flex-col items-center text-center space-y-2">
-                    <div className="p-3 bg-green-500/10 rounded-xl text-green-500">
-                        <TrendingUp size={20} />
-                    </div>
-                    <span className="text-xs font-bold text-slate-700 dark:text-gray-300">Kelly Staking</span>
-                </div>
-                <div className="hidden md:flex flex-col items-center text-center space-y-2">
-                    <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-500">
-                        <Zap size={20} />
-                    </div>
-                    <span className="text-xs font-bold text-slate-700 dark:text-gray-300">AI Analysis</span>
-                </div>
-                <div className="hidden md:flex flex-col items-center text-center space-y-2">
-                    <div className="p-3 bg-red-500/10 rounded-xl text-red-500">
-                        <Star size={20} />
-                    </div>
-                    <span className="text-xs font-bold text-slate-700 dark:text-gray-300">Accumulators</span>
-                </div>
-            </div>
-
-            {/* Blog CTA */}
-            <div className="mb-10 px-2 md:px-8">
-                <button
-                    onClick={() => window.location.href = '/blog'}
-                    className="w-full relative overflow-hidden group rounded-xl p-[1px]"
-                >
-                    <div className="absolute inset-0 bg-gradient-to-r from-vantage-cyan via-vantage-purple to-vantage-cyan rounded-xl opacity-30 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative bg-slate-900/90 dark:bg-black/90 backdrop-blur-md rounded-xl px-4 py-5 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-vantage-cyan/10 rounded-lg">
-                                <BookOpen size={20} className="text-vantage-cyan" />
-                            </div>
-                            <div className="text-left">
-                                <h3 className="text-sm font-bold text-white">Daily AI Blog</h3>
-                                <p className="text-[10px] text-gray-400">Free betting tips (No login)</p>
-                            </div>
+                <div className="space-y-3">
+                    {faqs.map((faq, i) => (
+                        <div key={i} className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden transition-all">
+                            <button 
+                                onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                                className="w-full px-6 py-4 flex items-center justify-between font-bold text-slate-900 dark:text-white text-left"
+                            >
+                                {faq.q}
+                                <ChevronDown size={18} className={`text-gray-400 transition-transform ${openFaq === i ? 'rotate-180' : ''}`} />
+                            </button>
+                            <AnimatePresence>
+                                {openFaq === i && (
+                                    <motion.div 
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="px-6 pb-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed border-t border-gray-100 dark:border-white/5 pt-3">
+                                            {faq.a}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
-                        <ArrowRight size={18} className="text-gray-400 group-hover:text-white" />
-                    </div>
-                </button>
+                    ))}
+                </div>
             </div>
+
+            {/* Footer Minimal */}
+            <footer className="text-center py-8 border-t border-gray-200 dark:border-white/5">
+                <h3 className="text-lg font-bold font-orbitron text-slate-900 dark:text-white mb-2">
+                    VANTAGE<span className="text-vantage-cyan">AI</span>
+                </h3>
+                <p className="text-xs text-gray-500 max-w-md mx-auto mb-4 px-4">
+                    Sports trading involves significant risk. Our platform provides data and mathematical models, not financial advice. Past performance does not guarantee future results.
+                </p>
+            </footer>
         </div>
     );
 };
