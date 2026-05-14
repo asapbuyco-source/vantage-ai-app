@@ -87,15 +87,20 @@ export async function seedStaticData(db, token, { force = false } = {}) {
     const ref = db.collection('static_cache');
     const now = new Date().toISOString();
 
-    // ── 1. Leagues Metadata ──────────────────────────────────────────────────
+    // ── 1. Leagues Metadata & 2. Current Season IDs ──────────────────────────
     const leaguesDoc = await ref.doc('leagues').get();
-    if (force || isStale(leaguesDoc)) {
-        console.log('[Seeder] Fetching leagues...');
+    const seasonsDoc = await ref.doc('seasons').get();
+    
+    if (force || isStale(leaguesDoc) || isStale(seasonsDoc)) {
+        console.log('[Seeder] Fetching leagues and current seasons...');
         const leagues = {};
+        const seasons = {};
+        
         for (const id of APPROVED_LEAGUE_IDS) {
-            const json = await smGet(token, `/leagues/${id}`, { include: 'country' });
+            const json = await smGet(token, `/leagues/${id}`, { include: 'country;currentSeason' });
             if (!json?.data) continue;
             const l = json.data;
+            
             leagues[id] = {
                 id: l.id,
                 name: l.name,
@@ -105,39 +110,21 @@ export async function seedStaticData(db, token, { force = false } = {}) {
                 countryCode: l.country?.official_name || '',
                 countryFlag: l.country?.image_path || '',
             };
+            
+            if (l.currentseason) {
+                seasons[id] = {
+                    id: l.currentseason.id,
+                    name: l.currentseason.name,
+                    year: l.currentseason.finished ? 'finished' : 'active',
+                };
+            }
             await new Promise(r => setTimeout(r, 300)); // gentle rate limit
         }
         await ref.doc('leagues').set({ data: leagues, seededAt: now });
-        console.log(`[Seeder] ✅ Seeded ${Object.keys(leagues).length} leagues`);
-    } else {
-        console.log('[Seeder] ⏭️  Leagues up-to-date, skipping');
-    }
-
-    // ── 2. Current Season IDs ─────────────────────────────────────────────────
-    const seasonsDoc = await ref.doc('seasons').get();
-    if (force || isStale(seasonsDoc)) {
-        console.log('[Seeder] Fetching current seasons...');
-        const seasons = {};
-        for (const leagueId of APPROVED_LEAGUE_IDS) {
-            const json = await smGet(token, `/seasons`, { 'filter[league_id]': leagueId });
-            if (!json?.data) continue;
-            // Get the most recent season by ID (highest ID = current)
-            const sorted = (Array.isArray(json.data) ? json.data : [json.data])
-                .filter(s => s.is_current_season)
-                .sort((a, b) => b.id - a.id);
-            if (sorted[0]) {
-                seasons[leagueId] = {
-                    id: sorted[0].id,
-                    name: sorted[0].name,
-                    year: sorted[0].finished ? 'finished' : 'active',
-                };
-            }
-            await new Promise(r => setTimeout(r, 300));
-        }
         await ref.doc('seasons').set({ data: seasons, seededAt: now });
-        console.log(`[Seeder] ✅ Seeded ${Object.keys(seasons).length} current seasons`);
+        console.log(`[Seeder] ✅ Seeded ${Object.keys(leagues).length} leagues and ${Object.keys(seasons).length} current seasons`);
     } else {
-        console.log('[Seeder] ⏭️  Seasons up-to-date, skipping');
+        console.log('[Seeder] ⏭️  Leagues and Seasons up-to-date, skipping');
     }
 
     // ── 3. Team Metadata (name + logo for all approved league teams) ──────────
