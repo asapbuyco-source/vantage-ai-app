@@ -15,7 +15,7 @@ import { VIP } from './pages/VIP';
 import { Profile } from './pages/Profile';
 import { Admin } from './pages/Admin';
 import { BettingGuide } from './pages/BettingGuide';
-import { Kelly } from './pages/Kelly';
+import { Vault } from './pages/Vault';
 import { TicketWizard } from './components/TicketWizard';
 import { LandingPage } from './pages/LandingPage';
 import { PublicStats } from './pages/PublicStats';
@@ -23,7 +23,6 @@ import { Results } from './pages/Results';
 import { LiveScores } from './pages/LiveScores';
 import { BlogIndex } from './pages/BlogIndex';
 import { BlogPost } from './pages/BlogPost';
-import { LeagueTables } from './pages/LeagueTables';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
@@ -347,12 +346,11 @@ function AppContent() {
                     {activeTab === 'guide' && <BettingGuide />}
                     {activeTab === 'profile' && <Profile />}
                     {activeTab === 'admin' && <Admin setTab={setActiveTab} />}
-                    {activeTab === 'kelly' && <Kelly setTab={setActiveTab} />}
+                    {activeTab === 'vault' && <Vault setTab={setActiveTab} />}
                     {activeTab === 'concierge' && <TicketWizard setTab={setActiveTab} />}
                     {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
                     {activeTab === 'results' && <Results />}
                     {activeTab === 'live' && <LiveScores setTab={setActiveTab} />}
-                    {activeTab === 'tables' && <LeagueTables setTab={setActiveTab} />}
                   </ErrorBoundary>
                 </motion.div>
               }
