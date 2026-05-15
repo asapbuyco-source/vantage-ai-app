@@ -266,83 +266,6 @@ def _grade_bet(market: str, home_goals: int, away_goals: int) -> str:
     return "void"  # Unknown market
 
 
-def _chatgpt_grade_fallback(pending_preds: list, date_str: str) -> dict:
-    """Uses OpenAI API to find results for matches that Sportmonks missed and grades them."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        print("[Grading/ChatGPT] No OPENAI_API_KEY found. Skipping fallback.", file=sys.stderr)
-        return {}
-    
-    import json
-    
-    missing_list = []
-    for p in pending_preds:
-        missing_list.append({
-            "id": str(p.get("fixture_id", "")),
-            "home": p.get("home_team", ""),
-            "away": p.get("away_team", ""),
-            "prediction": p.get("bet_type", "")
-        })
-    
-    if not missing_list:
-        return {}
-        
-    prompt = f"""
-Find the FINAL full-time scores for these football matches played on {date_str}.
-Grade the predictions based on the final scores.
-MATCHES:
-{json.dumps(missing_list, indent=2)}
-
-GRADING RULES:
-- Use FULL-TIME (90 min + stoppage) scores only.
-- If match was postponed/cancelled/no result -> status: "void".
-- RESULT: "Home Win" -> home > away. "Away Win" -> away > home. "Draw" -> equal.
-- DOUBLE CHANCE (1X) -> won if home wins OR draw.
-- DOUBLE CHANCE (X2) -> won if away wins OR draw.
-- DOUBLE CHANCE (12) -> won if home OR away wins (not draw).
-- OVER 1.5 -> total > 1. OVER 2.5 -> total > 2. UNDER 2.5 -> total < 3. OVER 3.5 -> total > 3. UNDER 3.5 -> total < 4.
-- BTTS -> home > 0 AND away > 0. BTTS No -> home == 0 OR away == 0.
-- DRAW NO BET (Home) -> won if home wins; void if draw; lost if away wins.
-- DRAW NO BET (Away) -> won if away wins; void if draw; lost if home wins.
-
-Return ONLY a valid JSON array. Each object: {{ "id": string, "score": "H-A" (or "?" if unknown), "status": "won"|"lost"|"void" }}.
-Do NOT skip any match.
-"""
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "You are a precise sports data assistant with access to recent match results."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.1
-    }
-    
-    try:
-        r = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=45)
-        r.raise_for_status()
-        res_json = r.json()
-        content = res_json['choices'][0]['message']['content']
-        content = content.replace("```json", "").replace("```", "").strip()
-        parsed = json.loads(content)
-        
-        fallback_map = {}
-        for item in parsed:
-            fallback_map[str(item.get("id"))] = {
-                "status": item.get("status", "void"),
-                "score": item.get("score", "?")
-            }
-        return fallback_map
-    except Exception as e:
-        print(f"[Grading/ChatGPT] Failed to fetch grades from ChatGPT: {e}", file=sys.stderr)
-        return {}
-
-
 def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
     """
     Grade all quant predictions for a given date.
@@ -427,20 +350,8 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
 
         graded_count += 1
 
-    # ── ChatGPT Fallback for Missing Results ──────────────────────────
     if pending_preds:
-        print(f"[Grading] {len(pending_preds)} matches not found on Sportmonks. Attempting ChatGPT fallback...")
-        fallback_results = _chatgpt_grade_fallback([p for _, p in pending_preds], date_str)
-        if fallback_results:
-            for fid, pred in pending_preds:
-                fb = fallback_results.get(fid)
-                if fb:
-                    pred["status"] = fb["status"]
-                    pred["score"] = fb["score"]
-                    pred["graded_at"] = datetime.now(timezone.utc).isoformat()
-                    pred["graded_by"] = "chatgpt"
-                    graded_count += 1
-                    print(f"[Grading/ChatGPT] Graded {pred.get('home_team')} vs {pred.get('away_team')} -> {fb['status']} ({fb['score']})")
+        print(f"[Grading] {len(pending_preds)} matches not found on Sportmonks. Grading unavailable for these matches.")
 
     avg_clv = round(clv_sum / clv_count, 4) if clv_count > 0 else None
 

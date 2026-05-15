@@ -367,8 +367,7 @@ const BASKETBALL_SCRIPT = path.join(__dirname, 'quant', 'basketball_pipeline.py'
 /**
  * Run the quantitative basketball pipeline for the given date.
  * Uses BallDontLie API (free, no key) for real NBA game data.
- * If no games are found, returns { status: 'no_games' } so the scheduler
- * can fall back to OpenAI automatically.
+ * If no games are found, returns { status: 'no_games' }.
  *
  * @param {string|null} dateStr - YYYY-MM-DD, defaults to Lagos today
  * @param {boolean} dryRun
@@ -409,9 +408,8 @@ export const runBasketballPipeline = async (dateStr = null, dryRun = false) => {
                     });
 
                     py.on('close', (code) => {
-                        // Check for "no games today" — not an error, just fall back to OpenAI
                         if (stdout.includes('NO_GAMES')) {
-                            logger.info('[QuantService] 🏀 Basketball: no NBA games scheduled today — triggering OpenAI fallback.');
+                            logger.info('[QuantService] 🏀 Basketball: no NBA games scheduled today.');
                             resolve({ stdout, stderr, noGames: true });
                             return;
                         }
@@ -440,9 +438,9 @@ export const runBasketballPipeline = async (dateStr = null, dryRun = false) => {
             }
         );
 
-        // Check for "no games today" — not an error, just fall back to OpenAI
+        // Check for "no games today"
         if (stdout.includes('NO_GAMES')) {
-            logger.info('[QuantService] 🏀 Basketball: no NBA games scheduled today — triggering OpenAI fallback.');
+            logger.info('[QuantService] 🏀 Basketball: no NBA games scheduled today.');
             return { status: 'no_games', generated: 0 };
         }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, Zap, TrendingUp, ShieldCheck, ArrowRight, CheckCircle, XCircle, Target, Briefcase, ChevronDown, Lock } from 'lucide-react';
+import { ChevronRight, Zap, TrendingUp, ShieldCheck, ArrowRight, CheckCircle, XCircle, Target, Briefcase, ChevronDown, Lock, AlertTriangle } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { TeamLogo } from '../components/TeamLogo';
 import { getFirestorePredictionsOnly, getPredictionsForDate } from '../services/db';
@@ -185,7 +185,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                         {/* Glows */}
                         <div className="absolute top-0 right-0 w-96 h-96 bg-vantage-cyan/10 blur-[100px] rounded-full" />
                         <div className="absolute bottom-0 left-0 w-96 h-96 bg-vantage-purple/10 blur-[100px] rounded-full" />
-                        
+
                         <div className="flex-1 relative z-10 space-y-6 text-center md:text-left">
                             <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
                                 <ShieldCheck size={14} className="text-vantage-cyan" />
@@ -212,7 +212,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                                 </li>
                             </ul>
                         </div>
-                        
+
                         {/* Mockup UI */}
                         <div className="flex-1 w-full max-w-md relative z-10">
                             <div className="bg-slate-800 border border-white/10 rounded-2xl p-5 shadow-2xl rotate-2 hover:rotate-0 transition-transform duration-500">
@@ -242,6 +242,84 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                                     <div className="mt-4 h-2 w-full bg-black/40 rounded-full overflow-hidden">
                                         <div className="h-full w-3/4 bg-gradient-to-r from-vantage-cyan to-green-400" />
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* 5b. Arbitrage Finder Teaser */}
+            <div className="max-w-6xl mx-auto px-4 mb-24">
+                <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-3xl p-8 md:p-12">
+                    <div className="flex flex-col md:flex-row items-center gap-10">
+                        <div className="flex-1 relative z-10 space-y-6 text-center md:text-left">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full">
+                                <Zap size={14} className="text-yellow-400" />
+                                <span className="text-xs font-bold text-yellow-400 uppercase tracking-wider">VIP Feature</span>
+                            </div>
+                            <h2 className="text-3xl md:text-4xl font-bold font-orbitron text-white leading-tight">
+                                <span className="text-yellow-400">Arb</span> Finder.
+                            </h2>
+                            <p className="text-gray-400 text-lg max-w-md">
+                                We scan hundreds of bookmakers every minute to find arbitrage opportunities. These are matches where you can bet on ALL outcomes and GUARANTEE a profit.
+                            </p>
+                            <ul className="space-y-3 text-left max-w-md mx-auto md:mx-0">
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle size={18} className="text-yellow-400 shrink-0" />
+                                    <span className="text-gray-300">Live scanning of 50+ bookmakers</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle size={18} className="text-yellow-400 shrink-0" />
+                                    <span className="text-gray-300">Instant alerts when arb is found</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle size={18} className="text-yellow-400 shrink-0" />
+                                    <span className="text-gray-300">Built-in calculator for exact stakes</span>
+                                </li>
+                                <li className="flex items-center gap-3">
+                                    <CheckCircle size={18} className="text-yellow-400 shrink-0" />
+                                    <span className="text-gray-300">Guaranteed profit (no losing bets)</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* Mockup UI */}
+                        <div className="flex-1 w-full max-w-md relative z-10">
+                            <div className="bg-slate-800 border border-yellow-500/20 rounded-2xl p-5 shadow-2xl">
+                                <div className="flex justify-between items-center mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <Zap size={18} className="text-yellow-400" />
+                                        <span className="text-white font-bold text-sm">Live Arb Found</span>
+                                    </div>
+                                    <span className="text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded border border-green-500/20">+2.3%</span>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                                        <div>
+                                            <p className="text-xs text-gray-400">Home Win</p>
+                                            <p className="text-white font-bold">1.85</p>
+                                        </div>
+                                        <span className="text-xs text-gray-500">Betway</span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                                        <div>
+                                            <p className="text-xs text-gray-400">Draw</p>
+                                            <p className="text-white font-bold">4.20</p>
+                                        </div>
+                                        <span className="text-xs text-gray-500">1xBet</span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                                        <div>
+                                            <p className="text-xs text-gray-400">Away Win</p>
+                                            <p className="text-white font-bold">5.50</p>
+                                        </div>
+                                        <span className="text-xs text-gray-500">22Bet</span>
+                                    </div>
+                                </div>
+                                <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                    <p className="text-xs text-gray-400 text-center">Guaranteed Profit</p>
+                                    <p className="text-lg font-black text-green-400 text-center">+2.3%</p>
                                 </div>
                             </div>
                         </div>

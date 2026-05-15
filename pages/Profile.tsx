@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, CreditCard, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, Coins, Wallet } from 'lucide-react';
+import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, CreditCard, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, Coins, Wallet, History, Sparkles } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -691,6 +691,26 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest ml-1">{t('profile.general')}</h3>
 
                 <GlassCard className="!p-0 overflow-hidden">
+                    <button
+                        onClick={() => window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'results' }))}
+                        className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border-b border-slate-200 dark:border-white/5"
+                    >
+                        <div className="flex items-center space-x-3 text-slate-700 dark:text-gray-300">
+                            <History size={20} />
+                            <span className="font-medium">{language === 'fr' ? 'Historique & Résultats' : 'Past Results'}</span>
+                        </div>
+                        <ChevronRight size={18} className="text-gray-400" />
+                    </button>
+                    <button
+                        onClick={() => window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'concierge' }))}
+                        className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border-b border-slate-200 dark:border-white/5"
+                    >
+                        <div className="flex items-center space-x-3 text-vantage-cyan">
+                            <Sparkles size={20} />
+                            <span className="font-bold">{language === 'fr' ? 'Ticket Concierge' : 'Smart Ticket'}</span>
+                        </div>
+                        <ChevronRight size={18} className="text-gray-400" />
+                    </button>
                     <button
                         onClick={() => setShowSettings(true)}
                         className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border-b border-slate-200 dark:border-white/5"

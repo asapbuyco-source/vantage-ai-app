@@ -1,5 +1,5 @@
 
-export type NavigationTab = 'home' | 'free' | 'vip' | 'guide' | 'profile' | 'admin' | 'vault' | 'concierge' | 'stats' | 'results' | 'live';
+export type NavigationTab = 'home' | 'free' | 'vip' | 'guide' | 'profile' | 'admin' | 'vault' | 'arb' | 'concierge' | 'stats' | 'results' | 'live';
 
 export type Language = 'en' | 'fr';
 
@@ -213,6 +213,13 @@ export interface UserStats {
   membership: 'Free' | 'VIP';
 }
 
+export interface VaultProgress {
+    currentDay: number;
+    bankroll: number;
+    startDate: string;
+    completedDays: number[];
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -231,6 +238,8 @@ export interface UserProfile {
   referralCount?: number;
   referralEarnings?: number; // Current Available Balance
   lifetimeEarnings?: number; // Total accumulated over time
+  // Vault Progress
+  vaultProgress?: VaultProgress;
 }
 
 export interface PayoutRequest {

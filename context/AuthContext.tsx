@@ -39,6 +39,7 @@ interface AuthContextType {
     getPayoutRequests: () => Promise<PayoutRequest[]>;
     processPayout: (payoutId: string, action: 'paid' | 'rejected') => Promise<void>;
     updateUserCountry: (country: string) => Promise<void>;
+    updateVaultProgress: (progress: { currentDay: number; bankroll: number; startDate: string; completedDays: number[] }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -327,6 +328,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
+    const updateVaultProgress = async (progress: { currentDay: number; bankroll: number; startDate: string; completedDays: number[] }) => {
+        if (!user) return;
+        try {
+            await updateDoc(doc(db, "profiles", user.uid), { vaultProgress: progress });
+            await fetchProfile(user);
+        } catch (e) {
+            console.error("Failed to update vault progress", e);
+            throw e;
+        }
+    };
+
     const requestPayout = async (amount: number, phoneNumber: string) => {
         if (!user || !userProfile) return;
         if (amount < 1000) throw new Error("Minimum payout is 1000 FCFA");
@@ -537,7 +549,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             user, userProfile, loading, error, isAdmin,
             signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, clearError: () => setError(null),
             upgradeToVip, getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, verifyTransaction,
-            requestPayout, getPayoutRequests, processPayout, updateUserCountry
+            requestPayout, getPayoutRequests, processPayout, updateUserCountry, updateVaultProgress
         }}>
             {children}
         </AuthContext.Provider>

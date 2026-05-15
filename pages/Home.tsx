@@ -674,7 +674,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                               </div>
                               <div className="flex items-center gap-2">
                                  {isUnlocked && (
-                                   <button
+                                   <div
                                      onClick={(e) => {
                                        e.stopPropagation();
                                        const pred = getPredictionText(match);
@@ -683,13 +683,15 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                          : `${match.homeTeam} vs ${match.awayTeam}`;
                                        handleCopy(text, match.id);
                                      }}
-                                     className="p-1.5 rounded-lg bg-white/5 hover:bg-vantage-cyan/10 text-gray-500 hover:text-vantage-cyan transition-colors"
+                                     role="button"
+                                     tabIndex={0}
+                                     className="p-1.5 rounded-lg bg-white/5 hover:bg-vantage-cyan/10 text-gray-500 hover:text-vantage-cyan transition-colors cursor-pointer"
                                      title="Copy prediction"
                                    >
                                      {copiedId === match.id
                                        ? <Check size={11} className="text-green-400" />
                                        : <Copy size={11} />}
-                                   </button>
+                                   </div>
                                  )}
                                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-vantage-cyan transition-colors flex items-center gap-1">
                                    {language === 'fr' ? 'Détails' : 'Details'}

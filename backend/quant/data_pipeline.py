@@ -775,14 +775,6 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
             away_logo=away_p.get("image_path", ""),
         )
 
-        # Try fetching Sportmonks' own probability model
-        sm_pred = fetch_sportmonks_prediction(int(md.fixture_id))
-        if sm_pred:
-            md.sm_pred_home_win = sm_pred["home_win"]
-            md.sm_pred_draw = sm_pred["draw"]
-            md.sm_pred_away_win = sm_pred["away_win"]
-            md.sm_pred_available = True
-
         # Parse odds (now includes DC, DNB, O/U 1.5/3.5, AH, line movement)
         raw_odds = item.get("odds") or []
         odds_list = raw_odds if isinstance(raw_odds, list) else (raw_odds.get("data", []) if isinstance(raw_odds, dict) else [])

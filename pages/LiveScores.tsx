@@ -128,7 +128,7 @@ const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number; language: string 
           <div className="shrink-0 flex flex-col items-center px-3">
             <div className="flex items-center gap-2">
               <motion.span
-                key={match.homeScore}
+                key={`home-${match.homeScore}`}
                 initial={{ scale: 1.4 }}
                 animate={{ scale: 1 }}
                 className={`text-2xl font-black font-orbitron ${match.homeScore > match.awayScore ? 'text-vantage-cyan' : 'text-white'}`}
@@ -137,7 +137,7 @@ const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number; language: string 
               </motion.span>
               <span className="text-lg font-orbitron text-gray-600">-</span>
               <motion.span
-                key={match.awayScore}
+                key={`away-${match.awayScore}`}
                 initial={{ scale: 1.4 }}
                 animate={{ scale: 1 }}
                 className={`text-2xl font-black font-orbitron ${match.awayScore > match.homeScore ? 'text-vantage-purple' : 'text-white'}`}
