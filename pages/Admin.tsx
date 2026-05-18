@@ -244,7 +244,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         try {
             // getAllUsers() returns { users: UserProfile[], lastDoc: any } — destructure correctly
             const [result, countData] = await Promise.all([
-                getAllUsers(),
+                getAllUsers(null, 1000),
                 getUserCount()
             ]);
             const data: UserProfile[] = Array.isArray((result as any)?.users)

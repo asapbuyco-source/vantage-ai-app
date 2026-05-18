@@ -171,5 +171,27 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false; // Backend Admin SDK only
     }
+    // ── Match Details Data (publicly readable, server-only write) ─────────────
+    // Used by MatchDetailsModal.tsx
+    match /fixture_odds/{fixtureId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /h2h_data/{h2hId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /lineups/{fixtureId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /match_facts/{dateStr} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /static_cache/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }
