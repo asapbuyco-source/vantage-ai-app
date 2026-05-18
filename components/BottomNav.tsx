@@ -17,7 +17,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
   const navItems = [
     { id: 'home', icon: Home, label: t('nav.home') },
     { id: 'free', icon: Unlock, label: t('nav.free') },
-    { id: 'arb', icon: Zap, label: language === 'fr' ? 'Arbitrage' : 'Arb Finder' },
+    { id: 'live', icon: Radio, label: language === 'fr' ? 'En Direct' : 'Live', badge: liveCount || undefined },
     { id: 'vip', icon: Lock, label: t('nav.vip') },
     { id: 'profile', icon: User, label: t('nav.profile') },
   ] as const;

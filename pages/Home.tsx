@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon,
   Trophy, AlertTriangle, Hourglass, Search, SlidersHorizontal, ChevronDown,
-  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Radio, Copy, Check
+  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Radio, Copy, Check, Share2
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { CircularProgress } from '../components/CircularProgress';
@@ -36,6 +36,18 @@ const TOP_LEAGUES = [
   'Champions League', 'Europa League', 'World Cup', 'Euro', 'Copa America'
 ];
 
+const getCountdownToNextPicks = () => {
+  const now = new Date();
+  const lagosNow = new Date(now.toLocaleString('en', { timeZone: 'Africa/Lagos' }));
+  const next = new Date(lagosNow);
+  next.setHours(7, 0, 0, 0);
+  if (lagosNow.getHours() >= 7 || (lagosNow.getHours() === 6 && lagosNow.getMinutes() >= 55)) next.setDate(next.getDate() + 1);
+  const diff = next.getTime() - lagosNow.getTime();
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  return { h, m, total: diff };
+};
+
 function getLeagueTier(match: Match): number {
   if (match.league_tier !== undefined && match.league_tier > 0) return match.league_tier;
   const leagueName = match.league || '';
@@ -51,14 +63,17 @@ const FormDots = ({ form }: { form?: string }) => {
   return (
     <div className="flex items-center gap-0.5">
       {results.map((r, i) => (
-        <span key={i} className={`w-1.5 h-1.5 rounded-full ${ r === 'W' ? 'bg-emerald-500' : r === 'D' ? 'bg-amber-400' : 'bg-rose-500' }`} />
+        <span key={i} className={`w-2.5 h-2.5 rounded-full flex items-center justify-center text-[6px] font-black text-white
+          ${r === 'W' ? 'bg-emerald-500' : r === 'D' ? 'bg-amber-400' : 'bg-rose-500'}`}>
+          {r}
+        </span>
       ))}
     </div>
   );
 };
 
 export const Home: React.FC<HomeProps> = ({ setTab }) => {
-  const { t, language, setLanguage, theme, toggleTheme } = useAppContext();
+  const { t, language, setLanguage, theme, toggleTheme, showToast } = useAppContext();
   const { user, userProfile, isAdmin } = useAuth();
   const {
     activeDate, predictions, rawFixtures, basketballPredictions,
@@ -70,6 +85,11 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   // Load the scheduled football gen time from Firestore settings (for display only)
   const [scheduledTime, setScheduledTime] = useState('08:00');
   const [freePicksCount, setFreePicksCount] = useState(3);
+  const [countdown, setCountdown] = useState(getCountdownToNextPicks());
+  useEffect(() => {
+    const timer = setInterval(() => setCountdown(getCountdownToNextPicks()), 60000);
+    return () => clearInterval(timer);
+  }, []);
   const [visibleCount, setVisibleCount] = useState(15);
   useEffect(() => {
     getAppSettings().then(s => {
@@ -102,6 +122,19 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
     if (navigator.vibrate) navigator.vibrate(50);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  const handleShare = async (match: Match) => {
+    const pred = getPredictionText(match);
+    const text = `🎯 ${match.homeTeam} vs ${match.awayTeam}\n⚡ Pick: ${pred}${match.odds && match.odds > 1 ? ` @ ${Number(match.odds).toFixed(2)}` : ''}\n📊 Confidence: ${match.confidence || 0}%\n\n📱 Vantage AI — Data-driven picks`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ text, title: 'Vantage AI Pick' });
+      } else {
+        await navigator.clipboard.writeText(text);
+        showToast(language === 'fr' ? 'Pick copié !' : 'Pick copied!', 'success');
+      }
+    } catch (e) { /* user cancelled */ }
   };
 
   const getPredictionText = (match: Match) => {
@@ -522,8 +555,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                   {activeSport === 'basketball'
                     ? (language === 'fr' ? "Pas de pronostics basketball pour aujourd'hui. Revenez plus tard." : 'No basketball predictions yet. Come back later.')
                     : (language === 'fr'
-                      ? `Les pronostics sont publiés chaque matin à ${scheduledTime}. Revenez bientôt.`
-                      : `Predictions are published every morning at ${scheduledTimeDisplay}. Come back then.`
+                      ? `Les pronostics sont publiés chaque matin à ${scheduledTime}. Revenez dans ${countdown.h}h ${countdown.m}m.`
+                      : `Predictions are published every morning at ${scheduledTimeDisplay}. Come back in ${countdown.h}h ${countdown.m}m.`
                     )}
                 </p>
               </>
@@ -701,26 +734,40 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
-                                 {isUnlocked && (
-                                   <div
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       const pred = getPredictionText(match);
-                                       const text = pred
-                                         ? `${match.homeTeam} vs ${match.awayTeam} \u2014 ${pred} (${match.confidence}%)`
-                                         : `${match.homeTeam} vs ${match.awayTeam}`;
-                                       handleCopy(text, match.id);
-                                     }}
-                                     role="button"
-                                     tabIndex={0}
-                                     className="p-1.5 rounded-lg bg-white/5 hover:bg-vantage-cyan/10 text-gray-500 hover:text-vantage-cyan transition-colors cursor-pointer"
-                                     title="Copy prediction"
-                                   >
-                                     {copiedId === match.id
-                                       ? <Check size={11} className="text-green-400" />
-                                       : <Copy size={11} />}
-                                   </div>
-                                 )}
+{isUnlocked && (
+                                    <div
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleShare(match);
+                                      }}
+                                      role="button"
+                                      tabIndex={0}
+                                      className="p-1.5 rounded-lg bg-white/5 hover:bg-vantage-cyan/10 text-gray-500 hover:text-vantage-cyan transition-colors cursor-pointer"
+                                      title={language === 'fr' ? 'Partager ce pick' : 'Share this pick'}
+                                    >
+                                      <Share2 size={11} />
+                                    </div>
+                                  )}
+                                  {isUnlocked && (
+                                    <div
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const pred = getPredictionText(match);
+                                        const text = pred
+                                          ? `${match.homeTeam} vs ${match.awayTeam} \u2014 ${pred} (${match.confidence}%)`
+                                          : `${match.homeTeam} vs ${match.awayTeam}`;
+                                        handleCopy(text, match.id);
+                                      }}
+                                      role="button"
+                                      tabIndex={0}
+                                      className="p-1.5 rounded-lg bg-white/5 hover:bg-vantage-cyan/10 text-gray-500 hover:text-vantage-cyan transition-colors cursor-pointer"
+                                      title="Copy prediction"
+                                    >
+                                      {copiedId === match.id
+                                        ? <Check size={11} className="text-green-400" />
+                                        : <Copy size={11} />}
+                                    </div>
+                                  )}
                                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-vantage-cyan transition-colors flex items-center gap-1">
                                    {language === 'fr' ? 'Détails' : 'Details'}
                                    <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />

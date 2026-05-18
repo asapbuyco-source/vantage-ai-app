@@ -123,7 +123,6 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     }, []);
 
     // Fetch a fresh JWT on mount using the current user's Firebase ID token.
-    // This removes the need for VITE_ADMIN_API_SECRET in the browser bundle.
     useEffect(() => {
         if (adminJwt) return; // Already have one (from sessionStorage)
         const backendUrl = import.meta.env.VITE_BACKEND_URL;

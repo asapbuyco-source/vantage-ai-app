@@ -31,7 +31,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (saved === 'en' || saved === 'fr') return saved as Language;
     const browserLang = navigator.language || navigator.languages?.[0];
     if (browserLang && browserLang.toLowerCase().startsWith('en')) return 'en';
-    return 'fr';
+    return 'en';
   });
 
   // ─── Theme (persisted) ────────────────────────────────────────────────────

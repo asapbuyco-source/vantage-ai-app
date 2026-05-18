@@ -309,3 +309,25 @@ export interface Toast {
   message: string;
   type: ToastType;
 }
+
+export interface VaultPick {
+  fixtureId: string;
+  homeTeam: string;
+  awayTeam: string;
+  market: string;
+  odds: number;
+  kellyStakePct: number;
+  stakeAmount: number;
+  result: 'pending' | 'won' | 'lost' | 'void';
+  profit: number | null;
+  confirmed: boolean;
+}
+
+export interface VaultDay {
+  dayNumber: number;
+  dateKey: string;
+  picks: VaultPick[];
+  bankrollStart: number;
+  bankrollEnd: number | null;
+  status: 'locked' | 'active' | 'completed' | 'missed';
+}

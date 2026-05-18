@@ -761,4 +761,30 @@ export const getUserCount = async (): Promise<{ total: number; vip: number }> =>
         console.warn('getUserCount error', e);
         return { total: 0, vip: 0 };
     }
+}
+
+// ─── VAULT FUNCTIONS (2-A Architecture) ──────────────────────────────────
+
+export const getVaultDay = async (uid: string, dateKey: string) => {
+    try {
+        const snap = await getDoc(doc(db, 'vault_days', `${uid}_${dateKey}`));
+        return snap.exists() ? snap.data() : null;
+    } catch { return null; }
+};
+
+export const saveVaultDay = async (uid: string, dateKey: string, data: any) => {
+    await setDoc(doc(db, 'vault_days', `${uid}_${dateKey}`), { ...data, uid }, { merge: true });
+};
+
+export const confirmVaultBet = async (uid: string, dateKey: string, fixtureId: string) => {
+    const ref = doc(db, 'vault_days', `${uid}_${dateKey}`);
+    const { runTransaction } = await import('firebase/firestore');
+    await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) return;
+        const picks: any[] = snap.data().picks || [];
+        const idx = picks.findIndex(p => p.fixtureId === fixtureId);
+        if (idx >= 0) picks[idx] = { ...picks[idx], confirmed: true };
+        tx.update(ref, { picks });
+    });
 };

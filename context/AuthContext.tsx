@@ -515,36 +515,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const amount = result.amount;
 
             if (isSuccess) {
-                // ✔️ Idempotency guard: prevent the same transId from granting VIP twice.
-                // This is especially important because the App.tsx effect can potentially
-                // fire multiple times across page loads if localStorage isn't cleared properly.
-                const txRef = doc(db, 'fapshi_transactions', cleanTransId);
-                const txSnap = await getDoc(txRef);
-                if (txSnap.exists()) {
-                    console.warn(`[AuthContext] Fapshi transId ${cleanTransId} already used. Skipping duplicate VIP grant.`);
-                    return false;
-                }
-
                 let plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' = 'weekly';
                 const storedPlan = localStorage.getItem('pendingVipPlan') as any;
-
-                // Prioritise the actual amount paid over localStorage (more reliable)
                 if (amount !== undefined) {
                     if (amount >= 70000) plan = 'annual';
                     else if (amount >= 18000) plan = 'quarterly';
                     else if (amount >= 6500) plan = 'monthly';
-                    else if (amount >= 1000) plan = 'weekly'; // covers both 1,000 FCFA trial & 2,000 FCFA regular weekly
+                    else if (amount >= 1000) plan = 'weekly';
                     else if (amount >= 500) plan = 'daily';
                 } else {
                     plan = storedPlan || 'weekly';
                 }
 
-                // Mark as used BEFORE upgrading to prevent any race-condition double-grant
-                await setDoc(txRef, {
-                    usedAt: new Date().toISOString(),
-                    userId: user.uid,
-                    plan,
-                    amount: amount ?? null,
+                // Atomically check-and-write to prevent race-condition double-grant
+                const txRef = doc(db, 'fapshi_transactions', cleanTransId);
+                await runTransaction(db, async (tx) => {
+                    const txSnap = await tx.get(txRef);
+                    if (txSnap.exists()) {
+                        console.warn(`[AuthContext] Fapshi transId ${cleanTransId} already processed. Skipping.`);
+                        return;
+                    }
+                    tx.set(txRef, {
+                        usedAt: new Date().toISOString(),
+                        userId: user.uid,
+                        plan,
+                        amount: amount ?? null,
+                    });
                 });
 
                 await upgradeToVip(plan);

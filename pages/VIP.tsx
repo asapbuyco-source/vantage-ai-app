@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar, Activity, Pencil } from 'lucide-react';
+import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar, Activity, Pencil, Banknote } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
@@ -9,6 +9,7 @@ import { PaymentModal } from '../components/PaymentModal';
 import { NavigationTab, Match } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { AccumulatorModal } from '../components/AccumulatorModal';
+import { VaultTab } from '../components/VaultTab';
 import { getAppSettings, getGlobalTodayKey, getInternalSettings } from '../services/db';
 import { normalizeQuantPrediction } from '../services/db';
 import { getTomorrowFixturesFromDB } from '../services/sportsData';
@@ -45,7 +46,7 @@ interface VIPProps {
 
 export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const { t, language, showToast } = useAppContext();
-  const { predictions, loading } = useData();
+  const { predictions, accumulators: dataContextAccumulators, loading } = useData();
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -64,7 +65,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     });
   }, []);
 
-  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'screener' | 'tracker'>('predictions');
+  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault' | 'tracker'>('predictions');
   const [picksDay, setPicksDay] = useState<'today' | 'tomorrow'>('today');
   const [tomorrowFixtures, setTomorrowFixtures] = useState<Match[]>([]);
   const [tomorrowLoading, setTomorrowLoading] = useState(false);
@@ -83,7 +84,8 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const isUnlocked = (userProfile?.isVip === true) || isAdmin;
 
   // ── Quant Model State ──────────────────────────────────────────────────────
-  const [quantPredictions, setQuantPredictions] = useState<Match[]>([]);
+  // Use DataContext predictions to avoid duplicate Firestore reads.
+  // DataContext already streams quant_predictions via onSnapshot.
   const [quantAccumulators, setQuantAccumulators] = useState<Record<string, any[]>>({});
   const [quantLoading, setQuantLoading] = useState(false);
   const [quantBetFilter, setQuantBetFilter] = useState<string>('All');
@@ -91,33 +93,31 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const [quantExpanded, setQuantExpanded] = useState(true);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [showPortfolioEdit, setShowPortfolioEdit] = useState(false);
+  const [showAllPlans, setShowAllPlans] = useState(false);
+  const [performanceExpanded, setPerformanceExpanded] = useState(false);
 
+  // Sort predictions by rank priority (same logic as before but now uses DataContext data)
+  const quantPredictions = useMemo(() => {
+    const sorted = [...predictions].map(normalizeQuantPrediction) as Match[];
+    const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
+    sorted.sort((a, b) => (rankPriority[b.value_rank] || 0) - (rankPriority[a.value_rank] || 0));
+    return sorted;
+  }, [predictions]);
+
+  // Load accumulators from DataContext accumulators or fallback to Firestore
   useEffect(() => {
     if (!isUnlocked) return;
+    if (dataContextAccumulators) {
+      setQuantAccumulators(dataContextAccumulators as Record<string, any[]> || {});
+      return;
+    }
     setQuantLoading(true);
-    const loadQuant = async () => {
-      try {
-        const dateKey = getGlobalTodayKey();
-        const snap = await getDoc(doc(db, 'quant_predictions', dateKey));
-        if (snap.exists()) {
-          const data = snap.data();
-          const rawPreds = (data.predictions || []);
-          const preds = rawPreds.map(normalizeQuantPrediction) as Match[];
-          const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
-          preds.sort((a, b) => (rankPriority[b.value_rank] || 0) - (rankPriority[a.value_rank] || 0));
-          setQuantPredictions(preds);
-          // Load pre-built named accumulators
-          if (data.accumulators) {
-            setQuantAccumulators(data.accumulators);
-          }
-        }
-      } catch (e) {
-        console.warn('[VIP] Could not load quant predictions:', e);
-      } finally {
-        setQuantLoading(false);
+    const dateKey = getGlobalTodayKey();
+    getDoc(doc(db, 'quant_predictions', dateKey)).then(snap => {
+      if (snap.exists() && snap.data().accumulators) {
+        setQuantAccumulators(snap.data().accumulators);
       }
-    };
-    loadQuant();
+    }).catch(() => {}).finally(() => setQuantLoading(false));
   }, [isUnlocked]);
 
   const BET_TYPE_FILTERS = ['All', 'Home Win', 'Away Win', 'Over 2.5 Goals', 'BTTS', 'Double Chance (1X)', 'Double Chance (X2)'];
@@ -420,7 +420,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
         return <PortfolioOnboarding onComplete={() => {}} />;
     }
 
-    if (showPortfolioEdit && !isAdmin) {
+    if (showPortfolioEdit) {
         return (
             <PortfolioOnboarding
                 onComplete={() => setShowPortfolioEdit(false)}
@@ -447,62 +447,80 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">{t('vip.subtitle')}</p>
         </motion.div>
 
-        {/* ── PERFORMANCE TRACKING (Coming Soon — Honest Placeholder) ── */}
+        {/* ── PERFORMANCE TRACKING ── */}
         <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
-          <div className="flex items-start gap-3 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
-              <TrendingUp size={16} className="text-emerald-500" />
+          <button 
+            onClick={() => setPerformanceExpanded(!performanceExpanded)}
+            className="w-full flex items-center justify-between"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+                <TrendingUp size={16} className="text-emerald-500" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-bold text-slate-700 dark:text-white uppercase tracking-wider">
+                  {language === 'fr' ? 'Suivi de Performance' : 'Performance Tracking'}
+                </p>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  {language === 'fr' ? 'Statistiques du compte' : 'Account statistics'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-slate-700 dark:text-white uppercase tracking-wider">
-                {language === 'fr' ? 'Suivi de Performance' : 'Performance Tracking'}
-              </p>
-              <p className="text-[10px] text-gray-500 mt-0.5">
-                {language === 'fr' ? 'Statistiques détaillées en construction' : 'Full stats being built — live soon'}
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
-              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
-                {language === 'fr' ? 'Abonnement depuis' : 'Member since'}
-              </p>
-              <p className="text-sm font-bold font-mono text-slate-800 dark:text-white mt-0.5">
-                {userProfile?.createdAt
-                  ? new Date(userProfile.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
-                  : '—'}
-              </p>
-            </div>
-            <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
-              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
-                {language === 'fr' ? 'Jours actifs' : 'Days Active'}
-              </p>
-              <p className="text-sm font-bold font-mono text-slate-800 dark:text-white mt-0.5">
-                {userProfile?.createdAt
-                  ? Math.max(1, Math.ceil((Date.now() - new Date(userProfile.createdAt).getTime()) / 86400000))
-                  : '—'}
-              </p>
-            </div>
-            <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
-              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
-                {language === 'fr' ? 'Signaux totaux' : 'Total Signals'}
-              </p>
-              <p className="text-sm font-bold font-mono text-emerald-500 mt-0.5">
-                {quantPredictions.length || '—'}
-              </p>
-            </div>
-            <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
-              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
-                CLV Tracker
-              </p>
-              <button
-                onClick={() => setActiveVipTab('tracker')}
-                className="text-[10px] font-bold text-vantage-cyan hover:underline mt-0.5"
+            {performanceExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+          </button>
+
+          <AnimatePresence>
+            {performanceExpanded && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0, marginTop: 0 }} 
+                animate={{ height: 'auto', opacity: 1, marginTop: 12 }} 
+                exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                className="overflow-hidden"
               >
-                {language === 'fr' ? 'Voir le suivi →' : 'View tracker →'}
-              </button>
-            </div>
-          </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
+                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
+                      {language === 'fr' ? 'Abonnement depuis' : 'Member since'}
+                    </p>
+                    <p className="text-sm font-bold font-mono text-slate-800 dark:text-white mt-0.5">
+                      {userProfile?.createdAt
+                        ? new Date(userProfile.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+                        : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
+                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
+                      {language === 'fr' ? 'Jours actifs' : 'Days Active'}
+                    </p>
+                    <p className="text-sm font-bold font-mono text-slate-800 dark:text-white mt-0.5">
+                      {userProfile?.createdAt
+                        ? Math.max(1, Math.ceil((Date.now() - new Date(userProfile.createdAt).getTime()) / 86400000))
+                        : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
+                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
+                      {language === 'fr' ? 'Signaux totaux' : 'Total Signals'}
+                    </p>
+                    <p className="text-sm font-bold font-mono text-emerald-500 mt-0.5">
+                      {quantPredictions.length || '—'}
+                    </p>
+                  </div>
+                  <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
+                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
+                      CLV Tracker
+                    </p>
+                    <button
+                      onClick={() => setActiveVipTab('tracker')}
+                      className="text-[10px] font-bold text-vantage-cyan hover:underline mt-0.5"
+                    >
+                      {language === 'fr' ? 'Voir le suivi →' : 'View tracker →'}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Premium VIP status badge */}
@@ -588,10 +606,10 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           </button>
 
           <button
-            onClick={() => setActiveVipTab('screener')}
-            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'screener' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-emerald-500' : 'text-gray-500 hover:text-gray-300'}`}
+            onClick={() => setActiveVipTab('vault')}
+            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'vault' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-emerald-500' : 'text-gray-500 hover:text-gray-300'}`}
           >
-            <Sparkles size={16} /> <span>Screener</span>
+            <Banknote size={16} /> <span>Vault</span>
           </button>
           <button
             onClick={() => setActiveVipTab('tracker')}
@@ -603,10 +621,10 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
 
 
 
-        {/* ── SCREENER SECTION ── */}
-        {activeVipTab === 'screener' && (
+        {/* ── VAULT SECTION ── */}
+        {activeVipTab === 'vault' && (
           <div className="mb-6">
-            <Screener matches={quantPredictions} />
+            <VaultTab quantPredictions={quantPredictions} onEditBankroll={() => setShowPortfolioEdit(true)} />
           </div>
         )}
 
@@ -1030,7 +1048,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
 
           <div id="plans-section" className="space-y-6">
             <div className="flex flex-col gap-4">
-            {plans.map((plan) => {
+            {plans.filter(p => showAllPlans || ['weekly', 'monthly', 'annual'].includes(p.id)).map((plan) => {
                 const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
                 const isPopular = plan.id === 'monthly';
                 return (
@@ -1090,6 +1108,17 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                 )
               })}
             </div>
+
+            {/* Show all / collapse plans */}
+            <button
+              onClick={() => setShowAllPlans(v => !v)}
+              className="text-xs font-bold text-gray-400 hover:text-vantage-cyan transition-colors flex items-center justify-center gap-1 py-2"
+            >
+              {showAllPlans
+                ? <><ChevronUp size={12} /> {language === 'fr' ? 'Réduire les plans' : 'Show less'}</>
+                : <><ChevronDown size={12} /> {language === 'fr' ? 'Voir tous les plans' : 'See all plans'}</>
+              }
+            </button>
 
             {/* Premium Trust Signals */}
             <div className="pt-6 border-t border-slate-200 dark:border-white/10 flex flex-col items-center space-y-4">

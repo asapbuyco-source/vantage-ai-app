@@ -238,8 +238,8 @@ export const generateBlogPost = async (language = 'en', leagueOverride = null) =
 
     const excerpt = content.replace(/<[^>]+>/g, '').substring(0, 160).trim() + '...';
     
-    // Unique doc ID for multiple posts
-    const docId = `${todayStr}_${language}_${league.replace(/\s+/g, '_')}`;
+    // Unique doc ID - merge all leagues into one daily doc
+    const docId = `${todayStr}_${language}_roundup`;
 
     await db.collection('daily_blogs').doc(docId).set({
         title,

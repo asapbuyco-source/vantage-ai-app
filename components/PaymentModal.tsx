@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, CreditCard, Smartphone, CheckCircle2, ShieldCheck, ArrowRight, Loader2, Globe, AlertTriangle, Mail } from 'lucide-react';
+import { X, CreditCard, Smartphone, CheckCircle2, ShieldCheck, ArrowRight, Loader2, Globe, AlertTriangle, Mail, MessageCircle } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { initiatePayment } from '../services/fapshi';
 import { initiateSelarPayment } from '../services/selar';
@@ -40,6 +40,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
   const { user, userProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [gateway, setGateway] = useState<'fapshi' | 'selar'>('fapshi');
+  const [paymentFailed, setPaymentFailed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const userEmail = user?.email || '';
 
@@ -53,6 +55,21 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     }
   }, [isOpen, userProfile]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setPaymentFailed(false);
+      setIsSubmitting(false);
+      return;
+    }
+    setPaymentFailed(false);
+    setIsSubmitting(true);
+    const timer = setTimeout(() => {
+      setPaymentFailed(true);
+      setIsSubmitting(false);
+    }, 180000);
+    return () => clearTimeout(timer);
+  }, [isOpen, plan]);
+
   const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
 
   const handlePayment = async () => {
@@ -62,6 +79,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     }
 
     setLoading(true);
+    setIsSubmitting(false);
     localStorage.setItem('pendingVipPlan', plan.id);
 
     try {
@@ -236,6 +254,33 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                   </>
                 )}
               </button>
+
+              {paymentFailed && (
+                <div className="mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-center">
+                  <p className="text-sm font-bold text-red-500 mb-2">
+                    {language === 'fr' ? 'Paiement non confirmé.' : 'Payment not confirmed.'}
+                  </p>
+                  <p className="text-[10px] text-gray-500 mb-4">
+                    {language === 'fr' ? "Votre argent n'a PAS été débité." : "Your money was NOT charged."}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPaymentFailed(false)}
+                      className="flex-1 py-2 bg-vantage-cyan text-slate-900 font-bold rounded-lg text-xs"
+                    >
+                      {language === 'fr' ? 'Réessayer' : 'Try Again'}
+                    </button>
+                    <a
+                      href={`https://wa.me/237688203629?text=${encodeURIComponent(`Hi, I need help with my payment for Vantage AI. Amount: ${plan?.price || 'unknown'} FCFA`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2 bg-green-500 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1"
+                    >
+                      <MessageCircle size={12} /> Support
+                    </a>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-4 flex items-center justify-center space-x-2 text-[10px] text-gray-500">
                 <ShieldCheck size={12} className="text-green-500" />

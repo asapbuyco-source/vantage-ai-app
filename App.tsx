@@ -26,6 +26,7 @@ import { ArbFinder } from './pages/ArbFinder';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
+import { enableFirestorePersistence } from './firebaseConfig';
 import { TrialOfferPopup } from './components/TrialOfferPopup';
 import { WEEKLY_REGULAR_PRICE, WEEKLY_TRIAL_PRICE } from './src/constants/pricing';
 import { PaymentModal } from './components/PaymentModal';
@@ -48,8 +49,12 @@ function AppContent() {
 
   // Onboarding: show once, only after login
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Enable Firestore offline persistence on mount
+  useEffect(() => { enableFirestorePersistence(); }, []);
   // VIP renewal reminder
   const [showRenewalBanner, setShowRenewalBanner] = useState(false);
+  const [showTrialUpsell, setShowTrialUpsell] = useState(false);
   const [renewalDaysLeft, setRenewalDaysLeft] = useState(0);
   // Trial offer payment modal
   const [showTrialPayment, setShowTrialPayment] = useState(false);
@@ -80,6 +85,13 @@ function AppContent() {
       setShowRenewalBanner(true);
     } else {
       setShowRenewalBanner(false);
+    }
+
+    const trialDismissed = localStorage.getItem('vantage_trial_upsell_dismissed');
+    if (userProfile?.vipPlan === 'weekly' && daysLeft <= 2 && daysLeft >= 0 && trialDismissed !== userProfile.vipExpiry) {
+      setShowTrialUpsell(true);
+    } else {
+      setShowTrialUpsell(false);
     }
   }, [userProfile]);
 
@@ -327,7 +339,44 @@ function AppContent() {
             )}
           </AnimatePresence>
 
-          <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 pt-6 min-h-screen pb-24 md:pb-6" style={{ paddingTop: showRenewalBanner ? '4rem' : undefined }}>
+          <AnimatePresence>
+            {showTrialUpsell && !showRenewalBanner && (
+              <motion.div
+                initial={{ opacity: 0, y: -40 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -40 }}
+                className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-vantage-purple via-indigo-600 to-vantage-cyan text-white shadow-xl"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <Crown size={14} className="text-yellow-300 fill-yellow-300 shrink-0" />
+                  <span className="text-[11px] font-bold truncate">
+                    {language === 'fr'
+                      ? `Essai se termine dans ${renewalDaysLeft}j — Passer à l'annuel, économisez 60%`
+                      : `Trial ends in ${renewalDaysLeft}d — Switch to Annual, save 60%`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => { setShowTrialUpsell(false); setActiveTab('vip'); }}
+                    className="text-[10px] font-black bg-white text-vantage-purple px-2.5 py-1 rounded-lg whitespace-nowrap"
+                  >
+                    {language === 'fr' ? 'Voir →' : 'Upgrade →'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      localStorage.setItem('vantage_trial_upsell_dismissed', userProfile?.vipExpiry || '');
+                      setShowTrialUpsell(false);
+                    }}
+                    className="p-1 hover:bg-white/20 rounded transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 pt-6 min-h-screen pb-24 md:pb-6" style={{ paddingTop: (showRenewalBanner || showTrialUpsell) ? '4rem' : undefined }}>
             <AnimatePresence mode="wait">
               {
                 // @ts-ignore

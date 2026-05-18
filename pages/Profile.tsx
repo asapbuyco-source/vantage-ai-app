@@ -1,12 +1,13 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, CreditCard, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, Coins, Wallet, History, Sparkles, BookOpen, TrendingUp, Target, BarChart3, Activity, PlayCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, CreditCard, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, Coins, Wallet, History, Sparkles, BookOpen, TrendingUp, Target, BarChart3, Activity, PlayCircle, ExternalLink, RefreshCw, Zap } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LegalDoc } from '../components/LegalDoc';
+import { AppGuide } from '../components/AppGuide';
 import { ensureReferralCode } from '../services/db';
 
 interface ProfileProps {
@@ -27,6 +28,7 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
     const [resetSent, setResetSent] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [legalPage, setLegalPage] = useState<'privacy' | 'terms' | null>(null);
+    const [showAppGuide, setShowAppGuide] = useState(false);
     const [copiedCode, setCopiedCode] = useState(false);
     const [learnExpanded, setLearnExpanded] = useState<string | null>(null);
 
@@ -198,6 +200,14 @@ const shareReferral = () => {
         return (
             <div className="pb-24 relative min-h-screen">
                 <LegalDoc type={legalPage} onBack={() => setLegalPage(null)} />
+            </div>
+        );
+    }
+
+    if (showAppGuide) {
+        return (
+            <div className="pb-24 relative min-h-screen">
+                <AppGuide onBack={() => setShowAppGuide(false)} />
             </div>
         );
     }
@@ -697,6 +707,18 @@ const shareReferral = () => {
                 <BookOpen size={14} />
                 {language === 'fr' ? 'Centre d\'Apprentissage' : 'Learn Center'}
               </h3>
+              <button 
+                onClick={() => setShowAppGuide(true)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-vantage-cyan/10 rounded-xl border border-vantage-cyan/30 hover:bg-vantage-cyan/20 transition-colors mb-2"
+              >
+                <div className="flex items-center gap-3">
+                  <PlayCircle size={16} className="text-vantage-cyan" />
+                  <span className="text-xs font-bold text-vantage-cyan flex-1 text-left">
+                    {language === 'fr' ? 'Tutoriel Interactif de l\'Application' : 'How to Use App (Interactive Tutorial)'}
+                  </span>
+                </div>
+                <ArrowRight size={14} className="text-vantage-cyan" />
+              </button>
               {[
                 {
                   id: 'ev',
@@ -806,6 +828,16 @@ const shareReferral = () => {
                         <div className="flex items-center space-x-3 text-vantage-cyan">
                             <Sparkles size={20} />
                             <span className="font-bold">{language === 'fr' ? 'Ticket Concierge' : 'Smart Ticket'}</span>
+                        </div>
+                        <ChevronRight size={18} className="text-gray-400" />
+                    </button>
+                    <button
+                        onClick={() => window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'arb' }))}
+                        className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border-b border-slate-200 dark:border-white/5"
+                    >
+                        <div className="flex items-center space-x-3 text-slate-700 dark:text-gray-300">
+                            <Zap size={20} />
+                            <span className="font-medium">{language === 'fr' ? 'Recherche d\'Arbitrage' : 'Arb Finder'}</span>
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>

@@ -520,12 +520,29 @@ export const initScheduler = () => {
                                 // re-grading of rescheduled/postponed matches.
                                 if (pred.status === 'won' || pred.status === 'lost') continue;
 
-                                // STRICT: Only grade by fixture_id to prevent cross-match grading errors
+                                // STRICT: Match by fixture_id (SportMonks) with team-name fallback (Gemini).
+                                // Gemini-generated predictions have no fixture_id and must be graded by name.
                                 const ftMatch = ftMatches.find(m =>
-                                    String(m.id) === String(pred.fixture_id)
+                                    String(m.id) === String(pred.fixture_id) ||
+                                    (
+                                        pred.fixture_id == null &&
+                                        m.homeTeam && m.awayTeam &&
+                                        (
+                                            (pred.homeTeam || pred.home_team || '').toLowerCase().trim() === m.homeTeam.toLowerCase().trim() ||
+                                            (pred.homeTeam || pred.home_team || '').toLowerCase().trim() === m.awayTeam.toLowerCase().trim()
+                                        ) &&
+                                        (
+                                            (pred.awayTeam || pred.away_team || '').toLowerCase().trim() === m.awayTeam.toLowerCase().trim() ||
+                                            (pred.awayTeam || pred.away_team || '').toLowerCase().trim() === m.homeTeam.toLowerCase().trim()
+                                        )
+                                    )
                                 );
 
                                 if (!ftMatch) continue;
+
+                                if (pred.fixture_id == null) {
+                                    console.log(`[AutoGrade] Gemini fallback matched: ${pred.homeTeam || pred.home_team} vs ${pred.awayTeam || pred.away_team} → ${ftMatch.homeTeam} vs ${ftMatch.awayTeam} (${ftMatch.homeScore}-${ftMatch.awayScore})`);
+                                }
 
                                 const hg = ftMatch.homeScore;
                                 const ag = ftMatch.awayScore;

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, Clock, Target, Loader2, Copy, Check, Lock, Zap,
   BarChart3, Shield, Activity, Flame, ChevronRight, Eye, EyeOff,
-  ArrowRight, Star, Brain, Crown, ChevronDown, AlertCircle
+  ArrowRight, Star, Brain, Crown, ChevronDown, AlertCircle, Share2
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
@@ -25,12 +25,10 @@ const FormDots = ({ form }: { form: string }) => {
   return (
     <div className="flex items-center gap-0.5">
       {results.map((r, i) => (
-        <span
-          key={i}
-          className={`w-2 h-2 rounded-full ${
-            r === 'W' ? 'bg-emerald-500' : r === 'D' ? 'bg-amber-400' : 'bg-rose-500'
-          }`}
-        />
+        <span key={i} className={`w-2.5 h-2.5 rounded-full flex items-center justify-center text-[6px] font-black text-white
+          ${r === 'W' ? 'bg-emerald-500' : r === 'D' ? 'bg-amber-400' : 'bg-rose-500'}`}>
+          {r}
+        </span>
       ))}
     </div>
   );
@@ -45,6 +43,18 @@ const StatPill = ({ label, value, icon }: { label: string; value: string; icon?:
   </div>
 );
 
+const getCountdownToNextPicks = () => {
+  const now = new Date();
+  const lagosNow = new Date(now.toLocaleString('en', { timeZone: 'Africa/Lagos' }));
+  const next = new Date(lagosNow);
+  next.setHours(7, 0, 0, 0);
+  if (lagosNow.getHours() >= 7 || (lagosNow.getHours() === 6 && lagosNow.getMinutes() >= 55)) next.setDate(next.getDate() + 1);
+  const diff = next.getTime() - lagosNow.getTime();
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  return { h, m, total: diff };
+};
+
 
 
 export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
@@ -55,6 +65,12 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAllLeans, setShowAllLeans] = useState(false);
   const [freePicksCount, setFreePicksCount] = useState(3);
+  const [countdown, setCountdown] = useState(getCountdownToNextPicks());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setCountdown(getCountdownToNextPicks()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   React.useEffect(() => {
     getAppSettings().then(s => {
@@ -139,12 +155,29 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
                 <Clock size={10} /> {match.time || match.kickoff_local}
               </span>
               {!blurred && (
-                <button
-                  onClick={() => handleCopy(`${match.homeTeam || match.home_team} vs ${match.awayTeam || match.away_team} — ${pred} (${confidence}%)`, match.id)}
-                  className="p-1.5 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 hover:text-vantage-cyan"
-                >
-                  {copiedId === match.id ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      const shareText = `🎯 ${match.homeTeam || match.home_team} vs ${match.awayTeam || match.away_team}\n⚡ Pick: ${pred}\n📊 Confidence: ${confidence}%\n\nVantage AI • vantage.app`;
+                      if (navigator.share) {
+                        navigator.share({ text: shareText, title: 'Vantage AI Pick' });
+                      } else {
+                        navigator.clipboard.writeText(shareText);
+                        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+                        window.open(whatsappUrl, '_blank');
+                      }
+                    }}
+                    className="p-1.5 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 hover:text-vantage-cyan"
+                  >
+                    <Share2 size={11} />
+                  </button>
+                  <button
+                    onClick={() => handleCopy(`${match.homeTeam || match.home_team} vs ${match.awayTeam || match.away_team} — ${pred} (${confidence}%)`, match.id)}
+                    className="p-1.5 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 hover:text-vantage-cyan"
+                  >
+                    {copiedId === match.id ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -177,24 +210,26 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
             </div>
           </div>
 
-          {/* ── Match stats row ── */}
-          <div className="px-4 pb-2">
-            <div className="flex justify-center gap-1.5 flex-wrap">
-              {homeWinProb > 0 && (
-                <>
-                  <StatPill label="Home" value={`${homeWinProb}%`} />
-                  <StatPill label="Draw" value={`${drawProb}%`} />
-                  <StatPill label="Away" value={`${awayWinProb}%`} />
-                </>
-              )}
-              {match.over25_prob > 0 && (
-                <StatPill label="O2.5" value={`${Math.round(match.over25_prob * 100)}%`} />
-              )}
-              {match.btts_prob > 0 && (
-                <StatPill label="BTTS" value={`${Math.round(match.btts_prob * 100)}%`} />
-              )}
+          {/* ── Match stats row — hidden for blurred (teaser) cards ── */}
+          {!blurred && (
+            <div className="px-4 pb-2">
+              <div className="flex justify-center gap-1.5 flex-wrap">
+                {homeWinProb > 0 && (
+                  <>
+                    <StatPill label="Home" value={`${homeWinProb}%`} />
+                    <StatPill label="Draw" value={`${drawProb}%`} />
+                    <StatPill label="Away" value={`${awayWinProb}%`} />
+                  </>
+                )}
+                {match.over25_prob > 0 && (
+                  <StatPill label="O2.5" value={`${Math.round(match.over25_prob * 100)}%`} />
+                )}
+                {match.btts_prob > 0 && (
+                  <StatPill label="BTTS" value={`${Math.round(match.btts_prob * 100)}%`} />
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* ── Prediction section ── */}
           <div className="relative mx-4 mb-4 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 overflow-hidden">
@@ -363,7 +398,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
         <div className="text-center py-10">
           <Activity size={28} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
           <p className="text-gray-500 mb-2">{language === 'fr' ? "Aucune analyse disponible" : "No analysis available yet"}</p>
-          <p className="text-xs text-vantage-cyan font-medium italic">{language === 'fr' ? "Pronostics publiés chaque matin." : "Match analysis published every morning."}</p>
+          <p className="text-xs text-vantage-cyan font-medium italic">{language === 'fr' ? `Pronostics publiés chaque matin. Revenez dans ${countdown.h}h ${countdown.m}m.` : `Match analysis published every morning. Come back in ${countdown.h}h ${countdown.m}m.`}</p>
         </div>
       ) : (
         <div className="space-y-6">
