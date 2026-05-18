@@ -1,5 +1,5 @@
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
-import { Match, AccumulatorSet } from "../types";
+import { Match, AccumulatorSet, AccumulatorTicket, AccumulatorLeg } from "../types";
 import { getGlobalTodayKey, saveTodaysPredictions, saveDailyFixtures, getGlobalYesterdayKey, getPredictionsForDate, savePredictionsForDate, getTeamAssetsMap, saveTeamAsset } from "./db";
 import { getTodaysFixtures, filterGlobalFixtures, enrichFixtures, formatFixtureContext } from "./sportsData";
 
@@ -645,6 +645,79 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
     }
 };
 
+function buildTicket(
+    tier: string,
+    matchIds: string[],
+    allMatches: Match[]
+): AccumulatorTicket[] {
+    if (!matchIds || matchIds.length === 0) return [];
+
+    const legs: AccumulatorLeg[] = [];
+    let combinedOdds = 1.0;
+    let combinedProb = 1.0;
+    let combinedEvSum = 0;
+
+    for (const id of matchIds) {
+        const match = allMatches.find(m => m.id === id);
+        if (match) {
+            const odds = match.odds || 1.5;
+            const prob = match.probability || (match.confidence / 100) || 0.7;
+            const ev = match.expected_value || 0.05;
+            
+            legs.push({
+                fixture_id: match.id,
+                home_team: match.homeTeam,
+                away_team: match.awayTeam,
+                home_team_logo: match.homeTeamLogo || '',
+                away_team_logo: match.awayTeamLogo || '',
+                market: match.bet_type || match.prediction_en || 'Home Win',
+                odds: odds,
+                model_prob: prob,
+                expected_value: ev,
+                league: match.league
+            } as any);
+
+            combinedOdds *= odds;
+            combinedProb *= prob;
+            combinedEvSum += ev;
+        }
+    }
+
+    if (legs.length === 0) return [];
+
+    const tierMeta: Record<string, { label: string; desc: string; icon: string }> = {
+        baseline: { label: 'The Baseline', desc: 'Highest probability treble', icon: 'ShieldCheck' },
+        alpha_edge: { label: 'The Alpha Edge', desc: 'Highest expected value', icon: 'Zap' },
+        syndicate: { label: 'The Syndicate', desc: '4-leg balanced combo', icon: 'Target' },
+        variance_play: { label: 'Variance Play', desc: 'High-yield moonshot', icon: 'Rocket' }
+    };
+
+    const meta = tierMeta[tier] || { label: tier, desc: 'AI Generated Combo', icon: 'Zap' };
+
+    let kellyStake = 0;
+    if (combinedOdds > 1) {
+        const rawKelly = (combinedOdds * combinedProb - 1) / (combinedOdds - 1);
+        kellyStake = Math.max(0, Math.min(0.05, rawKelly * 0.5));
+    }
+    const kellyPct = parseFloat((kellyStake * 100).toFixed(1));
+
+    const ticket: AccumulatorTicket = {
+        tier: tier,
+        tier_label: meta.label,
+        tier_description: meta.desc,
+        tier_icon: meta.icon,
+        leg_count: legs.length,
+        combined_odds: parseFloat(combinedOdds.toFixed(2)),
+        combined_prob: parseFloat(combinedProb.toFixed(3)),
+        combined_ev: parseFloat((combinedEvSum / legs.length).toFixed(3)),
+        kelly_stake: kellyPct || 1.5,
+        kelly_stake_unit: '%',
+        legs: legs
+    };
+
+    return [ticket];
+}
+
 /**
  * SEPARATE FUNCTION: Generates Smart Accumulators based on existing matches
  */
@@ -664,7 +737,7 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
 
     if (eligibleMatches.length === 0) {
         console.warn("[Accumulator] All matches were flagged as Uncertain. Returning empty sets.");
-        return { safe: [], medium: [], high: [] };
+        return { baseline: [], alpha_edge: [], syndicate: [], variance_play: [] };
     }
 
     try {
@@ -681,7 +754,7 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
 
         const prompt = `
             SYSTEM ROLE: You are the "Quant-Desk Senior Portfolio Manager" for Vantage AI.
-            OBJECTIVE: Construct 3 distinct, optimized accumulator tickets (Portfolios) from a pre-qualified match pool.
+            OBJECTIVE: Construct 4 distinct, optimized accumulator tickets (Portfolios) from a pre-qualified match pool.
 
             INPUT MATCH POOL (Pre-qualified — all passed EV ≥ 5% and confidence ≥ 70%):
             ${JSON.stringify(simplifiedMatches)}
@@ -690,49 +763,59 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
             1. MUTUAL EXCLUSIVITY: A match ID MUST NOT appear in more than one portfolio.
             2. SAFETY FIRST: When in doubt between two matches, always pick the higher-confidence, lower-variance one.
             3. ALLOCATION STRATEGY:
-               - Step 1: Identify the top 2-3 matches by confidence (≥78%) → assign to 'safe'.
-               - Step 2: Next tier by confidence (70-77%) or higher-EV value plays → assign to 'medium'.
-               - Step 3: Remaining matches with solid EV but more variance → assign to 'high'.
+               - Step 1: Identify the top 2-3 matches by confidence (≥78%) → assign to 'baseline'.
+               - Step 2: Next tier by confidence (70-77%) or higher-EV value plays → assign to 'alpha_edge'.
+               - Step 3: Balanced 4-leg matches → assign to 'syndicate'.
+               - Step 4: High-variance value plays → assign to 'variance_play'.
             4. DIVERSITY: Do not include the same league more than twice in a single portfolio.
             5. If fewer than 2 matches qualify for a tier, assign an empty array for that tier.
 
             --------------------------------------------------
-            PORTFOLIO 1: "SAFE" (Capital Preservation)
+            PORTFOLIO 1: "baseline" (Capital Preservation)
             --------------------------------------------------
-            - RISK PROFILE: Minimal. Bankers only.
+            - RISK PROFILE: Minimal.
             - SELECTION: 2-3 highest confidence matches (prefer Double Chance / DNB markets).
             - TYPICAL ODDS: 1.60 - 2.50 combined.
 
             --------------------------------------------------
-            PORTFOLIO 2: "MEDIUM" (Steady Compounder)
+            PORTFOLIO 2: "alpha_edge" (Highest Expected Value)
             --------------------------------------------------
             - RISK PROFILE: Balanced growth.
-            - SELECTION: 3-5 next-best matches from remaining pool.
+            - SELECTION: 3-5 next-best matches with the absolute highest expected value.
             - TYPICAL ODDS: 3.00 - 7.00 combined.
 
             --------------------------------------------------
-            PORTFOLIO 3: "HIGH" (High Variance / Small Stake)
+            PORTFOLIO 3: "syndicate" (Balanced 4-Leg Combo)
             --------------------------------------------------
-            - RISK PROFILE: High variance. Use smallest stake.
-            - SELECTION: 4-6 from remaining matches with highest EV, accepting more risk.
+            - RISK PROFILE: Medium variance.
+            - SELECTION: 4 balanced legs for steady accumulation.
+            - TYPICAL ODDS: 5.00 - 10.00 combined.
+
+            --------------------------------------------------
+            PORTFOLIO 4: "variance_play" (High Variance / Bold Moonshot)
+            --------------------------------------------------
+            - RISK PROFILE: High variance. Use small stake.
+            - SELECTION: 4-6 matches with high EV, accepting more volatility for exponential growth.
             - TYPICAL ODDS: 10.00+ combined.
 
             OUTPUT: JSON Object only.
             {
-                "safe": ["id_1", "id_2"],
-                "medium": ["id_3", "id_4", "id_5"],
-                "high": ["id_6", "id_7", "id_8", "id_9"]
+                "baseline": ["id_1", "id_2"],
+                "alpha_edge": ["id_3", "id_4", "id_5"],
+                "syndicate": ["id_6", "id_7", "id_8"],
+                "variance_play": ["id_9", "id_10"]
             }
         `;
 
         const schema = {
             type: Type.OBJECT,
             properties: {
-                safe: { type: Type.ARRAY, items: { type: Type.STRING } },
-                medium: { type: Type.ARRAY, items: { type: Type.STRING } },
-                high: { type: Type.ARRAY, items: { type: Type.STRING } }
+                baseline: { type: Type.ARRAY, items: { type: Type.STRING } },
+                alpha_edge: { type: Type.ARRAY, items: { type: Type.STRING } },
+                syndicate: { type: Type.ARRAY, items: { type: Type.STRING } },
+                variance_play: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
-            required: ["safe", "medium", "high"]
+            required: ["baseline", "alpha_edge", "syndicate", "variance_play"]
         };
 
         const response = await withRetry<any>(() => backendGenerateContent(
@@ -749,9 +832,10 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
 
         const result = JSON.parse(response.text || "{}");
         return {
-            safe: result.safe || [],
-            medium: result.medium || [],
-            high: result.high || []
+            baseline: buildTicket('baseline', result.baseline || [], matches),
+            alpha_edge: buildTicket('alpha_edge', result.alpha_edge || [], matches),
+            syndicate: buildTicket('syndicate', result.syndicate || [], matches),
+            variance_play: buildTicket('variance_play', result.variance_play || [], matches)
         };
 
     } catch (e: any) {
@@ -775,11 +859,17 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
         };
 
         // 2. Allocate strictly
-        const safe = getUnused(2);  // Top 2 for Safe
-        const medium = getUnused(4); // Next 4 for Medium
-        const high = getUnused(5);   // Next 5 for High
+        const baseline = getUnused(2);
+        const alpha_edge = getUnused(3);
+        const syndicate = getUnused(4);
+        const variance_play = getUnused(4);
 
-        return { safe, medium, high };
+        return {
+            baseline: buildTicket('baseline', baseline, matches),
+            alpha_edge: buildTicket('alpha_edge', alpha_edge, matches),
+            syndicate: buildTicket('syndicate', syndicate, matches),
+            variance_play: buildTicket('variance_play', variance_play, matches)
+        };
     }
 };
 

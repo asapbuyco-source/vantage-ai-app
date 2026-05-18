@@ -240,6 +240,9 @@ export interface UserProfile {
   lifetimeEarnings?: number; // Total accumulated over time
   // Vault Progress
   vaultProgress?: VaultProgress;
+  // Portfolio & Bankroll Management
+  portfolioBankroll?: number;
+  riskTolerance?: 'low' | 'medium' | 'high';
 }
 
 export interface PayoutRequest {

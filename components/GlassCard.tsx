@@ -30,7 +30,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({
         ${onClick ? 'cursor-pointer' : ''}
         ${highlight
           ? 'border-vantage-cyan/40 bg-vantage-cyan/10 dark:bg-vantage-cyan/5'
-          : 'border-slate-200 bg-white/60 dark:border-white/10 dark:bg-white/5'}
+          : 'border-slate-200 bg-white/90 dark:border-white/10 dark:bg-white/5'}
         backdrop-blur-md shadow-lg p-5
         ${className}
       `}

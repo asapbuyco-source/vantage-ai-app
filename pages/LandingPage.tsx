@@ -60,7 +60,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
         },
         {
             q: 'Do I need a massive bankroll to start?',
-            a: 'Not at all. The Alpha Vault is designed to work with any starting bankroll, whether it is 5,000 FCFA or 1,000,000 FCFA. It calculates your exact bet size based on percentages, so you never risk ruin.'
+            a: 'Not at all. Our portfolio management system is designed to work with any starting bankroll. It calculates your exact bet size based on mathematical percentages, so you never risk ruin.'
         },
         {
             q: 'How does the AI find Positive EV?',
@@ -172,82 +172,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                         <div className="w-16 h-16 rounded-2xl bg-green-500/10 flex items-center justify-center mb-6 border border-green-500/20">
                             <Briefcase size={32} className="text-green-500" />
                         </div>
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3">3. The Alpha Vault</h3>
-                        <p className="text-sm text-gray-500">We don't just give you the pick. Our built-in bankroll planner calculates exactly how much to stake using the Kelly Criterion to prevent ruin.</p>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3">3. Kelly Sizing</h3>
+                        <p className="text-sm text-gray-500">We don't just give you the pick. Our built-in risk manager calculates exactly how much to stake using the Kelly Criterion to maximize growth and prevent ruin.</p>
                     </GlassCard>
                 </div>
             </div>
 
-            {/* 5. Alpha Vault Teaser */}
-            <div className="max-w-6xl mx-auto px-4 mb-24">
-                <div className="bg-slate-900 dark:bg-black/40 rounded-3xl p-1 border border-white/10 overflow-hidden">
-                    <div className="bg-gradient-to-br from-slate-900 to-black rounded-[23px] p-8 md:p-12 relative overflow-hidden flex flex-col md:flex-row items-center gap-10">
-                        {/* Glows */}
-                        <div className="absolute top-0 right-0 w-96 h-96 bg-vantage-cyan/10 blur-[100px] rounded-full" />
-                        <div className="absolute bottom-0 left-0 w-96 h-96 bg-vantage-purple/10 blur-[100px] rounded-full" />
 
-                        <div className="flex-1 relative z-10 space-y-6 text-center md:text-left">
-                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
-                                <ShieldCheck size={14} className="text-vantage-cyan" />
-                                <span className="text-xs font-bold text-white uppercase tracking-wider">VIP Exclusive Feature</span>
-                            </div>
-                            <h2 className="text-3xl md:text-4xl font-bold font-orbitron text-white leading-tight">
-                                Meet the <span className="text-vantage-cyan">Alpha Vault.</span>
-                            </h2>
-                            <p className="text-gray-400 text-lg max-w-md">
-                                Input your starting bankroll, and our strategy engine projects your 30-day compound growth based on our historic 7.9% ROI.
-                            </p>
-                            <ul className="space-y-3 text-left max-w-md mx-auto md:mx-0">
-                                <li className="flex items-center gap-3">
-                                    <CheckCircle size={18} className="text-green-400 shrink-0" />
-                                    <span className="text-gray-300">Exact daily bet sizing (1% Flat or Quarter-Kelly)</span>
-                                </li>
-                                <li className="flex items-center gap-3">
-                                    <CheckCircle size={18} className="text-green-400 shrink-0" />
-                                    <span className="text-gray-300">Visual compound growth projections</span>
-                                </li>
-                                <li className="flex items-center gap-3">
-                                    <CheckCircle size={18} className="text-green-400 shrink-0" />
-                                    <span className="text-gray-300">Protects your bankroll from bad streaks</span>
-                                </li>
-                            </ul>
-                        </div>
-
-                        {/* Mockup UI */}
-                        <div className="flex-1 w-full max-w-md relative z-10">
-                            <div className="bg-slate-800 border border-white/10 rounded-2xl p-5 shadow-2xl rotate-2 hover:rotate-0 transition-transform duration-500">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div className="flex items-center gap-2">
-                                        <TrendingUp size={20} className="text-vantage-cyan" />
-                                        <span className="text-white font-bold text-sm">30-Day Projection</span>
-                                    </div>
-                                    <span className="text-xs text-gray-400 bg-black/30 px-2 py-1 rounded">Based on 7.9% ROI</span>
-                                </div>
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-end border-b border-white/5 pb-3">
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Starting Bankroll</p>
-                                            <p className="text-lg text-white font-bold">100,000 FCFA</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex justify-between items-end">
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Final Bankroll (Est)</p>
-                                            <p className="text-2xl text-vantage-cyan font-black font-orbitron">126,600 FCFA</p>
-                                        </div>
-                                        <div className="bg-green-500/10 px-3 py-1 rounded-lg border border-green-500/20">
-                                            <p className="text-sm font-bold text-green-400">+26.6%</p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 h-2 w-full bg-black/40 rounded-full overflow-hidden">
-                                        <div className="h-full w-3/4 bg-gradient-to-r from-vantage-cyan to-green-400" />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             {/* 5b. Arbitrage Finder Teaser */}
             <div className="max-w-6xl mx-auto px-4 mb-24">
@@ -347,7 +278,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                                 <CheckCircle size={16} className="text-green-500" /> Public Blog Access
                             </li>
                             <li className="flex items-center gap-2 text-sm text-gray-400 line-through">
-                                <XCircle size={16} className="text-gray-400" /> No Alpha Vault
+                                <XCircle size={16} className="text-gray-400" /> No Portfolio Tracking
                             </li>
                             <li className="flex items-center gap-2 text-sm text-gray-400 line-through">
                                 <XCircle size={16} className="text-gray-400" /> No +EV Accumulators
@@ -370,7 +301,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                                 <CheckCircle size={16} className="text-vantage-cyan" /> Full Daily Dashboard
                             </li>
                             <li className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-                                <CheckCircle size={16} className="text-vantage-cyan" /> Alpha Vault Strategy Planner
+                                <CheckCircle size={16} className="text-vantage-cyan" /> Portfolio Management
                             </li>
                             <li className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
                                 <CheckCircle size={16} className="text-vantage-cyan" /> AI Accumulators & Smart Tickets
@@ -393,7 +324,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                                 <CheckCircle size={16} className="text-green-500" /> Full Daily Dashboard
                             </li>
                             <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                                <CheckCircle size={16} className="text-green-500" /> Alpha Vault Access
+                                <CheckCircle size={16} className="text-green-500" /> Portfolio Tracking
                             </li>
                             <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                                 <CheckCircle size={16} className="text-green-500" /> AI Accumulators

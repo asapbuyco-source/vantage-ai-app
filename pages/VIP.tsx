@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
+import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar, Activity, Pencil } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
@@ -9,9 +9,13 @@ import { PaymentModal } from '../components/PaymentModal';
 import { NavigationTab, Match } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { AccumulatorModal } from '../components/AccumulatorModal';
-import { getAppSettings, getGlobalTodayKey } from '../services/db';
+import { getAppSettings, getGlobalTodayKey, getInternalSettings } from '../services/db';
 import { normalizeQuantPrediction } from '../services/db';
 import { getTomorrowFixturesFromDB } from '../services/sportsData';
+import { PortfolioOnboarding } from '../components/PortfolioOnboarding';
+import { Sparkline } from '../components/Sparkline';
+import { Screener } from '../components/Screener';
+import { CLVTracker } from '../components/CLVTracker';
 
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
@@ -55,12 +59,12 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    getAppSettings().then(s => {
+    getInternalSettings().then(s => {
       if (s.whatsappGroupUrl) setWhatsappGroupUrl(s.whatsappGroupUrl);
     });
   }, []);
 
-  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'accumulators'>('predictions');
+  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'screener' | 'tracker'>('predictions');
   const [picksDay, setPicksDay] = useState<'today' | 'tomorrow'>('today');
   const [tomorrowFixtures, setTomorrowFixtures] = useState<Match[]>([]);
   const [tomorrowLoading, setTomorrowLoading] = useState(false);
@@ -85,6 +89,8 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const [quantBetFilter, setQuantBetFilter] = useState<string>('All');
   const [quantLeagueFilter, setQuantLeagueFilter] = useState<string>('All');
   const [quantExpanded, setQuantExpanded] = useState(true);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [showPortfolioEdit, setShowPortfolioEdit] = useState(false);
 
   useEffect(() => {
     if (!isUnlocked) return;
@@ -161,32 +167,22 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
       {
         id: 'daily',
         label: t('vip.plan_daily') || 'Daily Access',
-        badge: '⚡ 24-HOUR ACCESS',
+        badge: '⚡ 24-HOUR PASS',
         price: '500',
         icon: <Zap size={20} />,
-        features: ['24 Hour Access', 'Accumulator Access'],
-        color: 'border-slate-700 bg-slate-800/50',
-        claimColor: 'bg-slate-600 hover:bg-slate-500 text-white',
+        features: ['Full +EV Signal Feed', 'Kelly Bankroll Sizing'],
+        color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
+        claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
       {
         id: 'weekly',
         label: t('vip.plan_weekly'),
-        badge: '⚡ 1-WEEK TRIAL',
+        badge: '📊 7-DAY ACCESS',
         price: '2000',
-        icon: <Zap size={20} />,
-        features: [t('vip.feat_1'), 'Accumulator Access'],
-        color: 'border-slate-700 bg-slate-800/50',
-        claimColor: 'bg-slate-600 hover:bg-slate-500 text-white',
-      },
-      {
-        id: 'annual',
-        label: t('vip.plan_yearly'),
-        badge: '👑 SAVE 70% vs WEEKLY',
-        price: '40000',
-        icon: <Crown size={20} />,
-        features: ['Full Year Access (365 days)', 'All VIP Features', 'VIP WhatsApp Group'],
-        color: 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_30px_rgba(234,179,8,0.15)]',
-        claimColor: 'bg-yellow-500 hover:bg-yellow-400 text-slate-900',
+        icon: <Activity size={20} />,
+        features: ['Full +EV Signal Feed', 'Kelly Bankroll Sizing', 'Alpha Screener Access'],
+        color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
+        claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
       {
         id: 'monthly',
@@ -194,9 +190,9 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
         badge: '🔥 MOST POPULAR',
         price: '5000',
         icon: <Star size={20} />,
-        features: [t('vip.feat_1'), 'Accumulator Access', 'VIP WhatsApp'],
-        color: 'border-vantage-purple bg-vantage-purple/10 shadow-[0_0_30px_rgba(168,85,247,0.15)]',
-        claimColor: 'bg-vantage-purple hover:bg-purple-500 text-white',
+        features: ['Full +EV Signal Feed', 'Live CLV Tracker', 'Alpha Screener Access', 'VIP WhatsApp Group'],
+        color: 'border-vantage-cyan bg-vantage-cyan/5 dark:bg-vantage-cyan/10 shadow-[0_0_40px_rgba(34,211,238,0.1)]',
+        claimColor: 'bg-vantage-cyan hover:bg-cyan-400 text-slate-900 shadow-lg shadow-vantage-cyan/25',
       },
       {
         id: 'quarterly',
@@ -204,9 +200,19 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
         badge: '💎 BEST VALUE',
         price: '12000',
         icon: <ShieldCheck size={20} />,
-        features: ['3 Months Access', 'All Features', 'VIP WhatsApp'],
-        color: 'border-vantage-cyan bg-vantage-cyan/10 shadow-[0_0_30px_rgba(34,211,238,0.15)]',
-        claimColor: 'bg-vantage-cyan hover:bg-cyan-400 text-slate-900',
+        features: ['Full +EV Signal Feed', 'Live CLV Tracker', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support'],
+        color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
+        claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
+      },
+      {
+        id: 'annual',
+        label: t('vip.plan_yearly'),
+        badge: '👑 INSTITUTIONAL',
+        price: '40000',
+        icon: <Crown size={20} />,
+        features: ['1-Year Terminal Access', 'All Premium Tools', 'VIP WhatsApp Group', 'Direct Analyst Access'],
+        color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
+        claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
     ];
 
@@ -346,9 +352,9 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                         <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">{match.homeTeam}</span>
                       </div>
                       <div className="flex flex-col items-center gap-1 shrink-0 px-1">
-                        <span className="text-[10px] font-orbitron text-gray-400">VS</span>
+                        <span className="text-[10px] font-mono text-gray-400">VS</span>
                         {match.odds > 1 && (
-                          <span className="text-[10px] font-bold bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">{match.odds.toFixed(2)}x</span>
+                          <span className="text-[10px] font-bold font-mono bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">{match.odds.toFixed(2)}x</span>
                         )}
                       </div>
                       <div className="flex items-center justify-end gap-2.5 w-5/12 overflow-hidden">
@@ -370,7 +376,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                         <div className="flex flex-col items-center shrink-0">
                           <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">{t('free.prob_label')}</span>
                           <motion.span
-                            className="text-lg font-bold font-orbitron text-green-500 dark:text-green-400"
+                            className="text-lg font-bold font-mono text-green-500 dark:text-green-400"
                             initial={{ scale: 0.5, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: idx * 0.07 + 0.4, type: 'spring', stiffness: 300 }}
@@ -408,6 +414,24 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     const expiryDate = userProfile?.vipExpiry ? new Date(userProfile.vipExpiry) : null;
     const daysLeft = expiryDate ? Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / 86400000)) : null;
 
+    const needsPortfolioOnboarding = userProfile && !userProfile.portfolioBankroll;
+
+    if (needsPortfolioOnboarding) {
+        return <PortfolioOnboarding onComplete={() => {}} />;
+    }
+
+    if (showPortfolioEdit && !isAdmin) {
+        return (
+            <PortfolioOnboarding
+                onComplete={() => setShowPortfolioEdit(false)}
+                onCancel={() => setShowPortfolioEdit(false)}
+                initialBankroll={userProfile?.portfolioBankroll}
+                initialRisk={userProfile?.riskTolerance}
+                isEditMode
+            />
+        );
+    }
+
     return (
       <div className="space-y-4 pb-24 relative min-h-screen">
         {/* Header */}
@@ -417,11 +441,69 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
-          <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white">
-            {t('vip.title')} <span className="text-vantage-purple">{t('vip.title_accent')}</span>
+          <h1 className="text-2xl font-black font-orbitron text-slate-900 dark:text-white uppercase tracking-tight">
+            {t('vip.title')} <span className="text-vantage-cyan">{t('vip.title_accent')}</span>
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{t('vip.subtitle')}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">{t('vip.subtitle')}</p>
         </motion.div>
+
+        {/* ── PERFORMANCE TRACKING (Coming Soon — Honest Placeholder) ── */}
+        <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+              <TrendingUp size={16} className="text-emerald-500" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-700 dark:text-white uppercase tracking-wider">
+                {language === 'fr' ? 'Suivi de Performance' : 'Performance Tracking'}
+              </p>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                {language === 'fr' ? 'Statistiques détaillées en construction' : 'Full stats being built — live soon'}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
+              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
+                {language === 'fr' ? 'Abonnement depuis' : 'Member since'}
+              </p>
+              <p className="text-sm font-bold font-mono text-slate-800 dark:text-white mt-0.5">
+                {userProfile?.createdAt
+                  ? new Date(userProfile.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+                  : '—'}
+              </p>
+            </div>
+            <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
+              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
+                {language === 'fr' ? 'Jours actifs' : 'Days Active'}
+              </p>
+              <p className="text-sm font-bold font-mono text-slate-800 dark:text-white mt-0.5">
+                {userProfile?.createdAt
+                  ? Math.max(1, Math.ceil((Date.now() - new Date(userProfile.createdAt).getTime()) / 86400000))
+                  : '—'}
+              </p>
+            </div>
+            <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
+              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
+                {language === 'fr' ? 'Signaux totaux' : 'Total Signals'}
+              </p>
+              <p className="text-sm font-bold font-mono text-emerald-500 mt-0.5">
+                {quantPredictions.length || '—'}
+              </p>
+            </div>
+            <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
+              <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
+                CLV Tracker
+              </p>
+              <button
+                onClick={() => setActiveVipTab('tracker')}
+                className="text-[10px] font-bold text-vantage-cyan hover:underline mt-0.5"
+              >
+                {language === 'fr' ? 'Voir le suivi →' : 'View tracker →'}
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* Premium VIP status badge */}
         <motion.div
@@ -458,14 +540,25 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                 )}
               </div>
             </div>
-            {expiryDate && !isAdmin && (
-              <div className="text-right">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Expires</p>
-                <p className="text-xs font-bold font-orbitron text-white">
-                  {expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                </p>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {expiryDate && !isAdmin && (
+                <div className="text-right">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">Expires</p>
+                  <p className="text-xs font-bold font-orbitron text-white">
+                    {expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </p>
+                </div>
+              )}
+              {!isAdmin && (
+                <button
+                  onClick={() => setShowPortfolioEdit(true)}
+                  className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-vantage-cyan transition-colors"
+                  title={language === 'fr' ? 'Modifier le portefeuille' : 'Edit bankroll'}
+                >
+                  <Pencil size={16} />
+                </button>
+              )}
+            </div>
           </div>
         </motion.div>
 
@@ -489,97 +582,39 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
        <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 mb-6">
           <button
             onClick={() => setActiveVipTab('predictions')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${activeVipTab === 'predictions' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-vantage-cyan' : 'text-gray-500 hover:text-gray-300'}`}
+            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'predictions' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-vantage-cyan' : 'text-gray-500 hover:text-gray-300'}`}
           >
-            <BarChart2 size={16} /> {language === 'fr' ? 'Pronostics IA' : 'AI Predictions'}
+            <BarChart2 size={16} /> <span>Signals</span>
+          </button>
+
+          <button
+            onClick={() => setActiveVipTab('screener')}
+            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'screener' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-emerald-500' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            <Sparkles size={16} /> <span>Screener</span>
           </button>
           <button
-            onClick={() => setActiveVipTab('accumulators')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${activeVipTab === 'accumulators' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-vantage-purple' : 'text-gray-500 hover:text-gray-300'}`}
+            onClick={() => setActiveVipTab('tracker')}
+            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'tracker' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-orange-500' : 'text-gray-500 hover:text-gray-300'}`}
           >
-            <Layers size={16} /> {language === 'fr' ? 'Accumulateurs IA' : 'AI Accumulators'}
+            <TrendingUp size={16} /> <span>CLV</span>
           </button>
         </div>
 
-        {/* ── 4 NAMED ACCUMULATORS ── */}
-        {activeVipTab === 'accumulators' && (
-          <div className="mb-8 animate-in slide-in-from-right duration-300">
-            <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300 mb-3">
-            <Layers size={16} className="text-vantage-purple" />
-            {language === 'fr' ? 'Accumulateurs IA' : 'AI Accumulators'}
-            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-vantage-purple/15 border border-vantage-purple/30 text-vantage-purple ml-1">DAILY</span>
-          </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(['baseline', 'alpha_edge', 'syndicate', 'variance_play'] as const).map(tierKey => {
-              const tierTickets = quantAccumulators[tierKey] || [];
-              const ticket = tierTickets[0];
-              const fr = language === 'fr';
-              const tierMeta: Record<string, { icon: string; label: string; gradient: string; border: string }> = {
-                baseline: { icon: '🛡️', label: fr ? 'La Base' : 'The Baseline', gradient: 'from-emerald-500/10 to-emerald-500/5', border: 'border-emerald-500/30 hover:border-emerald-500/50' },
-                alpha_edge: { icon: '⚡', label: fr ? "L'Avantage Alpha" : 'The Alpha Edge', gradient: 'from-vantage-cyan/10 to-blue-500/5', border: 'border-vantage-cyan/30 hover:border-vantage-cyan/50' },
-                syndicate: { icon: '🎯', label: fr ? 'Le Syndicat' : 'The Syndicate', gradient: 'from-vantage-purple/10 to-purple-500/5', border: 'border-vantage-purple/30 hover:border-vantage-purple/50' },
-                variance_play: { icon: '🚀', label: fr ? 'Jeu de Variance' : 'The Variance Play', gradient: 'from-orange-500/10 to-amber-500/5', border: 'border-orange-500/30 hover:border-orange-500/50' },
-              };
-              const meta = tierMeta[tierKey];
 
-              return (
-                <motion.div
-                  key={tierKey}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: ['baseline', 'alpha_edge', 'syndicate', 'variance_play'].indexOf(tierKey) * 0.08 }}
-                  className={`rounded-2xl border bg-gradient-to-br ${meta.gradient} ${meta.border} p-4 transition-all cursor-pointer hover:shadow-lg`}
-                  onClick={() => ticket && openAccumulator(tierKey)}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{meta.icon}</span>
-                      <div>
-                        <p className="text-xs font-bold text-slate-900 dark:text-white">{ticket?.tier_label || meta.label}</p>
-                        <p className="text-[9px] text-gray-500">{ticket?.tier_description || 'Generating...'}</p>
-                      </div>
-                    </div>
-                    {ticket && (
-                      <div className="text-right">
-                        <p className="text-sm font-bold font-orbitron text-vantage-cyan">{ticket.combined_odds?.toFixed(2)}x</p>
-                        <p className="text-[9px] text-gray-500">{ticket.leg_count} legs</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {ticket ? (
-                    <div className="space-y-1.5">
-                      {(ticket.legs || []).map((leg: any, li: number) => (
-                        <div key={li} className="flex items-center justify-between text-[10px] px-2 py-1 rounded-lg bg-black/5 dark:bg-white/5">
-                          <span className="font-medium text-slate-700 dark:text-gray-300 truncate max-w-[45%]">{leg.home_team} v {leg.away_team}</span>
-                          <span className="font-bold text-vantage-cyan">{leg.market}</span>
-                          <span className="font-bold text-slate-600 dark:text-gray-400">{leg.odds?.toFixed(2)}x</span>
-                        </div>
-                      ))}
-                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/10">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ticket.combined_ev > 0 ? 'bg-emerald-500/15 text-emerald-500' : 'bg-orange-500/15 text-orange-500'}`}>
-                          EV: {ticket.combined_ev > 0 ? '+' : ''}{(ticket.combined_ev * 100).toFixed(1)}%
-                        </span>
-                        {ticket.kelly_stake > 0 && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
-                            Kelly: {ticket.kelly_stake}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-3">
-                      <p className="text-[10px] text-gray-500">
-                        {language === 'fr' ? 'Pas assez de matchs qualifiés' : 'Not enough qualifying matches'}
-                      </p>
-                    </div>
-                  )}
-                </motion.div>
-              );
-            })}
+        {/* ── SCREENER SECTION ── */}
+        {activeVipTab === 'screener' && (
+          <div className="mb-6">
+            <Screener matches={quantPredictions} />
           </div>
-        </div>
+        )}
+
+        {/* ── TRACKER SECTION ── */}
+        {activeVipTab === 'tracker' && (
+          <div className="mb-6">
+            <CLVTracker />
+          </div>
         )}
 
         {/* ── VANTAGE MODEL PICKS SECTION ──────────────────────────────────────── */}
@@ -679,6 +714,16 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                         const evColor = ev >= 0.10 ? 'text-emerald-500' : ev >= 0.05 ? 'text-yellow-500' : 'text-orange-500';
                         const category = match.category || 'value';
                         const cfg = CAT_CONFIG[category as keyof typeof CAT_CONFIG] || CAT_CONFIG.value;
+                        
+                        // Dynamic Kelly Sizing
+                        const riskMultipliers = { 'low': 0.25, 'medium': 0.5, 'high': 1.0 };
+                        const riskMult = userProfile?.riskTolerance ? riskMultipliers[userProfile.riskTolerance] : 0.5;
+                        const bankroll = userProfile?.portfolioBankroll || 0;
+                        const recommendedStake = bankroll > 0 ? Math.round(bankroll * (kelly / 100) * riskMult) : 0;
+                        
+                        // Mock Sparkline Data
+                        const sparklineData = Array.from({ length: 15 }, () => 1.5 + Math.random() * 0.5);
+
                         return (
                           <motion.div
                             key={match.fixture_id ?? String(idx)}
@@ -688,22 +733,32 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                             transition={{ delay: idx * 0.05, duration: 0.3 }}
                           >
                             <div className={`relative overflow-hidden rounded-2xl border bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 h-full flex flex-col ${'border-l-emerald-500'} border-slate-200 dark:border-white/10`}>
-                              {/* Header */}
-                              <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-                                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest truncate max-w-[100px]">{match.league}</span>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">⚡ VANTAGE</span>
-                                  <span className="text-[9px] text-gray-400 flex items-center gap-0.5"><Clock size={9} />{match.kickoff_local || match.time}</span>
-                                  <button
-                                    onClick={() => handleCopy(`${match.home_team || match.homeTeam} vs ${match.away_team || match.awayTeam} \u2014 ${match.bet_type || match.prediction} (${match.confidence ?? Math.round((match.probability ?? 0) * 100)}%)`, String(match.fixture_id || idx))}
-                                    className="p-1 rounded bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 hover:text-vantage-cyan shadow-sm border border-slate-200 dark:border-white/5"
-                                  >
-                                    {copiedId === String(match.fixture_id || idx) ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
-                                  </button>
+                              {/* Clickable header row */}
+                              <button
+                                onClick={() => {
+                                  const cardId = String(match.fixture_id || idx);
+                                  setExpandedCards(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(cardId)) next.delete(cardId);
+                                    else next.add(cardId);
+                                    return next;
+                                  });
+                                }}
+                                className="w-full px-4 pt-3 pb-2 flex items-center justify-between text-left hover:bg-black/3 dark:hover:bg-white/3 transition-colors"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest truncate max-w-[80px]">{match.league}</span>
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shrink-0">⚡ VANTAGE</span>
+                                  <span className="text-[9px] text-gray-400 flex items-center gap-0.5 shrink-0"><Clock size={9} />{match.kickoff_local || match.time}</span>
                                 </div>
-                              </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">{match.bet_type || match.prediction}</span>
+                                  <span className="text-sm font-bold font-mono text-green-500">{match.confidence ?? Math.round((match.probability ?? 0) * 100)}%</span>
+                                  <ChevronDown size={14} className={`text-gray-400 transition-transform ${expandedCards.has(String(match.fixture_id || idx)) ? 'rotate-180' : ''}`} />
+                                </div>
+                              </button>
 
-                              {/* Teams */}
+                              {/* Teams row */}
                               <div className="flex items-center justify-between px-4 py-2">
                                 <div className="flex items-center gap-2 w-5/12 min-w-0">
                                   <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0">
@@ -712,8 +767,8 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                                   <span className="text-xs font-bold text-slate-900 dark:text-white truncate">{match.home_team || match.homeTeam}</span>
                                 </div>
                                 <div className="flex flex-col items-center shrink-0">
-                                  <span className="text-[9px] font-orbitron text-gray-400">VS</span>
-                                  {xgH > 0 && <span className="text-[8px] text-gray-500">{xgH.toFixed(1)}-{xgA.toFixed(1)}</span>}
+                                  <span className="text-[9px] font-mono text-gray-400">VS</span>
+                                  {xgH > 0 && <span className="text-[8px] font-mono text-gray-500">{xgH.toFixed(1)}-{xgA.toFixed(1)}</span>}
                                 </div>
                                 <div className="flex items-center justify-end gap-2 w-5/12 min-w-0">
                                   <span className="text-xs font-bold text-slate-900 dark:text-white text-right truncate">{match.away_team || match.awayTeam}</span>
@@ -723,53 +778,75 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                                 </div>
                               </div>
 
-                              {/* Quant stats bar */}
-                              <div className="mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <span className="text-[9px] text-gray-500 uppercase tracking-wide">Bet</span>
-                                    <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 leading-tight break-words">{match.bet_type || match.prediction}</p>
-                                  </div>
-                                  <div className="text-center shrink-0">
-                                    <span className="text-[9px] text-gray-500 uppercase tracking-wide">Prob</span>
-                                    <p className="text-sm font-bold font-orbitron text-green-500">{match.confidence ?? Math.round((match.probability ?? 0) * 100)}%</p>
-                                  </div>
-                                </div>
-
-                                {/* EV + Kelly + Odds row */}
-                                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 ${evColor}`}>
-                                    {/* ev_pct is already stored as % by pipeline; ev (0-1) is the raw fallback */}
-                                    EV: +{(match.ev_pct ?? (ev * 100)).toFixed(1)}%
+                              {/* EV + Kelly + Odds row — always visible */}
+                              <div className="mx-4 mb-3 flex items-center gap-2 flex-wrap">
+                                <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 ${evColor}`}>
+                                  EV: +{(match.ev_pct ?? (ev * 100)).toFixed(1)}%
+                                </span>
+                                {recommendedStake > 0 ? (
+                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-vantage-cyan/10 text-vantage-cyan border border-vantage-cyan/20">
+                                    Stake: {recommendedStake.toLocaleString()} FCFA
                                   </span>
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                ) : (
+                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
                                     Kelly: {kelly.toFixed(1)}%
                                   </span>
-                                  {Number(match.odds) > 1 && (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
-                                      {Number(match.odds).toFixed(2)}x
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Model agreement bar */}
-                                {modelConf > 0 && (
-                                  <div className="mt-2">
-                                    <div className="flex justify-between text-[8px] text-gray-400 mb-0.5">
-                                      <span>Model Agreement</span>
-                                      <span>{Math.round(modelConf * 100)}%</span>
-                                    </div>
-                                    <div className="h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
-                                      <motion.div
-                                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${modelConf * 100}%` }}
-                                        transition={{ duration: 1, delay: idx * 0.05 + 0.3 }}
-                                      />
-                                    </div>
-                                  </div>
+                                )}
+                                {Number(match.odds) > 1 && (
+                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
+                                    {Number(match.odds).toFixed(2)}x
+                                  </span>
                                 )}
                               </div>
+
+                              {/* Expanded details section */}
+                              <AnimatePresence>
+                                {expandedCards.has(String(match.fixture_id || idx)) && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.25 }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className="mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 space-y-3">
+                                      {/* Mock Sparkline */}
+                                      <div className="bg-black/20 rounded-lg p-2 border border-white/5 relative h-12 flex items-center">
+                                        <div className="absolute left-2 top-2 text-[8px] text-gray-500 uppercase tracking-widest font-bold z-10">Line Movement</div>
+                                        <div className="w-full h-full flex items-end">
+                                          <Sparkline data={sparklineData} width={300} height={24} color="#00E5FF" strokeWidth={1.5} className="w-full" />
+                                        </div>
+                                      </div>
+
+                                      {/* Model agreement bar */}
+                                      {modelConf > 0 && (
+                                        <div>
+                                          <div className="flex justify-between text-[8px] text-gray-400 mb-0.5">
+                                            <span>Model Agreement</span>
+                                            <span className="font-mono">{Math.round(modelConf * 100)}%</span>
+                                          </div>
+                                          <div className="h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                                            <motion.div
+                                              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
+                                              initial={{ width: 0 }}
+                                              animate={{ width: `${modelConf * 100}%` }}
+                                              transition={{ duration: 1, delay: 0.3 }}
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Copy button */}
+                                      <button
+                                        onClick={() => handleCopy(`${match.home_team || match.homeTeam} vs ${match.away_team || match.awayTeam} \u2014 ${match.bet_type || match.prediction} (${match.confidence ?? Math.round((match.probability ?? 0) * 100)}%)`, String(match.fixture_id || idx))}
+                                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 text-gray-500 hover:text-vantage-cyan transition-colors text-[10px] font-bold"
+                                      >
+                                        {copiedId === String(match.fixture_id || idx) ? <><Check size={10} /> Copied!</> : <><Copy size={10} /> Copy Signal</>}
+                                      </button>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </div>
                           </motion.div>
                         );
@@ -916,162 +993,129 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
         </div>
       ) : (
         <>
-          {/* TEASER SECTION (Locked Content Visual) */}
-          <div className="relative mb-8">
-            {/* The "Blur" Effect Layer */}
-            <div className="absolute inset-0 z-20 backdrop-blur-[6px] bg-vantage-bg/30 rounded-2xl flex flex-col items-center justify-center text-center p-4 border border-vantage-purple/30">
-              <div className="w-14 h-14 bg-vantage-purple text-white rounded-full flex items-center justify-center mb-3 shadow-[0_0_20px_rgba(168,85,247,0.4)]">
-                <Lock size={24} />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">Premium Analysis Locked</h3>
-              <p className="text-xs text-gray-300 mb-4 max-w-[200px]">
-                Unlock 3 "Sure Banker" matches and our high-yield accumulator for today.
-              </p>
-              <button
-                onClick={() => document.getElementById('plans-section')?.scrollIntoView({ behavior: 'smooth' })}
-                className="text-xs font-bold text-vantage-cyan flex items-center gap-1 hover:underline"
-              >
-                View Access Plans <ArrowRight size={12} />
-              </button>
+          {/* PREMIUM HERO TEASER */}
+          <div className="relative mb-8 text-center pt-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-vantage-cyan/10 border border-vantage-cyan/20 text-vantage-cyan text-[10px] font-bold uppercase tracking-widest mb-4">
+              <Activity size={12} /> Institutional Grade Analytics
             </div>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 leading-tight">
+              Unlock the <span className="text-vantage-cyan">Alpha Terminal</span>
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-6">
+              Stop guessing. Get access to our quantitative models, live CLV tracking, and +EV betting signals.
+            </p>
 
             {/* Fake Content Behind Blur */}
-            <div className="opacity-50 pointer-events-none select-none filter grayscale-[50%]">
-              {[1, 2].map(i => (
-                <div key={i} className="mb-3 p-4 rounded-xl border border-white/5 bg-white/5 flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-700" />
-                    <div className="space-y-1">
-                      <div className="h-3 w-20 bg-slate-700 rounded" />
-                      <div className="h-2 w-12 bg-slate-700 rounded" />
-                    </div>
-                  </div>
-                  <div className="h-6 w-12 bg-green-500/20 rounded" />
+            <div className="relative mx-auto max-w-md rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-4 select-none">
+              <div className="absolute inset-0 z-20 backdrop-blur-sm bg-white/30 dark:bg-black/40 flex flex-col items-center justify-center">
+                <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center mb-3 shadow-xl border border-slate-200 dark:border-white/10">
+                  <Lock size={20} className="text-slate-400" />
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div id="plans-section" className="space-y-4">
-            {/* Social Proof Section */}
-            <div className="space-y-3 mb-6">
-              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-green-500/10 border border-green-500/20">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-xs font-bold text-green-500">
-                    {language === 'fr' ? 'Fiabilité vérifiée' : 'Verified accuracy'}
-                  </span>
-                </div>
-                <span className="text-xs font-bold text-green-400">
-                  {language === 'fr' ? 'Voir les stats →' : 'See stats →'}
-                </span>
+                <span className="text-xs font-bold text-slate-800 dark:text-white">Premium Data Locked</span>
               </div>
-              
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: language === 'fr' ? 'Taux Quotidien' : 'Daily Rate', value: '72%', color: 'text-vantage-cyan' },
-                  { label: language === 'fr' ? 'Matchs/jour' : 'Picks/day', value: '30+', color: 'text-vantage-purple' },
-                  { label: language === 'fr' ? 'Membres VIP' : 'VIP Members', value: '500+', color: 'text-amber-400' },
-                ].map((stat, i) => (
-                  <div key={i} className="text-center p-3 rounded-xl bg-white/5 border border-white/10">
-                    <p className={`text-lg font-bold font-orbitron ${stat.color}`}>{stat.value}</p>
-                    <p className="text-[9px] text-gray-500 uppercase tracking-wider">{stat.label}</p>
+              {/* Fake Data Rows */}
+              <div className="space-y-3 opacity-50 blur-[2px]">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-black/20 rounded-xl border border-slate-100 dark:border-white/5">
+                    <div className="flex flex-col gap-2 w-1/2">
+                      <div className="h-2.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full" />
+                      <div className="h-2 w-2/3 bg-slate-200 dark:bg-slate-700 rounded-full" />
+                    </div>
+                    <div className="h-6 w-12 bg-emerald-500/20 rounded-md" />
                   </div>
                 ))}
               </div>
             </div>
+          </div>
 
-            <div className="flex items-center justify-between px-1">
-              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest">{t('vip.select_plan')}</h3>
-              <div className="flex items-center gap-1.5 text-[10px] text-vantage-purple bg-vantage-purple/10 px-2 py-0.5 rounded border border-vantage-purple/20">
-                <Sparkles size={10} /> 90% Win Rate
-              </div>
-            </div>
-
+          <div id="plans-section" className="space-y-6">
             <div className="flex flex-col gap-4">
             {plans.map((plan) => {
                 const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
+                const isPopular = plan.id === 'monthly';
                 return (
                   <motion.button
                     key={plan.id}
                     onClick={() => handlePlanClick(plan.id as any)}
                     whileTap={{ scale: 0.98 }}
                     className={`
-                            relative w-full text-left p-0 rounded-2xl border transition-all duration-300 overflow-hidden group
+                            relative w-full text-left p-6 rounded-2xl border transition-all duration-300 overflow-hidden group
                             ${plan.color}
-                            ${selectedPlanId === plan.id ? 'ring-2 ring-vantage-purple ring-offset-2 ring-offset-black' : ''}
                         `}
                   >
                     {/* Badge */}
                     {plan.badge && (
-                      <div className="absolute top-0 right-0 bg-gradient-to-l from-vantage-purple to-purple-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl shadow-lg flex items-center gap-1 z-10">
+                      <div className={`absolute top-0 right-0 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-bl-xl z-10
+                        ${isPopular ? 'bg-vantage-cyan text-slate-900' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}
+                      `}>
                         {plan.badge}
                       </div>
                     )}
 
-                    <div className="p-5 flex justify-between items-center relative z-0">
-                      <div className="flex flex-col gap-2">
-                        {/* Plan icon + label */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-vantage-purple">{plan.icon}</span>
-                          <span className="text-sm font-bold text-slate-300 uppercase tracking-wide">{plan.label}</span>
+                    <div className="flex justify-between items-start relative z-0">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${isPopular ? 'bg-vantage-cyan/20 text-vantage-cyan' : 'bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-gray-400'}`}>
+                            {plan.icon}
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">{plan.label}</h3>
+                          </div>
                         </div>
                         {/* Features */}
-                        <div className="flex items-center gap-2 flex-wrap mt-1">
+                        <div className="flex flex-col gap-2 mt-1">
                           {plan.features.map((feat, idx) => (
-                            <span key={idx} className="text-[10px] flex items-center text-gray-400 bg-black/20 px-2 py-0.5 rounded-full">
-                              <Check size={8} className="mr-1 text-vantage-cyan" /> {feat}
+                            <span key={idx} className="text-xs flex items-center text-slate-600 dark:text-gray-300">
+                              <Check size={12} className={`mr-2 ${isPopular ? 'text-vantage-cyan' : 'text-slate-400'}`} /> {feat}
                             </span>
                           ))}
                         </div>
                       </div>
 
-                      {/* Pricing CTA */}
-                      <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-sm transition-all ${plan.claimColor} shadow-lg shrink-0`}>
-                        <Zap size={14} />
-                        <span>
-                          {pricing.symbol}
-                          {pricing.amount.toLocaleString()}
-                          {pricing.code === 'FCFA' ? ' FCFA' : ` ${pricing.code}`}
+                      {/* Pricing */}
+                      <div className="flex flex-col items-end">
+                        <span className="text-lg md:text-xl font-black font-mono text-slate-900 dark:text-white">
+                          {pricing.symbol}{pricing.amount.toLocaleString()}
                         </span>
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                          {pricing.code === 'FCFA' ? 'FCFA' : pricing.code}
+                        </span>
+                        
+                        <div className={`mt-4 px-4 py-2 rounded-xl font-bold text-xs transition-all ${plan.claimColor}`}>
+                          Select Plan
+                        </div>
                       </div>
                     </div>
-
-                    {/* Hover Effect */}
-                    <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   </motion.button>
                 )
               })}
             </div>
 
-            {/* Trust Signals */}
-            <div className="pt-4 flex flex-col items-center space-y-3">
-              <div className="flex items-center justify-center gap-4 opacity-70 grayscale hover:grayscale-0 transition-all flex-wrap">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/3/3f/MTN-logo.jpg" alt="MTN" className="h-6 object-contain rounded-sm" />
-                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c8/Orange_logo.svg" alt="Orange" className="h-6 object-contain" />
-                <div className="bg-white px-2 py-0.5 rounded flex items-center justify-center h-6">
-                  <img src="https://selar.co/images/logo.png" alt="Selar" className="h-4 object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement!.innerHTML = '<span class="text-black font-bold text-xs tracking-tight">Selar</span>'; }} />
-                </div>
+            {/* Premium Trust Signals */}
+            <div className="pt-6 border-t border-slate-200 dark:border-white/10 flex flex-col items-center space-y-4">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
+                <ShieldCheck size={14} className="text-emerald-500" />
+                Secure Checkout via <span className="text-slate-900 dark:text-white font-bold">Fapshi</span> & <span className="text-slate-900 dark:text-white font-bold">Selar</span>
               </div>
-
-              <div className="flex items-center gap-1 text-[10px] text-gray-500 text-center">
-                <ShieldCheck size={12} className="text-green-500 shrink-0" />
-                <span>Secure Payment via Fapshi & Selar • Instant Activation</span>
+              
+              {/* Payment Methods (Modernized) */}
+              <div className="flex items-center justify-center gap-2">
+                {['MTN Mobile Money', 'Orange Money', 'Card'].map(method => (
+                  <div key={method} className="px-2.5 py-1 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
+                    {method}
+                  </div>
+                ))}
               </div>
 
               {/* Manual Verification Button */}
-              <div className="w-full border-t border-slate-200 dark:border-white/5 pt-2 mt-2">
-                <button
-                  onClick={handleManualCheck}
-                  disabled={isVerifying}
-                  className="w-full text-xs text-gray-500 hover:text-vantage-cyan flex items-center justify-center space-x-1 py-1"
-                >
-                  <RefreshCw size={12} className={isVerifying ? "animate-spin" : ""} />
-                  <span>
-                    {language === 'fr' ? "Problème d'activation ? Vérifier le statut" : "Activation issue? Check status"}
-                  </span>
-                </button>
-              </div>
+              <button
+                onClick={handleManualCheck}
+                disabled={isVerifying}
+                className="text-[10px] text-gray-400 hover:text-vantage-cyan flex items-center justify-center space-x-1 py-2 transition-colors uppercase font-bold tracking-widest mt-4"
+              >
+                <RefreshCw size={10} className={isVerifying ? "animate-spin" : ""} />
+                <span>{language === 'fr' ? "Vérifier l'activation manuellement" : "Verify Activation Manually"}</span>
+              </button>
             </div>
           </div>
         </>

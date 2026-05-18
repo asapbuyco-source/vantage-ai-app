@@ -39,7 +39,7 @@ export const ArbFinder: React.FC<ArbFinderProps> = ({ setTab }) => {
             const fetchedArbs = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
-            }));
+            } as any));
             
             // Filter out arbs older than 15 minutes (900 seconds)
             const now = Date.now() / 1000;

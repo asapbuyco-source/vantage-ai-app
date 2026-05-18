@@ -10,6 +10,9 @@ export default {
     darkMode: 'class',
     theme: {
         extend: {
+            fontFamily: {
+                mono: ['"JetBrains Mono"', 'monospace'],
+            },
             colors: {
                 vantage: {
                     bg: '#05070a',

@@ -4,6 +4,7 @@ import { X, Activity, Scale, ShieldAlert, Zap, Loader2, Trophy, Crosshair, Targe
 import { NavigationTab, Match, MatchNews } from '../types';
 import { getLiveOddsFromDB, getH2HFromDB, getMatchNewsFromDB, getMatchNewsForDate, getFixtureLineupsFromDB, getMatchStatsFromDB, getMatchFactsFromDB, LineupPlayer, TeamForm, H2HRecord, MatchOdds, InjuryReport, MatchStatsData, MatchFact } from '../services/sportsData';
 import { TeamLogo } from './TeamLogo';
+import { Sparkline } from './Sparkline';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -88,9 +89,9 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
         return (
             <div className="mb-4">
                 <div className="flex justify-between text-xs mb-1">
-                    <span className="font-bold">{homeVal}{isPercentage ? '%' : ''}</span>
+                    <span className="font-bold font-mono">{homeVal}{isPercentage ? '%' : ''}</span>
                     <span className="text-gray-500 uppercase">{label}</span>
-                    <span className="font-bold">{awayVal}{isPercentage ? '%' : ''}</span>
+                    <span className="font-bold font-mono">{awayVal}{isPercentage ? '%' : ''}</span>
                 </div>
                 <div className="h-2 w-full bg-slate-200 dark:bg-white/10 rounded-full flex overflow-hidden">
                     <div className="bg-vantage-cyan h-full" style={{ width: `${homePct}%` }} />
@@ -140,7 +141,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                             </div>
 
                             <div className="flex flex-col items-center justify-center w-1/3">
-                                <span className="text-2xl font-orbitron font-bold text-vantage-cyan/50">VS</span>
+                                <span className="text-2xl font-mono font-bold text-vantage-cyan/50">VS</span>
                             </div>
 
                             <div className="flex flex-col items-center w-1/3">
@@ -223,10 +224,10 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                                 onClose();
                                                                 setTab('vip');
                                                             }}
-                                                            className="mt-4 flex items-center gap-2 px-6 py-3 bg-vantage-purple hover:bg-purple-600 active:scale-95 transition-all text-white rounded-xl font-bold font-orbitron shadow-lg shadow-vantage-purple/20"
+                                                            className="mt-4 flex items-center gap-2 px-6 py-3 bg-vantage-purple hover:bg-purple-600 active:scale-95 transition-all text-white rounded-xl font-bold shadow-lg shadow-vantage-purple/20"
                                                         >
                                                             <Zap size={18} className="text-yellow-400 fill-yellow-400" />
-                                                            {language === 'fr' ? 'DEVENIR VIP' : 'BECOME VIP'}
+                                                            {language === 'fr' ? 'DEVENIR ALPHA' : 'BECOME ALPHA'}
                                                         </button>
                                                     )}
                                                 </div>
@@ -242,6 +243,14 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                         const categoryColor = category === 'safe' ? 'text-green-400' : category === 'risky' ? 'text-red-400' : 'text-yellow-400';
                                         const categoryBg = category === 'safe' ? 'bg-green-500/10 border-green-500/20' : category === 'risky' ? 'bg-red-500/10 border-red-500/20' : 'bg-yellow-500/10 border-yellow-500/20';
                                         const predLabel = language === 'fr' ? predictionFr : prediction;
+                                        const ev = match.expected_value ?? 0;
+                                        const evPct = match.ev_pct ?? (ev * 100);
+                                        const kelly = match.kelly_stake ?? 0;
+                                        const riskMultipliers = { 'low': 0.25, 'medium': 0.5, 'high': 1.0 };
+                                        const riskMult = userProfile?.riskTolerance ? riskMultipliers[userProfile.riskTolerance] : 0.5;
+                                        const bankroll = userProfile?.portfolioBankroll || 0;
+                                        const recommendedStake = bankroll > 0 ? Math.round(bankroll * (kelly / 100) * riskMult) : 0;
+                                        const sparklineData = Array.from({ length: 15 }, () => 1.5 + Math.random() * 0.5);
 
                                         return (
                                             <div className="space-y-5">
@@ -255,32 +264,50 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                     <p className={`text-xl font-bold tracking-tight ${categoryColor}`}>{predLabel || (language === 'fr' ? 'Analyse en attente' : 'Analysis Pending')}</p>
                                                 </div>
 
-                                                {/* Confidence + Odds row */}
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div className="rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-4 flex flex-col items-center">
+                                                {/* Confidence + Odds + EV + Kelly row */}
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                    <div className="rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-4 flex flex-col items-center justify-center">
                                                         <span className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
                                                             {language === 'fr' ? 'Confiance' : 'Confidence'}
                                                         </span>
-                                                        <div className="relative w-16 h-16">
-                                                            <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                                                                <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-200 dark:text-white/10" />
-                                                                <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="3"
-                                                                    strokeDasharray={`${confidence} ${100 - confidence}`}
-                                                                    strokeLinecap="round"
-                                                                    className={confidence >= 80 ? 'text-green-400' : confidence >= 70 ? 'text-yellow-400' : 'text-red-400'}
-                                                                />
-                                                            </svg>
-                                                            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{confidence}%</span>
-                                                        </div>
+                                                        <span className={`text-xl font-bold font-mono ${confidence >= 80 ? 'text-green-400' : confidence >= 70 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                                            {confidence}%
+                                                        </span>
                                                     </div>
                                                     <div className="rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-4 flex flex-col items-center justify-center">
                                                         <span className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
                                                             {language === 'fr' ? 'Cote' : 'Odds'}
                                                         </span>
-                                                        <span className="text-2xl font-bold text-vantage-cyan">
+                                                        <span className="text-xl font-bold font-mono text-white">
                                                             {odds > 0 ? odds.toFixed(2) : '—'}
                                                         </span>
-                                                        <span className="text-[10px] text-gray-400 mt-1">{language === 'fr' ? 'décimal' : 'decimal'}</span>
+                                                    </div>
+                                                    <div className="rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-4 flex flex-col items-center justify-center">
+                                                        <span className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+                                                            {language === 'fr' ? 'Valeur (EV)' : 'Value (EV)'}
+                                                        </span>
+                                                        <span className={`text-xl font-bold font-mono ${evPct > 5 ? 'text-emerald-500' : 'text-orange-500'}`}>
+                                                            +{evPct.toFixed(1)}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="rounded-xl bg-slate-50 dark:bg-white/5 border border-vantage-cyan/30 p-4 flex flex-col items-center justify-center shadow-[0_0_15px_rgba(0,229,255,0.1)]">
+                                                        <span className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+                                                            {language === 'fr' ? 'Mise (Kelly)' : 'Stake (Kelly)'}
+                                                        </span>
+                                                        <span className="text-xl font-bold font-mono text-vantage-cyan">
+                                                            {recommendedStake > 0 ? `${recommendedStake.toLocaleString()}` : `${kelly.toFixed(1)}%`}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Mock Sparkline for Order Book / Line Movement */}
+                                                <div className="rounded-xl bg-black/20 border border-white/5 p-4 relative h-20 flex flex-col justify-end">
+                                                    <div className="absolute top-3 left-4 text-[10px] uppercase tracking-widest text-gray-500 font-bold flex items-center gap-2">
+                                                        <Activity size={12} className="text-vantage-cyan" />
+                                                        {language === 'fr' ? 'Mouvement de Ligne (Simulé)' : 'Line Movement (Simulated)'}
+                                                    </div>
+                                                    <div className="w-full h-8">
+                                                        <Sparkline data={sparklineData} width={400} height={32} color="#00E5FF" strokeWidth={2} className="w-full" />
                                                     </div>
                                                 </div>
 
@@ -373,18 +400,18 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                     <div className="grid grid-cols-3 gap-2">
                                                         <div className="p-3 rounded-lg bg-vantage-cyan/10 border border-vantage-cyan/20 flex flex-col items-center">
                                                             <span className="text-[10px] text-vantage-cyan mb-1 font-bold">1 (Home)</span>
-                                                            <span className="text-lg font-bold">{odds.homeImpliedProb}%</span>
-                                                            <span className="text-xs text-gray-500">{odds.home.toFixed(2)}</span>
+                                                            <span className="text-lg font-bold font-mono">{odds.homeImpliedProb}%</span>
+                                                            <span className="text-xs font-mono text-gray-500">{odds.home.toFixed(2)}</span>
                                                         </div>
                                                         <div className="p-3 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex flex-col items-center">
                                                             <span className="text-[10px] text-gray-500 mb-1 font-bold">X (Draw)</span>
-                                                            <span className="text-lg font-bold">{odds.drawImpliedProb}%</span>
-                                                            <span className="text-xs text-gray-500">{odds.draw.toFixed(2)}</span>
+                                                            <span className="text-lg font-bold font-mono">{odds.drawImpliedProb}%</span>
+                                                            <span className="text-xs font-mono text-gray-500">{odds.draw.toFixed(2)}</span>
                                                         </div>
                                                         <div className="p-3 rounded-lg bg-vantage-purple/10 border border-vantage-purple/20 flex flex-col items-center">
                                                             <span className="text-[10px] text-vantage-purple mb-1 font-bold">2 (Away)</span>
-                                                            <span className="text-lg font-bold">{odds.awayImpliedProb}%</span>
-                                                            <span className="text-xs text-gray-500">{odds.away.toFixed(2)}</span>
+                                                            <span className="text-lg font-bold font-mono">{odds.awayImpliedProb}%</span>
+                                                            <span className="text-xs font-mono text-gray-500">{odds.away.toFixed(2)}</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -483,19 +510,19 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                             <h4 className="text-sm font-bold mb-4">{language === 'fr' ? 'Confrontations Directes (5 dernières)' : 'Head-to-Head (Last 5)'}</h4>
                                                             <div className="flex justify-center items-center gap-6">
                                                                 <div className="flex flex-col items-center">
-                                                                    <span className="text-2xl font-bold text-vantage-cyan mb-1">{h2hData.homeTeamWins}</span>
+                                                                    <span className="text-2xl font-bold font-mono text-vantage-cyan mb-1">{h2hData.homeTeamWins}</span>
                                                                     <span className="text-[10px] text-gray-500 uppercase">{match.homeTeam}</span>
                                                                 </div>
                                                                 <div className="flex flex-col items-center">
-                                                                    <span className="text-lg font-bold text-gray-400 mb-1">{h2hData.draws}</span>
+                                                                    <span className="text-lg font-bold font-mono text-gray-400 mb-1">{h2hData.draws}</span>
                                                                     <span className="text-[10px] text-gray-500 uppercase">Draws</span>
                                                                 </div>
                                                                 <div className="flex flex-col items-center">
-                                                                    <span className="text-2xl font-bold text-vantage-purple mb-1">{h2hData.awayTeamWins}</span>
+                                                                    <span className="text-2xl font-bold font-mono text-vantage-purple mb-1">{h2hData.awayTeamWins}</span>
                                                                     <span className="text-[10px] text-gray-500 uppercase">{match.awayTeam}</span>
                                                                 </div>
                                                             </div>
-                                                            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10 text-xs text-gray-500 truncate px-2">
+                                                            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10 text-xs text-gray-500 truncate px-2 font-mono">
                                                                 Scores: {h2hData.last5Goals || 'N/A'}
                                                             </div>
                                                         </div>
@@ -592,7 +619,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                         <p className="text-[10px] font-bold text-center text-vantage-cyan pb-2 border-b border-vantage-cyan/20">{match.homeTeam}</p>
                                                         {lineup.home.map((p, i) => (
                                                             <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors">
-                                                                <span className="text-[9px] font-bold font-orbitron text-vantage-cyan w-5 text-center shrink-0">{p.number ?? i + 1}</span>
+                                                                <span className="text-[9px] font-bold font-mono text-vantage-cyan w-5 text-center shrink-0">{p.number ?? i + 1}</span>
                                                                 <span className="text-xs text-slate-700 dark:text-gray-200 truncate">{p.name}</span>
                                                             </div>
                                                         ))}
@@ -601,7 +628,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                         <p className="text-[10px] font-bold text-center text-vantage-purple pb-2 border-b border-vantage-purple/20">{match.awayTeam}</p>
                                                         {lineup.away.map((p, i) => (
                                                             <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-white/5 transition-colors">
-                                                                <span className="text-[9px] font-bold font-orbitron text-vantage-purple w-5 text-center shrink-0">{p.number ?? i + 1}</span>
+                                                                <span className="text-[9px] font-bold font-mono text-vantage-purple w-5 text-center shrink-0">{p.number ?? i + 1}</span>
                                                                 <span className="text-xs text-slate-700 dark:text-gray-200 truncate">{p.name}</span>
                                                             </div>
                                                         ))}
@@ -627,7 +654,7 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                 className="w-full flex items-center justify-center gap-2 py-3 bg-vantage-purple hover:bg-purple-600 text-white rounded-xl font-bold shadow-lg shadow-vantage-purple/20 transition-all active:scale-95"
                             >
                                 <Zap size={16} className="text-yellow-400 fill-yellow-400" />
-                                {language === 'fr' ? 'Voir la Prédiction de l\'IA' : 'Unlock AI Prediction (VIP)'}
+                                {language === 'fr' ? 'Voir la Prédiction de l\'IA' : 'Unlock AI Signal (Alpha)'}
                             </button>
                         </div>
                     )}

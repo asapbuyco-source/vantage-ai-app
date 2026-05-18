@@ -27,6 +27,12 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
 
     const [step, setStep] = useState(1);
     const [stake, setStake] = useState<string>('1000');
+    
+    React.useEffect(() => {
+        if (userProfile?.portfolioBankroll) {
+            setStake(Math.round(userProfile.portfolioBankroll * 0.05).toString());
+        }
+    }, [userProfile?.portfolioBankroll]);
     const [goal, setGoal] = useState<string>('5000');
     const [risk, setRisk] = useState<'low' | 'med' | 'high'>('med');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -132,7 +138,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
                                         type="number"
                                         value={stake}
                                         onChange={(e) => setStake(e.target.value)}
-                                        className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl py-3 px-4 font-orbitron font-bold text-lg text-vantage-purple focus:outline-none focus:ring-2 focus:ring-vantage-purple/50"
+                                        className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl py-3 px-4 font-mono font-bold text-lg text-vantage-purple focus:outline-none focus:ring-2 focus:ring-vantage-purple/50"
                                     />
                                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">FCFA</span>
                                 </div>
@@ -147,7 +153,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
                                         type="number"
                                         value={goal}
                                         onChange={(e) => setGoal(e.target.value)}
-                                        className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl py-3 px-4 font-orbitron font-bold text-lg text-vantage-cyan focus:outline-none focus:ring-2 focus:ring-vantage-cyan/50"
+                                        className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl py-3 px-4 font-mono font-bold text-lg text-vantage-cyan focus:outline-none focus:ring-2 focus:ring-vantage-cyan/50"
                                     />
                                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">FCFA</span>
                                 </div>
@@ -160,9 +166,9 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
                                         {language === 'fr'
                                           ? `L'IA analysera les cotes disponibles pour atteindre votre objectif de `
                                           : `AI will analyze available odds to reach your goal of `}
-                                        <span className="text-vantage-purple font-bold">{goal} FCFA</span>
+                                        <span className="text-vantage-purple font-bold font-mono">{goal} FCFA</span>
                                         {language === 'fr' ? ' avec une mise de ' : ' with a stake of '}
-                                        <span className="text-vantage-purple font-bold">{stake} FCFA</span>.
+                                        <span className="text-vantage-purple font-bold font-mono">{stake} FCFA</span>.
                                     </p>
                                 </div>
                             </div>
@@ -273,11 +279,11 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
                                     <div className="bg-vantage-purple p-4 flex justify-between items-center text-white">
                                         <div>
                                             <p className="text-[10px] uppercase font-bold opacity-80">{t('concierge.total_odds')}</p>
-                                            <p className="text-2xl font-black font-orbitron">{totalOdds.toFixed(2)}</p>
+                                            <p className="text-2xl font-black font-mono">{totalOdds.toFixed(2)}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-[10px] uppercase font-bold opacity-80">{t('concierge.potential_win')}</p>
-                                            <p className="text-2xl font-black font-orbitron text-vantage-cyan">{potentialPayout.toLocaleString()} F</p>
+                                            <p className="text-2xl font-black font-mono text-vantage-cyan">{potentialPayout.toLocaleString()} F</p>
                                         </div>
                                     </div>
 
@@ -295,7 +301,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
                                                     </p>
                                                     <div className="flex items-center gap-2 mt-1">
                                                         <span className="text-[10px] font-black text-vantage-purple uppercase">{match.prediction}</span>
-                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-gray-500 font-bold">@{match.odds.toFixed(2)}</span>
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-gray-500 font-bold font-mono">@{match.odds.toFixed(2)}</span>
                                                     </div>
                                                 </div>
                                                 <button
@@ -326,7 +332,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
                                     <div className="p-4 bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
                                         <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-500 italic">
-                                                {language === 'fr' ? 'Mise recommandée:' : 'Recommended stake:'} {stake} FCFA
+                                                {language === 'fr' ? 'Mise recommandée:' : 'Recommended stake:'} <span className="font-mono">{stake}</span> FCFA
                                             </span>
                                             <div className="flex items-center gap-1 text-vantage-purple">
                                                 <Sparkles size={12} />

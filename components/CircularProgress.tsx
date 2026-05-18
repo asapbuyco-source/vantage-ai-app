@@ -47,7 +47,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xl font-bold font-orbitron text-white">{percentage}%</span>
+          <span className="text-xl font-bold font-mono text-white">{percentage}%</span>
         </div>
       </div>
       {label && <span className="mt-2 text-sm text-gray-400 font-medium tracking-wider">{label}</span>}

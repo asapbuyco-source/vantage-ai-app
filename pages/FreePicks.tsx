@@ -10,10 +10,9 @@ import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { getAppSettings } from '../services/db';
 import { TeamLogo } from '../components/TeamLogo';
 import { NavigationTab, Match } from '../types';
-import { SpecialOfferBanner } from '../components/SpecialOfferBanner';
+import { getAppSettings } from '../services/db';
 
 interface FreePicksProps {
   setTab: (tab: NavigationTab) => void;
@@ -41,19 +40,12 @@ const FormDots = ({ form }: { form: string }) => {
 const StatPill = ({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) => (
   <div className="flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg bg-black/5 dark:bg-white/5">
     {icon}
-    <span className="text-[10px] font-bold text-slate-700 dark:text-white">{value}</span>
+    <span className="text-[10px] font-bold font-mono text-slate-700 dark:text-white">{value}</span>
     <span className="text-[8px] text-gray-500 uppercase tracking-wider">{label}</span>
   </div>
 );
 
-// ── VIP feature list for FOMO ───────────────────────────────────────────────
-const VIP_FEATURES = [
-  { icon: <Zap size={14} className="text-yellow-400 fill-yellow-400" />, text: 'See the picks our AI rated highest — hidden from you right now' },
-  { icon: <BarChart3 size={14} className="text-vantage-cyan" />, text: 'xG models & win probability on EVERY match, not just 2' },
-  { icon: <Brain size={14} className="text-vantage-purple" />, text: '4 ready-made accumulators built by AI — daily, automatically' },
-  { icon: <Crown size={14} className="text-amber-400" />, text: 'Filter by league so you only see what you bet on' },
-  { icon: <Shield size={14} className="text-emerald-400" />, text: 'Instant WhatsApp alert the second picks drop each morning' },
-];
+
 
 export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
   const { t, language } = useAppContext();
@@ -169,9 +161,9 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
               </div>
             </div>
             <div className="flex flex-col items-center shrink-0 px-2">
-              <span className="text-[10px] font-black font-orbitron text-gray-300 dark:text-gray-600">VS</span>
+              <span className="text-[10px] font-black font-mono text-gray-300 dark:text-gray-600">VS</span>
               {xgH > 0 && (
-                <span className="text-[9px] font-bold text-vantage-cyan mt-0.5">{xgH.toFixed(1)} - {xgA.toFixed(1)}</span>
+                <span className="text-[9px] font-bold font-mono text-vantage-cyan mt-0.5">{xgH.toFixed(1)} - {xgA.toFixed(1)}</span>
               )}
             </div>
             <div className="flex items-center gap-2.5 w-5/12 min-w-0 flex-row-reverse">
@@ -207,31 +199,21 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
           {/* ── Prediction section ── */}
           <div className="relative mx-4 mb-4 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 overflow-hidden">
             {blurred ? (
-              /* ── BLURRED VIP TEASER ── */
-              <div className="relative">
-                <div className="blur-[6px] select-none pointer-events-none">
-                  <div className="flex justify-between items-center">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-gray-500 uppercase tracking-wide">{t('free.pred_label')}</span>
-                      <span className="text-sm font-bold text-vantage-cyan">Over 2.5 Goals</span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-[10px] text-gray-500 uppercase tracking-wide">{t('free.prob_label')}</span>
-                      <span className="text-lg font-bold text-green-500">--</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-transparent via-slate-50/80 to-slate-50 dark:via-[#1a1d26]/80 dark:to-[#1a1d26] rounded-xl">
-                  <div className="w-10 h-10 bg-vantage-purple/20 rounded-full flex items-center justify-center mb-2">
-                    <Lock size={18} className="text-vantage-purple" />
-                  </div>
+              /* ── SOFTER FOMO: UNLOCK BADGE INSTEAD OF BLUR ── */
+              <div className="flex justify-between items-center">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-gray-500 uppercase tracking-wide">{t('free.pred_label')}</span>
                   <button
                     onClick={() => setTab('vip')}
-                    className="px-4 py-1.5 bg-vantage-purple hover:bg-purple-600 text-white text-xs font-bold rounded-full transition-all shadow-lg shadow-vantage-purple/20 flex items-center gap-1.5"
+                    className="mt-1 px-3 py-1.5 bg-vantage-purple/10 hover:bg-vantage-purple/20 border border-vantage-purple/30 text-vantage-purple text-xs font-bold rounded-full transition-all flex items-center gap-1.5"
                   >
-                    <Zap size={12} className="fill-yellow-300 text-yellow-300" />
-                    {language === 'fr' ? 'Débloquer VIP' : 'Unlock VIP'}
+                    <Lock size={10} />
+                    {language === 'fr' ? 'Débloquer' : 'Unlock'}
                   </button>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-[10px] text-gray-500 uppercase tracking-wide">{t('free.prob_label')}</span>
+                  <span className="text-lg font-bold font-mono text-gray-300 mt-1">—</span>
                 </div>
               </div>
             ) : (
@@ -240,12 +222,12 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
                 <div className="flex justify-between items-center relative z-10">
                   <div className="flex flex-col">
                     <span className="text-[10px] text-gray-500 uppercase tracking-wide">{t('free.pred_label')}</span>
-                    <span className="text-sm font-bold text-vantage-cyan font-orbitron">{pred}</span>
+                    <span className="text-sm font-bold text-vantage-cyan font-mono">{pred}</span>
                   </div>
                   <div className="h-8 w-px bg-slate-300 dark:bg-white/10 mx-2" />
                   <div className="flex flex-col items-end">
                     <span className="text-[10px] text-gray-500 uppercase tracking-wide">{t('free.prob_label')}</span>
-                    <div className="flex items-center text-sm font-bold text-green-500 dark:text-green-400">
+                    <div className="flex items-center text-sm font-bold font-mono text-green-500 dark:text-green-400">
                       <TrendingUp size={14} className="mr-1" />
                       {confidence}%
                     </div>
@@ -285,7 +267,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
                   {language === 'fr' ? 'Rapport Intelligence IA' : 'AI Intelligence Report'}
                 </p>
                 <p className="text-[10px] text-gray-500">
-                  {language === 'fr' ? 'Accès VIP requis' : 'VIP Access Required'}
+                  {language === 'fr' ? 'Accès Alpha requis' : 'Alpha Access Required'}
                 </p>
               </div>
             </div>
@@ -299,59 +281,15 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
         {/* Teaser stats */}
         <div className="px-5 py-4 space-y-3">
 
-          {/* Match count breakdown */}
+          {/* Match count + single-line upgrade CTA */}
           <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2.5">
-              {language === 'fr' ? `${totalAnalyzed} matchs analysés aujourd'hui` : `${totalAnalyzed} matches analyzed today`}
+            <p className="text-[10px] text-gray-500 mb-1">
+              {language === 'fr'
+                ? `Voir ce que l'IA a choisi — accès dès 1000 FCFA/semaine`
+                : `See what the model picked — 7-day access from 1000 FCFA`}
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              {topLeagues.map(([league, count]) => (
-                <div key={league} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-black/20">
-                  <span className="text-[10px] text-gray-400 truncate max-w-[90px]">{league}</span>
-                  <span className="text-[10px] font-bold text-vantage-cyan shrink-0">{count} games</span>
-                </div>
-              ))}
-              {Object.keys(leagueBreakdown).length > 4 && (
-                <div className="col-span-2 text-center text-[10px] text-gray-600">
-                  + {Object.keys(leagueBreakdown).length - 4} more leagues...
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* What VIP unlocks */}
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-              {language === 'fr' ? 'Ce que vous obtenez avec VIP' : 'What you unlock with VIP'}
-            </p>
-            {VIP_FEATURES.map((f, i) => (
-              <div key={i} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/3 border border-white/5">
-                {f.icon}
-                <span className="text-xs text-gray-300">{f.text}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Blurred preview of hidden matches */}
-          <div className="relative rounded-xl overflow-hidden border border-white/5">
-            <div className="blur-sm select-none pointer-events-none p-4 space-y-2">
-              {dataCards.slice(0, 3).map((m, i) => (
-                <div key={i} className="flex justify-between items-center py-1.5 border-b border-white/5 last:border-0">
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full bg-slate-700" />
-                    <div>
-                      <div className="h-2 w-24 bg-slate-600 rounded mb-1" />
-                      <div className="h-1.5 w-16 bg-slate-700 rounded" />
-                    </div>
-                  </div>
-                  <div className="h-5 w-14 bg-green-500/20 rounded" />
-                </div>
-              ))}
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/50 to-black/80 flex items-end justify-center pb-4">
-              <p className="text-[11px] text-gray-400 font-medium">
-                {hiddenCount} {language === 'fr' ? 'analyses cachées...' : 'analyses hidden...'}
-              </p>
+            <div className="text-[10px] text-vantage-purple font-bold mt-1">
+              {language === 'fr' ? `${totalAnalyzed} matchs analysés` : `${totalAnalyzed} matches analyzed today`}
             </div>
           </div>
         </div>
@@ -391,9 +329,6 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
         <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white mb-2">
           {language === 'fr' ? 'Analyse' : 'Match'} <span className="text-vantage-cyan">{language === 'fr' ? 'des Matchs' : 'Analysis'}</span>
         </h1>
-
-        {/* ── Special Offer Banner ── */}
-        {!isVip && <SpecialOfferBanner onClick={() => setTab('vip')} />}
 
         {/* Live match count banner */}
         {!loading && totalAnalyzed > 0 && (
@@ -454,7 +389,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
               <div className="flex items-center gap-2 mb-1">
                 <Lock size={12} className="text-vantage-purple" />
                 <h2 className="text-sm font-bold uppercase tracking-widest text-vantage-purple flex items-center gap-1.5">
-                  {language === 'fr' ? 'Picks VIP' : 'VIP Predictions'}
+                  {language === 'fr' ? 'Signaux Alpha' : 'Alpha Signals'}
                 </h2>
                 <span className="text-[9px] px-2 py-0.5 rounded-full bg-vantage-purple/15 border border-vantage-purple/30 text-vantage-purple font-bold">
                   {vipTeasers.length} PICKS
@@ -479,10 +414,10 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
                   </div>
                   <div className="text-left">
                     <div className="text-sm font-black text-white tracking-wide">
-                      {language === 'fr' ? `Débloquer ${vipTeasers.length} Picks VIP` : `Unlock ${vipTeasers.length} VIP Predictions`}
+                      {language === 'fr' ? `Débloquer ${vipTeasers.length} Signaux Alpha` : `Unlock ${vipTeasers.length} Alpha Signals`}
                     </div>
                     <div className="text-[10px] text-white/70 font-medium">
-                      {language === 'fr' ? 'Analyse complète + accumulateurs IA' : 'Full analysis + AI accumulators'}
+                      {language === 'fr' ? 'Analyse complète + Kelly Staking' : 'Full analysis + Kelly Staking'}
                     </div>
                   </div>
                 </div>

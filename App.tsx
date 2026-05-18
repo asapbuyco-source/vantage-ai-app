@@ -15,7 +15,6 @@ import { VIP } from './pages/VIP';
 import { Profile } from './pages/Profile';
 import { Admin } from './pages/Admin';
 import { BettingGuide } from './pages/BettingGuide';
-import { Vault } from './pages/Vault';
 import { TicketWizard } from './components/TicketWizard';
 import { LandingPage } from './pages/LandingPage';
 import { PublicStats } from './pages/PublicStats';
@@ -28,7 +27,7 @@ import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { TrialOfferPopup } from './components/TrialOfferPopup';
-import { WEEKLY_TRIAL_PRICE } from './src/constants/pricing';
+import { WEEKLY_REGULAR_PRICE, WEEKLY_TRIAL_PRICE } from './src/constants/pricing';
 import { PaymentModal } from './components/PaymentModal';
 
 
@@ -347,7 +346,6 @@ function AppContent() {
                     {activeTab === 'guide' && <BettingGuide />}
                     {activeTab === 'profile' && <Profile />}
                     {activeTab === 'admin' && <Admin setTab={setActiveTab} />}
-                    {activeTab === 'vault' && <Vault setTab={setActiveTab} />}
                     {activeTab === 'concierge' && <TicketWizard setTab={setActiveTab} />}
                     {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
                     {activeTab === 'results' && <Results />}
@@ -381,13 +379,13 @@ function AppContent() {
               onClose={() => setShowTrialPayment(false)}
               plan={{
                 id: 'weekly',
-                label: language === 'fr' ? 'Essai VIP 1 Semaine' : '1-Week VIP Trial',
+                label: language === 'fr' ? 'Pass Alpha 7 Jours' : '7-Day Alpha Pass',
                 price: String(WEEKLY_TRIAL_PRICE),
                 features: [
-                  language === 'fr' ? 'Prédictions complètes' : 'Full predictions',
-                  language === 'fr' ? 'Accumulateurs IA' : 'AI Accumulators',
-                  language === 'fr' ? 'Mises Kelly' : 'Kelly stakes',
-                  language === 'fr' ? 'Toutes les ligues' : 'All leagues',
+                  language === 'fr' ? 'Signaux +EV Premium' : 'Premium +EV Signals',
+                  language === 'fr' ? 'Gestion Kelly' : 'Kelly Staking',
+                  language === 'fr' ? 'Suivi de la Valeur de Clôture (CLV)' : 'Closing Line Value (CLV) Tracker',
+                  language === 'fr' ? 'Filtres Advanced Screener' : 'Advanced Screener Filters',
                 ],
               }}
               onSuccess={() => { setShowTrialPayment(false); setActiveTab('vip'); }}

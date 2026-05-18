@@ -1197,7 +1197,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                         </div>
                         {whatsappUrl && (
                             <button
-                                onClick={() => { setWhatsappUrl(''); saveAppSettings({ whatsappGroupUrl: '' }); }}
+                                onClick={() => { setWhatsappUrl(''); saveInternalSettings({ whatsappGroupUrl: '' }); }}
                                 className="mt-2 text-xs text-red-400 hover:text-red-500"
                             >
                                 Remove link

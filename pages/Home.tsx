@@ -16,7 +16,6 @@ import { TeamLogo } from '../components/TeamLogo';
 import { MatchDetailsModal } from '../components/MatchDetailsModal';
 import { getAppSettings } from '../services/db';
 import { PWAInstallButton } from '../components/PWAInstallButton';
-import { SpecialOfferBanner } from '../components/SpecialOfferBanner';
 
 interface HomeProps {
   setTab: (tab: NavigationTab) => void;
@@ -262,12 +261,12 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
             return (
               <>
                 <div className="flex items-center gap-1">
-                  <span className="text-[10px] font-black text-green-500">{won}W</span>
+                  <span className="text-[10px] font-black font-mono text-green-500">{won}W</span>
                   <span className="text-[10px] text-gray-600">-</span>
-                  <span className="text-[10px] font-black text-red-400">{lost}L</span>
+                  <span className="text-[10px] font-black font-mono text-red-400">{lost}L</span>
                 </div>
                 <div className="h-3 w-px bg-white/10" />
-                <span className={`text-[10px] font-black ${rate >= 60 ? 'text-green-500' : 'text-amber-400'}`}>
+                <span className={`text-[10px] font-black font-mono ${rate >= 60 ? 'text-green-500' : 'text-amber-400'}`}>
                   {rate}% today
                 </span>
                 {streak >= 3 && (
@@ -281,8 +280,44 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         </div>
       )}
 
-      {/* ── Special Offer Banner ── */}
-      {!isVip && <SpecialOfferBanner onClick={() => setTab('vip')} />}
+      {/* ── Zone A: Top Pick Hero ── */}
+      {(() => {
+        const topPick = useMemo(() => {
+          const ranked = [...predictions].sort((a, b) => {
+            const rankPri = { high: 4, medium: 3, low: 2, none: 1 };
+            return (rankPri[b.value_rank as keyof typeof rankPri] || 0) - (rankPri[a.value_rank as keyof typeof rankPri] || 0) ||
+                   ((b.confidence || 0) - (a.confidence || 0));
+          });
+          return ranked.find(m => m.value_rank === 'high' || m.value_rank === 'medium') || ranked[0];
+        }, [predictions]);
+
+        if (!topPick) return null;
+
+        const pred = getPredictionText(topPick);
+        return (
+          <button
+            onClick={() => setSelectedMatch(topPick)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-vantage-cyan/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all text-left"
+          >
+            <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+              <Zap size={18} className="text-emerald-500 fill-emerald-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">
+                {language === 'fr' ? "Meilleur Pick du Jour" : "Today's Top Pick"}
+              </p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white truncate mt-0.5">
+                {topPick.homeTeam} vs {topPick.awayTeam}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-xs font-bold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">{pred}</p>
+              <p className="text-[10px] font-bold font-mono text-emerald-500 mt-0.5">{topPick.confidence}%</p>
+            </div>
+            <ChevronRight size={16} className="text-emerald-500 shrink-0" />
+          </button>
+        );
+      })()}
 
       {/* ── Date Bar ── */}
       <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 px-4 py-2.5 rounded-xl border border-black/5 dark:border-white/5 text-xs">
@@ -303,40 +338,33 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         </div>
       </div>
 
-      {/* ── Win Rate Stats ── */}
-      <GlassCard delay={1}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-2 text-vantage-purple">
-            <Activity size={16} />
-            <span className="text-sm font-bold uppercase tracking-wider">{t('home.performance')}</span>
+      {/* ── Hero Proposition ── */}
+      <GlassCard delay={1} className="overflow-hidden relative border-vantage-cyan/20">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-vantage-cyan/10 blur-[50px] rounded-full pointer-events-none" />
+        <div className="flex flex-col mb-2 relative z-10">
+          <div className="flex items-center gap-2 mb-2">
+             <Zap size={18} className="text-vantage-cyan" />
+             <span className="text-xs font-bold uppercase tracking-widest text-vantage-cyan">Quantitative Edge</span>
           </div>
-          {winRateStats.streak > 0 && (
-            <div className="flex items-center gap-1 text-orange-400 bg-orange-400/10 border border-orange-400/20 px-2 py-0.5 rounded-full text-xs font-bold">
-              <Flame size={12} /> {winRateStats.streak}d {language === 'fr' ? 'consécutifs' : 'streak'}
-            </div>
-          )}
+          <h2 className="text-xl md:text-2xl font-black font-orbitron text-slate-900 dark:text-white leading-tight">
+            Data-Driven <br/>Sports Analytics.
+          </h2>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: t('home.daily_rate'), pct: winRateStats.daily, color: '#22d3ee' },
-            { label: t('home.weekly_rate'), pct: winRateStats.weekly, color: '#a855f7' },
-            { label: t('home.monthly_rate'), pct: winRateStats.monthly, color: '#eab308' },
-          ].map((m, i) => (
-            <div key={i} className="flex flex-col items-center">
-              <CircularProgress percentage={m.pct || 0} label="" color={m.color} size={72} strokeWidth={6} />
-              <span className="mt-1.5 text-[10px] font-bold text-gray-500 dark:text-gray-400 text-center uppercase leading-tight">{m.label}</span>
-            </div>
-          ))}
-        </div>
-        {winRateStats.todayTotal > 0 && (
-          <div className="mt-3 pt-3 border-t border-white/5 flex justify-center">
-            <span className="text-[11px] text-gray-500">
-              {language === 'fr'
-                ? `Aujourd'hui: ${winRateStats.todayWon}/${winRateStats.todayTotal} gagnés`
-                : `Today: ${winRateStats.todayWon}/${winRateStats.todayTotal} won`}
-            </span>
+        <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-2 mb-4 leading-relaxed relative z-10">
+          {language === 'fr' 
+            ? "Nous analysons des milliers de points de données pour trouver des paris mathématiquement rentables. Ne devinez pas, investissez dans la donnée."
+            : "We analyze thousands of data points to find mathematically profitable bets. Stop guessing, start investing in data."}
+        </p>
+        <div className="grid grid-cols-2 gap-3 relative z-10">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex flex-col justify-center">
+            <div className="text-lg font-black font-mono text-emerald-500">+EV</div>
+            <div className="text-[9px] uppercase tracking-widest text-gray-500 font-bold mt-1">Value Bets</div>
           </div>
-        )}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex flex-col justify-center">
+             <div className="text-lg font-black font-mono text-vantage-purple">Kelly</div>
+             <div className="text-[9px] uppercase tracking-widest text-gray-500 font-bold mt-1">Bankroll Sizing</div>
+          </div>
+        </div>
       </GlassCard>
 
       {/* ─── PWA INSTALL + NOTIFICATIONS ─── */}
@@ -366,7 +394,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
       )}
 
       {/* ─── SORT & FILTER TOOLBAR ─── */}
-      <div className="space-y-3">
+      <div className="space-y-3 sticky top-[72px] z-20 bg-vantage-lightBg dark:bg-vantage-bg backdrop-blur-md py-2 -mx-2 px-2">
         {/* Sport Toggle */}
         <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 border border-slate-200 dark:border-white/10">
           {(['football', 'basketball'] as Sport[]).map(sport => (
@@ -581,7 +609,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                               <div className="shrink-0 flex flex-col items-center">
                                 {match.score && (match.status !== 'pending' || match.live_state) ? (
                                   <div className="flex flex-col items-center gap-0.5">
-                                    <span className="text-[13px] font-black font-orbitron text-vantage-cyan px-2 tracking-widest bg-vantage-cyan/10 rounded border border-vantage-cyan/20">
+                                    <span className="text-[13px] font-black font-mono text-vantage-cyan px-2 tracking-widest bg-vantage-cyan/10 rounded border border-vantage-cyan/20">
                                       {match.score.replace('-', ' - ')}
                                     </span>
                                     {match.status === 'won' && (
@@ -627,19 +655,19 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                                 {isUnlocked ? (
                                   <>
                                     {match.home_win_prob > 0 && (
-                                      <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">H {Math.round(match.home_win_prob * 100)}%</span>
+                                      <span className="text-[9px] font-bold font-mono text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">H {Math.round(match.home_win_prob * 100)}%</span>
                                     )}
                                     {match.draw_prob > 0 && (
-                                      <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">D {Math.round(match.draw_prob * 100)}%</span>
+                                      <span className="text-[9px] font-bold font-mono text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">D {Math.round(match.draw_prob * 100)}%</span>
                                     )}
                                     {match.away_win_prob > 0 && (
-                                      <span className="text-[9px] font-bold text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">A {Math.round(match.away_win_prob * 100)}%</span>
+                                      <span className="text-[9px] font-bold font-mono text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">A {Math.round(match.away_win_prob * 100)}%</span>
                                     )}
                                     {match.over25_prob > 0 && (
-                                      <span className="text-[9px] font-bold text-vantage-cyan/70 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>
+                                      <span className="text-[9px] font-bold font-mono text-vantage-cyan/70 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>
                                     )}
                                     {match.btts_prob > 0 && (
-                                      <span className="text-[9px] font-bold text-amber-400/70 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>
+                                      <span className="text-[9px] font-bold font-mono text-amber-400/70 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>
                                     )}
                                   </>
                                 ) : (
@@ -656,7 +684,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                               <div className="flex items-center gap-2">
                                 {hasConfidence && (
                                   isUnlocked ? (
-                                    <span className="text-[10px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <span className="text-[10px] font-bold font-mono text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded-full flex items-center gap-1">
                                       <BarChart3 size={9} />
                                       {match.confidence}%
                                     </span>

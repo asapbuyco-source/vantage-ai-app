@@ -17,8 +17,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
   const navItems = [
     { id: 'home', icon: Home, label: t('nav.home') },
     { id: 'free', icon: Unlock, label: t('nav.free') },
-    { id: 'live', icon: Radio, label: language === 'fr' ? 'Live' : 'Live', badge: liveCount > 0 ? liveCount : undefined },
-    { id: 'vault', icon: Briefcase, label: language === 'fr' ? 'Stratégie' : 'Vault' },
     { id: 'arb', icon: Zap, label: language === 'fr' ? 'Arbitrage' : 'Arb Finder' },
     { id: 'vip', icon: Lock, label: t('nav.vip') },
     { id: 'profile', icon: User, label: t('nav.profile') },
@@ -65,12 +63,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 />
               )}
-              <div className={`relative z-10 flex items-center justify-center transition-all duration-200 ${isActive ? 'text-vantage-cyan -translate-y-0.5 md:translate-y-0 md:scale-110' : item.id === 'live' ? 'text-red-500 md:hover:text-red-400' : 'text-gray-400 dark:text-gray-500 md:hover:text-vantage-cyan/70'}`}>
+              <div className={`relative z-10 flex items-center justify-center transition-all duration-200 ${isActive ? 'text-vantage-cyan -translate-y-0.5 md:translate-y-0 md:scale-110' : 'text-gray-400 dark:text-gray-500 md:hover:text-vantage-cyan/70'}`}>
                 <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} className="md:w-5 md:h-5" />
                 {/* Live badge */}
-                {'badge' in item && item.badge !== undefined && (
+                {'badge' in item && (item as any).badge !== undefined && (
                   <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center px-0.5 leading-none">
-                    {item.badge}
+                    {String((item as any).badge)}
                   </span>
                 )}
               </div>

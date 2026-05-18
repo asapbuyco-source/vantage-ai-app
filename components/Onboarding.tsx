@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Crown, Gift, ArrowRight, X, Bot, Globe, Check } from 'lucide-react';
+import { Zap, Crown, Gift, ArrowRight, X, Globe, Check, TrendingUp, BarChart3, BrainCircuit } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -21,15 +21,26 @@ const slides = [
         desc_fr: 'La plateforme de pronostics sportifs la plus avancée d\'Afrique. Propulsée par Vantage AI — données en direct, vraie analyse.',
     },
     {
-        id: 'ai',
-        icon: Bot,
-        color: 'text-vantage-purple',
-        bg: 'from-vantage-purple/20 via-vantage-cyan/10 to-transparent',
-        badge: 'Vantage AI Powered',
-        title_en: 'How Our AI\nWorks',
-        title_fr: 'Comment fonctionne\nnôtre IA',
-        desc_en: 'Every day, our AI scans real football & basketball data, calculates win probabilities, and ranks picks by confidence — so you only see the best.',
-        desc_fr: 'Chaque jour, notre IA analyse les données réelles de football et basketball, calcule les probabilités et classe les pronostics par confiance.',
+        id: 'ev_explained',
+        icon: TrendingUp,
+        color: 'text-emerald-400',
+        bg: 'from-emerald-400/20 via-vantage-cyan/10 to-transparent',
+        badge: 'The Edge Explained',
+        title_en: 'What is\n+EV?',
+        title_fr: 'Qu\'est-ce que\nle +VE ?',
+        desc_en: '+EV means the odds are better than the true probability. If a bookie offers 2.10 for a coin flip, but you know it\'s really 50/50, you have +EV. Our AI finds these gaps every day.',
+        desc_fr: '+VE signifie que les cotes sont meilleures que la vraie probabilité. Si un bookmaker offre 2.10 pour un pile ou face, mais que vous savez que c\'est vraiment 50/50, vous avez +VE. Notre IA trouve ces écarts chaque jour.',
+    },
+    {
+        id: 'how_it_works',
+        icon: BarChart3,
+        color: 'text-vantage-cyan',
+        bg: 'from-vantage-cyan/20 via-vantage-purple/10 to-transparent',
+        badge: 'The Process',
+        title_en: 'Data → Model\n→ Signal',
+        title_fr: 'Données → Modèle\n→ Signal',
+        desc_en: 'We pull live data from dozens of leagues, run it through our statistical models to calculate win probabilities, then compare against bookie odds to find +EV bets. You just pick from the ranked list.',
+        desc_fr: 'Nous collectons les données en direct de dizaines de ligues, les analysons avec nos modèles statistiques pour calculer les probabilités, puis les comparons aux cotes des bookmakers pour trouver les paris +VE. Vous choisissez simplement dans la liste classée.',
     },
     {
         id: 'country',
@@ -41,6 +52,17 @@ const slides = [
         title_fr: 'D\'où pariez-vous ?',
         desc_en: 'Select your country to see local pricing and the best payment methods for your region.',
         desc_fr: 'Sélectionnez votre pays pour voir les prix locaux et les meilleures méthodes de paiement.',
+    },
+    {
+        id: 'long_game',
+        icon: BrainCircuit,
+        color: 'text-vantage-purple',
+        bg: 'from-vantage-purple/20 via-vantage-cyan/10 to-transparent',
+        badge: 'Reality Check',
+        title_en: 'Think in 1,000\nbets, not 1',
+        title_fr: 'Pensez en 1,000\nparis, pas 1',
+        desc_en: 'Even a 60% win-rate model will lose 10 in a row sometimes. That\'s variance. The smart play: bet consistently, size your stakes with Kelly, and trust the model over 1,000 picks. That\'s how edge compounds.',
+        desc_fr: 'Même un modèle à 60% de victoires perdra parfois 10 fois de suite. C\'est la variance. La bonne stratégie : pariez régulièrement, taille vos enjeux avec Kelly, et faites confiance au modèle sur 1,000 paris. C\'est ainsi que l\'avantage s\'accumule.',
     },
     {
         id: 'vip',

@@ -40,6 +40,7 @@ interface AuthContextType {
     processPayout: (payoutId: string, action: 'paid' | 'rejected') => Promise<void>;
     updateUserCountry: (country: string) => Promise<void>;
     updateVaultProgress: (progress: { currentDay: number; bankroll: number; startDate: string; completedDays: number[] }) => Promise<void>;
+    updatePortfolioConfig: (bankroll: number, riskTolerance: 'low' | 'medium' | 'high') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -277,7 +278,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         const isFirstTime = !userProfile?.totalPaid || userProfile.totalPaid === 0;
         const basePrice = plan === 'daily' ? DAILY_PRICE : plan === 'weekly' ? WEEKLY_REGULAR_PRICE : plan === 'monthly' ? MONTHLY_PRICE : plan === 'quarterly' ? QUARTERLY_PRICE : ANNUAL_PRICE;
-        const planCost = (isFirstTime && plan === 'weekly') ? WEEKLY_TRIAL_PRICE : basePrice;
+        const planCost = basePrice;
 
         try {
             const userRef = doc(db, "profiles", user.uid);
@@ -335,6 +336,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await fetchProfile(user);
         } catch (e) {
             console.error("Failed to update vault progress", e);
+            throw e;
+        }
+    };
+
+    const updatePortfolioConfig = async (bankroll: number, riskTolerance: 'low' | 'medium' | 'high') => {
+        if (!user) return;
+        try {
+            await updateDoc(doc(db, "profiles", user.uid), { 
+                portfolioBankroll: bankroll,
+                riskTolerance: riskTolerance
+            });
+            await fetchProfile(user);
+        } catch (e) {
+            console.error("Failed to update portfolio config", e);
             throw e;
         }
     };
@@ -549,7 +564,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             user, userProfile, loading, error, isAdmin,
             signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, clearError: () => setError(null),
             upgradeToVip, getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, verifyTransaction,
-            requestPayout, getPayoutRequests, processPayout, updateUserCountry, updateVaultProgress
+            requestPayout, getPayoutRequests, processPayout, updateUserCountry, updateVaultProgress, updatePortfolioConfig
         }}>
             {children}
         </AuthContext.Provider>
