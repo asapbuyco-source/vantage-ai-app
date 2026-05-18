@@ -329,7 +329,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         const pred = getPredictionText(topPick);
         return (
           <button
-            onClick={() => setSelectedMatch(topPick)}
+            onClick={() => !isVip ? setTab('vip') : setSelectedMatch(topPick)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-vantage-cyan/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all text-left"
           >
             <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
