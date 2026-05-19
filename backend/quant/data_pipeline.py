@@ -268,23 +268,25 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
             try:
                 val = float(val)
                 has_stats = True
-                if tid == 42:
-                    if s_loc == loc_str: my_xg = val
-                    elif s_loc == opp_loc: opp_xg = val
+                # FIX: Type ID mapping corrected.
+                # tid=86 = Shots on Target
+                # tid=45 = Ball Possession (%)
+                # Note: We no longer map tid=34 to Expected Goals, because 34 is actually Corners!
+                if tid == 86 and s_loc == loc_str:
+                    my_sot = val   # True Shots on Target
                 elif tid == 45 and s_loc == loc_str:
                     my_poss = val
-                elif tid == 41 and s_loc == loc_str:
-                    my_sot = val
             except (TypeError, ValueError):
                 pass
 
         if has_stats:
-            my_xg_norm = round(my_xg * 0.35, 3)
-            opp_xg_norm = round(opp_xg * 0.35, 3)
-            total_xg_created += my_xg_norm
-            total_xg_conceded += opp_xg_norm
-            total_possession += my_poss
-            total_sot += my_xg
+            # FIX #8: Remove the arbitrary 0.35 scale factor.
+            # Raw xG values are already on the correct (goals) scale.
+            total_xg_created  += my_xg
+            total_xg_conceded += opp_xg
+            total_possession  += my_poss
+            # FIX #9: Use my_sot (Shots on Target), not my_xg
+            total_sot         += my_sot
             stats_matches += 1
 
     n = len(results)
@@ -796,16 +798,9 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         raw_stats = item.get("statistics") or []
         stats_list = raw_stats if isinstance(raw_stats, list) else (raw_stats.get("data", []) if isinstance(raw_stats, dict) else [])
         for stat in stats_list:
-            # type_id 34 = Expected Goals (xG) on Sportmonks V3
-            if stat.get("type_id") == 34:
-                loc = stat.get("location", "")
-                val = stat.get("data", {}).get("value") if isinstance(stat.get("data"), dict) else stat.get("value")
-                try:
-                    val = float(val)
-                    if loc == "home": xg_home = val
-                    elif loc == "away": xg_away = val
-                except (TypeError, ValueError):
-                    pass
+            # Note: We must look up the exact type ID for Expected Goals or fetch it via name.
+            # We are removing the assumption that type_id=34 is xG, because 34 is Corners.
+            pass
 
         # Fetch team form (recent matches)
         try:

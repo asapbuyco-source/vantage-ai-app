@@ -27,8 +27,11 @@ MIN_INEFFICIENCY = 0.06  # Default 6% model vs market gap (used for goals/BTTS)
 
 # Market-aware inefficiency: bookmakers price 1X2 very tightly (1-2% margin),
 # so requiring 6%+ gap blocks almost all 1X2 bets. Lower threshold for result markets.
+# FIX #6: Raised "result" from 0.03 to 0.04 to match risk_filters.MIN_INEFFICIENCY=0.04.
+# Previously, bets with 3.x% inefficiency were flagged is_value=True here but then
+# silently rejected by risk_filters \u2014 producing confusing phantom value bets.
 MARKET_INEFFICIENCY = {
-    "result": 0.03,      # 3% for Home Win, Away Win, Draw, DC, DNB
+    "result": 0.04,      # 4% for Home Win, Away Win, Draw, DC, DNB (aligned with risk_filters)
     "goals": 0.05,       # 5% for Over/Under goals
     "btts": 0.05,        # 5% for BTTS Yes/No
 }

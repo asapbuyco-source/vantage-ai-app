@@ -733,11 +733,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                         const category = match.category || 'value';
                         const cfg = CAT_CONFIG[category as keyof typeof CAT_CONFIG] || CAT_CONFIG.value;
                         
-                        // Dynamic Kelly Sizing
-                        const riskMultipliers = { 'low': 0.25, 'medium': 0.5, 'high': 1.0 };
-                        const riskMult = userProfile?.riskTolerance ? riskMultipliers[userProfile.riskTolerance] : 0.5;
-                        const bankroll = userProfile?.portfolioBankroll || 0;
-                        const recommendedStake = bankroll > 0 ? Math.round(bankroll * (kelly / 100) * riskMult) : 0;
+                        // Dynamic Kelly Sizing (Abstracted to percentage to avoid conflict with Vault)
                         
                         // Mock Sparkline Data
                         const sparklineData = Array.from({ length: 15 }, () => 1.5 + Math.random() * 0.5);
@@ -801,15 +797,9 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                                 <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 ${evColor}`}>
                                   EV: +{(match.ev_pct ?? (ev * 100)).toFixed(1)}%
                                 </span>
-                                {recommendedStake > 0 ? (
-                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-vantage-cyan/10 text-vantage-cyan border border-vantage-cyan/20">
-                                    Stake: {recommendedStake.toLocaleString()} FCFA
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                    Kelly: {kelly.toFixed(1)}%
-                                  </span>
-                                )}
+                                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                  Kelly: {kelly.toFixed(1)}%
+                                </span>
                                 {Number(match.odds) > 1 && (
                                   <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
                                     {Number(match.odds).toFixed(2)}x

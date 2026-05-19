@@ -32,7 +32,7 @@ from datetime import datetime, timezone, timedelta
 # ── Local imports ─────────────────────────────────────────────────────────────
 from data_pipeline import fetch_matches, MatchData, TeamStats
 from poisson_model import compute_probabilities, compute_dynamic_rho
-from elo_rating import load_ratings_from_firestore, match_probabilities as elo_probs, save_dirty_ratings, get_team_rating, is_derby_match
+from elo_rating import load_ratings_from_firestore, match_probabilities as elo_probs, save_dirty_ratings, get_team_rating, is_derby_match, DEFAULT_ELO
 from form_model import compute_form_probabilities
 from probability_engine import compute_combined, CombinedProbabilities
 from ev_engine import evaluate_all_markets, get_best_value_bet
@@ -184,9 +184,10 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
             home_opp_strengths = []
             away_opp_strengths = []
             if match.home_stats and hasattr(match.home_stats, 'recent_opponents'):
-                home_opp_strengths = [get_team_rating(opp_id) / 1500 for opp_id in match.home_stats.recent_opponents[:5]]
+                # FIX #14: Use DEFAULT_ELO constant instead of hardcoded 1500
+                home_opp_strengths = [get_team_rating(opp_id) / DEFAULT_ELO for opp_id in match.home_stats.recent_opponents[:5]]
             if match.away_stats and hasattr(match.away_stats, 'recent_opponents'):
-                away_opp_strengths = [get_team_rating(opp_id) / 1500 for opp_id in match.away_stats.recent_opponents[:5]]
+                away_opp_strengths = [get_team_rating(opp_id) / DEFAULT_ELO for opp_id in match.away_stats.recent_opponents[:5]]
 
             # ── Dynamic Dixon-Coles rho (BUG-01 fixed) ─────────────────────
             # BUG-01: was `str(id) in str(id)` which was always True for any ID

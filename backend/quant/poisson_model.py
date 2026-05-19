@@ -22,6 +22,9 @@ def compute_dynamic_rho(mu_home: float, mu_away: float, league_tier: int = 1, is
     - Derby/rivalry matches: stronger correction (more 0-0s and 1-1s)
     - High-scoring expected matches: weaker correction (goals flow freely)
     - Top vs bottom mismatches: weaker correction (blowouts)
+
+    FIX #1: rho is now floored so tau(1,0) = 1 + mu_away*rho >= 0
+    and tau(0,1) = 1 + mu_home*rho >= 0, preventing negative Poisson cells.
     """
     rho = DIXON_COLES_RHO  # Start with default -0.13
 
@@ -40,6 +43,12 @@ def compute_dynamic_rho(mu_home: float, mu_away: float, league_tier: int = 1, is
     xg_ratio = max(mu_home, mu_away) / max(min(mu_home, mu_away), 0.3)
     if xg_ratio > 2.5:
         rho *= 0.7
+
+    # FIX #1: ensure tau(1,0)=1+mu_away*rho>=0 and tau(0,1)=1+mu_home*rho>=0
+    # => rho >= -1/max(mu_home, mu_away)  (add 0.001 margin above singularity)
+    max_mu = max(mu_home, mu_away, 0.01)
+    rho_floor = -1.0 / max_mu + 0.001
+    rho = max(rho_floor, rho)
 
     return max(-0.30, min(-0.05, rho))
 
@@ -80,16 +89,22 @@ def _tau(h: int, a: int, mu_h: float, mu_a: float, rho: float) -> float:
     Only applied to scores (0,0), (1,0), (0,1), (1,1).
     rho < 0 means these 4 scorelines get adjusted (0-0 and 1-1 boosted,
     1-0 and 0-1 reduced) to match empirical football distributions.
+
+    FIX #1: All branches are clamped to 0.0 — tau must never be negative.
+    A negative tau would produce a negative cell probability which corrupts
+    every downstream market calculation.
     """
     if h == 0 and a == 0:
-        return 1 - mu_h * mu_a * rho
+        val = 1 - mu_h * mu_a * rho
     elif h == 1 and a == 0:
-        return 1 + mu_a * rho
+        val = 1 + mu_a * rho
     elif h == 0 and a == 1:
-        return 1 + mu_h * rho
+        val = 1 + mu_h * rho
     elif h == 1 and a == 1:
-        return 1 - rho
-    return 1.0
+        val = 1 - rho
+    else:
+        return 1.0
+    return max(0.0, val)  # tau must never be negative
 
 
 def compute_score_grid(mu_home: float, mu_away: float, rho: float | None = None) -> dict[tuple[int, int], float]:

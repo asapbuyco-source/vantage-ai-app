@@ -1,0 +1,13 @@
+python-dotenv could not parse statement starting at line 26
+python-dotenv could not parse statement starting at line 27
+python-dotenv could not parse statement starting at line 28
+python-dotenv could not parse statement starting at line 29
+python-dotenv could not parse statement starting at line 30
+python-dotenv could not parse statement starting at line 31
+python-dotenv could not parse statement starting at line 32
+python-dotenv could not parse statement starting at line 33
+python-dotenv could not parse statement starting at line 34
+python-dotenv could not parse statement starting at line 35
+python-dotenv could not parse statement starting at line 36
+[H2H] Failed to build Firestore client from FIREBASE_SERVICE_ACCOUNT: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)
+[H2H] Persistent team cache unavailable: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.

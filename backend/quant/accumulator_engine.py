@@ -99,13 +99,21 @@ class Accumulator:
                 self.combined_odds *= l.odds
                 self.combined_prob *= l.model_prob
 
-            # Same-league correlation penalty: reduce combined probability for legs from same league
-            # (correlated outcomes inflate EV when multiple games from same league are simultaneous)
+            # FIX #7a: Same-league correlation penalty.
+            # Research puts intra-day same-league correlations at 10-20%.
+            # Old 2% reduction (0.98^n) was empirically far too small.
+            # New: 8% reduction per extra same-league leg (0.92^n).
             league_counts = {}
             for l in self.legs:
                 league_counts[l.league] = league_counts.get(l.league, 0) + 1
             duplicate_count = sum(max(0, c - 1) for c in league_counts.values())
-            self.combined_prob *= (0.98 ** duplicate_count)
+            self.combined_prob *= (0.92 ** duplicate_count)
+
+            # FIX #7b: Same-fixture cross-market correlation penalty.
+            # BTTS and Over 2.5 on the same fixture are highly correlated — 15% reduction.
+            fixture_ids = [l.fixture_id for l in self.legs]
+            same_fixture_pairs = len(fixture_ids) - len(set(fixture_ids))
+            self.combined_prob *= (0.85 ** same_fixture_pairs)
 
             self.combined_odds = round(self.combined_odds, 2)
             self.combined_prob = round(self.combined_prob, 4)

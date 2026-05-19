@@ -112,20 +112,27 @@ def compute_combined(
 
     W_SM = 0.10
     has_sm = match is not None and getattr(match, 'sm_pred_available', False)
-    if has_sm:
-        scale = 1.0 - W_SM
-        w_poisson = w_poisson * scale
-        w_elo = w_elo * scale
-        w_form = w_form * scale
 
-    # Normalize weights to ensure they sum to exactly 1.0
+    # FIX #4: Normalize base weights BEFORE applying SM scale.
+    # Previously, normalization happened AFTER scale, which restored original
+    # weights then added W_SM=0.10 on top → total sum = 1.10.
+    # Step 1: normalize the four base model weights to sum = 1.0
     w_total = w_poisson + w_elo + w_form + w_h2h
     if w_total > 0:
         w_poisson /= w_total
-        w_elo /= w_total
-        w_form /= w_total
-        w_h2h /= w_total
+        w_elo     /= w_total
+        w_form    /= w_total
+        w_h2h     /= w_total
 
+    # Step 2: if Sportmonks prediction available, scale all base weights by (1-W_SM)
+    # so that base_sum = 0.90, and adding W_SM=0.10 in the final combination = 1.00
+    if has_sm:
+        scale = 1.0 - W_SM
+        w_poisson *= scale
+        w_elo     *= scale
+        w_form    *= scale
+        w_h2h     *= scale
+        # No further normalization needed — sum is now exactly 1.00
     # ── Model 1: Poisson (MODEL-01: form-adjusted xG before grid) ────────
     # Multiplicative xG form scaling applied before Poisson grid so the full
     # probability distribution stays coherent (old additive tweak did not).
@@ -137,10 +144,15 @@ def compute_combined(
     # If more than 4 players are missing, it signals a deeper squad crisis.
     home_injury_penalty = min(0.25, home_sidelined * 0.03 + (0.05 if home_sidelined > 4 else 0.0))
     away_injury_penalty = min(0.25, away_sidelined * 0.03 + (0.05 if away_sidelined > 4 else 0.0))
-    
-    adj_mu_home = max(0.20, mu_home * (0.90 + _hfs * 0.20) * (1.0 - home_injury_penalty))
-    adj_mu_away = max(0.20, mu_away * (0.90 + _afs * 0.20) * (1.0 - away_injury_penalty))
 
+    # FIX #3 + FIX #10: Form is NO LONGER baked into adj_mu.
+    # It enters the consensus purely through W_FORM * form.home_win below.
+    # Old multiplier (0.90 + _hfs*0.20) double-counted form AND had a range of
+    # [0.90, 1.10] that punished neutral teams (form_score=0 → -10% xG).
+    # New multiplier: (0.85 + _hfs*0.30) would be correct IF we kept form here,
+    # but we remove it entirely and apply injury penalty only.
+    adj_mu_home = max(0.20, mu_home * (1.0 - home_injury_penalty))
+    adj_mu_away = max(0.20, mu_away * (1.0 - away_injury_penalty))
 
     # UPGRADE B: League-aware Home Advantage
     # Real football has systemic home advantage. We apply a multiplier to the 
@@ -202,13 +214,25 @@ def compute_combined(
 
     # ── Realistic probability caps for defensive markets ───────────────────
     # Prevents artificially low xG from generating over-confident Under/BTTS No picks.
-    under25 = min(under25, 0.80)   # Under 2.5 cannot exceed 80% (avg ~2.7 goals)
-    under35 = min(under35, 0.88)   # Under 3.5 cannot exceed 88%
-    btts_no = min(btts_no, 0.85)   # BTTS No cannot exceed 85%
-    # Re-balance complementary markets after capping
-    over25 = 1.0 - under25
-    over35 = 1.0 - under35
-    btts = 1.0 - btts_no
+    under25 = min(poisson.under25, 0.80)  # Under 2.5 cannot exceed 80%
+    over25  = 1.0 - under25
+
+    under35 = min(poisson.under35, 0.88)  # Under 3.5 cannot exceed 88%
+    over35  = 1.0 - under35
+
+    under15 = poisson.under15
+    over15  = poisson.over15
+
+    btts_no = min(poisson.btts_no, 0.85)  # BTTS No cannot exceed 85%
+    btts    = 1.0 - btts_no
+
+    # FIX #2: Enforce stochastic ordering — must hold: over15 >= over25 >= over35
+    # Capping under35 at 0.88 can produce over35 > over25 which is impossible
+    # ("over 3.5" is a strict subset of "over 2.5").
+    over35  = min(over35,  over25)   # over35 cannot exceed over25
+    under35 = 1.0 - over35
+    over15  = max(over15,  over25)   # over15 must be at least as large as over25
+    under15 = 1.0 - over15
 
     # ── Compound markets ───────────────────────────────────────────────────
     dc_1x = p_home + p_draw

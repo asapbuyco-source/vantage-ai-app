@@ -72,7 +72,7 @@ def resolveMarket(market: str) -> MarketType:
         return MarketType.DRAW_NO_BET_AWAY
 
     # Over/Under
-    if "over 1.5" in m or "over 1.5" in market.lower():
+    if "over 1.5" in m:
         return MarketType.OVER_1_5
     if "over 2.5" in m or "over 2.5" in market.lower():
         return MarketType.OVER_2_5
