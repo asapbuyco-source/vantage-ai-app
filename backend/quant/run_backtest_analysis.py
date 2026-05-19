@@ -167,7 +167,10 @@ def print_report(bets, markets, dates, xg_vals, safety_downgrades, agreements):
         hr = d["wins"] / n
         avg_o = d["odds_sum"] / n if n > 0 else 1
         actual_roi = ((d["wins"] * (avg_o - 1)) - d["losses"]) / n
-        ev_mid = (int(key.split("-")[0]) + 10) / 100.0  # midpoint of bucket
+        try:
+            ev_mid = (int(key.split("%")[0].split(" ")[0].split("-")[-2]) + 10) / 100.0 if not key.startswith("-") else (int(key.split("-")[1]) * -1 + 10) / 100.0
+        except:
+            ev_mid = 0.0
         gap = actual_roi - ev_mid
         direction = "OVER-conf" if gap < -0.05 else ("UNDER-conf" if gap > 0.05 else "OK")
         print(f"  {key:<18} {n:>4} {hr:>6.1%} {actual_roi:>+10.1%} {gap:>+12.1%}  {direction}")

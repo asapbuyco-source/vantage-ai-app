@@ -75,7 +75,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
 
         const topPicks = quantPredictions
             .filter(m => (m.ev_pct ?? ((m.expected_value ?? 0) * 100)) >= 2)
-            .slice(0, 3);
+            .slice(0, 7);
 
         const picks: VaultPick[] = topPicks.map(m => ({
             fixtureId: m.fixture_id || m.id,
