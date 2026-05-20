@@ -738,3 +738,281 @@ python-dotenv could not parse statement starting at line 36
 [QuantPipeline]   🟢 Sportivo Trinidense vs Cerro Porteño: Over 1.5 Goals | EV 17.9% | Rank=high
 [QuantPipeline]   🛡️ Safety Downgrade [Prob 57% & Agreement 0.02 & Tier 5]: Over 2.5 Goals -> Over 1.5 Goals
 [QuantPipeline]   🟡 FC Cajamarca vs Sporting Cristal: Over 1.5 Goals | EV 5.7% | Rank=medium
+[QuantPipeline]   🛡️ Safety Downgrade [Prob 61% & Agreement 0.02 & Tier 5]: BTTS -> Over 1.5 Goals
+[QuantPipeline]   🟡 LDU Quito vs Técnico Universitario: Over 1.5 Goals | EV 5.7% | Rank=medium
+[QuantPipeline]   🟡 Montevideo City Torque vs Nacional: Over 2.5 Goals | EV 14.6% | Rank=medium
+[QuantPipeline] 🎰 Generated 3 named accumulators across 4 tiers.
+[QuantPipeline] 🛑 Dry run: Skipping Firestore save.
+
+[QuantPipeline] ✅ Pipeline complete!
+  Matches analyzed: 55
+  Predictions generated: 55
+  Value bets (high/medium): 41
+  Accumulators: 3
+    🛡️ The Baseline: 3.24x (2 legs)
+    ⚡ The Alpha Edge: 5.31x (2 legs)
+    🎯 The Syndicate: 5.31x (2 legs)
+   MATCH: Salford City 2-2 Grimsby Town
+   PICK : Over 1.5 Goals @ 1.34 -> WON
+   MATCH: Notts County 0-0 Chesterfield
+   PICK : Over 1.5 Goals @ 1.39 -> LOST
+   MATCH: Vitória 2-0 Flamengo
+   PICK : Over 1.5 Goals @ 1.46 -> WON
+   MATCH: Pachuca 1-0 Pumas UNAM
+   PICK : Over 1.5 Goals @ 1.27 -> LOST
+   MATCH: Adelaide United 0-3 Auckland
+   PICK : Over 1.5 Goals @ 1.3 -> WON
+   MATCH: Công an TP.Hồ Chí Minh 2-2 SHB Đà Nẵng
+   PICK : Over 1.5 Goals @ 1.3 -> WON
+   MATCH: Tianjin Jinmen Tiger 1-2 Chengdu Rongcheng
+   PICK : Over 1.5 Goals @ 1.29 -> WON
+   MATCH: Henan Songshan Longmen 1-0 Shenzhen Peng City
+   PICK : Over 1.5 Goals @ 1.23 -> LOST
+   MATCH: Rubin Kazan U19 3-1 Dinamo Makhachkala U19
+   PICK : Home Win @ 2.73 -> WON
+   MATCH: Krasnodar U19 8-0 Almaz-Antey U19
+   PICK : Away Win @ 7.16 -> LOST
+   MATCH: Dalian Yingbo 2-3 Qingdao West Coast
+   PICK : Over 1.5 Goals @ 1.3 -> WON
+   MATCH: Olimpia 3-2 Deportivo Recoleta
+   PICK : Over 1.5 Goals @ 1.19 -> WON
+   MATCH: Rostov U19 1-1 Nizhny Novgorod U19
+   PICK : Over 1.5 Goals @ 1.12 -> WON
+   MATCH: Hapoel Tel Aviv 0-2 Hapoel Be'er Sheva
+   PICK : Over 1.5 Goals @ 1.3 -> WON
+   MATCH: Mohammedan 0-4 Mumbai City
+   PICK : Over 1.5 Goals @ 1.2 -> WON
+   MATCH: Rodina Moskva U19 2-0 Dinamo Moskva U19
+   PICK : Home Win @ 2.44 -> WON
+   MATCH: Al Sharjah 3-1 Khorfakkan Club
+   PICK : Over 1.5 Goals @ 1.22 -> WON
+   MATCH: Nyíregyháza Spartacus 2-2 Kazincbarcika
+   PICK : Over 1.5 Goals @ 1.17 -> WON
+   MATCH: Vukovar 0-2 Varaždin
+   PICK : Home Win @ 3.8 -> LOST
+   MATCH: Zagłębie Lubin 0-1 Pogoń Szczecin
+   PICK : Over 1.5 Goals @ 1.3 -> LOST
+   MATCH: Kolding IF 1-3 Lyngby Boldklub
+   PICK : Home Win @ 3.95 -> LOST
+   MATCH: Damac FC 3-0 Al-Fayha
+   PICK : Over 1.5 Goals @ 1.4 -> WON
+   MATCH: Porto II 2-0 Benfica II
+   PICK : Home Win @ 3.55 -> WON
+   MATCH: B 93 1-1 Aalborg BK
+   PICK : Over 1.5 Goals @ 1.17 -> WON
+   MATCH: Çorum FK 2-0 Bodrum FK
+   PICK : Over 1.5 Goals @ 1.26 -> WON
+   MATCH: Argeş 2-2 Rapid Bucuresti
+   PICK : Over 1.5 Goals @ 1.5 -> WON
+   MATCH: Puskás 2-2 MTK
+   PICK : Over 1.5 Goals @ 1.2 -> WON
+   MATCH: Marítimo 1-3 Chaves
+   PICK : Over 1.5 Goals @ 1.24 -> WON
+   MATCH: Al Taawoun 1-1 Al Riyadh
+   PICK : Away Win @ 5.6 -> LOST
+   MATCH: Bari 1908 0-0 Südtirol
+   PICK : Over 1.5 Goals @ 1.54 -> LOST
+   MATCH: Korona Kielce 1-0 Widzew Lodz
+   PICK : Over 1.5 Goals @ 1.5 -> LOST
+   MATCH: Saint-Étienne 0-0 Rodez
+   PICK : Away Win @ 4.52 -> LOST
+   MATCH: Waterford United 2-2 Derry City
+   PICK : Over 1.5 Goals @ 1.28 -> WON
+   MATCH: St Patrick's 0-1 Shelbourne
+   PICK : Over 1.5 Goals @ 1.38 -> LOST
+   MATCH: Bohemians 2-1 Drogheda United
+   PICK : Over 1.5 Goals @ 1.28 -> WON
+   MATCH: OH Leuven 3-0 Antwerp
+   PICK : Over 2.5 Goals @ 1.95 -> WON
+   MATCH: Partick Thistle 2-1 Dunfermline Athletic
+   PICK : Over 1.5 Goals @ 1.38 -> WON
+   MATCH: Dundalk 1-0 Shamrock Rovers
+   PICK : Over 1.5 Goals @ 1.25 -> LOST
+   MATCH: Rubio Ñú 1-1 Nacional Asunción
+   PICK : Over 1.5 Goals @ 1.5 -> WON
+   MATCH: Sportivo Trinidense 3-1 Cerro Porteño
+   PICK : Over 1.5 Goals @ 1.45 -> WON
+   MATCH: FC Cajamarca 3-1 Sporting Cristal
+   PICK : Over 1.5 Goals @ 1.3 -> WON
+   MATCH: LDU Quito 2-1 Técnico Universitario
+   PICK : Over 1.5 Goals @ 1.3 -> WON
+   MATCH: Montevideo City Torque 1-2 Nacional
+   PICK : Over 2.5 Goals @ 2.0 -> WON
+👉 Analyzing 2026-05-14...
+[QuantPipeline] 🚀 Starting quant pipeline for 2026-05-14 (dry_run=True)
+[DataPipeline] Fetching fixtures for 2026-05-14...
+[DataPipeline] Past date requested (2026-05-14). Bypassing future filter.
+[DataPipeline] Raw fixtures (future only): 40
+[DataPipeline] Only 4 approved fixtures. Loosening filters to include all leagues...
+[DataPipeline] Final fixtures for analysis: 40
+[DataPipeline]   [OK] Valencia vs Rayo Vallecano (xG: 1.48-1.32 [model])
+[DataPipeline]   [OK] Girona vs Real Sociedad (xG: 1.48-1.32 [model])
+[DataPipeline]   [OK] Real Madrid vs Real Oviedo (xG: 1.01-1.20 [model])
+[DataPipeline]   [OK] Bradford City vs Bolton Wanderers (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] St. Louis City vs Los Angeles FC (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Sporting KC vs LA Galaxy (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Dallas vs Vancouver Whitecaps (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Minnesota United vs Colorado Rapids (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Jacuipense vs Palmeiras (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Remo vs Bahia (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Ceará vs Atlético Mineiro (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] River Plate vs Gimnasia La Plata (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Junior FC vs Once Caldas (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Seattle Sounders vs SJ Earthquakes (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] San Diego vs Austin (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Real Salt Lake vs Houston Dynamo (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Cruz Azul vs Guadalajara (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Kudrivka vs Rukh Vynnyky (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Hobro vs Aarhus Fremad (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Septemvri Sofia vs Spartak Varna (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Thun vs Young Boys (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Basel vs St. Gallen (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Sion vs Lugano (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Botev Vratsa vs Montana (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Ljungskile vs GIF Sundsvall (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Ben Guerdane vs ES Tunis (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] CS Sfaxien vs Etoile du Sahel (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] US Monastir vs AS Slimane (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] ES Métlaoui vs Kairouan (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Club Africain vs Olympique Béja (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Al Fateh vs Al Najma (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Lokomotiv Sofia 1929 vs Beroe (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Al Ettifaq vs Al Ittihad (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Al-Qadsiah vs Al Hazm (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Libertad vs 2 de Mayo (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Chapecoense vs Botafogo (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Confiança vs Grêmio (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Atlético GO vs Athletico PR (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] Corinthians vs Barra FC (xG: 1.51-1.35 [model])
+[DataPipeline]   [OK] CRB vs Fortaleza (xG: 1.51-1.35 [model])
+[DataPipeline] Pipeline complete: 40 enriched matches.
+[QuantPipeline] Processing 40 matches...
+[QuantPipeline]   🟢 Valencia vs Rayo Vallecano: Over 1.5 Goals | EV 17.2% | Rank=high
+[QuantPipeline]   ⚪ Girona vs Real Sociedad: Over 1.5 Goals | EV 0.4% | Rank=low
+[QuantPipeline]   🟢 Real Madrid vs Real Oviedo: Under 3.5 Goals | EV 40.3% | Rank=high
+[QuantPipeline]   🟢 Bradford City vs Bolton Wanderers: Over 1.5 Goals | EV 10.5% | Rank=high
+[QuantPipeline]   ⚫ St. Louis City vs Los Angeles FC: Over 1.5 Goals | EV -1.7% | Rank=none
+[QuantPipeline]   🟢 Sporting KC vs LA Galaxy: Under 3.5 Goals | EV 17.8% | Rank=high
+[QuantPipeline]   ⚪ Dallas vs Vancouver Whitecaps: Home Win | EV 75.9% | Rank=low
+[QuantPipeline]   ⚪ Minnesota United vs Colorado Rapids: Away Win | EV 54.8% | Rank=low
+[QuantPipeline]   🛡️ Safety Downgrade [Prob 61% & Agreement 0.02 & Tier 5]: BTTS -> Over 1.5 Goals
+[QuantPipeline]   🟡 Jacuipense vs Palmeiras: Over 1.5 Goals | EV -1.7% | Rank=medium
+[QuantPipeline]   ⚪ Remo vs Bahia: Over 1.5 Goals | EV 2.4% | Rank=low
+[QuantPipeline]   🟢 Ceará vs Atlético Mineiro: Over 1.5 Goals | EV 20.3% | Rank=high
+[QuantPipeline]   🟢 River Plate vs Gimnasia La Plata: Over 1.5 Goals | EV 17.0% | Rank=high
+[QuantPipeline]   🛡️ Safety Downgrade [Prob 57% & Agreement 0.02 & Tier 5]: Over 2.5 Goals -> Over 1.5 Goals
+[QuantPipeline]   🟡 Junior FC vs Once Caldas: Over 1.5 Goals | EV 6.5% | Rank=medium
+[QuantPipeline]   🟢 Seattle Sounders vs SJ Earthquakes: Under 3.5 Goals | EV 12.0% | Rank=high
+[QuantPipeline]   🟢 San Diego vs Austin: Under 3.5 Goals | EV 16.5% | Rank=high
+[QuantPipeline]   ⚪ Real Salt Lake vs Houston Dynamo: Away Win | EV 55.1% | Rank=low
+[QuantPipeline]   🛡️ Safety Downgrade [Prob 57% & Agreement 0.02 & Tier 5]: Over 2.5 Goals -> Over 1.5 Goals
+[QuantPipeline]   🟡 Cruz Azul vs Guadalajara: Over 1.5 Goals | EV 5.7% | Rank=medium
+[QuantPipeline]   🟢 Kudrivka vs Rukh Vynnyky: Over 1.5 Goals | EV 15.4% | Rank=high
+[QuantPipeline]   🟢 Hobro vs Aarhus Fremad: Over 1.5 Goals | EV 10.5% | Rank=high
+[QuantPipeline]   🟢 Septemvri Sofia vs Spartak Varna: Over 1.5 Goals | EV 8.1% | Rank=high
+[QuantPipeline]   🟢 Thun vs Young Boys: Under 3.5 Goals | EV 31.5% | Rank=high
+[QuantPipeline]   🟢 Basel vs St. Gallen: Under 3.5 Goals | EV 25.0% | Rank=high
+[QuantPipeline]   🛡️ Safety Downgrade [Prob 57% & Agreement 0.02 & Tier 5]: Over 2.5 Goals -> Over 1.5 Goals
+[QuantPipeline]   🟡 Sion vs Lugano: Over 1.5 Goals | EV 4.0% | Rank=medium
+[QuantPipeline]   🛡️ Safety Downgrade [Prob 57% & Agreement 0.02 & Tier 5]: Over 2.5 Goals -> Over 1.5 Goals
+[QuantPipeline]   🟡 Botev Vratsa vs Montana: Over 1.5 Goals | EV 5.7% | Rank=medium
+[QuantPipeline]   🛡️ Safety Downgrade [Prob 61% & Agreement 0.02 & Tier 5]: BTTS -> Over 1.5 Goals
+[QuantPipeline]   🟡 Ljungskile vs GIF Sundsvall: Over 1.5 Goals | EV 4.9% | Rank=medium
+[QuantPipeline]   🛡️ Safety Downgrade [Prob 61% & Agreement 0.02 & Tier 5]: BTTS -> Over 1.5 Goals
+[QuantPipeline]   🟡 Ben Guerdane vs ES Tunis: Over 1.5 Goals | EV -2.5% | Rank=medium
+[QuantPipeline]   🟢 CS Sfaxien vs Etoile du Sahel: Over 1.5 Goals | EV 24.4% | Rank=high
+[QuantPipeline]   🟢 US Monastir vs AS Slimane: Over 1.5 Goals | EV 15.4% | Rank=high
+[QuantPipeline]   ⚪ ES Métlaoui vs Kairouan: Home Win | EV 92.2% | Rank=low
+[QuantPipeline]   🟢 Club Africain vs Olympique Béja: Over 1.5 Goals | EV 13.0% | Rank=high
+[QuantPipeline]   🟢 Al Fateh vs Al Najma: Under 3.5 Goals | EV 15.2% | Rank=high
+[QuantPipeline]   🛡️ Safety Downgrade [Prob 57% & Agreement 0.02 & Tier 5]: Over 2.5 Goals -> Over 1.5 Goals
+[QuantPipeline]   🟡 Lokomotiv Sofia 1929 vs Beroe: Over 1.5 Goals | EV 2.4% | Rank=medium
+[QuantPipeline]   🟢 Al Ettifaq vs Al Ittihad: Under 3.5 Goals | EV 8.7% | Rank=high
+[QuantPipeline]   🟢 Al-Qadsiah vs Al Hazm: Under 3.5 Goals | EV 43.2% | Rank=high
+[QuantPipeline]   🟢 Libertad vs 2 de Mayo: Over 1.5 Goals | EV 10.5% | Rank=high
+[QuantPipeline]   🟢 Chapecoense vs Botafogo: Over 1.5 Goals | EV 13.8% | Rank=high
+[QuantPipeline]   🟢 Confiança vs Grêmio: Over 1.5 Goals | EV 13.8% | Rank=high
+[QuantPipeline]   🟢 Atlético GO vs Athletico PR: Over 1.5 Goals | EV 25.2% | Rank=high
+[QuantPipeline]   🛡️ Safety Downgrade [Prob 61% & Agreement 0.02 & Tier 5]: BTTS -> Over 1.5 Goals
+[QuantPipeline]   🟡 Corinthians vs Barra FC: Over 1.5 Goals | EV 4.0% | Rank=medium
+[QuantPipeline]   🟢 CRB vs Fortaleza: Over 1.5 Goals | EV 21.9% | Rank=high
+[QuantPipeline] 🎰 Generated 0 named accumulators across 4 tiers.
+[QuantPipeline] 🛑 Dry run: Skipping Firestore save.
+
+[QuantPipeline] ✅ Pipeline complete!
+  Matches analyzed: 40
+  Predictions generated: 40
+  Value bets (high/medium): 33
+  Accumulators: 0
+   MATCH: Valencia 1-1 Rayo Vallecano
+   PICK : Over 1.5 Goals @ 1.46 -> WON
+   MATCH: Girona 1-1 Real Sociedad
+   PICK : Over 1.5 Goals @ 1.25 -> WON
+   MATCH: Bradford City 0-1 Bolton Wanderers
+   PICK : Over 1.5 Goals @ 1.36 -> LOST
+   MATCH: St. Louis City 2-1 Los Angeles FC
+   PICK : Over 1.5 Goals @ 1.21 -> WON
+   MATCH: Dallas 2-3 Vancouver Whitecaps
+   PICK : Home Win @ 4.09 -> LOST
+   MATCH: Minnesota United 0-1 Colorado Rapids
+   PICK : Away Win @ 4.95 -> WON
+   MATCH: Jacuipense 1-4 Palmeiras
+   PICK : Over 1.5 Goals @ 1.21 -> WON
+   MATCH: Remo 2-1 Bahia
+   PICK : Over 1.5 Goals @ 1.26 -> WON
+   MATCH: Ceará 2-1 Atlético Mineiro
+   PICK : Over 1.5 Goals @ 1.48 -> WON
+   MATCH: River Plate 2-0 Gimnasia La Plata
+   PICK : Over 1.5 Goals @ 1.44 -> WON
+   MATCH: Junior FC 2-2 Once Caldas
+   PICK : Over 1.5 Goals @ 1.31 -> WON
+   MATCH: Real Salt Lake 3-0 Houston Dynamo
+   PICK : Away Win @ 4.96 -> LOST
+   MATCH: Cruz Azul 2-2 Guadalajara
+   PICK : Over 1.5 Goals @ 1.3 -> WON
+   MATCH: Kudrivka 2-1 Rukh Vynnyky
+   PICK : Over 1.5 Goals @ 1.42 -> WON
+   MATCH: Hobro 0-3 Aarhus Fremad
+   PICK : Over 1.5 Goals @ 1.36 -> WON
+   MATCH: Septemvri Sofia 1-0 Spartak Varna
+   PICK : Over 1.5 Goals @ 1.33 -> LOST
+   MATCH: Sion 2-2 Lugano
+   PICK : Over 1.5 Goals @ 1.28 -> WON
+   MATCH: Botev Vratsa 1-0 Montana
+   PICK : Over 1.5 Goals @ 1.3 -> LOST
+   MATCH: Ljungskile 1-0 GIF Sundsvall
+   PICK : Over 1.5 Goals @ 1.29 -> LOST
+   MATCH: Ben Guerdane 0-1 ES Tunis
+   PICK : Over 1.5 Goals @ 1.2 -> LOST
+   MATCH: CS Sfaxien 3-1 Etoile du Sahel
+   PICK : Over 1.5 Goals @ 1.53 -> WON
+   MATCH: US Monastir 3-0 AS Slimane
+   PICK : Over 1.5 Goals @ 1.42 -> WON
+   MATCH: ES Métlaoui 0-0 Kairouan
+   PICK : Home Win @ 4.47 -> LOST
+   MATCH: Club Africain 1-1 Olympique Béja
+   PICK : Over 1.5 Goals @ 1.39 -> WON
+   MATCH: Lokomotiv Sofia 1929 1-1 Beroe
+   PICK : Over 1.5 Goals @ 1.26 -> WON
+   MATCH: Libertad 0-0 2 de Mayo
+   PICK : Over 1.5 Goals @ 1.36 -> LOST
+   MATCH: Chapecoense 2-0 Botafogo
+   PICK : Over 1.5 Goals @ 1.4 -> WON
+   MATCH: Confiança 0-3 Grêmio
+   PICK : Over 1.5 Goals @ 1.4 -> WON
+   MATCH: Atlético GO 0-0 Athletico PR
+   PICK : Over 1.5 Goals @ 1.54 -> LOST
+   MATCH: Corinthians 1-0 Barra FC
+   PICK : Over 1.5 Goals @ 1.28 -> LOST
+   MATCH: CRB 0-0 Fortaleza
+   PICK : Over 1.5 Goals @ 1.5 -> LOST
+
+============================================================
+📈 TEST SUMMARY: 5 DAYS
+============================================================
+Total Predictions: 183
+Wins / Losses:     116 / 67
+Hit Rate:          63.4%
+Estimated ROI:     -5.6%
+============================================================
+

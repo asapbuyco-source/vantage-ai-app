@@ -131,11 +131,11 @@ def _get(path: str, params: dict | None = None) -> list | dict | None:
     if params:
         base_params.update(params)
         
-    max_attempts = 3
-    base_delay = 1.5
+    max_attempts = 5
+    base_delay = 2.0
     for attempt in range(max_attempts):
         try:
-            resp = requests.get(f"{SM_BASE}{path}", params=base_params, timeout=15)
+            resp = requests.get(f"{SM_BASE}{path}", params=base_params, timeout=45)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
