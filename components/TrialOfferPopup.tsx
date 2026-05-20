@@ -49,14 +49,12 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
     features: language === 'fr' 
       ? [
           '✓ Signaux +EV en Temps Réel', 
-          '✓ Staking Kelly Dynamique', 
-          '✓ Suivi CLV (Closing Line Value)', 
+          '✓ Stratégie Kelly Bankroll',
           '✓ Filtres Avancés Screener'
         ]
       : [
           '✓ Real-Time +EV Signals', 
-          '✓ Dynamic Kelly Staking', 
-          '✓ CLV (Closing Line Value) Tracker', 
+          '✓ Kelly Bankroll Strategy',
           '✓ Advanced Screener Filters'
         ],
     expires: language === 'fr' 
@@ -218,10 +216,6 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
                 <div className="flex items-center gap-2">
                   <Zap size={12} className="text-vantage-cyan" />
                   <span className="text-[11px] font-bold text-slate-300">Kelly Staking</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <LineChart size={12} className="text-vantage-cyan" />
-                  <span className="text-[11px] font-bold text-slate-300">CLV Analytics</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <ShieldCheck size={12} className="text-vantage-cyan" />

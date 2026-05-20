@@ -18,6 +18,12 @@ from typing import Optional
 from league_config import APPROVED_LEAGUE_IDS, get_league_info, get_priority_score
 
 # ── Config ────────────────────────────────────────────────────────────────────
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env.local'))
+except ImportError:
+    pass
+
 SM_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN") or os.environ.get("VITE_SPORTMONKS_API_TOKEN", "")
 SM_BASE = "https://api.sportmonks.com/v3/football"
 MAX_MATCHES = 100

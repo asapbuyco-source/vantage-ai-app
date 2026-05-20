@@ -16,7 +16,6 @@ import { getTomorrowFixturesFromDB } from '../services/sportsData';
 import { PortfolioOnboarding } from '../components/PortfolioOnboarding';
 import { Sparkline } from '../components/Sparkline';
 import { Screener } from '../components/Screener';
-import { CLVTracker } from '../components/CLVTracker';
 
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
@@ -65,7 +64,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
     });
   }, []);
 
-  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault' | 'tracker'>('predictions');
+  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault'>('predictions');
   const [picksDay, setPicksDay] = useState<'today' | 'tomorrow'>('today');
   const [tomorrowFixtures, setTomorrowFixtures] = useState<Match[]>([]);
   const [tomorrowLoading, setTomorrowLoading] = useState(false);
@@ -94,8 +93,6 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [showPortfolioEdit, setShowPortfolioEdit] = useState(false);
   const [showAllPlans, setShowAllPlans] = useState(false);
-  const [performanceExpanded, setPerformanceExpanded] = useState(false);
-
   // Sort predictions by rank priority (same logic as before but now uses DataContext data)
   const quantPredictions = useMemo(() => {
     const sorted = [...predictions].map(normalizeQuantPrediction) as Match[];
@@ -190,7 +187,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
         badge: '🔥 MOST POPULAR',
         price: '5000',
         icon: <Star size={20} />,
-        features: ['Full +EV Signal Feed', 'Live CLV Tracker', 'Alpha Screener Access', 'VIP WhatsApp Group'],
+        features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group'],
         color: 'border-vantage-cyan bg-vantage-cyan/5 dark:bg-vantage-cyan/10 shadow-[0_0_40px_rgba(34,211,238,0.1)]',
         claimColor: 'bg-vantage-cyan hover:bg-cyan-400 text-slate-900 shadow-lg shadow-vantage-cyan/25',
       },
@@ -200,7 +197,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
         badge: '💎 BEST VALUE',
         price: '12000',
         icon: <ShieldCheck size={20} />,
-        features: ['Full +EV Signal Feed', 'Live CLV Tracker', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support'],
+        features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support'],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
         claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
@@ -447,82 +444,6 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">{t('vip.subtitle')}</p>
         </motion.div>
 
-        {/* ── PERFORMANCE TRACKING ── */}
-        <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4">
-          <button 
-            onClick={() => setPerformanceExpanded(!performanceExpanded)}
-            className="w-full flex items-center justify-between"
-          >
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
-                <TrendingUp size={16} className="text-emerald-500" />
-              </div>
-              <div className="text-left">
-                <p className="text-xs font-bold text-slate-700 dark:text-white uppercase tracking-wider">
-                  {language === 'fr' ? 'Suivi de Performance' : 'Performance Tracking'}
-                </p>
-                <p className="text-[10px] text-gray-500 mt-0.5">
-                  {language === 'fr' ? 'Statistiques du compte' : 'Account statistics'}
-                </p>
-              </div>
-            </div>
-            {performanceExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-          </button>
-
-          <AnimatePresence>
-            {performanceExpanded && (
-              <motion.div 
-                initial={{ height: 0, opacity: 0, marginTop: 0 }} 
-                animate={{ height: 'auto', opacity: 1, marginTop: 12 }} 
-                exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
-                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
-                      {language === 'fr' ? 'Abonnement depuis' : 'Member since'}
-                    </p>
-                    <p className="text-sm font-bold font-mono text-slate-800 dark:text-white mt-0.5">
-                      {userProfile?.createdAt
-                        ? new Date(userProfile.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
-                        : '—'}
-                    </p>
-                  </div>
-                  <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
-                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
-                      {language === 'fr' ? 'Jours actifs' : 'Days Active'}
-                    </p>
-                    <p className="text-sm font-bold font-mono text-slate-800 dark:text-white mt-0.5">
-                      {userProfile?.createdAt
-                        ? Math.max(1, Math.ceil((Date.now() - new Date(userProfile.createdAt).getTime()) / 86400000))
-                        : '—'}
-                    </p>
-                  </div>
-                  <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
-                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
-                      {language === 'fr' ? 'Signaux totaux' : 'Total Signals'}
-                    </p>
-                    <p className="text-sm font-bold font-mono text-emerald-500 mt-0.5">
-                      {quantPredictions.length || '—'}
-                    </p>
-                  </div>
-                  <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3">
-                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">
-                      CLV Tracker
-                    </p>
-                    <button
-                      onClick={() => setActiveVipTab('tracker')}
-                      className="text-[10px] font-bold text-vantage-cyan hover:underline mt-0.5"
-                    >
-                      {language === 'fr' ? 'Voir le suivi →' : 'View tracker →'}
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
         {/* Premium VIP status badge */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -611,12 +532,6 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           >
             <Banknote size={16} /> <span>Vault</span>
           </button>
-          <button
-            onClick={() => setActiveVipTab('tracker')}
-            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'tracker' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-orange-500' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            <TrendingUp size={16} /> <span>CLV</span>
-          </button>
         </div>
 
 
@@ -628,12 +543,6 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           </div>
         )}
 
-        {/* ── TRACKER SECTION ── */}
-        {activeVipTab === 'tracker' && (
-          <div className="mb-6">
-            <CLVTracker />
-          </div>
-        )}
 
         {/* ── VANTAGE MODEL PICKS SECTION ──────────────────────────────────────── */}
         {activeVipTab === 'predictions' && (

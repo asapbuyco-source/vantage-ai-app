@@ -1,23 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Unlock, CheckCircle2, XCircle, RefreshCw, TrendingUp, TrendingDown, Minus, Calendar, ChevronDown, ChevronUp, Pencil, Info, AlertTriangle } from 'lucide-react';
+import { RefreshCw, TrendingUp, TrendingDown, Minus, Calendar, ChevronDown, ChevronUp, Pencil, Info, AlertTriangle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { VaultPick, VaultDay } from '../types';
-import { getVaultDay, saveVaultDay, confirmVaultBet } from '../services/db';
+import { getVaultDay, saveVaultDay, getPredictionsForDate, updateUserProfile, getGlobalTodayKey } from '../services/db';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 
 const DEFAULT_BANKROLL = 10000;
 
-function getTodayKey() {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
 
 function calcBankrollEnd(picks: VaultPick[], startBankroll: number): number {
     let bankroll = startBankroll;
     for (const pick of picks) {
-        if (!pick.confirmed) continue;
         if (pick.result === 'pending') continue;
         bankroll += pick.profit ?? 0;
     }
@@ -37,26 +34,111 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
 
     const [vaultDay, setVaultDay] = useState<VaultDay | null>(null);
     const [loading, setLoading] = useState(false);
-    const [confirming, setConfirming] = useState<string | null>(null);
     const [showHistory, setShowHistory] = useState(false);
+    const [vaultHistory, setVaultHistory] = useState<VaultDay[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
     const [showInfo, setShowInfo] = useState(false);
 
-    const todayKey = getTodayKey();
+    const todayKey = getGlobalTodayKey();
     const vaultStartDate = userProfile?.vaultProgress?.startDate || user?.metadata?.creationTime?.split('T')[0] || todayKey;
     const currentDay = dayNumber(vaultStartDate);
     const bankrollStart = userProfile?.portfolioBankroll || DEFAULT_BANKROLL;
 
     useEffect(() => {
-        if (!user) return;
+        if (!user || !userProfile) return;
         setLoading(true);
-        getVaultDay(user.uid, todayKey).then(day => {
-            if (day) {
-                setVaultDay(day as VaultDay);
-            } else {
-                autoPopulate();
+        autoGradeVault().then(() => {
+            getVaultDay(user.uid, todayKey).then(day => {
+                if (day) {
+                    setVaultDay(day as VaultDay);
+                } else {
+                    autoPopulate();
+                }
+            }).finally(() => setLoading(false));
+        });
+    }, [user, todayKey, userProfile?.portfolioBankroll]);
+
+    const autoGradeVault = async () => {
+        if (!user || !userProfile) return;
+        try {
+            // Find all pending vault days
+            const q = query(collection(db, 'vault_days'), where('uid', '==', user.uid), where('status', '==', 'active'));
+            const snap = await getDocs(q);
+            if (snap.empty) return;
+
+            let currentBankroll = userProfile.portfolioBankroll || DEFAULT_BANKROLL;
+            let profileNeedsUpdate = false;
+
+            // Sort days chronologically to compound correctly
+            const daysToGrade = snap.docs.map(d => d.data() as VaultDay).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+
+            for (const day of daysToGrade) {
+                let dayUpdated = false;
+
+                // Ensure perfect compounding: if a previous day grew the bankroll, 
+                // update this day's starting bankroll and recalculate stakes for pending picks!
+                if (day.bankrollStart !== currentBankroll) {
+                    day.bankrollStart = currentBankroll;
+                    for (let pick of day.picks) {
+                        if (pick.result === 'pending') {
+                            pick.stakeAmount = Math.round(currentBankroll * ((pick.kellyStakePct || 0) / 100));
+                        }
+                    }
+                    dayUpdated = true;
+                }
+
+                // Fetch graded predictions for that day
+                const masterPicks = await getPredictionsForDate(day.dateKey);
+                if (!masterPicks || masterPicks.length === 0) {
+                    if (dayUpdated) await saveVaultDay(user.uid, day.dateKey, day);
+                    continue;
+                }
+
+                let dayBankroll = day.bankrollStart;
+
+                for (let pick of day.picks) {
+                    if (pick.result === 'pending') {
+                        const masterPick = masterPicks.find(m => String(m.id) === String(pick.fixtureId) || String(m.fixture_id) === String(pick.fixtureId));
+                        if (masterPick && masterPick.status && masterPick.status !== 'pending') {
+                            pick.result = masterPick.status as any;
+                            // Calculate profit based on kelly stake and odds
+                            if (pick.result === 'won') {
+                                pick.profit = Math.round(pick.stakeAmount * (pick.odds - 1));
+                            } else if (pick.result === 'lost') {
+                                pick.profit = -pick.stakeAmount;
+                            } else if (pick.result === 'void') {
+                                pick.profit = 0;
+                            }
+                            dayUpdated = true;
+                        }
+                    }
+                    if (pick.result !== 'pending') {
+                        dayBankroll += (pick.profit || 0);
+                    }
+                }
+
+                // Check if all picks are now graded
+                const allGraded = day.picks.every(p => p.result !== 'pending');
+                
+                if (dayUpdated) {
+                    day.bankrollEnd = dayBankroll;
+                    if (allGraded) {
+                        day.status = 'completed';
+                        // Update the user's running bankroll for the next day
+                        currentBankroll = dayBankroll;
+                        profileNeedsUpdate = true;
+                    }
+                    await saveVaultDay(user.uid, day.dateKey, day);
+                }
             }
-        }).finally(() => setLoading(false));
-    }, [user, todayKey]);
+
+            if (profileNeedsUpdate) {
+                await updateUserProfile(user.uid, { portfolioBankroll: currentBankroll });
+            }
+        } catch (e) {
+            console.error('Error auto-grading vault:', e);
+        }
+    };
 
     const autoPopulate = async () => {
         if (!user || quantPredictions.length === 0) {
@@ -87,7 +169,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             stakeAmount: Math.round(bankrollStart * ((m.kelly_stake || 0) / 100)),
             result: 'pending',
             profit: null,
-            confirmed: false
+            confirmed: true
         }));
 
         const day: VaultDay = {
@@ -102,24 +184,34 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
         await saveVaultDay(user!.uid, todayKey, day);
     };
 
-    const handleConfirmBet = async (fixtureId: string) => {
-        if (!user || !vaultDay) return;
-        setConfirming(fixtureId);
-        try {
-            await confirmVaultBet(user.uid, todayKey, fixtureId);
-            const updated: VaultDay = {
-                ...vaultDay,
-                picks: vaultDay.picks.map(p => p.confirmed ? p : { ...p, confirmed: true })
-            };
-            setVaultDay(updated);
-        } finally {
-            setConfirming(null);
+    useEffect(() => {
+        if (showHistory && user && vaultHistory.length === 0) {
+            setLoadingHistory(true);
+            const q = query(
+                collection(db, 'vault_days'), 
+                where('uid', '==', user.uid),
+                where('status', '==', 'completed')
+            );
+            getDocs(q).then(snap => {
+                const history = snap.docs
+                    .map(d => d.data() as VaultDay)
+                    .sort((a, b) => b.dateKey.localeCompare(a.dateKey)); // Newest first
+                setVaultHistory(history);
+            }).finally(() => setLoadingHistory(false));
         }
-    };
+    }, [showHistory, user]);
+
+
 
     const currentBankroll = vaultDay ? calcBankrollEnd(vaultDay.picks, bankrollStart) : bankrollStart;
     const pnl = currentBankroll - bankrollStart;
-    const pnlPct = ((pnl / bankrollStart) * 100).toFixed(1);
+    const pnlPct = ((pnl / bankrollStart) * 100);
+
+    // 30-Day Projection Calculation
+    // Use historical average daily ROI, clamped between 0.5% and 3% to be realistic.
+    const averageDailyRoi = currentDay > 1 ? (pnlPct / currentDay) : 1.5;
+    const effectiveRoi = Math.max(0.5, Math.min(3, averageDailyRoi));
+    const projectedBankroll30Days = currentBankroll * Math.pow(1 + (effectiveRoi / 100), 30);
 
     const chartData = useMemo(() => {
         if (!vaultDay) return { path: '', labels: [] };
@@ -135,7 +227,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
 
         for (let i = 0; i < vaultDay.picks.length; i++) {
             const p = vaultDay.picks[i];
-            if (p.confirmed) {
+            if (p.result !== 'pending') {
                 runningBankroll += p.profit ?? 0;
                 points.push([(i + 1) / vaultDay.picks.length * 100, 100 - ((runningBankroll - minY) / range * 100)]);
             }
@@ -147,7 +239,6 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
         return { path, labels: [] };
     }, [vaultDay]);
 
-    const confirmedCount = vaultDay?.picks.filter(p => p.confirmed).length || 0;
     const wonCount = vaultDay?.picks.filter(p => p.result === 'won').length || 0;
     const lostCount = vaultDay?.picks.filter(p => p.result === 'lost').length || 0;
     const pendingCount = vaultDay?.picks.filter(p => p.result === 'pending').length || 0;
@@ -216,15 +307,8 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 )}
             </AnimatePresence>
 
-            <div className="grid grid-cols-3 gap-2">
-                <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700">
-                    <div className={`text-lg font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {pnl >= 0 ? '+' : ''}{pnlPct}%
-                    </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">
-                        {language === 'fr' ? 'P&L' : 'P&L'}
-                    </div>
-                </div>
+            <div className="grid grid-cols-2 gap-2">
+                {/* Current Bankroll */}
                 <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700 relative">
                     {onEditBankroll && (
                         <button 
@@ -236,18 +320,42 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                         </button>
                     )}
                     <div className="text-lg font-bold font-mono text-white">
-                        {currentBankroll.toLocaleString()}
+                        {currentBankroll.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </div>
                     <div className="text-[10px] text-gray-500 mt-0.5">
-                        {language === 'fr' ? 'Bankroll' : 'Bankroll'}
+                        {language === 'fr' ? 'Bankroll Actuelle' : 'Current Bankroll'}
                     </div>
                 </div>
+
+                {/* 30-Day Projection */}
+                <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/5 rounded-xl p-3 text-center border border-emerald-500/20 relative overflow-hidden">
+                    <div className="absolute -right-4 -top-4 w-12 h-12 bg-emerald-500/10 rounded-full blur-xl" />
+                    <div className="text-lg font-bold font-mono text-emerald-400">
+                        {projectedBankroll30Days.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </div>
+                    <div className="text-[10px] text-emerald-500/80 mt-0.5 font-bold flex items-center justify-center gap-1">
+                        <TrendingUp size={10} />
+                        {language === 'fr' ? 'Projeté (30 Jours)' : '30-Day Projection'}
+                    </div>
+                </div>
+
+                {/* P&L */}
                 <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700">
-                    <div className="text-lg font-bold font-mono text-vantage-cyan">
+                    <div className={`text-sm font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">
+                        {language === 'fr' ? 'P&L Total' : 'Total P&L'}
+                    </div>
+                </div>
+
+                {/* Picks Count */}
+                <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700">
+                    <div className="text-sm font-bold font-mono text-vantage-cyan">
                         {vaultDay?.picks.length || 0}
                     </div>
                     <div className="text-[10px] text-gray-500 mt-0.5">
-                        {language === 'fr' ? 'Picks' : 'Picks'}
+                        {language === 'fr' ? 'Picks du jour' : 'Today\'s Picks'}
                     </div>
                 </div>
             </div>
@@ -277,7 +385,6 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> {language === 'fr' ? 'Gagnés' : 'Won'}: {wonCount}</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500"></span> {language === 'fr' ? 'Perdus' : 'Lost'}: {lostCount}</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-500"></span> {language === 'fr' ? 'En attente' : 'Pending'}: {pendingCount}</span>
-                <span className="flex items-center gap-1 ml-auto"><span className="w-2 h-2 rounded-full bg-amber-500"></span> {language === 'fr' ? 'Confirmés' : 'Confirmed'}: {confirmedCount}</span>
             </div>
 
             {vaultDay?.picks.length === 0 ? (
@@ -292,7 +399,6 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             ) : (
                 <div className="space-y-2">
                     {vaultDay?.picks.map((pick, i) => {
-                        const isConfirmed = pick.confirmed;
                         const isPending = pick.result === 'pending';
                         const isWon = pick.result === 'won';
                         const isLost = pick.result === 'lost';
@@ -346,32 +452,18 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                                                 <Minus size={12} /> <span className="text-[10px] font-bold">VOID</span>
                                             </div>
                                         )}
-                                        {isPending && !isConfirmed && (
-                                            <button
-                                                onClick={() => handleConfirmBet(pick.fixtureId)}
-                                                disabled={confirming === pick.fixtureId}
-                                                className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-vantage-purple/20 text-vantage-purple hover:bg-vantage-purple/30 disabled:opacity-50 transition-colors"
-                                            >
-                                                {confirming === pick.fixtureId ? (
-                                                    <RefreshCw size={10} className="animate-spin" />
-                                                ) : (
-                                                    <CheckCircle2 size={10} />
-                                                )}
-                                                {language === 'fr' ? 'Pari-placé' : 'Bet Placed'}
-                                            </button>
-                                        )}
-                                        {isPending && isConfirmed && (
-                                            <div className="flex items-center gap-1 text-amber-400">
-                                                <CheckCircle2 size={12} />
+                                        {isPending && (
+                                            <div className="flex items-center gap-1 text-gray-400">
+                                                <RefreshCw size={12} className="animate-spin" /> <span className="text-[10px] font-bold">PENDING</span>
                                             </div>
                                         )}
                                     </div>
                                 </div>
-                                {isPending && pick.stakeAmount > 0 && (
-                                    <div className="mt-1.5 text-[10px] text-gray-500 font-mono">
-                                        Stake: {pick.stakeAmount.toLocaleString()} FCFA
+                                {pick.stakeAmount > 0 && (
+                                    <div className="mt-1.5 text-[10px] text-gray-500 font-mono flex items-center gap-2">
+                                        <span>Stake: {pick.stakeAmount.toLocaleString()} FCFA</span>
                                         {pick.profit !== null && (
-                                            <span className={pick.profit >= 0 ? 'text-emerald-400 ml-2' : 'text-rose-400 ml-2'}>
+                                            <span className={pick.profit >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
                                                 {pick.profit >= 0 ? '+' : ''}{pick.profit.toLocaleString()} FCFA
                                             </span>
                                         )}
@@ -382,6 +474,69 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                     })}
                 </div>
             )}
+
+            <AnimatePresence>
+                {showHistory && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden mt-6"
+                    >
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                            {language === 'fr' ? 'Historique du Vault' : 'Vault History'}
+                        </h4>
+                        
+                        {loadingHistory ? (
+                            <div className="flex justify-center py-6"><RefreshCw size={16} className="animate-spin text-gray-500" /></div>
+                        ) : vaultHistory.length === 0 ? (
+                            <div className="text-center py-6 text-gray-500 text-xs">
+                                {language === 'fr' ? 'Aucun historique disponible' : 'No history available yet'}
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {vaultHistory.map(hDay => {
+                                    const dayPnl = hDay.bankrollEnd - hDay.bankrollStart;
+                                    const dayPnlPct = (dayPnl / hDay.bankrollStart) * 100;
+                                    return (
+                                        <div key={hDay.dateKey} className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-3">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <div className="text-xs font-bold text-white">Day {hDay.dayNumber}</div>
+                                                    <div className="text-[10px] text-gray-500">{hDay.dateKey}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className={`text-xs font-bold font-mono ${dayPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                        {dayPnl >= 0 ? '+' : ''}{dayPnl.toLocaleString()} FCFA
+                                                    </div>
+                                                    <div className={`text-[10px] font-mono ${dayPnl >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
+                                                        {dayPnl >= 0 ? '+' : ''}{dayPnlPct.toFixed(1)}%
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-1.5">
+                                                {hDay.picks.map(p => (
+                                                    <div key={p.fixtureId} className="flex items-center justify-between text-[10px]">
+                                                        <span className="text-gray-400 truncate pr-2 flex-1">
+                                                            {p.homeTeam} vs {p.awayTeam}
+                                                        </span>
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            <span className="font-mono text-gray-500">@{p.odds.toFixed(2)}</span>
+                                                            {p.result === 'won' && <span className="text-emerald-400 font-bold">WON</span>}
+                                                            {p.result === 'lost' && <span className="text-rose-400 font-bold">LOST</span>}
+                                                            {p.result === 'void' && <span className="text-amber-400 font-bold">VOID</span>}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <button
                 onClick={autoPopulate}

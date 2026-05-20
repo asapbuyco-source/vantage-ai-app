@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { verifySelarOrder } from './services/selar';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, X, Crown } from 'lucide-react';
+import { Loader2, X, Crown, RefreshCw } from 'lucide-react';
 import { NavigationTab } from './types';
 import { BottomNav } from './components/BottomNav';
 import { ToastContainer } from './components/Toast';
@@ -52,12 +52,26 @@ function AppContent() {
 
   // Enable Firestore offline persistence on mount
   useEffect(() => { enableFirestorePersistence(); }, []);
+
+  // Listen for SW_UPDATED message from the new service worker
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'SW_UPDATED') {
+        setShowUpdateBanner(true);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, []);
   // VIP renewal reminder
   const [showRenewalBanner, setShowRenewalBanner] = useState(false);
   const [showTrialUpsell, setShowTrialUpsell] = useState(false);
   const [renewalDaysLeft, setRenewalDaysLeft] = useState(0);
   // Trial offer payment modal
   const [showTrialPayment, setShowTrialPayment] = useState(false);
+  // New version available banner
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
 
   const { theme, language, showToast } = useAppContext();
   const { user, userProfile, verifyTransaction, loading: authLoading, isAdmin } = useAuth();
@@ -298,6 +312,39 @@ function AppContent() {
             <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 blur-[120px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-cyan/5' : 'bg-blue-200/40'}`} />
             <div className={`absolute bottom-0 right-0 w-96 h-96 blur-[120px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-purple/5' : 'bg-purple-200/40'}`} />
           </div>
+
+          {/* ── New Version Update Banner ───────────────────────────── */}
+          <AnimatePresence>
+            {showUpdateBanner && (
+              // @ts-ignore
+              <motion.div
+                initial={{ y: -60, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -60, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 text-white text-sm font-bold shadow-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <RefreshCw size={15} className="shrink-0 animate-spin" />
+                  <span>New version available — tap to update</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors font-black"
+                  >
+                    Refresh Now
+                  </button>
+                  <button
+                    onClick={() => setShowUpdateBanner(false)}
+                    className="text-white/70 hover:text-white"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* VIP Renewal Reminder Banner */}
           <AnimatePresence>
