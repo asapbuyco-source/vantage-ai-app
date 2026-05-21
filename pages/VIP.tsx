@@ -98,7 +98,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const quantPredictions = useMemo(() => {
     const sorted = [...predictions].map(normalizeQuantPrediction) as Match[];
     const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
-    sorted.sort((a, b) => (rankPriority[b.value_rank] || 0) - (rankPriority[a.value_rank] || 0));
+    sorted.sort((a, b) => (rankPriority[b.value_rank ?? ''] || 0) - (rankPriority[a.value_rank ?? ''] || 0));
     return sorted;
   }, [predictions]);
 

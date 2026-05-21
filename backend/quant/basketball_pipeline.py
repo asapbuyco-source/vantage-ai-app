@@ -22,10 +22,6 @@ import math
 import datetime
 import urllib.request
 import urllib.error
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # ── Firestore imports (Firebase Admin SDK) ────────────────────────────────────
 try:

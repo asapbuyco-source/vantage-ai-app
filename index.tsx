@@ -18,3 +18,13 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// Listen for Service Worker updates to auto-reload the page
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SW_UPDATED') {
+      console.log('New version detected! Auto-reloading...');
+      window.location.reload();
+    }
+  });
+}
