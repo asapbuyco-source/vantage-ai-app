@@ -45,7 +45,7 @@ interface VIPProps {
 
 export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const { t, language, showToast } = useAppContext();
-  const { predictions, accumulators: dataContextAccumulators, loading } = useData();
+  const { predictions, accumulators: dataContextAccumulators, loading, basketballPredictions } = useData();
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -65,6 +65,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   }, []);
 
   const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault'>('predictions');
+  const [activeSport, setActiveSport] = useState<'football' | 'basketball'>('football');
   const [picksDay, setPicksDay] = useState<'today' | 'tomorrow'>('today');
   const [tomorrowFixtures, setTomorrowFixtures] = useState<Match[]>([]);
   const [tomorrowLoading, setTomorrowLoading] = useState(false);
@@ -566,56 +567,151 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
           <AnimatePresence>
             {quantExpanded && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-                {/* Bet-type filter tabs */}
-                {!quantLoading && quantPredictions.length > 0 && (
-                  <>
-                    <div className="flex gap-1.5 flex-wrap mb-2">
-                      {['All', 'Straight Win', 'Over/Under', 'BTTS', 'Double Chance'].map(tab => (
-                        <button
-                          key={tab}
-                          onClick={() => setQuantBetFilter(tab)}
-                          className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${quantBetFilter === tab
-                            ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/30'
-                            : 'bg-slate-100 dark:bg-white/5 text-gray-500 border-slate-200 dark:border-white/10 hover:border-emerald-500/50'
-                            }`}
-                        >{tab}</button>
-                      ))}
+
+                {/* ── Sport Toggle ── */}
+                <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 mb-4">
+                  <button
+                    onClick={() => setActiveSport('football')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                      activeSport === 'football'
+                        ? 'bg-white dark:bg-slate-800 shadow text-vantage-cyan'
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    ⚽ Football
+                  </button>
+                  <button
+                    onClick={() => setActiveSport('basketball')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                      activeSport === 'basketball'
+                        ? 'bg-white dark:bg-slate-800 shadow text-orange-400'
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    🏀 NBA
+                  </button>
+                </div>
+
+                {/* ── Basketball Feed ── */}
+                {activeSport === 'basketball' && (
+                  basketballPredictions && basketballPredictions.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <AnimatePresence>
+                        {basketballPredictions.map((match, idx) => {
+                          const cat = (match as any).category || 'value';
+                          const cfg = CAT_CONFIG[cat as keyof typeof CAT_CONFIG] || CAT_CONFIG.value;
+                          return (
+                            <motion.div
+                              key={match.id}
+                              initial={{ opacity: 0, y: 16 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.3, delay: idx * 0.05 }}
+                            >
+                              <div className={`relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 flex flex-col ${cfg.border}`}>
+                                <div className="flex justify-between items-center px-4 pt-4 pb-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">NBA</span>
+                                    <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.badge}`}>
+                                      {cfg.icon} {cfg.label}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] font-bold font-mono text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">🏀 Basketball</span>
+                                </div>
+                                <div className="flex justify-between items-center px-4 py-3">
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white truncate w-5/12">{match.homeTeam}</span>
+                                  <div className="flex flex-col items-center shrink-0">
+                                    <span className="text-[10px] font-mono text-gray-400">VS</span>
+                                    {match.odds > 1 && <span className="text-[10px] font-bold font-mono bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">{match.odds.toFixed(2)}x</span>}
+                                  </div>
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white text-right truncate w-5/12">{match.awayTeam}</span>
+                                </div>
+                                <div className="mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex flex-col flex-1 mr-3">
+                                      <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">Prediction</span>
+                                      <span className="text-xs font-bold text-orange-400">{language === 'fr' ? (match as any).prediction_fr : match.prediction}</span>
+                                    </div>
+                                    <div className="flex flex-col items-center shrink-0">
+                                      <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">Confidence</span>
+                                      <span className="text-lg font-bold font-mono text-green-500">{match.confidence}%</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="mx-4 mb-4 p-3 rounded-xl bg-gradient-to-r from-orange-500/5 to-transparent border border-orange-500/15">
+                                  <div className="flex items-start gap-2">
+                                    <BrainCircuit size={13} className="text-orange-400 mt-0.5 shrink-0" />
+                                    <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
+                                      {language === 'fr' ? (match as any).analysis_fr : (match as any).analysis_en}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
                     </div>
-
-                    {/* League filter — scrollable horizontal chip row */}
-                    {availableLeagues.length > 1 && (
-                      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
-                        {availableLeagues.map(league => (
-                          <button
-                            key={league}
-                            onClick={() => setQuantLeagueFilter(league)}
-                            className={`px-3 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap shrink-0 transition-all ${
-                              quantLeagueFilter === league
-                                ? 'bg-vantage-cyan text-slate-900 border-vantage-cyan shadow-sm shadow-vantage-cyan/30'
-                                : 'bg-slate-100 dark:bg-white/5 text-gray-500 border-slate-200 dark:border-white/10 hover:border-vantage-cyan/50'
-                            }`}
-                          >
-                            {league === 'All' ? '🌍 All Leagues' : league}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {(quantBetFilter !== 'All' || quantLeagueFilter !== 'All') && (
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-[10px] text-gray-500">
-                          Showing <span className="font-bold text-vantage-cyan">{filteredQuantPredictions.length}</span> of {quantPredictions.length} picks
-                        </p>
-                        <button
-                          onClick={() => { setQuantBetFilter('All'); setQuantLeagueFilter('All'); }}
-                          className="text-[10px] font-bold text-gray-400 hover:text-vantage-cyan transition-colors underline"
-                        >
-                          Clear filters
-                        </button>
-                      </div>
-                    )}
-                  </>
+                  ) : (
+                    <div className="text-center py-8 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10">
+                      <span className="text-4xl block mb-2">🏀</span>
+                      <p className="text-sm font-medium text-gray-500">No NBA value bets found today</p>
+                      <p className="text-xs text-gray-400 mt-1">The model only flags genuine +EV edges</p>
+                    </div>
+                  )
                 )}
+
+                {/* ── Football Feed ── */}
+                {activeSport === 'football' && (
+                  <>
+                    {!quantLoading && quantPredictions.length > 0 && (
+                      <>
+                        <div className="flex gap-1.5 flex-wrap mb-2">
+                          {['All', 'Straight Win', 'Over/Under', 'BTTS', 'Double Chance'].map(tab => (
+                            <button
+                              key={tab}
+                              onClick={() => setQuantBetFilter(tab)}
+                              className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${quantBetFilter === tab
+                                ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/30'
+                                : 'bg-slate-100 dark:bg-white/5 text-gray-500 border-slate-200 dark:border-white/10 hover:border-emerald-500/50'
+                                }`}
+                            >{tab}</button>
+                          ))}
+                        </div>
+
+                        {/* League filter — scrollable horizontal chip row */}
+                        {availableLeagues.length > 1 && (
+                          <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+                            {availableLeagues.map(league => (
+                              <button
+                                key={league}
+                                onClick={() => setQuantLeagueFilter(league)}
+                                className={`px-3 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap shrink-0 transition-all ${
+                                  quantLeagueFilter === league
+                                    ? 'bg-vantage-cyan text-slate-900 border-vantage-cyan shadow-sm shadow-vantage-cyan/30'
+                                    : 'bg-slate-100 dark:bg-white/5 text-gray-500 border-slate-200 dark:border-white/10 hover:border-vantage-cyan/50'
+                                }`}
+                              >
+                                {league === 'All' ? '🌍 All Leagues' : league}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {(quantBetFilter !== 'All' || quantLeagueFilter !== 'All') && (
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] text-gray-500">
+                              Showing <span className="font-bold text-vantage-cyan">{filteredQuantPredictions.length}</span> of {quantPredictions.length} picks
+                            </p>
+                            <button
+                              onClick={() => { setQuantBetFilter('All'); setQuantLeagueFilter('All'); }}
+                              className="text-[10px] font-bold text-gray-400 hover:text-vantage-cyan transition-colors underline"
+                            >
+                              Clear filters
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
 
                 {quantLoading ? (
                   <div className="space-y-2">
@@ -771,6 +867,8 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                     </AnimatePresence>
                   </div>
                 )}
+                </>
+              )}
               </motion.div>
             )}
           </AnimatePresence>
