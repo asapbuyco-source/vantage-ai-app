@@ -47,26 +47,27 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
     useEffect(() => {
         if (!user || !userProfile) return;
         setLoading(true);
-        autoGradeVault().then(() => {
+        autoGradeVault().then((finalBankroll) => {
             getVaultDay(user.uid, todayKey).then(day => {
                 if (day) {
                     setVaultDay(day as VaultDay);
                 } else {
-                    autoPopulate();
+                    autoPopulate(finalBankroll);
                 }
             }).finally(() => setLoading(false));
         });
-    }, [user, todayKey, userProfile?.portfolioBankroll]);
+    }, [user, todayKey]);
 
-    const autoGradeVault = async () => {
-        if (!user || !userProfile) return;
+    const autoGradeVault = async (): Promise<number> => {
+        let currentBankroll = userProfile?.portfolioBankroll || DEFAULT_BANKROLL;
+        if (!user || !userProfile) return currentBankroll;
+
         try {
             // Find all pending vault days
             const q = query(collection(db, 'vault_days'), where('uid', '==', user.uid), where('status', '==', 'active'));
             const snap = await getDocs(q);
-            if (snap.empty) return;
+            if (snap.empty) return currentBankroll;
 
-            let currentBankroll = userProfile.portfolioBankroll || DEFAULT_BANKROLL;
             let profileNeedsUpdate = false;
 
             // Sort days chronologically to compound correctly
@@ -100,14 +101,20 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                     if (pick.result === 'pending') {
                         const masterPick = masterPicks.find(m => String(m.id) === String(pick.fixtureId) || String(m.fixture_id) === String(pick.fixtureId));
                         if (masterPick && masterPick.status && masterPick.status !== 'pending') {
-                            pick.result = masterPick.status as any;
-                            // Calculate profit based on kelly stake and odds
-                            if (pick.result === 'won') {
+                            const statusStr = masterPick.status.toLowerCase();
+                            
+                            // Calculate profit based on kelly stake and odds, robust against variations
+                            if (statusStr === 'won' || statusStr === 'win') {
+                                pick.result = 'won';
                                 pick.profit = Math.round(pick.stakeAmount * (pick.odds - 1));
-                            } else if (pick.result === 'lost') {
+                            } else if (statusStr === 'lost' || statusStr === 'loss') {
+                                pick.result = 'lost';
                                 pick.profit = -pick.stakeAmount;
-                            } else if (pick.result === 'void') {
+                            } else if (statusStr === 'void' || statusStr === 'cancelled' || statusStr === 'refund') {
+                                pick.result = 'void';
                                 pick.profit = 0;
+                            } else {
+                                pick.result = statusStr as any;
                             }
                             dayUpdated = true;
                         }
@@ -120,7 +127,8 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 // Check if all picks are now graded
                 const allGraded = day.picks.every(p => p.result !== 'pending');
                 
-                if (dayUpdated) {
+                // If the day was updated OR it's fully graded but somehow stuck as active
+                if (dayUpdated || (allGraded && day.status !== 'completed')) {
                     day.bankrollEnd = dayBankroll;
                     if (allGraded) {
                         day.status = 'completed';
@@ -138,16 +146,18 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
         } catch (e) {
             console.error('Error auto-grading vault:', e);
         }
+        
+        return currentBankroll;
     };
 
-    const autoPopulate = async () => {
+    const autoPopulate = async (startingBankroll: number) => {
         if (!user || quantPredictions.length === 0) {
             const empty: VaultDay = {
                 dayNumber: currentDay,
                 dateKey: todayKey,
                 picks: [],
-                bankrollStart,
-                bankrollEnd: bankrollStart,
+                bankrollStart: startingBankroll,
+                bankrollEnd: startingBankroll,
                 status: 'active'
             };
             setVaultDay(empty);
@@ -166,7 +176,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             market: m.prediction_en || m.prediction || m.bet_type,
             odds: m.odds || 1.5,
             kellyStakePct: m.kelly_stake || 0,
-            stakeAmount: Math.round(bankrollStart * ((m.kelly_stake || 0) / 100)),
+            stakeAmount: Math.round(startingBankroll * ((m.kelly_stake || 0) / 100)),
             result: 'pending',
             profit: null,
             confirmed: true
@@ -176,8 +186,8 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             dayNumber: currentDay,
             dateKey: todayKey,
             picks,
-            bankrollStart,
-            bankrollEnd: bankrollStart,
+            bankrollStart: startingBankroll,
+            bankrollEnd: startingBankroll,
             status: 'active'
         };
         setVaultDay(day);
@@ -539,7 +549,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             </AnimatePresence>
 
             <button
-                onClick={autoPopulate}
+                onClick={() => autoPopulate(currentBankroll)}
                 className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-[10px] font-bold text-gray-500 hover:text-white hover:border-slate-500 transition-colors flex items-center justify-center gap-1.5"
             >
                 <RefreshCw size={12} />
