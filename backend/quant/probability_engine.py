@@ -18,12 +18,12 @@ if TYPE_CHECKING:
     from data_pipeline import TeamStats
 
 # ── Model weights (must sum to 1.00) ──────────────────────────────────────────
-# H2H endpoint is unavailable on Sportmonks Pro plan — always defaults to Poisson.
-# Setting W_H2H = 0.0 makes this explicit and prevents implicit Poisson double-weighting.
-W_POISSON = 0.65  # Was 0.55; +0.10 absorbed from H2H
-W_ELO     = 0.25
-W_FORM    = 0.10
-W_H2H     = 0.00  # H2H data unavailable — do not use
+# FIX-3: Enabled H2H contribution (5%). H2H data is fetched via API-Football.
+# H2H provides ~5% signal on match outcomes when 3+ meetings exist.
+W_POISSON = 0.60  # Poisson score model (primary — strongest for goals markets)
+W_ELO     = 0.25  # Elo ratings (secondary — good for match outcomes)
+W_FORM    = 0.10  # Form model (10% — recency-weighted team performance)
+W_H2H     = 0.05  # FIX-3: Enabled H2H contribution (was 0.00)
 
 
 @dataclass
@@ -77,11 +77,12 @@ def compute_combined(
     away_sidelined: int = 0,
     rho: float | None = None,
     weights_override: dict | None = None,
-    match=None,
+    league_tier: int = 2,
 ) -> CombinedProbabilities:
     """
     Combine Poisson + Elo + Form + H2H into final probabilities.
-    Fix #5: H2H historical win/draw/loss rates now contribute 5% of the 1X2 probability.
+    FIX-3: H2H contributes 5% when 3+ meetings exist.
+    FIX-5: league_tier read from match (not TeamStats) for correct home advantage.
 
     Args:
         mu_home: Expected goals for home team (from data_pipeline)
@@ -91,14 +92,15 @@ def compute_combined(
         home_stats: TeamStats object
         away_stats: TeamStats object
         home_opp_strengths: list of opponent Elo ratings
-        away_opp_strengths: 
+        away_opp_strengths:
         h2h_home_wins: Number of H2H wins for home team (last 8 meetings)
         h2h_away_wins: Number of H2H wins for away team
         h2h_draws: Number of H2H draws
         home_sidelined: Count of injured/suspended players for home team
         away_sidelined: Count of injured/suspended players for away team
-        rho: Dixon-Coles rho
+        rho: Dixon-Coles rho for score correlation
         weights_override: dict of model weights (poisson, elo, form, h2h)
+        league_tier: League tier (1=elite, 5=lower) for home advantage multiplier
 
     Returns:
         CombinedProbabilities with all markets filled.
@@ -154,11 +156,9 @@ def compute_combined(
     adj_mu_home = max(0.20, mu_home * (1.0 - home_injury_penalty))
     adj_mu_away = max(0.20, mu_away * (1.0 - away_injury_penalty))
 
-    # UPGRADE B: League-aware Home Advantage
-    # Real football has systemic home advantage. We apply a multiplier to the 
-    # home team's expected goals based on league tier.
-    # Default to 1.08 (8% boost) if tier isn't provided (backwards compat).
-    league_tier = getattr(home_stats, 'league_tier', 2) if home_stats else 2
+    # FIX-5: Home advantage is now read from the league_tier parameter
+    # (correctly passed from match.league_tier, not from TeamStats which doesn't have it)
+    # FIX-4: Only ONE home advantage multiplier applied (removed data_pipeline's 1.12)
     HOME_ADVANTAGE = {1: 1.10, 2: 1.08, 3: 1.05, 4: 1.03, 5: 1.00}
     adj_mu_home *= HOME_ADVANTAGE.get(league_tier, 1.08)
 
@@ -167,9 +167,9 @@ def compute_combined(
     # ── Model 2: Elo ───────────────────────────────────────────────────────
     elo = elo_match_probs(home_team_id, away_team_id)
 
-    # ── Model 3: Form (Upgrade #4: opponent strength aware) ───────────────
+    # ── Model 3: Form (FIX-6: opponent strength aware + FIX-10: league-tier aware) ─
     form: FormProbabilities = compute_form_probabilities(
-        home_stats, away_stats, home_opp_strengths, away_opp_strengths
+        home_stats, away_stats, home_opp_strengths, away_opp_strengths, league_tier
     )
 
     # ── Model 4: H2H (Fix #5) ─────────────────────────────────────────────

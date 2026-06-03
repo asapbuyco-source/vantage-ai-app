@@ -94,16 +94,27 @@ def _performance_score(stats: 'TeamStats') -> float:
 
 
 
-def _scores_to_probabilities(home_score: float, away_score: float) -> tuple[float, float, float]:
+def _scores_to_probabilities(home_score: float, away_score: float, league_tier: int = 2) -> tuple[float, float, float]:
     """
     Convert two form scores (0–1) into match outcome probabilities.
     Returns (home_win, draw, away_win).
+
+    FIX-10: Base probabilities now vary slightly by league tier.
+    Elite leagues (tier 1) have higher home win rates (~45%) and lower draws (~23%).
+    Lower tiers have more even matchups and higher draw rates (~28%).
     """
+    # League-tier-aware base probabilities
+    BASE = {
+        1: (0.45, 0.23, 0.32),  # EPL, La Liga, Serie A, Bundesliga
+        2: (0.43, 0.25, 0.32),  # UCL, Europa, Ligue 1, etc.
+        3: (0.40, 0.27, 0.33),  # Secondary leagues (Eredivisie, Championship, etc.)
+        4: (0.37, 0.28, 0.35),  # Lower-tier leagues
+        5: (0.35, 0.30, 0.35),  # Emerging/African leagues
+    }
+    base_home, base_draw, base_away = BASE.get(league_tier, (0.40, 0.26, 0.34))
+
     # Form advantage: difference between team scores
     diff = home_score - away_score  # Range: -1 to +1
-
-    # Center around a 40/25/35 base (slight home bias)
-    base_home, base_draw, base_away = 0.40, 0.26, 0.34
 
     # Shift based on form differential
     SHIFT = 0.25  # Max shift per direction
@@ -125,12 +136,13 @@ def compute_form_probabilities(
     home_stats: 'TeamStats', away_stats: 'TeamStats',
     home_opp_strengths: list[float] | None = None,
     away_opp_strengths: list[float] | None = None,
+    league_tier: int = 2,
 ) -> FormProbabilities:
     """
     Main entry point.
     Given TeamStats objects for home/away teams, return FormProbabilities.
-    Upgrade #4: Accepts optional opponent strength lists for quality-adjusted scoring.
-    Fix: Advanced Underlying Performance Form Model (blends W/D/L with xG/Poss/SOT)
+    FIX-3: Blended 50% Results + 50% True Dominance for better predictive power.
+    FIX-10: league_tier passed through to base probability in _scores_to_probabilities.
     """
     # 1. Classic Form (W/D/L adjusted for opponent strength)
     home_res_score = _form_score(home_stats.form, home_opp_strengths)
@@ -145,7 +157,7 @@ def compute_form_probabilities(
     home_score = (home_res_score * 0.5) + (home_perf_score * 0.5)
     away_score = (away_res_score * 0.5) + (away_perf_score * 0.5)
 
-    p_home, p_draw, p_away = _scores_to_probabilities(home_score, away_score)
+    p_home, p_draw, p_away = _scores_to_probabilities(home_score, away_score, league_tier)
 
     return FormProbabilities(
         home_win=p_home,

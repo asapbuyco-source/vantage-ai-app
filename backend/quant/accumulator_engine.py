@@ -191,14 +191,18 @@ def generate_accumulators(value_bets: list[dict]) -> dict[str, list[dict]]:
     """
     Generate 4 named accumulators from the value bet pool.
     Returns a dict keyed by tier name, each containing a list of accumulator dicts.
+
+    FIX-9: Cross-tier fixture deduplication. Once a fixture is used in a higher-tier
+    accumulator (baseline > alpha_edge > syndicate > variance_play), it is excluded
+    from lower tiers. This prevents users from accidentally doubling their risk on
+    the same match outcome across multiple recommended tickets.
     """
     results = {tier: [] for tier in TIER_CONFIG}
+    used_fixtures = set()
 
     for tier_key, config in TIER_CONFIG.items():
         for _ in range(config["count"]):
-            # Pass empty set for used_fixtures to allow cross-tier overlap
-            # The different sort_keys (prob, ev, composite) will ensure variety
-            legs = _select_legs(value_bets, config, set())
+            legs = _select_legs(value_bets, config, used_fixtures)
 
             if len(legs) >= config["min_legs"]:
                 acca = Accumulator(
@@ -211,6 +215,8 @@ def generate_accumulators(value_bets: list[dict]) -> dict[str, list[dict]]:
 
                 if acca.combined_odds >= config["min_combined_odds"]:
                     results[tier_key].append(accumulator_to_dict(acca))
+                    for leg in legs:
+                        used_fixtures.add(leg["fixture_id"])
 
     return results
 

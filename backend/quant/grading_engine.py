@@ -371,6 +371,31 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
     except Exception as e:
         print(f"[Grading] Calibration failed (non-fatal): {e}", file=sys.stderr)
 
+    # FIX-2: Update Elo ratings from graded results
+    try:
+        from elo_rating import bulk_update_from_results
+        results_to_update = []
+        for pred in predictions:
+            if pred.get("status") in ("won", "lost", "void") and pred.get("home_team_id") and pred.get("away_team_id"):
+                score_str = pred.get("score", "")
+                if score_str and "-" in score_str:
+                    try:
+                        hg, ag = map(int, score_str.split("-"))
+                        results_to_update.append({
+                            "home_team_id": int(pred["home_team_id"]),
+                            "away_team_id": int(pred["away_team_id"]),
+                            "home_goals": hg,
+                            "away_goals": ag,
+                            "league_id": pred.get("league_id"),
+                        })
+                    except (ValueError, TypeError):
+                        pass
+        if results_to_update:
+            bulk_update_from_results(results_to_update)
+            print(f"[Grading] ✅ Elo ratings updated from {len(results_to_update)} graded matches.")
+    except Exception as e:
+        print(f"[Grading] Elo update failed (non-fatal): {e}", file=sys.stderr)
+
     clv_str = f" | Avg CLV: {avg_clv:+.2%} ({clv_count} bets)" if avg_clv is not None else ""
     print(f"[Grading] Graded {graded_count}/{len(predictions)} predictions for {date_str}.{clv_str}")
     return {"status": "success", "total": len(predictions), "graded": graded_count,

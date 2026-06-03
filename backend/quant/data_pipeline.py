@@ -50,13 +50,16 @@ class TeamStats:
     win_rate: float = 0.0
     clean_sheet_rate: float = 0.0
     matches_analyzed: int = 0
-    
+
     # --- Advanced Form Metrics ---
     avg_xg_created: float = 0.0
     avg_xg_conceded: float = 0.0
     avg_possession: float = 50.0
     avg_shots_on_target: float = 0.0
-    sidelined_count: int = 0  # Upgrade #13: Count of injured/suspended players
+    sidelined_count: int = 0
+
+    # FIX-6: Opponent strengths for form model (opponent Elo ratings)
+    recent_opponents: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -223,9 +226,17 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
 
     total_xg_created, total_xg_conceded = 0.0, 0.0
     total_possession, total_sot = 0.0, 0.0
+    total_shots = 0.0
     stats_matches = 0
+    opponent_ids = []  # FIX-6: Track recent opponents for Elo-based form weighting
 
     for fx in recent_fixtures[:10]:
+        # FIX-7: Only include completed matches in form analysis
+        state = fx.get("state", {})
+        state_val = (state.get("state") or "") if state else ""
+        if state_val not in ("FT", "AET", "PEN"):
+            continue
+
         participants = fx.get("participants", [])
         home_p = next((p for p in participants if p.get("meta", {}).get("location") == "home"), {})
         away_p = next((p for p in participants if p.get("meta", {}).get("location") == "away"), {})
@@ -264,9 +275,10 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
         
         has_stats = False
         my_xg, opp_xg, my_poss, my_sot = 0.0, 0.0, 50.0, 0.0
+        my_shots = 0.0
         loc_str = "home" if is_home else "away"
         opp_loc = "away" if is_home else "home"
-        
+
         for stat in stats_list:
             tid = stat.get("type_id")
             s_loc = stat.get("location", "")
@@ -274,24 +286,35 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
             try:
                 val = float(val)
                 has_stats = True
-                # FIX: Type ID mapping corrected.
-                # tid=86 = Shots on Target
-                # tid=45 = Ball Possession (%)
-                # Note: We no longer map tid=34 to Expected Goals, because 34 is actually Corners!
-                if tid == 86 and s_loc == loc_str:
-                    my_sot = val   # True Shots on Target
+                # FIX-1: Correct type_id mapping
+                # type_id=580 = xG On Target (Sportmonks' own expected goals metric)
+                if tid == 580:
+                    if s_loc == loc_str: my_xg = val
+                    elif s_loc == opp_loc: opp_xg = val
+                # type_id=86 = Shots on Target
+                elif tid == 86 and s_loc == loc_str:
+                    my_sot = val
+                # type_id=41 = Total Shots (use as xG fallback if no SOT xG)
+                elif tid == 41 and s_loc == loc_str:
+                    my_shots = val
+                # type_id=45 = Ball Possession (%)
                 elif tid == 45 and s_loc == loc_str:
                     my_poss = val
             except (TypeError, ValueError):
                 pass
 
         if has_stats:
-            # FIX #8: Remove the arbitrary 0.35 scale factor.
-            # Raw xG values are already on the correct (goals) scale.
+            # FIX-1: xG on target is the gold standard (Sportmonks computed xG)
+            # If unavailable, derive xG proxy from shots on target (avg 0.35 xG/SOT)
+            # and also use total shots as secondary signal
+            if my_xg == 0.0 and my_sot > 0:
+                my_xg = round(my_sot * 0.35, 3)
+            if opp_xg == 0.0 and my_shots > 0:
+                # Use our shots to estimate opp's xG conceded (rough but better than zero)
+                opp_xg = round(my_shots * 0.12, 3)
             total_xg_created  += my_xg
             total_xg_conceded += opp_xg
             total_possession  += my_poss
-            # FIX #9: Use my_sot (Shots on Target), not my_xg
             total_sot         += my_sot
             stats_matches += 1
 
@@ -325,6 +348,9 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
     else:
         stats.avg_xg_created = stats.avg_scored
         stats.avg_xg_conceded = stats.avg_conceded
+
+    # FIX-6: Store recent opponent IDs for Elo-based form weighting
+    stats.recent_opponents = opponent_ids[-10:]
 
     return stats
 
@@ -722,7 +748,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
             if not raw_odds:
                 continue
 
-            # Skip already-started matches
+            # Skip already-starte matches
             starting_at = item.get("starting_at", "")
             if starting_at:
                 try:
@@ -799,14 +825,24 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
                 md.away_sidelined_count += 1
 
 
-        # ── Extract xG from Sportmonks statistics (Upgrade #1) ─────────
-        xg_home, xg_away = None, None
+        # ── Extract xG from Sportmonks fixture statistics ─────────────────
+        # FIX-1: Use type_id=580 (xG On Target) — Sportmonks' own computed xG
+        # If unavailable, fall back to avg_xg_created from form analysis (already computed)
+        xg_home = None
+        xg_away = None
         raw_stats = item.get("statistics") or []
         stats_list = raw_stats if isinstance(raw_stats, list) else (raw_stats.get("data", []) if isinstance(raw_stats, dict) else [])
         for stat in stats_list:
-            # Note: We must look up the exact type ID for Expected Goals or fetch it via name.
-            # We are removing the assumption that type_id=34 is xG, because 34 is Corners.
-            pass
+            tid = stat.get("type_id")
+            s_loc = stat.get("location", "")
+            val = stat.get("data", {}).get("value") if isinstance(stat.get("data"), dict) else stat.get("value")
+            try:
+                val = float(val)
+                if tid == 580:
+                    if s_loc == "home": xg_home = val
+                    elif s_loc == "away": xg_away = val
+            except (TypeError, ValueError):
+                pass
 
         # Fetch team form (recent matches)
         try:
@@ -870,9 +906,12 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
             away_def = (away_conceded_val / half_avg) if away_conceded_val > 0 else 1.0
             away_att = (away_scored_val / half_avg) if away_scored_val > 0 else 1.0
             home_def = (home_conceded_val / half_avg) if home_conceded_val > 0 else 1.0
-            home_adv = 1.12
 
-            md.expected_goals_home = max(0.75, home_att * away_def * half_avg * home_adv)
+            # FIX-4: Home advantage multiplier removed here.
+            # League-aware home advantage (5-10%) is now applied ONLY in probability_engine.py
+            # via HOME_ADVANTAGE dict keyed by league_tier. Having it here too caused
+            # double-application (1.12 × 1.08 = 1.23 for tier-2) inflating home win probabilities.
+            md.expected_goals_home = max(0.75, home_att * away_def * half_avg)
             md.expected_goals_away = max(0.60, away_att * home_def * half_avg)
             xg_source = "model"
 

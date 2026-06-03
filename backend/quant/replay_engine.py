@@ -76,19 +76,29 @@ def grade_prediction(prediction: str, result: str) -> str:
         h, a = map(int, result.split("-"))
     except:
         return "void"
-        
+
     p = prediction.lower()
-    
+
     if p == "home win": return "won" if h > a else "lost"
     if p == "away win": return "won" if a > h else "lost"
     if p == "draw": return "won" if h == a else "lost"
     if p == "double chance (1x)": return "won" if h >= a else "lost"
     if p == "double chance (x2)": return "won" if a >= h else "lost"
-    if p == "over 2.5 goals": return "won" if (h + a) > 2.5 else "lost"
-    if p == "under 2.5 goals": return "won" if (h + a) < 2.5 else "lost"
+    if p == "double chance (12)": return "won" if h != a else "lost"
+    if p == "draw no bet (home)": return "won" if h > a else ("void" if h == a else "lost")
+    if p == "draw no bet (away)": return "won" if a > h else ("void" if h == a else "lost")
     if p == "over 1.5 goals": return "won" if (h + a) > 1.5 else "lost"
-    if p == "btts": return "won" if h > 0 and a > 0 else "lost"
-    
+    if p == "under 1.5 goals": return "won" if (h + a) < 2 else "lost"
+    if p == "over 2.5 goals": return "won" if (h + a) > 2.5 else "lost"
+    if p == "under 2.5 goals": return "won" if (h + a) < 3 else "lost"
+    if p == "over 3.5 goals": return "won" if (h + a) > 3.5 else "lost"
+    if p == "under 3.5 goals": return "won" if (h + a) < 4 else "lost"
+    if p == "btts" or p == "both teams score": return "won" if h > 0 and a > 0 else "lost"
+    if p == "btts no" or p == "both teams score - no": return "won" if h == 0 or a == 0 else "lost"
+    if p == "btts + over 2.5" or p == "btts & over 2.5":
+        return "won" if (h > 0 and a > 0 and (h + a) > 2) else "lost"
+    if p == "over 0.5 goals": return "won" if (h + a) >= 1 else "lost"
+
     return "void"
 
 def run_replay(days: int = 30):
