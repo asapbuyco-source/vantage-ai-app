@@ -246,6 +246,10 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
         my_pid = home_p.get("id") if is_home else away_p.get("id")
         opp_pid = away_p.get("id") if is_home else home_p.get("id")
 
+        # FIX-6: Collect opponent IDs for Elo-based form weighting
+        if opp_pid:
+            opponent_ids.append(int(opp_pid))
+
         my_goals = next((s["score"]["goals"] for s in scores
                         if s.get("participant_id") == my_pid and s.get("description") == "CURRENT"), None)
         opp_goals = next((s["score"]["goals"] for s in scores

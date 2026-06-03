@@ -113,7 +113,10 @@ def compute_combined(
     w_h2h = weights_override.get('h2h', W_H2H) if weights_override else W_H2H
 
     W_SM = 0.10
-    has_sm = match is not None and getattr(match, 'sm_pred_available', False)
+    # FIX-1: SM (Sportmonks prediction) integration is disabled until data_pipeline
+    # populates sm_pred_home_win/sm_pred_draw/sm_pred_away_win on MatchData.
+    # Default to disabled. When wired, pass sm_probs dict to compute_combined.
+    has_sm = False
 
     # FIX #4: Normalize base weights BEFORE applying SM scale.
     # Previously, normalization happened AFTER scale, which restored original
@@ -185,19 +188,17 @@ def compute_combined(
         h2h_p_away = poisson.away_win
 
     # ── Weighted combination of 1x2 probabilities ──────────────────────────
-    sm_home = getattr(match, 'sm_pred_home_win', 0.0) if has_sm else 0.0
-    sm_draw = getattr(match, 'sm_pred_draw', 0.0) if has_sm else 0.0
-    sm_away = getattr(match, 'sm_pred_away_win', 0.0) if has_sm else 0.0
+    # SM (Sportmonks) prediction disabled until wired — defaults to 0
+    sm_home = 0.0
+    sm_draw = 0.0
+    sm_away = 0.0
 
     p_home = (w_poisson * poisson.home_win + w_elo * elo["home_win"]
-              + w_form * form.home_win + w_h2h * h2h_p_home
-              + (W_SM * sm_home if has_sm else 0.0))
+              + w_form * form.home_win + w_h2h * h2h_p_home)
     p_draw = (w_poisson * poisson.draw + w_elo * elo["draw"]
-              + w_form * form.draw + w_h2h * h2h_p_draw
-              + (W_SM * sm_draw if has_sm else 0.0))
+              + w_form * form.draw + w_h2h * h2h_p_draw)
     p_away = (w_poisson * poisson.away_win + w_elo * elo["away_win"]
-              + w_form * form.away_win + w_h2h * h2h_p_away
-              + (W_SM * sm_away if has_sm else 0.0))
+              + w_form * form.away_win + w_h2h * h2h_p_away)
 
     p_home, p_draw, p_away = _normalize(p_home, p_draw, p_away)
 
