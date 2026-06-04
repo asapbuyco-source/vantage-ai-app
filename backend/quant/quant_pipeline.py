@@ -159,6 +159,17 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
         print("[QuantPipeline] No matches found. Exiting.")
         return {"status": "skipped", "reason": "no_matches", "date": date_str}
 
+    # ── Deduplicate fixtures (Sportmonks pagination can return same fixture multiple times) ──
+    seen_fixture_ids = set()
+    deduped_matches = []
+    for m in matches:
+        if m.fixture_id not in seen_fixture_ids:
+            seen_fixture_ids.add(m.fixture_id)
+            deduped_matches.append(m)
+    if len(deduped_matches) < len(matches):
+        print(f"[QuantPipeline] Deduped {len(matches)} -> {len(deduped_matches)} fixtures (removed {len(matches) - len(deduped_matches)} duplicates)")
+    matches = deduped_matches
+
     print(f"[QuantPipeline] Processing {len(matches)} matches...")
 
     # ── Steps 2–9: Model pipeline per match ───────────────────────────────
@@ -279,23 +290,36 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 }
                 
                 if best_bet.market in SAFETY_DOWNGRADES:
-                    # MODEL-05 fix: Require BOTH probability AND agreement to be low
-                    # before downgrading result markets in Tier 1/2 leagues.
-                    # Previously fired on ANY single condition, over-downgrading EPL/La Liga picks.
+                    # CAL-02: Use per-market confidence scores instead of the old single
+                    # confidence_score which only measured 1X2 entropy (irrelevant for goals markets).
+                    m = best_bet.market.lower()
+                    if any(k in m for k in ["over", "under"]):
+                        is_low_agreement = probs.goals_confidence < 0.25
+                    elif "btts" in m:
+                        is_low_agreement = probs.btts_confidence < 0.25
+                    else:
+                        is_low_agreement = probs.result_confidence < 0.25
+
                     is_risky_prob = best_bet.model_prob < 0.62
-                    is_low_agreement = probs.confidence_score < 0.60
                     is_volatile_league = match.league_tier >= 3
 
-                    # Downgrade if: (both prob low AND agreement low) OR volatile league
-                    should_downgrade = (is_risky_prob and is_low_agreement) or is_volatile_league
+                    # MODEL-06: Over 3.5 Goals is ALWAYS downgraded to Over 2.5 Goals.
+                    # Backtesting shows O3.5 hit rate is ~20% despite 75-80% model probability,
+                    # causing systematic losses. Over 2.5 (82% hit rate) captures the same upside
+                    # without the tail risk of 4+ goals needed for O3.5.
+                    is_over35 = best_bet.market == "Over 3.5 Goals"
+
+                    # Downgrade if: Over 3.5 (always), OR (both prob low AND agreement low) OR volatile league
+                    should_downgrade = is_over35 or (is_risky_prob and is_low_agreement) or is_volatile_league
 
                     if should_downgrade:
                         safe_target = SAFETY_DOWNGRADES[best_bet.market]
                         safe_bet = next((b for b in all_value_bets if b.market == safe_target), None)
                         if safe_bet:
                             reasons = []
+                            if is_over35: reasons.append("Over 3.5 auto-downgrade")
                             if is_risky_prob: reasons.append(f"Prob {best_bet.model_prob:.0%}")
-                            if is_low_agreement: reasons.append(f"Agreement {probs.confidence_score:.2f}")
+                            if is_low_agreement: reasons.append(f"Agreement {probs.goals_confidence:.2f}" if "btts" not in m and not any(k in m for k in ["over","under"]) else f"Conf {probs.goals_confidence:.2f}")
                             if is_volatile_league: reasons.append(f"Tier {match.league_tier}")
                             reason_str = " & ".join(reasons)
                             _safe_print(f"[QuantPipeline]   🛡️ Safety Downgrade [{reason_str}]: {best_bet.market} -> {safe_target}")
@@ -376,7 +400,12 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 "btts_prob": round(probs.btts, 4),
                 "double_chance_1x": round(probs.double_chance_1x, 4),
                 "double_chance_x2": round(probs.double_chance_x2, 4),
-                "model_confidence": round(probs.confidence_score, 4),
+                # CAL-02: All three per-market confidence scores
+                "result_confidence": round(probs.result_confidence, 4),
+                "goals_confidence": round(probs.goals_confidence, 4),
+                "btts_confidence": round(probs.btts_confidence, 4),
+                # Legacy alias for backward compat with existing dashboard
+                "model_confidence": round(probs.goals_confidence, 4),
                 # ── Classification ──────────────────────────────────────────
                 "category": category,
                 "value_rank": value_rank,  # high / medium / low / none

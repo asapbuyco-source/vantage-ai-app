@@ -316,8 +316,8 @@ def _parse_form(recent_fixtures: list, team_id: int) -> TeamStats:
             if opp_xg == 0.0 and my_shots > 0:
                 # Use our shots to estimate opp's xG conceded (rough but better than zero)
                 opp_xg = round(my_shots * 0.12, 3)
-            total_xg_created  += my_xg
-            total_xg_conceded += opp_xg
+            total_xg_created  += min(my_xg, 5.0)
+            total_xg_conceded += min(opp_xg, 5.0)
             total_possession  += my_poss
             total_sot         += my_sot
             stats_matches += 1
@@ -890,7 +890,12 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         league_avg = _league_avg(lid)
 
         if xg_home is not None and xg_away is not None:
-            # Real xG available — use directly (gold standard)
+            # FIX-Bug-5: Cap API xG at 5.0 — values above this are data artefacts
+            # (Sportmonks sometimes returns shots-on-target counts as xG).
+            # Real xG very rarely exceeds 5.0 in a single match; anything higher
+            # would inflate Poisson mu and create systematically over-valued O2.5 picks.
+            xg_home = min(xg_home, 5.0)
+            xg_away = min(xg_away, 5.0)
             md.expected_goals_home = max(0.2, xg_home)
             md.expected_goals_away = max(0.2, xg_away)
             xg_source = "API-xG"

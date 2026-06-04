@@ -21,7 +21,7 @@ from ev_engine import ValueBet
 MIN_PROBABILITY = 0.40     # Lowered from 0.55 — let EV/inefficiency filters guard quality
 MIN_EV = 0.05              # Minimum expected value (5%)
 MAX_ODDS = 3.50            # Reject high-risk outliers
-MIN_ODDS = 1.30            # Reject near-certainty bets (usually no edge)
+MIN_ODDS = 1.40            # P4: Raised from 1.30 — 9 picks below 1.40 had avg 18.9% EV
 MIN_INEFFICIENCY = 0.04    # Model must differ from market by at least 4%
 
 
@@ -101,7 +101,7 @@ def filter_bets(bets: list[ValueBet], league_tier: int = 1) -> list[ValueBet]:
     Filter a list of bets.
     Returns only those that pass all risk filters, sorted by a confidence-weighted
     composite score (not just raw EV) to prefer high-agreement, high-quality picks.
-    
+
     Score = EV * 0.4 + model_prob * 0.4 + inefficiency * 0.2
     This prevents low-probability defensive markets from always dominating.
     """
@@ -110,16 +110,28 @@ def filter_bets(bets: list[ValueBet], league_tier: int = 1) -> list[ValueBet]:
         result = apply_filters(bet, league_tier)
         if result.passed:
             passed.append(bet)
-    
+
     # Sort by safety tier first, then composite quality score
     # This ensures "safe" bets always outrank "risky" ones — critical for financial integrity
     tier_priority = {"safe": 2, "value": 1, "risky": 0}
-    
+
+    # P3: Market ROI bonus — boost high-ROI markets slightly so they get into top 7
+    # when they're close to the cutoff. Derived from 30-day backtest.
+    MARKET_BONUS = {
+        "Under 1.5 Goals": 1.18,   # 73% ROI — most profitable market, significantly under-allocated
+        "Under 3.5 Goals": 1.10,  # 41% ROI but small sample
+        "Home Win": 1.08,          # 112% ROI (small sample — use sparingly)
+        "Away Win": 1.05,          # 32% ROI — more volatile but positive
+        "Over 2.5 Goals": 1.02,   # baseline — already dominant (40% of picks)
+        "BTTS No": 1.02,           # 25% ROI but reliable, small boost
+    }
+
     def _quality_score(b: ValueBet) -> float:
         tier = tier_priority.get(grade_risk(b), 0)
         composite = b.expected_value * 0.4 + b.model_prob * 0.4 + b.inefficiency * 0.2
-        return tier + composite  # Tier dominates (2/1/0), composite breaks ties
-    
+        bonus = MARKET_BONUS.get(b.market, 1.0)
+        return tier + composite * bonus  # Tier dominates (2/1/0), composite breaks ties
+
     return sorted(passed, key=_quality_score, reverse=True)
 
 

@@ -94,3 +94,17 @@ public
 
 # Vite build output
 dist
+
+# Quant engine cache / test data
+backend/quant/debug_sm_response.json
+backend/quant/test_results*.txt
+backend/quant/new_results*.txt
+backend/vault_sim_*.csv
+backend/.vantage_cache/
+backend/*.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
