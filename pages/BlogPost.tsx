@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Calendar, Loader2, AlertCircle, BookOpen, Tag } from 'lucide-react';
 import { getBlogPost, BlogPost as IBlogPost } from '../services/blogService';
 import { useAppContext } from '../context/AppContext';
+import DOMPurify from 'isomorphic-dompurify';
 
 export const BlogPost: React.FC = () => {
     const { date } = useParams<{ date: string }>();
@@ -15,6 +16,16 @@ export const BlogPost: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     const targetDate = date || new Date().toISOString().split('T')[0];
+
+    const cleanContent = useMemo(() => {
+        if (!post?.content) return '';
+        return DOMPurify.sanitize(post.content, {
+            ALLOWED_TAGS: ["p", "h2", "h3", "ul", "ol", "li", "strong", "em", "b", "i", "br", "span", "a"],
+            ALLOWED_ATTR: ["href", "target", "rel"],
+            FORBID_TAGS: ["script", "style", "iframe", "object", "embed", "xmp"],
+            ADD_ATTR: ["target"],
+        });
+    }, [post?.content]);
 
     const fetchPost = useCallback(async () => {
         setLoading(true);
@@ -130,14 +141,14 @@ export const BlogPost: React.FC = () => {
                         {/* Blog HTML Content */}
                         <div
                             className="prose prose-invert prose-sm max-w-none
-                [&>h2]:text-vantage-cyan [&>h2]:font-bold [&>h2]:text-lg [&>h2]:mt-8 [&>h2]:mb-3
-                [&>h3]:text-gray-200 [&>h3]:font-semibold [&>h3]:mt-6 [&>h3]:mb-2
-                [&>p]:text-gray-300 [&>p]:leading-relaxed [&>p]:mb-4
-                [&>ul]:text-gray-300 [&>ul]:pl-5 [&>ul]:mb-4 [&>ul>li]:mb-1
-                [&>ol]:text-gray-300 [&>ol]:pl-5 [&>ol]:mb-4 [&>ol>li]:mb-1
-                [&>strong]:text-white [&_strong]:text-white
-                [&>a]:text-vantage-cyan [&_a]:underline"
-                            dangerouslySetInnerHTML={{ __html: post.content }}
+                        [&>h2]:text-vantage-cyan [&>h2]:font-bold [&>h2]:text-lg [&>h2]:mt-8 [&>h2]:mb-3
+                        [&>h3]:text-gray-200 [&>h3]:font-semibold [&>h3]:mt-6 [&>h3]:mb-2
+                        [&>p]:text-gray-300 [&>p]:leading-relaxed [&>p]:mb-4
+                        [&>ul]:text-gray-300 [&>ul]:pl-5 [&>ul]:mb-4 [&>ul>li]:mb-1
+                        [&>ol]:text-gray-300 [&>ol]:pl-5 [&>ol]:mb-4 [&>ol>li]:mb-1
+                        [&>strong]:text-white [&_strong]:text-white
+                        [&>a]:text-vantage-cyan [&_a]:underline"
+                            dangerouslySetInnerHTML={{ __html: cleanContent }}
                         />
 
                         {/* Footer navigation */}

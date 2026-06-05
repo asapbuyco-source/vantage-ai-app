@@ -1,139 +1,159 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Global helper: Check if user is admin
-    function isAdmin() {
-      return request.auth != null && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isAdmin == true;
+
+    function signedIn() {
+      return request.auth != null;
     }
 
-    // Helper: Checks that a write does NOT touch VIP or admin-sensitive fields.
-    // This prevents client-side free VIP bypass.
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isAdmin == true;
+    }
+
     function doesNotTouchProtectedFields() {
-      let protected = ['isVip', 'vipExpiry', 'vipPlan', 'totalPaid', 'isAdmin', 'isBlocked'];
+      let protected = ['isVip', 'vipExpiry', 'vipPlan', 'totalPaid', 'isAdmin', 'isBlocked',
+        'referralEarnings', 'lifetimeEarnings', 'referralCount'];
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(protected);
     }
 
-    // Profiles: Users can read all profiles (needed for referral lookup).
-    // Users can ONLY update their own NON-protected fields.
-    // VIP/admin fields can only be written by the backend (Admin SDK bypasses all rules).
     match /profiles/{userId} {
-      allow read: if request.auth != null;
-      // Allow create (new user signup) — only if creating their own profile, isVip defaults false
-      allow create: if request.auth != null && request.auth.uid == userId
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly([
+          "uid", "email", "displayName", "isVip", "isAdmin", "isBlocked",
+          "referralCode", "referralCount", "referralEarnings", "lifetimeEarnings",
+          "createdAt"
+        ])
+        && request.resource.data.uid == request.auth.uid
         && request.resource.data.isVip == false
         && request.resource.data.isAdmin == false
-        && request.resource.data.isBlocked == false;
-      // Allow update only if NOT touching protected fields, or if admin
-      allow update: if (request.auth != null && request.auth.uid == userId && doesNotTouchProtectedFields())
-        || isAdmin();
+        && request.resource.data.isBlocked == false
+        && request.resource.data.referralCount == 0
+        && request.resource.data.referralEarnings == 0
+        && request.resource.data.lifetimeEarnings == 0;
+
+      allow update: if (
+        isOwner(userId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          "isVip", "vipExpiry", "vipPlan", "totalPaid", "isAdmin", "isBlocked",
+          "referralEarnings", "lifetimeEarnings", "referralCount"
+        ])
+      ) || isAdmin();
     }
 
-    // Referral Codes: Users can read all (for referral lookup), create their own code,
-    // but cannot update or delete others' codes.
     match /referral_codes/{code} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null 
+      allow read: if signedIn();
+      allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if false;
     }
-    
-    // Daily Predictions: Publicly readable. Writes are admin-only (via Admin SDK).
+
     match /daily_predictions/{dateStr} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Basketball Predictions: Same pattern as daily_predictions.
     match /basketball_predictions/{dateStr} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Daily Blogs: Publicly readable. Written by backend only.
     match /daily_blogs/{dateStr} {
       allow read: if true;
       allow write: if isAdmin();
     }
-    
-    // Generation Locks: Only admins can write (prevents unauthorized data manipulation)
+
     match /generation_locks/{dateStr} {
-      allow read: if request.auth != null;
+      allow read: if signedIn();
       allow write: if isAdmin();
     }
-    
-    // Team Assets: Publicly readable for team logos
+
     match /team_assets/{assetId} {
       allow read: if true;
       allow write: if isAdmin();
     }
-    
-    // Settings / App Stats: Publicly readable. Only admins can write.
+
     match /settings/{docId} {
       allow read: if docId in ['app', 'app_stats'];
       allow write: if isAdmin();
     }
 
-    // Settings / Internal: Admin-only read/write for secrets (telegram tokens, etc.)
     match /settings/internal {
       allow read, write: if isAdmin();
     }
-    
-    // Payouts (legacy collection, kept for backwards compat)
+
     match /payouts/{reqId} {
-       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-       allow read, update: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 1000
+        && request.resource.data.keys().hasOnly([
+          "userId", "userEmail", "amount", "phoneNumber", "status", "date", "paymentMethod"
+        ]);
+      allow get: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdmin();
+      allow update, delete: if isAdmin();
     }
 
-    // Payout Requests (actual collection used by AuthContext)
     match /payout_requests/{reqId} {
-       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-       allow read, update: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
-    }
-    
-    // Selar pending tokens — owner can read and CREATE their own token only.
-    // Updates are FORBIDDEN client-side — only the backend Admin SDK can mark tokens as used.
-    // This prevents plan spoofing (changing daily→annual before payment completes).
-    // Strict schema: only allow valid plan values.
-    match /selar_pending/{refId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null
+      allow create: if signedIn()
         && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 1000
+        && request.resource.data.keys().hasOnly([
+          "userId", "userEmail", "amount", "phoneNumber", "status", "date", "paymentMethod"
+        ]);
+      allow get: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /vault_days/{docId} {
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /selar_pending/{refId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
         && request.resource.data.used == false
-        && request.resource.data.plan in ['weekly', 'monthly', 'quarterly', 'annual'];
-      // No client-side update — backend Admin SDK handles marking as used
+        && request.resource.data.plan in ["daily", "weekly", "monthly", "quarterly", "annual"];
       allow update: if false;
       allow delete: if false;
     }
 
-    // Selar unmatched payments — written by backend only, admins can read for review
     match /selar_unmatched/{docId} {
       allow read: if isAdmin();
-      allow write: if false; // Backend only
+      allow write: if false;
     }
 
-    // ── Live Scores (publicly readable — sports data, no auth needed) ─────────
-    // Backend writes every 60 seconds via Admin SDK. Frontend reads in real-time.
-    // This rule was MISSING — it caused the Firestore listener to get permission-denied
-    // silently and the frontend would show "No Matches Live" even with data present.
     match /live_scores/{docId} {
-      allow read: if true;   // Public — live scores are not sensitive
-      allow write: if false; // Backend Admin SDK only
+      allow read: if true;
+      allow write: if false;
     }
 
-    // Pre-match news — publicly readable
     match /match_news/{dateStr} {
       allow read: if true;
       allow write: if false;
     }
 
-    // ── Quant Engine Collections ───────────────────────────────────────────────
     match /quant_predictions/{dateStr} {
       allow read: if true;
       allow write: if isAdmin();
     }
     match /quant_predictions/{dateStr}/picks/{pickId} {
-      allow read: if request.auth != null;
+      allow read: if signedIn();
       allow write: if false;
     }
     match /elo_ratings/{teamId} {
@@ -141,38 +161,29 @@ service cloud.firestore {
       allow write: if false;
     }
     match /quant_performance/{docId} {
-      allow read: if request.auth != null;
+      allow read: if signedIn();
       allow write: if false;
     }
 
-    // ── Fapshi Transactions (idempotency guard — prevent double VIP grant) ──────
-    // AuthContext reads this to check if a transId was already used before granting VIP.
-    // Users can only read their own records. Writes are client-initiated (create only, no update).
     match /fapshi_transactions/{transId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if false;
     }
 
-    // ── Push Subscriptions (server-only via Admin SDK) ───────────────────────
     match /push_subscriptions/{subId} {
-      allow read, write: if false; // Admin SDK only
+      allow read, write: if false;
     }
 
-    // ── Processed Emails (idempotency guard for Gmail listener) ─────────────
-    // Written by backend only (Gmail listener). Read allowed for admin debugging.
     match /processed_emails/{msgId} {
       allow read: if isAdmin();
-      allow write: if false; // Backend Admin SDK only
+      allow write: if false;
     }
 
-    // ── Match Stats (publicly readable, server-only write) ───────────────────
     match /match_stats/{dateStr} {
       allow read: if true;
-      allow write: if false; // Backend Admin SDK only
+      allow write: if false;
     }
-    // ── Match Details Data (publicly readable, server-only write) ─────────────
-    // Used by MatchDetailsModal.tsx
     match /fixture_odds/{fixtureId} {
       allow read: if true;
       allow write: if false;
@@ -191,6 +202,17 @@ service cloud.firestore {
     }
     match /static_cache/{docId} {
       allow read: if true;
+      allow write: if false;
+    }
+
+    match /payment_intents/{docId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if false;
+      allow update, delete: if false;
+    }
+
+    match /payment_transactions/{docId} {
+      allow read: if isAdmin();
       allow write: if false;
     }
   }

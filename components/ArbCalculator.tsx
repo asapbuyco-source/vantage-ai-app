@@ -65,7 +65,7 @@ export const ArbCalculator: React.FC<ArbCalculatorProps> = ({ arb, onClose }) =>
                     <div className="space-y-3">
                         <label className="block text-xs font-bold text-gray-400 uppercase">Exact Stake Distribution</label>
                         {arb.legs.map((leg: any, i: number) => (
-                            <div key={i} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5">
+                            <div key={i} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/5">
                                 <div>
                                     <p className="text-xs font-bold text-gray-400">{leg.bookmaker}</p>
                                     <p className="text-sm font-bold text-white">{leg.selection} @ {leg.odds}</p>

@@ -16,6 +16,9 @@ import sanitizeHtml from 'sanitize-html';
 import jwt from 'jsonwebtoken';
 import { initScheduler, stopScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance, repairCorruptedPredictions } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
+import { requireFirebaseUser } from './backend/authMiddleware.js';
+import { assertValidPlan, inferPlanFromAmount } from './backend/paymentPlans.js';
+import { fulfillVipPayment } from './backend/paymentFulfillment.js';
 
 
 // Load environment variables from .env.local if available (for local dev)
@@ -259,7 +262,7 @@ const geminiLimiter = rateLimit({
     message: { error: 'Too many requests to Gemini API from this IP, please try again after 15 minutes' }
 });
 
-app.post('/api/gemini/generate', geminiLimiter, async (req, res) => {
+app.post('/api/gemini/generate', adminAuth, geminiLimiter, async (req, res) => {
     try {
         if (!GOOGLE_GENAI_API_KEY) {
             logger.warn("[API] Gemini: API key missing on server");
@@ -580,7 +583,7 @@ const openaiLimiter = rateLimit({
     message: { error: 'Too many OpenAI requests from this IP, please try again in 15 minutes' }
 });
 
-app.post('/api/openai/generate', openaiLimiter, async (req, res) => {
+app.post('/api/openai/generate', adminAuth, openaiLimiter, async (req, res) => {
     try {
         if (!OPENAI_API_KEY) return res.status(500).json({ error: 'OPENAI_API_KEY not configured on server' });
 
@@ -684,6 +687,194 @@ app.get('/api/fapshi/status/:transId', fapshiLimiter, async (req, res) => {
     } catch (e) {
         logger.error({ error: e }, '[Fapshi] Status check proxy error');
         res.status(500).json({ status: 'UNKNOWN', error: 'Gateway request failed' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// SERVER-SIDE PAYMENT FULFILLMENT
+// VIP activation happens exclusively through Firebase Admin SDK.
+// Browser initiates payment, backend verifies and grants VIP.
+// ══════════════════════════════════════════════════════════════════════
+
+app.post('/api/payments/fapshi/initiate', requireFirebaseUser, fapshiLimiter, async (req, res) => {
+    try {
+        const { plan, email, redirectUrl } = req.body || {};
+        const cfg = assertValidPlan(plan);
+        const uid = req.firebaseUser.uid;
+
+        const response = await fetch(`${FAPSHI_API_BASE}/initiate-pay`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apiuser': process.env.FAPSHI_USER_TOKEN,
+                'apikey': process.env.FAPSHI_API_KEY,
+            },
+            body: JSON.stringify({
+                amount: cfg.amount,
+                email: email || req.firebaseUser.email,
+                externalId: `${uid}_${Date.now()}`,
+                redirectUrl,
+            }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            return res.status(response.status).json({ error: data.message || 'Fapshi initiation failed' });
+        }
+
+        await admin.firestore().collection('payment_intents').doc(`fapshi_${data.transId}`).set({
+            uid,
+            provider: 'fapshi',
+            transId: data.transId,
+            plan,
+            amount: cfg.amount,
+            status: 'pending',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        res.json({ link: data.link, transId: data.transId });
+    } catch (e) {
+        logger.error({ error: e }, '[Payments] Fapshi initiate error');
+        res.status(e.status || 500).json({ error: e.message || 'Payment initiation failed' });
+    }
+});
+
+app.post('/api/payments/fapshi/verify', requireFirebaseUser, fapshiLimiter, async (req, res) => {
+    try {
+        const { transId } = req.body || {};
+        if (!transId || !/^[a-zA-Z0-9_-]+$/.test(transId)) {
+            return res.status(400).json({ error: 'Invalid transId' });
+        }
+
+        const db = admin.firestore();
+        const intentRef = db.collection('payment_intents').doc(`fapshi_${transId}`);
+        const intentSnap = await intentRef.get();
+        if (!intentSnap.exists) return res.status(404).json({ error: 'Payment intent not found' });
+
+        const intent = intentSnap.data();
+        if (intent.uid !== req.firebaseUser.uid) {
+            return res.status(403).json({ error: 'Payment intent does not belong to this user' });
+        }
+
+        const response = await fetch(`${FAPSHI_API_BASE}/payment-status/${transId}`, {
+            headers: {
+                'apiuser': process.env.FAPSHI_USER_TOKEN,
+                'apikey': process.env.FAPSHI_API_KEY,
+            },
+        });
+
+        const data = await response.json();
+        if (!response.ok) return res.status(response.status).json({ status: 'UNKNOWN' });
+        if (data.status !== 'SUCCESSFUL') return res.json({ status: data.status });
+
+        const paidAmount = Number(data.amount || 0);
+        const paidPlan = inferPlanFromAmount(paidAmount);
+        if (!paidPlan || paidPlan !== intent.plan) {
+            return res.status(400).json({ error: 'Payment amount does not match selected plan' });
+        }
+
+        const result = await fulfillVipPayment({
+            uid: intent.uid,
+            provider: 'fapshi',
+            transactionId: transId,
+            plan: intent.plan,
+            amount: paidAmount,
+            raw: data,
+        });
+
+        await intentRef.set({ status: 'fulfilled', verifiedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        res.json({ status: 'SUCCESSFUL', ...result });
+    } catch (e) {
+        logger.error({ error: e }, '[Payments] Fapshi verify error');
+        res.status(e.status || 500).json({ error: e.message || 'Payment verification failed' });
+    }
+});
+
+app.post('/api/payments/selar/initiate', requireFirebaseUser, async (req, res) => {
+    try {
+        const { plan, email } = req.body || {};
+        const cfg = assertValidPlan(plan);
+        const productLink = process.env[`SELAR_${plan.toUpperCase()}_LINK`];
+        if (!productLink) return res.status(503).json({ error: 'Selar product link not configured' });
+
+        const reference = `VAN_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
+
+        await admin.firestore().collection('selar_pending').doc(reference).set({
+            uid: req.firebaseUser.uid,
+            email: email || req.firebaseUser.email,
+            plan,
+            amount: cfg.amount,
+            reference,
+            used: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        const returnUrl = `${process.env.FRONTEND_URL}/?selar_ref=${encodeURIComponent(reference)}`;
+        const checkoutUrl = `${productLink}?email=${encodeURIComponent(email || req.firebaseUser.email)}&redirect=${encodeURIComponent(returnUrl)}`;
+        res.json({ checkoutUrl, reference });
+    } catch (e) {
+        logger.error({ error: e }, '[Payments] Selar initiate error');
+        res.status(e.status || 500).json({ error: e.message || 'Selar initiation failed' });
+    }
+});
+
+app.post('/api/payments/selar/verify', requireFirebaseUser, async (req, res) => {
+    try {
+        const { reference } = req.body || {};
+        if (!reference || !/^VAN_[a-f0-9]{24}$/i.test(reference)) {
+            return res.status(400).json({ error: 'Invalid reference' });
+        }
+
+        const db = admin.firestore();
+        const ref = db.collection('selar_pending').doc(reference);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: 'Pending Selar payment not found' });
+
+        const pending = snap.data();
+        if (pending.uid !== req.firebaseUser.uid) {
+            return res.status(403).json({ error: 'Payment does not belong to this user' });
+        }
+
+        if (pending.used !== true) {
+            return res.status(202).json({ status: 'PENDING', message: 'Waiting for Selar webhook/payment confirmation' });
+        }
+
+        res.json({ status: 'SUCCESSFUL' });
+    } catch (e) {
+        logger.error({ error: e }, '[Payments] Selar verify error');
+        res.status(e.status || 500).json({ error: e.message || 'Selar verification failed' });
+    }
+});
+
+app.post('/api/payments/selar/webhook', async (req, res) => {
+    try {
+        const { reference, status, amount } = req.body || {};
+        if (status !== 'successful') return res.status(202).json({ ignored: true });
+
+        const db = admin.firestore();
+        const ref = db.collection('selar_pending').doc(reference);
+        const snap = await ref.get();
+        if (!snap.exists) return res.status(404).json({ error: 'Pending token not found' });
+
+        const pending = snap.data();
+        await fulfillVipPayment({
+            uid: pending.uid,
+            provider: 'selar',
+            transactionId: reference,
+            plan: pending.plan,
+            amount: Number(amount || pending.amount),
+            raw: req.body,
+        });
+
+        await ref.set({
+            used: true,
+            verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        res.json({ ok: true });
+    } catch (e) {
+        logger.error({ error: e }, '[Payments] Selar webhook error');
+        res.status(500).json({ error: 'Webhook processing failed' });
     }
 });
 

@@ -1,0 +1,1366 @@
+VANTAGE AI A-GRADE IMPLEMENTATION PLAN
+======================================
+
+Goal
+----
+Move the app from the current C-/C state to an A-grade production app by fixing
+security, payments, Firestore rules, admin reliability, XSS risk, dependency
+health, quant/product clarity, tests, performance, and polish.
+
+Target final state:
+- VIP payment activation is server-side and reliable.
+- The browser never grants VIP, admin, payout, or referral money privileges.
+- Firestore rules match the real app behavior and protect private data.
+- Dependency vulnerabilities are cleared or explicitly accepted with rationale.
+- Blog and SEO content are sanitized consistently.
+- Admin actions use a stable short-lived JWT flow.
+- Quant output clearly separates recommended bets from analysis-only picks.
+- Build, typecheck, security audit, and automated tests are part of the workflow.
+
+
+PHASE 0 - BASELINE, BRANCH, AND SAFETY NET
+==========================================
+
+Priority: P0
+Target duration: 0.5 day
+Risk reduced: accidental regression while fixing high-risk flows
+
+Tasks
+-----
+1. Create a working branch:
+
+   git checkout -b codex/a-grade-hardening
+
+2. Record current validation baseline:
+
+   npx tsc --noEmit
+   npm run build
+   npm audit --audit-level=moderate
+
+3. Add scripts so every phase can be verified consistently.
+
+Suggested package.json scripts:
+
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.js",
+    "server-dev": "node --watch server.js",
+    "typecheck": "tsc --noEmit",
+    "security:audit": "npm audit --audit-level=moderate",
+    "check": "npm run typecheck && npm run build"
+  }
+}
+
+Acceptance criteria
+-------------------
+- A branch exists for the work.
+- Typecheck and build results are known.
+- npm audit output is captured before dependency updates.
+
+
+PHASE 1 - SERVER-SIDE PAYMENT FULFILLMENT
+=========================================
+
+Priority: P0
+Target duration: 2-4 days
+Risk reduced: broken VIP activation, fraud, client-side privilege escalation
+
+Current problem
+---------------
+The frontend still calls upgradeToVip() after payment verification. But Firestore
+rules correctly block normal users from updating protected fields such as isVip,
+vipExpiry, vipPlan, and totalPaid. Selar also tries to update selar_pending.used
+from the browser, while Firestore rules explicitly forbid client updates.
+
+The browser must initiate payment, but only the backend should fulfill payment.
+
+1.1 Add shared plan helpers
+---------------------------
+
+Create a backend-side source of truth for plans. Keep frontend pricing constants,
+but do not trust frontend plan/price for fulfillment.
+
+Suggested file:
+backend/paymentPlans.js
+
+Code sketch:
+
+export const PLAN_CONFIG = {
+  daily: { days: 1, amount: 500 },
+  weekly: { days: 7, amount: 1000 },
+  monthly: { days: 30, amount: 6500 },
+  quarterly: { days: 90, amount: 18000 },
+  annual: { days: 365, amount: 70000 },
+};
+
+export function assertValidPlan(plan) {
+  if (!PLAN_CONFIG[plan]) {
+    const err = new Error("Invalid plan");
+    err.status = 400;
+    throw err;
+  }
+  return PLAN_CONFIG[plan];
+}
+
+export function getVipExpiry(plan, now = new Date()) {
+  const cfg = assertValidPlan(plan);
+  const expiry = new Date(now);
+  expiry.setDate(expiry.getDate() + cfg.days);
+  return expiry.toISOString();
+}
+
+export function inferPlanFromAmount(amount) {
+  if (amount >= PLAN_CONFIG.annual.amount) return "annual";
+  if (amount >= PLAN_CONFIG.quarterly.amount) return "quarterly";
+  if (amount >= PLAN_CONFIG.monthly.amount) return "monthly";
+  if (amount >= PLAN_CONFIG.weekly.amount) return "weekly";
+  if (amount >= PLAN_CONFIG.daily.amount) return "daily";
+  return null;
+}
+
+
+1.2 Add backend VIP fulfillment service
+---------------------------------------
+
+Suggested file:
+backend/paymentFulfillment.js
+
+Responsibilities:
+- Idempotently process a payment transaction.
+- Grant VIP via Firebase Admin SDK.
+- Record transaction ownership.
+- Apply referral commissions server-side.
+- Never trust localStorage or browser-submitted amounts.
+
+Code sketch:
+
+import admin from "firebase-admin";
+import { PLAN_CONFIG, getVipExpiry } from "./paymentPlans.js";
+
+export async function fulfillVipPayment({
+  uid,
+  provider,
+  transactionId,
+  plan,
+  amount,
+  raw = {},
+}) {
+  if (!admin.apps.length) {
+    const err = new Error("Firebase Admin not initialized");
+    err.status = 503;
+    throw err;
+  }
+
+  const db = admin.firestore();
+  const txRef = db.collection("payment_transactions").doc(`${provider}_${transactionId}`);
+  const userRef = db.collection("profiles").doc(uid);
+
+  return db.runTransaction(async (tx) => {
+    const existingTx = await tx.get(txRef);
+    if (existingTx.exists) {
+      return { alreadyProcessed: true, plan: existingTx.data().plan };
+    }
+
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists) {
+      const err = new Error("User profile not found");
+      err.status = 404;
+      throw err;
+    }
+
+    const user = userSnap.data();
+    const planCfg = PLAN_CONFIG[plan];
+    if (!planCfg) {
+      const err = new Error("Invalid plan");
+      err.status = 400;
+      throw err;
+    }
+
+    const expiry = getVipExpiry(plan);
+    tx.update(userRef, {
+      isVip: true,
+      vipExpiry: expiry,
+      vipPlan: plan,
+      totalPaid: admin.firestore.FieldValue.increment(amount || planCfg.amount),
+      updatedAt: new Date().toISOString(),
+    });
+
+    if (user.referredBy) {
+      const commission = Math.floor((amount || planCfg.amount) * 0.20);
+      if (commission > 0) {
+        const referrerRef = db.collection("profiles").doc(user.referredBy);
+        tx.update(referrerRef, {
+          referralEarnings: admin.firestore.FieldValue.increment(commission),
+          lifetimeEarnings: admin.firestore.FieldValue.increment(commission),
+        });
+      }
+    }
+
+    tx.set(txRef, {
+      uid,
+      provider,
+      transactionId,
+      plan,
+      amount: amount || planCfg.amount,
+      status: "fulfilled",
+      raw,
+      fulfilledAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { alreadyProcessed: false, plan, vipExpiry: expiry };
+  });
+}
+
+
+1.3 Add Firebase auth middleware for user payment endpoints
+-----------------------------------------------------------
+
+Suggested file:
+backend/authMiddleware.js
+
+Code sketch:
+
+import admin from "firebase-admin";
+
+export async function requireFirebaseUser(req, res, next) {
+  try {
+    const header = req.headers.authorization || "";
+    const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+    if (!token) return res.status(401).json({ error: "Missing Firebase ID token" });
+    if (!admin.apps.length) return res.status(503).json({ error: "Firebase Admin not initialized" });
+
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.firebaseUser = decoded;
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: "Invalid or expired Firebase ID token" });
+  }
+}
+
+
+1.4 Replace Fapshi client fulfillment with backend fulfillment
+--------------------------------------------------------------
+
+Current frontend flow:
+- initiate Fapshi from frontend through proxy
+- browser stores transId
+- browser checks status
+- browser calls upgradeToVip()
+
+Target flow:
+- frontend initiates through backend with Firebase ID token
+- backend creates a pending payment intent
+- frontend redirects user to payment link
+- frontend asks backend to verify transId after return
+- backend verifies provider status and grants VIP
+
+Server route sketch in server.js:
+
+import { requireFirebaseUser } from "./backend/authMiddleware.js";
+import { assertValidPlan, inferPlanFromAmount } from "./backend/paymentPlans.js";
+import { fulfillVipPayment } from "./backend/paymentFulfillment.js";
+
+app.post("/api/payments/fapshi/initiate", requireFirebaseUser, fapshiLimiter, async (req, res) => {
+  try {
+    const { plan, email, redirectUrl } = req.body || {};
+    const cfg = assertValidPlan(plan);
+    const uid = req.firebaseUser.uid;
+
+    const response = await fetch(`${FAPSHI_API_BASE}/initiate-pay`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apiuser: process.env.FAPSHI_USER_TOKEN,
+        apikey: process.env.FAPSHI_API_KEY,
+      },
+      body: JSON.stringify({
+        amount: cfg.amount,
+        email: email || req.firebaseUser.email,
+        externalId: `${uid}_${Date.now()}`,
+        redirectUrl,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data.message || "Fapshi initiation failed" });
+    }
+
+    await admin.firestore().collection("payment_intents").doc(`fapshi_${data.transId}`).set({
+      uid,
+      provider: "fapshi",
+      transId: data.transId,
+      plan,
+      amount: cfg.amount,
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ link: data.link, transId: data.transId });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || "Payment initiation failed" });
+  }
+});
+
+app.post("/api/payments/fapshi/verify", requireFirebaseUser, fapshiLimiter, async (req, res) => {
+  try {
+    const { transId } = req.body || {};
+    if (!transId || !/^[a-zA-Z0-9_-]+$/.test(transId)) {
+      return res.status(400).json({ error: "Invalid transId" });
+    }
+
+    const db = admin.firestore();
+    const intentRef = db.collection("payment_intents").doc(`fapshi_${transId}`);
+    const intentSnap = await intentRef.get();
+    if (!intentSnap.exists) return res.status(404).json({ error: "Payment intent not found" });
+
+    const intent = intentSnap.data();
+    if (intent.uid !== req.firebaseUser.uid) {
+      return res.status(403).json({ error: "Payment intent does not belong to this user" });
+    }
+
+    const response = await fetch(`${FAPSHI_API_BASE}/payment-status/${transId}`, {
+      headers: {
+        apiuser: process.env.FAPSHI_USER_TOKEN,
+        apikey: process.env.FAPSHI_API_KEY,
+      },
+    });
+
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ status: "UNKNOWN" });
+    if (data.status !== "SUCCESSFUL") return res.json({ status: data.status });
+
+    const paidAmount = Number(data.amount || 0);
+    const paidPlan = inferPlanFromAmount(paidAmount);
+    if (!paidPlan || paidPlan !== intent.plan) {
+      return res.status(400).json({ error: "Payment amount does not match selected plan" });
+    }
+
+    const result = await fulfillVipPayment({
+      uid: intent.uid,
+      provider: "fapshi",
+      transactionId: transId,
+      plan: intent.plan,
+      amount: paidAmount,
+      raw: data,
+    });
+
+    await intentRef.set({ status: "fulfilled", verifiedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    res.json({ status: "SUCCESSFUL", ...result });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || "Payment verification failed" });
+  }
+});
+
+
+1.5 Replace Selar client fulfillment with backend fulfillment
+-------------------------------------------------------------
+
+Preferred approach:
+- Use Selar webhook if available.
+- Use redirect verification only as a fallback, but still call backend.
+
+Server route sketch:
+
+app.post("/api/payments/selar/initiate", requireFirebaseUser, async (req, res) => {
+  try {
+    const { plan, email } = req.body || {};
+    const cfg = assertValidPlan(plan);
+    const productLink = process.env[`SELAR_${plan.toUpperCase()}_LINK`];
+    if (!productLink) return res.status(503).json({ error: "Selar product link not configured" });
+
+    const reference = `VAN_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
+
+    await admin.firestore().collection("selar_pending").doc(reference).set({
+      uid: req.firebaseUser.uid,
+      email: email || req.firebaseUser.email,
+      plan,
+      amount: cfg.amount,
+      reference,
+      used: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const returnUrl = `${process.env.FRONTEND_URL}/?selar_ref=${encodeURIComponent(reference)}`;
+    const checkoutUrl = `${productLink}?email=${encodeURIComponent(email || req.firebaseUser.email)}&redirect=${encodeURIComponent(returnUrl)}`;
+    res.json({ checkoutUrl, reference });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || "Selar initiation failed" });
+  }
+});
+
+app.post("/api/payments/selar/verify", requireFirebaseUser, async (req, res) => {
+  try {
+    const { reference } = req.body || {};
+    if (!reference || !/^VAN_[a-f0-9]{24}$/i.test(reference)) {
+      return res.status(400).json({ error: "Invalid reference" });
+    }
+
+    const db = admin.firestore();
+    const ref = db.collection("selar_pending").doc(reference);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "Pending Selar payment not found" });
+
+    const pending = snap.data();
+    if (pending.uid !== req.firebaseUser.uid) {
+      return res.status(403).json({ error: "Payment does not belong to this user" });
+    }
+
+    // Important:
+    // Replace this placeholder with real Selar verification/webhook proof.
+    // Do not mark paid based only on return URL.
+    if (pending.used !== true) {
+      return res.status(202).json({ status: "PENDING", message: "Waiting for Selar webhook/payment confirmation" });
+    }
+
+    res.json({ status: "SUCCESSFUL" });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || "Selar verification failed" });
+  }
+});
+
+Webhook route sketch:
+
+app.post("/api/payments/selar/webhook", async (req, res) => {
+  try {
+    // Verify Selar signature/secret here if Selar provides one.
+    // Never trust unsigned webhook payloads in production.
+    const { reference, status, amount } = req.body || {};
+    if (status !== "successful") return res.status(202).json({ ignored: true });
+
+    const db = admin.firestore();
+    const ref = db.collection("selar_pending").doc(reference);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "Pending token not found" });
+
+    const pending = snap.data();
+    await fulfillVipPayment({
+      uid: pending.uid,
+      provider: "selar",
+      transactionId: reference,
+      plan: pending.plan,
+      amount: Number(amount || pending.amount),
+      raw: req.body,
+    });
+
+    await ref.set({
+      used: true,
+      verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "Webhook processing failed" });
+  }
+});
+
+
+1.6 Frontend payment changes
+----------------------------
+
+Remove direct calls to:
+- upgradeToVip() from payment success
+- verifySelarOrder() client transaction updates
+- checkPaymentStatus() as a direct fulfillment trigger
+
+New frontend helper sketch:
+
+async function getFirebaseBearer() {
+  const current = auth.currentUser;
+  if (!current) throw new Error("Login required");
+  return `Bearer ${await current.getIdToken()}`;
+}
+
+export async function initiateFapshiVip(plan, email) {
+  const backendUrl = import.meta.env.VITE_BACKEND_URL.replace(/\/$/, "");
+  const res = await fetch(`${backendUrl}/api/payments/fapshi/initiate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: await getFirebaseBearer(),
+    },
+    body: JSON.stringify({
+      plan,
+      email,
+      redirectUrl: `${window.location.origin}${window.location.pathname}`,
+    }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error || "Payment initiation failed");
+  return res.json();
+}
+
+export async function verifyFapshiVip(transId) {
+  const backendUrl = import.meta.env.VITE_BACKEND_URL.replace(/\/$/, "");
+  const res = await fetch(`${backendUrl}/api/payments/fapshi/verify`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: await getFirebaseBearer(),
+    },
+    body: JSON.stringify({ transId }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error || "Payment verification failed");
+  return res.json();
+}
+
+Acceptance criteria
+-------------------
+- A non-admin user can pay and receive VIP through backend Admin SDK.
+- A non-admin user cannot manually write VIP fields in Firestore.
+- Reusing the same transaction does not extend VIP or duplicate referral commission.
+- Selar/Fapshi plan amount mismatch is rejected.
+- No payment flow depends on localStorage for plan trust.
+
+
+PHASE 2 - FIRESTORE RULES HARDENING
+===================================
+
+Priority: P0
+Target duration: 1-2 days
+Risk reduced: private data leakage, payout tampering, schema spoofing
+
+2.1 Replace broad profile read
+------------------------------
+
+Current:
+allow read: if request.auth != null;
+
+Target:
+- user can read own profile
+- admin can read all profiles
+- referral lookup uses referral_codes only
+
+Rules sketch:
+
+function signedIn() {
+  return request.auth != null;
+}
+
+function isOwner(userId) {
+  return signedIn() && request.auth.uid == userId;
+}
+
+function isAdmin() {
+  return signedIn()
+    && exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
+    && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isAdmin == true;
+}
+
+match /profiles/{userId} {
+  allow get: if isOwner(userId) || isAdmin();
+  allow list: if isAdmin();
+
+  allow create: if isOwner(userId)
+    && request.resource.data.keys().hasOnly([
+      "uid", "email", "displayName", "isVip", "isAdmin", "isBlocked",
+      "referralCode", "referralCount", "referralEarnings", "lifetimeEarnings",
+      "createdAt"
+    ])
+    && request.resource.data.uid == request.auth.uid
+    && request.resource.data.isVip == false
+    && request.resource.data.isAdmin == false
+    && request.resource.data.isBlocked == false
+    && request.resource.data.referralCount == 0
+    && request.resource.data.referralEarnings == 0
+    && request.resource.data.lifetimeEarnings == 0;
+
+  allow update: if (
+    isOwner(userId)
+    && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+      "isVip", "vipExpiry", "vipPlan", "totalPaid", "isAdmin", "isBlocked",
+      "referralEarnings", "lifetimeEarnings", "referralCount"
+    ])
+  ) || isAdmin();
+}
+
+
+2.2 Lock payout updates
+-----------------------
+
+Rules sketch:
+
+match /payout_requests/{reqId} {
+  allow create: if signedIn()
+    && request.resource.data.userId == request.auth.uid
+    && request.resource.data.status == "pending"
+    && request.resource.data.amount is number
+    && request.resource.data.amount >= 1000
+    && request.resource.data.keys().hasOnly([
+      "userId", "userEmail", "amount", "phoneNumber", "status", "date", "paymentMethod"
+    ]);
+
+  allow get: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+  allow list: if isAdmin();
+  allow update, delete: if isAdmin();
+}
+
+Better target:
+- even admin payout updates should happen through backend Admin SDK.
+- if so, set allow update/delete: if false and use server endpoints.
+
+
+2.3 Add vault_days rules
+------------------------
+
+The app uses vault_days but rules currently do not define it.
+
+Rules sketch:
+
+match /vault_days/{docId} {
+  allow read, write: if signedIn()
+    && request.resource.data.uid == request.auth.uid;
+}
+
+For update/delete, resource.data.uid should also be checked:
+
+match /vault_days/{docId} {
+  allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+  allow read, update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+}
+
+
+2.4 Fix selar_pending plan mismatch
+-----------------------------------
+
+If daily remains a real plan, allow it:
+
+request.resource.data.plan in ["daily", "weekly", "monthly", "quarterly", "annual"]
+
+But client update remains false. Backend Admin SDK bypasses rules.
+
+Acceptance criteria
+-------------------
+- Users can only read their own private profile.
+- Admin can still list profiles in Admin panel.
+- Referral lookup still works through referral_codes.
+- Users cannot update payout status or payout amount after creation.
+- Payment/VIP updates happen only through Admin SDK.
+
+
+PHASE 3 - ADMIN API AND AI PROXY SECURITY
+=========================================
+
+Priority: P0/P1
+Target duration: 1-2 days
+Risk reduced: API quota abuse, flaky admin actions, stale/null token requests
+
+3.1 Require auth for AI proxy endpoints
+---------------------------------------
+
+Current:
+- /api/gemini/generate is public to allowed CORS origins.
+- /api/openai/generate is public to allowed CORS origins.
+
+Target:
+- Admin-only for arbitrary model/prompt/config.
+- If user-facing AI features exist, expose narrow task-specific endpoints.
+
+Server sketch:
+
+app.post("/api/gemini/generate", adminAuth, geminiLimiter, async (req, res) => {
+  // existing handler
+});
+
+app.post("/api/openai/generate", adminAuth, openaiLimiter, async (req, res) => {
+  // existing handler
+});
+
+For non-admin user feature:
+
+app.post("/api/ai/explain-pick", requireFirebaseUser, userAiLimiter, async (req, res) => {
+  const { fixtureId } = req.body || {};
+  // Load known prediction from Firestore.
+  // Generate explanation from server-controlled prompt only.
+});
+
+
+3.2 Add reusable adminFetch helper
+----------------------------------
+
+Suggested file:
+services/adminApi.ts
+
+Code sketch:
+
+import { auth } from "../firebaseConfig";
+
+let cachedJwt: { token: string; expiresAt: number } | null = null;
+
+const backendUrl = () => {
+  const url = import.meta.env.VITE_BACKEND_URL;
+  if (!url) throw new Error("VITE_BACKEND_URL is not configured");
+  return url.replace(/\/$/, "");
+};
+
+async function fetchAdminJwt(force = false): Promise<string> {
+  const now = Date.now();
+  if (!force && cachedJwt && cachedJwt.expiresAt - 30_000 > now) {
+    return cachedJwt.token;
+  }
+
+  const user = auth.currentUser;
+  if (!user) throw new Error("Admin login required");
+
+  const idToken = await user.getIdToken(force);
+  const res = await fetch(`${backendUrl()}/api/admin/token`, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.token) {
+    throw new Error(data.error || "Could not get admin token");
+  }
+
+  cachedJwt = {
+    token: data.token,
+    expiresAt: Date.now() + Number(data.expiresIn || 900) * 1000,
+  };
+  sessionStorage.setItem("admin_jwt", cachedJwt.token);
+  return cachedJwt.token;
+}
+
+export async function adminFetch(path: string, init: RequestInit = {}) {
+  let token = await fetchAdminJwt();
+  let res = await fetch(`${backendUrl()}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init.headers || {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (res.status === 401) {
+    token = await fetchAdminJwt(true);
+    res = await fetch(`${backendUrl()}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init.headers || {}),
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  }
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || `Admin request failed: ${res.status}`);
+  return data;
+}
+
+
+3.3 Replace Admin.tsx fetch calls
+---------------------------------
+
+Before:
+
+const response = await fetch(`${backendUrl}/api/admin/trigger-quant`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${adminJwt}` },
+  body: JSON.stringify({})
+});
+
+After:
+
+const result = await adminFetch("/api/admin/trigger-quant", {
+  method: "POST",
+  body: JSON.stringify({}),
+});
+
+Remove all unused VITE_ADMIN_API_SECRET reads from Admin.tsx.
+
+3.4 Keep legacy x-admin-token out of browser paths
+--------------------------------------------------
+
+Keep x-admin-token only if needed for server-to-server jobs. Never expose or read
+VITE_ADMIN_API_SECRET in frontend files.
+
+Acceptance criteria
+-------------------
+- Admin buttons never send Bearer null.
+- Admin token refreshes automatically after expiry.
+- Public users cannot call arbitrary OpenAI/Gemini proxy endpoints.
+- VITE_ADMIN_API_SECRET no longer appears in frontend source.
+
+
+PHASE 4 - XSS AND CONTENT SAFETY
+================================
+
+Priority: P0/P1
+Target duration: 1 day
+Risk reduced: stored XSS through generated/admin blog content
+
+4.1 Sanitize blog HTML before React rendering
+---------------------------------------------
+
+Current:
+BlogPost.tsx renders post.content directly with dangerouslySetInnerHTML.
+
+Suggested install/use:
+- isomorphic-dompurify is already present.
+
+Code sketch:
+
+import DOMPurify from "isomorphic-dompurify";
+
+const cleanContent = React.useMemo(() => {
+  return DOMPurify.sanitize(post.content || "", {
+    ALLOWED_TAGS: [
+      "p", "h2", "h3", "ul", "ol", "li", "strong", "em", "b", "i", "br", "span", "a"
+    ],
+    ALLOWED_ATTR: ["href", "target", "rel"],
+    FORBID_TAGS: ["script", "style", "iframe", "object", "embed", "xmp"],
+  });
+}, [post.content]);
+
+Then:
+
+dangerouslySetInnerHTML={{ __html: cleanContent }}
+
+Also force safe link attributes:
+
+const cleanContent = DOMPurify.sanitize(raw, {
+  ADD_ATTR: ["target"],
+  ALLOWED_URI_REGEXP: /^https?:\/\//i,
+});
+
+
+4.2 Escape server-side SEO tags
+-------------------------------
+
+Current server injects title and description into HTML strings.
+
+Add helper:
+
+function escapeHtmlAttr(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function escapeHtmlText(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+Use:
+
+const safeTitle = escapeHtmlText(title);
+const safeDescription = escapeHtmlAttr(description);
+
+const seoTags = `
+  <title>${safeTitle}</title>
+  <meta name="description" content="${safeDescription}" />
+  <meta property="og:title" content="${escapeHtmlAttr(title)}" />
+  <meta property="og:description" content="${safeDescription}" />
+`;
+
+
+4.3 Tighten sanitize-html server config
+---------------------------------------
+
+Remove arbitrary style attributes unless required:
+
+allowedAttributes: {
+  a: ["href", "target", "rel"]
+}
+
+Transform links:
+
+transformTags: {
+  a: (tagName, attribs) => {
+    const href = attribs.href || "";
+    if (!/^https?:\/\//i.test(href)) {
+      return { tagName: "span", attribs: {}, text: attribs.text || "" };
+    }
+    return {
+      tagName,
+      attribs: {
+        href,
+        target: "_blank",
+        rel: "noopener noreferrer",
+      },
+    };
+  },
+}
+
+Acceptance criteria
+-------------------
+- Stored blog HTML cannot execute script in browser render path.
+- SEO title/description cannot break out of tags/attributes.
+- Dependency audit no longer flags current sanitize-html critical issue after updates.
+
+
+PHASE 5 - DEPENDENCY SECURITY CLEANUP
+=====================================
+
+Priority: P0/P1
+Target duration: 1-2 days
+Risk reduced: known CVEs in production dependencies
+
+Tasks
+-----
+1. Run:
+
+   npm audit fix
+
+2. Re-run:
+
+   npm audit --audit-level=moderate
+   npm run check
+
+3. If vulnerabilities remain, manually update direct deps:
+
+   npm install vite@latest react-router-dom@latest express-rate-limit@latest sanitize-html@latest firebase-admin@latest
+
+4. Be careful with firebase-admin:
+   npm audit suggested a force path that may downgrade firebase-admin. Do not blindly
+   accept breaking downgrades. Prefer upgrading transitive packages through latest
+   compatible direct dependencies.
+
+5. If a vulnerability is dev-only and not exploitable in production, document it:
+
+   SECURITY_EXCEPTIONS.md
+
+Example entry:
+
+Package: <name>
+Severity: <severity>
+Path: <dependency path>
+Reason accepted: dev-only build-time dependency, no untrusted input reaches it
+Review date: YYYY-MM-DD
+Owner: engineering
+
+Acceptance criteria
+-------------------
+- npm audit has zero critical/high production vulnerabilities.
+- Remaining moderate/dev-only findings are documented.
+- Build and typecheck still pass.
+
+
+PHASE 6 - ADMIN PANEL RELIABILITY AND UX
+========================================
+
+Priority: P1
+Target duration: 1-2 days
+Risk reduced: broken admin actions, hard-to-debug operations
+
+Tasks
+-----
+1. Replace all admin backend fetches with adminFetch().
+2. Remove unused adminToken constants.
+3. Replace alert() with toast/status UI where practical.
+4. Add per-action error messages.
+5. Disable buttons when admin JWT is unavailable.
+6. Add visible last-run result for:
+   - quant generation
+   - quant grading
+   - basketball generation
+   - performance recompute
+   - blog generation
+   - telegram test/broadcast
+
+Code sketch:
+
+const [actionStatus, setActionStatus] = useState<Record<string, string>>({});
+
+async function runAdminAction(key: string, path: string, body?: unknown) {
+  setActionStatus(s => ({ ...s, [key]: "Running..." }));
+  try {
+    const data = await adminFetch(path, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    setActionStatus(s => ({ ...s, [key]: `Success: ${data.status || "ok"}` }));
+    return data;
+  } catch (e) {
+    setActionStatus(s => ({ ...s, [key]: `Error: ${(e as Error).message}` }));
+    throw e;
+  }
+}
+
+Acceptance criteria
+-------------------
+- Admin operations have consistent loading and error states.
+- No alert-only operational flow remains for critical backend jobs.
+- Admin panel can recover from expired token without page reload.
+
+
+PHASE 7 - QUANT PRODUCT CLARITY
+===============================
+
+Priority: P1
+Target duration: 1-2 days
+Risk reduced: misleading betting UX, inflated perceived recommendation quality
+
+Current situation
+-----------------
+The quant pipeline intentionally emits picks even when no approved value bet
+exists. This is fine for a match analysis platform, but dangerous if all rows are
+presented as betting recommendations.
+
+Tasks
+-----
+1. Define categories clearly:
+
+   safe: recommended
+   value: recommended
+   lean: analysis only
+   no_edge: analysis only
+
+2. Add helper:
+
+export function isRecommendedPick(pick) {
+  return pick.category === "safe" || pick.category === "value";
+}
+
+3. Update UI sections:
+
+   Recommended Bets
+   - safe/value only
+
+   Match Analysis
+   - lean/no_edge
+
+4. Ensure performance stats only count recommended picks.
+
+5. Update free/VIP views:
+   - free users see limited recommended picks
+   - analysis-only picks are not marketed as profitable picks
+
+6. Update quant pipeline output labels:
+
+For no-edge picks:
+
+"recommendation_type": "analysis_only"
+
+For safe/value:
+
+"recommendation_type": "bet_recommendation"
+
+Code sketch in quant_pipeline.py:
+
+is_recommended = category in ("safe", "value")
+pred = {
+  ...
+  "category": category,
+  "recommendation_type": "bet_recommendation" if is_recommended else "analysis_only",
+  "is_recommended": is_recommended,
+}
+
+Acceptance criteria
+-------------------
+- Users can visually distinguish bets from analysis.
+- Stats exclude lean/no_edge picks.
+- Legal/product copy is consistent with actual recommendations.
+
+
+PHASE 8 - PERFORMANCE AND BUNDLE SIZE
+=====================================
+
+Priority: P1/P2
+Target duration: 1-2 days
+Risk reduced: slow mobile load, bad retention
+
+Current issue
+-------------
+Production build passes but emits chunks over 500 kB:
+- main app chunk
+- Firebase chunk
+
+Tasks
+-----
+1. Lazy-load more route pages:
+
+const Profile = lazy(() => import("./pages/Profile").then(m => ({ default: m.Profile })));
+const Results = lazy(() => import("./pages/Results").then(m => ({ default: m.Results })));
+const LiveScores = lazy(() => import("./pages/LiveScores").then(m => ({ default: m.LiveScores })));
+const FreePicks = lazy(() => import("./pages/FreePicks").then(m => ({ default: m.FreePicks })));
+const BlogIndex = lazy(() => import("./pages/BlogIndex").then(m => ({ default: m.BlogIndex })));
+const BlogPost = lazy(() => import("./pages/BlogPost").then(m => ({ default: m.BlogPost })));
+const ArbFinder = lazy(() => import("./pages/ArbFinder").then(m => ({ default: m.ArbFinder })));
+
+2. Lazy-load payment modal and heavy modals.
+
+3. Review Firebase imports.
+   Avoid importing admin-only/frontend-heavy modules into root app when only needed
+   inside admin or payment flows.
+
+4. Add bundle visualization if desired:
+
+   npm install -D rollup-plugin-visualizer
+
+Vite config sketch:
+
+import { visualizer } from "rollup-plugin-visualizer";
+
+plugins: [
+  react(),
+  swVersionPlugin(),
+  process.env.ANALYZE ? visualizer({ filename: "dist/stats.html" }) : null,
+].filter(Boolean)
+
+5. Rebuild and compare chunk sizes.
+
+Acceptance criteria
+-------------------
+- Main initial chunk is materially smaller.
+- Firebase/admin-heavy code is not all loaded on first landing page render.
+- Build still passes.
+
+
+PHASE 9 - TESTING AND QA
+========================
+
+Priority: P1
+Target duration: 2-4 days
+Risk reduced: regressions in auth/payment/admin/quant flows
+
+9.1 Add test tooling
+--------------------
+
+Install:
+
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+
+package.json:
+
+{
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run test && npm run build"
+  }
+}
+
+vite.config.ts:
+
+test: {
+  environment: "jsdom",
+  setupFiles: "./src/test/setup.ts"
+}
+
+src/test/setup.ts:
+
+import "@testing-library/jest-dom";
+
+
+9.2 Unit tests to add
+---------------------
+
+Payment:
+- plan config maps days and amounts correctly
+- inferPlanFromAmount returns expected plan
+- fulfillment is idempotent
+- mismatched Fapshi amount rejects
+
+Auth/profile:
+- expired VIP is locally treated as inactive
+- normal users cannot update protected fields
+
+Admin:
+- adminFetch obtains JWT
+- adminFetch refreshes on 401
+- adminFetch rejects when no current user
+
+Blog:
+- sanitizer removes script/xmp/iframe
+- sanitizer preserves safe h2/p/a tags
+
+Quant:
+- normalizeQuantPrediction returns stable id
+- category safe/value maps to recommended
+- category lean/no_edge maps to analysis only
+
+
+9.3 Firestore emulator rule tests
+---------------------------------
+
+Add Firebase emulator tests if practical.
+
+Test cases:
+- user can create own profile with safe defaults
+- user cannot set isVip true on create
+- user cannot update isVip/vipPlan/totalPaid
+- user cannot read another user's profile
+- admin can list profiles
+- user can create payout request
+- user cannot update payout request status
+- user can read own vault_days
+- user cannot read another user's vault_days
+
+Acceptance criteria
+-------------------
+- npm run test passes.
+- npm run check includes tests.
+- Firestore rules have automated coverage for protected fields.
+
+
+PHASE 10 - TEXT ENCODING, TYPES, AND CODE HEALTH
+================================================
+
+Priority: P2
+Target duration: 2-3 days
+Risk reduced: unprofessional UX, hidden type bugs, maintainability drag
+
+10.1 Fix mojibake
+-----------------
+
+Search:
+
+rg -n "â|Ã|ð|�" App.tsx pages components services context backend server.js
+
+Replace broken sequences with proper UTF-8 or ASCII.
+
+Examples:
+- âœ… -> check mark text or "Success"
+- Ã© -> e / proper é if file supports UTF-8
+- â€” -> -
+- ðŸŽ‰ -> remove or replace with plain text
+
+Given repo editing preference, use ASCII unless the file already clearly uses
+UTF-8 and the UI needs French accents.
+
+
+10.2 Remove @ts-ignore where practical
+--------------------------------------
+
+Search:
+
+rg -n "@ts-ignore|any" App.tsx pages components services context
+
+Fix priority:
+1. auth/payment/admin/db
+2. prediction types
+3. UI components
+
+10.3 Add shared types
+---------------------
+
+Suggested file:
+types/payment.ts
+
+export type VipPlan = "daily" | "weekly" | "monthly" | "quarterly" | "annual";
+
+export interface PaymentIntent {
+  provider: "fapshi" | "selar";
+  uid: string;
+  plan: VipPlan;
+  amount: number;
+  status: "pending" | "fulfilled" | "failed";
+  transId?: string;
+  reference?: string;
+}
+
+Suggested file:
+types/prediction.ts
+
+export type PredictionCategory = "safe" | "value" | "lean" | "no_edge" | "risky";
+export type RecommendationType = "bet_recommendation" | "analysis_only";
+
+export function isBetRecommendation(category: PredictionCategory): boolean {
+  return category === "safe" || category === "value";
+}
+
+Acceptance criteria
+-------------------
+- No mojibake remains in visible UI strings.
+- Core auth/payment/admin modules have fewer type escape hatches.
+- Payment and prediction categories use shared types.
+
+
+PHASE 11 - DOCUMENTATION AND OPERATIONS
+=======================================
+
+Priority: P2
+Target duration: 1 day
+Risk reduced: deployment mistakes, lost operational knowledge
+
+Docs to add/update
+------------------
+1. PAYMENT_FLOW.md
+   - Fapshi flow
+   - Selar flow
+   - webhook requirements
+   - idempotency model
+   - transaction collections
+
+2. FIRESTORE_RULES.md
+   - protected fields
+   - admin access
+   - profile privacy
+   - payout rules
+
+3. ADMIN_OPERATIONS.md
+   - how admin JWT works
+   - how to trigger quant generation
+   - how to grade predictions
+   - how to diagnose failed jobs
+
+4. DEPLOYMENT_GUIDE.md update
+   - required frontend env vars
+   - required backend env vars
+   - which secrets must never be VITE-prefixed
+
+5. SECURITY_EXCEPTIONS.md if any audit findings remain.
+
+Acceptance criteria
+-------------------
+- A new developer can understand payment, admin, and scheduler flows from docs.
+- Env var ownership is clear.
+- Known risks are documented.
+
+
+FINAL VALIDATION CHECKLIST
+==========================
+
+Run:
+
+npm run typecheck
+npm run test
+npm run build
+npm audit --audit-level=moderate
+
+Manual smoke tests:
+1. Anonymous user can see landing/blog/public stats.
+2. User can sign up and receives non-VIP profile.
+3. User cannot read another user's profile.
+4. User can initiate Fapshi payment.
+5. Backend verifies successful payment and grants VIP.
+6. Re-verifying same transId does not duplicate VIP/referral reward.
+7. Selar pending token cannot be marked used from browser.
+8. Selar webhook/verification grants VIP server-side.
+9. VIP expiry removes access.
+10. Admin can obtain JWT.
+11. Admin can trigger quant generation.
+12. Admin can trigger grading.
+13. Non-admin cannot call admin endpoints.
+14. Non-admin cannot call arbitrary AI proxy endpoints.
+15. Blog with script/xmp/iframe content renders safely without execution.
+16. Recommended bets and analysis-only picks are visually distinct.
+17. Mobile build loads without obvious layout overlap.
+
+
+EXPECTED FINAL GRADES
+=====================
+
+Security: A-
+Payments: A
+Firestore/data rules: A-
+Backend/API: A-
+Frontend/UI: B+/A-
+Quant/product clarity: A-
+Testing: B+/A-
+Performance: B+
+Documentation/ops: A-
+
+Overall target: A-.
+Overall A is realistic after the payment webhooks, emulator tests, and dependency
+audit stay clean for at least one full release cycle.
+

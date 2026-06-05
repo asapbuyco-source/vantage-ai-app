@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { verifySelarOrder } from './services/selar';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,9 +11,7 @@ import { Onboarding } from './components/Onboarding';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Home } from './pages/Home';
 import { FreePicks } from './pages/FreePicks';
-import { VIP } from './pages/VIP';
 import { Profile } from './pages/Profile';
-import { Admin } from './pages/Admin';
 import { BettingGuide } from './pages/BettingGuide';
 import { TicketWizard } from './components/TicketWizard';
 import { LandingPage } from './pages/LandingPage';
@@ -30,6 +28,9 @@ import { enableFirestorePersistence } from './firebaseConfig';
 import { TrialOfferPopup } from './components/TrialOfferPopup';
 import { WEEKLY_REGULAR_PRICE, WEEKLY_TRIAL_PRICE } from './src/constants/pricing';
 import { PaymentModal } from './components/PaymentModal';
+
+const VIP = lazy(() => import('./pages/VIP').then(m => ({ default: m.VIP })));
+const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 
 
 function AppContent() {
@@ -425,6 +426,7 @@ function AppContent() {
 
           <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 pt-6 min-h-screen pb-24 md:pb-6" style={{ paddingTop: (showRenewalBanner || showTrialUpsell) ? '4rem' : undefined }}>
             <AnimatePresence mode="wait">
+              <Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center"><Loader2 className="animate-spin text-vantage-cyan mb-4" size={40} /><p className="text-gray-500 text-sm font-medium animate-pulse">Loading...</p></div>}>
               {
                 // @ts-ignore
                 <motion.div
@@ -450,6 +452,7 @@ function AppContent() {
                   </ErrorBoundary>
                 </motion.div>
               }
+              </Suspense>
             </AnimatePresence>
           </main>
 

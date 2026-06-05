@@ -93,7 +93,7 @@ export const BetSlip: React.FC = () => {
                                             animate={{ opacity: 1, x: 0 }}
                                             exit={{ opacity: 0, x: 20, height: 0, marginBottom: 0 }}
                                             transition={{ delay: i * 0.04 }}
-                                            className="flex items-center gap-3 bg-white/5 rounded-2xl p-3 border border-white/10"
+                                            className="flex items-center gap-3 bg-slate-50 dark:bg-white/5 rounded-2xl p-3 border border-slate-200 dark:border-white/10"
                                         >
                                             {/* Logos */}
                                             <div className="flex -space-x-2 shrink-0">

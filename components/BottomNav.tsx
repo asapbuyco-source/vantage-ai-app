@@ -49,7 +49,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
               {/* Active sliding indicator bar */}
               {isActive && (
                 <motion.div
-                  className="absolute bottom-0 left-2 right-2 h-0.5 bg-vantage-cyan rounded-full md:block"
+                  className="absolute bottom-0 left-2 right-2 h-0.5 bg-vantage-cyan rounded-full md:block will-change-transform"
                   layoutId="activeTab"
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 />
@@ -59,7 +59,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
                 // @ts-ignore
                 <motion.div
                   layoutId="nav-pill"
-                  className="absolute inset-x-1 top-1.5 bottom-1.5 bg-vantage-cyan/12 rounded-2xl md:hidden"
+                  className="absolute inset-x-1 top-1.5 bottom-1.5 bg-vantage-cyan/12 rounded-2xl md:hidden will-change-transform"
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 />
               )}

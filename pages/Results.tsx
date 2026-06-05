@@ -171,7 +171,7 @@ export const Results: React.FC = () => {
     const statusBorder: Record<MatchStatus, string> = {
         won: 'bg-green-500/5 border-green-500/20',
         lost: 'bg-red-500/5 border-red-500/20',
-        pending: 'bg-white/[0.02] border-white/5',
+        pending: 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/5',
         void: 'bg-gray-500/5 border-gray-500/20',
     };
 
