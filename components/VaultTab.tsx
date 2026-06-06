@@ -11,6 +11,9 @@ import { db } from '../firebaseConfig';
 
 const DEFAULT_BANKROLL = 10000;
 const MAX_VAULT_PICKS = 7;
+const VAULT_STRATEGY_VERSION = 'vault-sim-v2';
+const VAULT_STRATEGY_NAME = 'Simulator EV Quality Top 7';
+const VAULT_DECISION_TIME_LOCAL = '19:00 Africa/Lagos';
 
 const vaultCategoryPriority: Record<string, number> = {
     safe: 2,
@@ -31,10 +34,30 @@ function getVaultQualityScore(match: any): number {
     );
 }
 
+function getVaultKellyPct(match: any): number {
+    return match.kelly_stake ?? match.kellyStakePct ?? 0;
+}
+
+function getVaultOdds(match: any): number {
+    return match.odds ?? match.lockedOdds ?? 0;
+}
+
+function getVaultProbability(match: any): number {
+    return match.probability ?? ((match.confidence ?? 0) / 100);
+}
+
+function getVaultGeneratedAt(match: any, lockedAt: string): string {
+    return match.generated_at ?? match.generatedAt ?? match.created_at ?? match.createdAt ?? lockedAt;
+}
+
+function getVaultKickoffUtc(match: any): string {
+    return match.kickoff_utc ?? match.kickoffUtc ?? match.kickoff ?? '';
+}
+
 function selectVaultPicks(predictions: any[]): any[] {
     return [...predictions]
         .filter(m => getVaultEvPct(m) >= 2)
-        .filter(m => (m.odds ?? 0) > 1 && (m.probability ?? 0) > 0 && (m.kelly_stake ?? 0) > 0)
+        .filter(m => getVaultOdds(m) > 1 && getVaultProbability(m) > 0 && getVaultKellyPct(m) > 0)
         .sort((a, b) => {
             const categoryDiff = (vaultCategoryPriority[b.category ?? ''] ?? -1) - (vaultCategoryPriority[a.category ?? ''] ?? -1);
             if (categoryDiff !== 0) return categoryDiff;
@@ -114,7 +137,9 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                     day.bankrollStart = currentBankroll;
                     for (let pick of day.picks) {
                         if (pick.result === 'pending') {
-                            pick.stakeAmount = Math.round(currentBankroll * ((pick.kellyStakePct || 0) / 100));
+                            if (!pick.lockedAt) {
+                                pick.stakeAmount = Math.round(currentBankroll * ((pick.kellyStakePct || 0) / 100));
+                            }
                         }
                     }
                     dayUpdated = true;
@@ -198,15 +223,29 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
         }
 
         const topPicks = selectVaultPicks(quantPredictions);
+        const lockedAt = new Date().toISOString();
 
         const picks: VaultPick[] = topPicks.map(m => ({
             fixtureId: m.fixture_id || m.id,
             homeTeam: m.home_team || m.homeTeam,
             awayTeam: m.away_team || m.awayTeam,
             market: m.prediction_en || m.prediction || m.bet_type,
-            odds: m.odds || 1.5,
-            kellyStakePct: m.kelly_stake || 0,
-            stakeAmount: Math.round(startingBankroll * ((m.kelly_stake || 0) / 100)),
+            odds: getVaultOdds(m),
+            lockedOdds: getVaultOdds(m),
+            kickoffUtc: getVaultKickoffUtc(m),
+            lockedAt,
+            generatedAt: getVaultGeneratedAt(m, lockedAt),
+            strategyVersion: VAULT_STRATEGY_VERSION,
+            evPct: getVaultEvPct(m),
+            probability: getVaultProbability(m),
+            expectedValue: m.expected_value ?? 0,
+            inefficiency: m.inefficiency ?? 0,
+            category: m.category ?? '',
+            valueRank: m.value_rank ?? '',
+            qualityScore: getVaultQualityScore(m),
+            source: 'vault_strategy',
+            kellyStakePct: getVaultKellyPct(m),
+            stakeAmount: Math.round(startingBankroll * (getVaultKellyPct(m) / 100)),
             result: 'pending',
             profit: null,
             confirmed: true
@@ -218,7 +257,11 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             picks,
             bankrollStart: startingBankroll,
             bankrollEnd: startingBankroll,
-            status: 'active'
+            status: 'active',
+            lockedAt,
+            decisionTimeLocal: VAULT_DECISION_TIME_LOCAL,
+            strategyVersion: VAULT_STRATEGY_VERSION,
+            strategyName: VAULT_STRATEGY_NAME
         };
         setVaultDay(day);
         await saveVaultDay(user!.uid, todayKey, day);

@@ -60,6 +60,9 @@ from data_pipeline import TeamStats
 
 LAGOS_TZ = timezone(timedelta(hours=1))
 MAX_DAILY_PICKS = 7
+VAULT_STRATEGY_VERSION = "vault-sim-v2"
+VAULT_STRATEGY_NAME = "Simulator EV Quality Top 7"
+VAULT_DECISION_TIME_LOCAL = "19:00 Africa/Lagos"
 
 # ── Vault grading (matches replay_engine grade_prediction) ─────────────────
 def grade_prediction(prediction: str, result: str) -> str:
@@ -275,6 +278,9 @@ def run_vault_simulation(days: int, starting_bankroll: float, use_cache: bool = 
 
             daily_picks.append({
                 "date": date_str,
+                "strategy_version": VAULT_STRATEGY_VERSION,
+                "strategy_name": VAULT_STRATEGY_NAME,
+                "decision_time_local": VAULT_DECISION_TIME_LOCAL,
                 "fixture_id": fid,
                 "home_team": pred.get("home_team", ""),
                 "away_team": pred.get("away_team", ""),

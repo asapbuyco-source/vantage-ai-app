@@ -316,6 +316,19 @@ export interface VaultPick {
   awayTeam: string;
   market: string;
   odds: number;
+  lockedOdds?: number;
+  kickoffUtc?: string;
+  lockedAt?: string;
+  generatedAt?: string;
+  strategyVersion?: string;
+  evPct?: number;
+  probability?: number;
+  expectedValue?: number;
+  inefficiency?: number;
+  category?: string;
+  valueRank?: string;
+  qualityScore?: number;
+  source?: 'vault_strategy';
   kellyStakePct: number;
   stakeAmount: number;
   result: 'pending' | 'won' | 'lost' | 'void';
@@ -330,4 +343,8 @@ export interface VaultDay {
   bankrollStart: number;
   bankrollEnd: number | null;
   status: 'locked' | 'active' | 'completed' | 'missed';
+  lockedAt?: string;
+  decisionTimeLocal?: string;
+  strategyVersion?: string;
+  strategyName?: string;
 }
