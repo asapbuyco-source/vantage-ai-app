@@ -10,6 +10,38 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
 const DEFAULT_BANKROLL = 10000;
+const MAX_VAULT_PICKS = 7;
+
+const vaultCategoryPriority: Record<string, number> = {
+    safe: 2,
+    value: 1,
+    risky: 0,
+    lean: -1,
+};
+
+function getVaultEvPct(match: any): number {
+    return match.ev_pct ?? ((match.expected_value ?? 0) * 100);
+}
+
+function getVaultQualityScore(match: any): number {
+    return (
+        (match.expected_value ?? 0) * 0.4 +
+        (match.probability ?? 0) * 0.4 +
+        (match.inefficiency ?? 0) * 0.2
+    );
+}
+
+function selectVaultPicks(predictions: any[]): any[] {
+    return [...predictions]
+        .filter(m => getVaultEvPct(m) >= 2)
+        .filter(m => (m.odds ?? 0) > 1 && (m.probability ?? 0) > 0 && (m.kelly_stake ?? 0) > 0)
+        .sort((a, b) => {
+            const categoryDiff = (vaultCategoryPriority[b.category ?? ''] ?? -1) - (vaultCategoryPriority[a.category ?? ''] ?? -1);
+            if (categoryDiff !== 0) return categoryDiff;
+            return getVaultQualityScore(b) - getVaultQualityScore(a);
+        })
+        .slice(0, MAX_VAULT_PICKS);
+}
 
 
 function calcBankrollEnd(picks: VaultPick[], startBankroll: number): number {
@@ -165,9 +197,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             return;
         }
 
-        const topPicks = quantPredictions
-            .filter(m => (m.ev_pct ?? ((m.expected_value ?? 0) * 100)) >= 2)
-            .slice(0, 7);
+        const topPicks = selectVaultPicks(quantPredictions);
 
         const picks: VaultPick[] = topPicks.map(m => ({
             fixtureId: m.fixture_id || m.id,
