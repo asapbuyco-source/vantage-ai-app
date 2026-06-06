@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface TeamLogoProps {
   src?: string;
@@ -9,6 +9,10 @@ interface TeamLogoProps {
 
 export const TeamLogo: React.FC<TeamLogoProps> = ({ src, teamName, className = "w-8 h-8" }) => {
   const [error, setError] = useState(false);
+
+  useEffect(() => {
+    setError(false);
+  }, [src]);
 
   if (!src || error) {
     return (
@@ -24,6 +28,7 @@ export const TeamLogo: React.FC<TeamLogoProps> = ({ src, teamName, className = "
       alt={teamName} 
       className={`${className} object-contain shrink-0`} 
       onError={() => setError(true)} 
+      decoding="async"
       loading="lazy"
     />
   );
