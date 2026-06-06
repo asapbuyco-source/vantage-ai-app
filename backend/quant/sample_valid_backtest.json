@@ -1,0 +1,33 @@
+{
+  "documents": [
+    {
+      "date": "2026-05-01",
+      "generated_at": "2026-05-01T08:00:00Z",
+      "predictions": [
+        {
+          "fixture_id": "sample-1",
+          "home_team": "Home",
+          "away_team": "Away",
+          "bet_type": "Over 1.5 Goals",
+          "odds": 1.8,
+          "status": "won",
+          "expected_value": 0.08,
+          "kelly_stake": 2.5,
+          "kickoff_utc": "2026-05-01T12:00:00Z"
+        },
+        {
+          "fixture_id": "sample-2",
+          "home_team": "Late",
+          "away_team": "Rejected",
+          "bet_type": "Home Win",
+          "odds": 2.1,
+          "status": "won",
+          "expected_value": 0.10,
+          "kelly_stake": 2.5,
+          "generated_at": "2026-05-01T11:45:00Z",
+          "kickoff_utc": "2026-05-01T12:00:00Z"
+        }
+      ]
+    }
+  ]
+}
