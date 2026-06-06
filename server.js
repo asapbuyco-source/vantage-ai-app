@@ -308,7 +308,7 @@ app.post('/api/gemini/generate', adminAuth, geminiLimiter, async (req, res) => {
 // Admin authentication middleware — accepts either:
 // 1. x-admin-token header matching ADMIN_API_SECRET (legacy)
 // 2. Authorization: Bearer <JWT> signed with ADMIN_API_SECRET or ADMIN_JWT_SECRET
-const adminAuth = (req, res, next) => {
+function adminAuth(req, res, next) {
     const secret = process.env.ADMIN_API_SECRET;
     const jwtSecret = process.env.ADMIN_JWT_SECRET || secret;
     const bearerToken = req.headers['authorization']?.replace('Bearer ', '');
@@ -331,7 +331,7 @@ const adminAuth = (req, res, next) => {
     }
 
     return res.status(401).json({ error: 'Unauthorized — valid x-admin-token or Bearer JWT required' });
-};
+}
 
 // GET /api/admin/token — exchange a Firebase ID token for a short-lived admin JWT.
 // The caller must be authenticated with Firebase and have isAdmin:true in Firestore.

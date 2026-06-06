@@ -229,7 +229,7 @@ export async function seedStaticData(db, token, { force = false } = {}) {
 }
 
 // ── CLI runner ────────────────────────────────────────────────────────────────
-if (process.argv[1].includes('staticDataSeeder')) {
+if (process.argv[1]?.includes('staticDataSeeder')) {
     const token = process.env.SPORTMONKS_API_TOKEN;
     if (!admin.apps.length) {
         try {
