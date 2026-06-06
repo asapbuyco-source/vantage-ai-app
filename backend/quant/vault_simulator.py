@@ -318,7 +318,7 @@ def run_vault_simulation(days: int, starting_bankroll: float, use_cache: bool = 
         for pick in daily_picks:
             # Recalculate stake based on bankroll at time of pick
             # (matches VaultTab: stake = bankroll * kelly_pct / 100)
-            stake = round(bankroll * (pick["kelly_pct"] / 100) / 100, 2)
+            stake = round(bankroll * (pick["kelly_pct"] / 100), 2)
             stake = min(stake, bankroll * MAX_STAKE_PCT)  # 5% cap
             stake = max(stake, 1.0) if stake >= 1 else 0  # Min 1 FCFA
             if stake < 1:
