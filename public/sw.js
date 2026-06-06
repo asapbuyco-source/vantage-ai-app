@@ -77,9 +77,12 @@ self.addEventListener('fetch', (event) => {
   // Skip chrome-extension and non-http(s) requests
   if (!url.protocol.startsWith('http')) return;
 
+  // Let the browser handle cross-origin requests directly. If the service worker
+  // re-fetches external images/fonts, CSP applies connect-src instead of img-src.
+  if (url.origin !== self.location.origin) return;
+
   // Never serve the service worker or HTML entry point from an old cache.
   if (
-    url.origin === self.location.origin &&
     (url.pathname === '/sw.js' || url.pathname === '/index.html')
   ) {
     event.respondWith(fetch(new Request(request, { cache: 'no-store' })));
