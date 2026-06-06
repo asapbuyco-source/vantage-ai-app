@@ -40,6 +40,7 @@ export const PWAInstallButton: React.FC = () => {
       .register('/sw.js', { scope: '/', updateViaCache: 'none' })
       .then((reg) => {
         setSwRegistration(reg);
+        reg.update().catch((err) => console.warn('[PWA] SW update check failed:', err));
         // Tell existing SW to skip waiting so updates apply quickly
         if (reg.waiting) {
           reg.waiting.postMessage({ type: 'SKIP_WAITING' });

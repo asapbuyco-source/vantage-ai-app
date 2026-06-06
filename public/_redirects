@@ -1,0 +1,9 @@
+# Redirect rogue .html request directly to root (301 Permanent) to clear Google Search Console warnings
+/.html / 301
+
+# Allow explicit SEO files to passthrough
+/sitemap.xml /sitemap.xml 200
+/robots.txt /robots.txt 200
+
+# SPA fallback
+/* /index.html 200

@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Allow: /blog/
+Allow: /predictions/
+
+Disallow: /admin
+Disallow: /profile
+Disallow: /api/
+
+Sitemap: https://vantageai.online/sitemap.xml

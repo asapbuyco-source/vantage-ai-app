@@ -9,6 +9,7 @@
     X-Content-Type-Options = "nosniff"
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    Cache-Control = "no-cache, max-age=0, must-revalidate"
     # unsafe-none is required for Firebase signInWithPopup: Firebase opens a popup and checks
     # window.closed on it. A restrictive COOP policy blocks that cross-origin window access.
     Cross-Origin-Opener-Policy = "unsafe-none"
@@ -19,7 +20,23 @@
 [[headers]]
   for = "/index.html"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
+
+# The service worker must never be cached, otherwise browsers can keep using old deploy logic
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
+
+# Keep the manifest revalidated so install metadata follows deploys
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Cache-Control = "no-cache, max-age=0, must-revalidate"
 
 # Aggressively cache static assets (Vite automatically hashes these filenames)
 [[headers]]
