@@ -10,6 +10,7 @@ import { testGeminiConnection, enrichMatchStats, setGeminiModel, getGeminiModel,
 import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, saveTodaysPredictions, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount, getInternalSettings, saveInternalSettings } from '../services/db';
 import { auth } from '../firebaseConfig';
 import { TeamLogo } from '../components/TeamLogo';
+import { adminFetch } from '../services/adminApi';
 
 interface AdminProps {
     setTab: (tab: NavigationTab) => void;
@@ -387,22 +388,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const handleGenerateData = async () => {
         setIsSystemGenerating(true);
         try {
-            const backendUrl = import.meta.env.VITE_BACKEND_URL;
-            if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
-            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
-
-            const response = await fetch(`${backendUrl}/api/admin/trigger-quant`, {
+            const result = await adminFetch('/api/admin/trigger-quant', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` },
                 body: JSON.stringify({})
             });
 
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`Backend error: ${errText}`);
-            }
-
-            const result = await response.json();
             if (result.status === 'error') {
                 alert(`❌ Quant Pipeline failed: ${result.error || result.message || 'Unknown error'}`);
             } else {
@@ -430,22 +420,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const handleGenerateBasketball = async () => {
         setIsBasketballPipelineRunning(true);
         try {
-            const backendUrl = import.meta.env.VITE_BACKEND_URL;
-            if (!backendUrl) throw new Error('VITE_BACKEND_URL is not defined');
-            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
-
-            const response = await fetch(`${backendUrl}/api/admin/generate-basketball`, {
+            const result = await adminFetch('/api/admin/generate-basketball', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` },
                 body: JSON.stringify({})
             });
 
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`Backend error: ${errText}`);
-            }
-
-            const result = await response.json();
             if (result.status === 'success') {
                 alert(`✅ Basketball Quant Pipeline complete: ${result.generated ?? 0} picks saved for ${result.date || 'today'}.`);
             } else if (result.status === 'no_games') {
@@ -464,17 +443,10 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const handleQuantPerformance = async () => {
         setIsBasketballGenerating(true);
         try {
-            const backendUrl = import.meta.env.VITE_BACKEND_URL;
-            if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
-            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
-
-            const response = await fetch(`${backendUrl}/api/admin/quant-performance`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` }
+            const result = await adminFetch('/api/admin/quant-performance', {
+                method: 'POST'
             });
 
-            if (!response.ok) throw new Error('Quant performance request failed');
-            const result = await response.json();
             if (result.status === 'success') {
                 alert(`✅ Quant performance metrics updated successfully.`);
             } else {
@@ -507,17 +479,11 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
         }
 
         try {
-            const backendUrl = import.meta.env.VITE_BACKEND_URL;
-            if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined");
-            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
-
-            const response = await fetch(`${backendUrl}/api/admin/grade-quant`, {
+            const res = await adminFetch('/api/admin/grade-quant', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` },
                 body: JSON.stringify({ date: targetDate })
             });
 
-            const res = await response.json();
             if (isMounted.current) {
                 const resultMsg = res.status === 'success' || res.graded !== undefined
                     ? `✅ Quant Graded ${res.graded ?? 0}/${res.total ?? 0} bets`
@@ -564,14 +530,9 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     const runOpenAITest = async () => {
         setTestingOpenAI(true);
         try {
-            const backendUrl = import.meta.env.VITE_BACKEND_URL;
-            if (!backendUrl) throw new Error('VITE_BACKEND_URL not set');
-            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
-            const res = await fetch(`${backendUrl}/api/admin/test-openai`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` }
+            const data = await adminFetch('/api/admin/test-openai', {
+                method: 'POST'
             });
-            const data = await res.json();
             if (isMounted.current) setOpenAITest(data);
         } catch (e: any) {
             if (isMounted.current) setOpenAITest({ status: 'error', latency: 0, model: 'gpt-4o-mini', message: e.message });
@@ -798,15 +759,9 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                     if (!window.confirm("Are you sure you want to generate today's SEO blog? Ensure football and basketball are generated first.")) return;
                                     setLoadingMatches(true);
                                     try {
-                                        const backendUrl = import.meta.env.VITE_BACKEND_URL;
-                                        if (!backendUrl) throw new Error('VITE_BACKEND_URL is not defined');
-                                        const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
-                                        const res = await fetch(`${backendUrl}/api/admin/generate-blog`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` }
+                                        const data = await adminFetch('/api/admin/generate-blog', {
+                                            method: 'POST'
                                         });
-                                        const data = await res.json();
-                                        if (!res.ok) throw new Error(data.error || 'Failed to generate blog');
                                         alert(`Blog generated successfully! Status: ${data.status}`);
                                     } catch (e: any) {
                                         alert(`Blog generation error: ${e.message}`);
@@ -890,15 +845,10 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                     if (!window.confirm("Are you sure you want to run the static data seed? This uses up to 50 API calls to cache all team/league data.")) return;
                                     setLoadingMatches(true);
                                     try {
-                                        const backendUrl = import.meta.env.VITE_BACKEND_URL;
-                                        if (!backendUrl) throw new Error('VITE_BACKEND_URL is not defined');
-                                        const res = await fetch(`${backendUrl}/api/admin/seed-static`, {
+                                        const data = await adminFetch('/api/admin/seed-static', {
                                             method: 'POST',
-                                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` },
                                             body: JSON.stringify({ force: true })
                                         });
-                                        const data = await res.json();
-                                        if (!res.ok) throw new Error(data.message || 'Failed to trigger seed');
                                         alert(`Seed started in background. Check server logs.`);
                                     } catch (e: any) {
                                         alert(`Seed trigger error: ${e.message}`);
@@ -1540,13 +1490,9 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                         setIsTelegramActing(true);
                                         setTelegramActionResult(null);
                                         try {
-                                            const backendUrl = import.meta.env.VITE_BACKEND_URL;
-                                            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
-                                            const res = await fetch(`${backendUrl}/api/admin/telegram-test`, {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` }
+                                            const data = await adminFetch('/api/admin/telegram-test', {
+                                                method: 'POST'
                                             });
-                                            const data = await res.json();
                                             setTelegramActionResult(data.status === 'success' ? '✅ Test message sent!' : `❌ ${data.error}`);
                                         } catch (e: any) {
                                             setTelegramActionResult(`❌ ${e.message}`);
@@ -1565,13 +1511,9 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                         setIsTelegramActing(true);
                                         setTelegramActionResult(null);
                                         try {
-                                            const backendUrl = import.meta.env.VITE_BACKEND_URL;
-                                            const adminToken = import.meta.env.VITE_ADMIN_API_SECRET || '';
-                                            const res = await fetch(`${backendUrl}/api/admin/telegram-broadcast`, {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminJwt}` }
+                                            const data = await adminFetch('/api/admin/telegram-broadcast', {
+                                                method: 'POST'
                                             });
-                                            const data = await res.json();
                                             if (data.status === 'success') {
                                                 setTelegramActionResult(`✅ Sent ${data.sent} picks!`);
                                                 setTelegramLastSentAt(new Date().toISOString());

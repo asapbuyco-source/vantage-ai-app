@@ -1,7 +1,7 @@
 import fetch from 'node-fetch'; // Polyfill or use native Node 18 fetch
 
 async function run() {
-    const token = process.env.SPORTMONKS_API_TOKEN || process.env.VITE_SPORTMONKS_API_TOKEN;
+    const token = process.env.SPORTMONKS_API_TOKEN;
     if (!token) { console.error('❌ SPORTMONKS_API_TOKEN not set in environment'); process.exit(1); }
     const path = '/fixtures/date/2026-02-28?include=league;participants;scores';
     const separator = path.includes('?') ? '&' : '?';

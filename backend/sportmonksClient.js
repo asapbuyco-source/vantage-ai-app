@@ -33,7 +33,7 @@ function rateLimit(key) {
 }
 
 export const fetchSportmonksServerSide = async (path) => {
-    const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+    const token = process.env.SPORTMONKS_API_TOKEN;
     if (!token) {
         console.warn('[Sportmonks] No API token configured');
         return null;

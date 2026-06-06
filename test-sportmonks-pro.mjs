@@ -37,7 +37,7 @@ function parseEnvToken(key) {
     return null;
 }
 
-const TOKEN = parseEnvToken('VITE_SPORTMONKS_API_TOKEN') || process.env.SPORTMONKS_API_TOKEN;
+const TOKEN = process.env.SPORTMONKS_API_TOKEN || parseEnvToken('SPORTMONKS_API_TOKEN');
 const BASE = 'https://api.sportmonks.com/v3/football';
 const TODAY = new Date().toISOString().split('T')[0];
 const TOMORROW = new Date(Date.now() + 86400000).toISOString().split('T')[0];

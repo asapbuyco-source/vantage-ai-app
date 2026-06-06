@@ -13,8 +13,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDoc, orderBy, runTransaction, limit, getDocs, query, where, startAfter } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
-import { checkPaymentStatus } from "../services/fapshi";
-import { DAILY_PRICE, WEEKLY_TRIAL_PRICE, WEEKLY_REGULAR_PRICE, MONTHLY_PRICE, QUARTERLY_PRICE, ANNUAL_PRICE, REFERRAL_COMMISSION_PERCENT } from '../src/constants/pricing';
+import { verifyFapshiPayment } from "../services/fapshi";
 
 interface AuthContextType {
     user: User | null;
@@ -29,7 +28,6 @@ interface AuthContextType {
     logout: () => Promise<void>;
     deleteAccount: () => Promise<void>;
     clearError: () => void;
-    upgradeToVip: (plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => Promise<void>;
     getAllUsers: (lastDoc?: any, pageSize?: number) => Promise<{ users: UserProfile[]; lastDoc: any }>;
     toggleUserVip: (uid: string, currentStatus: boolean, plan?: 'daily'|'weekly'|'monthly'|'quarterly'|'annual') => Promise<void>;
     toggleUserAdmin: (uid: string, currentStatus: boolean) => Promise<void>;
@@ -266,58 +264,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const resetPassword = async (email: string) => { await sendPasswordResetEmail(auth, email); };
 
-    const upgradeToVip = async (plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
-        if (!user) return;
-        const now = new Date();
-        let expiry = new Date();
-        if (plan === 'daily') expiry.setDate(now.getDate() + 1);
-        if (plan === 'weekly') expiry.setDate(now.getDate() + 7);
-        if (plan === 'monthly') expiry.setDate(now.getDate() + 30);
-        if (plan === 'quarterly') expiry.setDate(now.getDate() + 90);
-        if (plan === 'annual') expiry.setDate(now.getDate() + 365);
-        
-        const isFirstTime = !userProfile?.totalPaid || userProfile.totalPaid === 0;
-        const basePrice = plan === 'daily' ? DAILY_PRICE : plan === 'weekly' ? WEEKLY_REGULAR_PRICE : plan === 'monthly' ? MONTHLY_PRICE : plan === 'quarterly' ? QUARTERLY_PRICE : ANNUAL_PRICE;
-        const planCost = basePrice;
-
-        try {
-            const userRef = doc(db, "profiles", user.uid);
-            const referredBy = userProfile?.referredBy;
-
-            await runTransaction(db, async (tx) => {
-                const now = new Date();
-                let expiry = new Date();
-                if (plan === 'daily') expiry.setDate(now.getDate() + 1);
-                if (plan === 'weekly') expiry.setDate(now.getDate() + 7);
-                if (plan === 'monthly') expiry.setDate(now.getDate() + 30);
-                if (plan === 'quarterly') expiry.setDate(now.getDate() + 90);
-                if (plan === 'annual') expiry.setDate(now.getDate() + 365);
-
-                tx.update(userRef, {
-                    isVip: true,
-                    vipExpiry: expiry.toISOString(),
-                    vipPlan: plan,
-                    totalPaid: increment(planCost)
-                });
-
-                if (referredBy) {
-                    const commission = Math.floor(planCost * REFERRAL_COMMISSION_PERCENT / 100);
-                    if (commission > 0) {
-                        const referrerRef = doc(db, "profiles", referredBy);
-                        tx.update(referrerRef, {
-                            referralEarnings: increment(commission),
-                            lifetimeEarnings: increment(commission)
-                        });
-                    }
-                }
-            });
-
-            await fetchProfile(user);
-        } catch (e) {
-            console.error("Failed to upgrade VIP", e);
-        }
-    };
-
     const updateUserCountry = async (country: string) => {
         if (!user) return;
         try {
@@ -503,47 +449,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     console.warn('[AuthContext] Selar token not yet verified (used !== true). Aborting VIP grant.');
                     return false;
                 }
-                const plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' = data.plan || 'weekly';
-                await upgradeToVip(plan);
+                await fetchProfile(user);
                 localStorage.removeItem('pendingVipPlan');
                 return true;
             }
 
             // ── Fapshi (Cameroon MoMo) ───────────────────────────────
-            const result = await checkPaymentStatus(cleanTransId);
+            const result = await verifyFapshiPayment(cleanTransId);
             const isSuccess = result.status === 'SUCCESSFUL';
-            const amount = result.amount;
 
             if (isSuccess) {
-                let plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' = 'weekly';
-                const storedPlan = localStorage.getItem('pendingVipPlan') as any;
-                if (amount !== undefined) {
-                    if (amount >= 70000) plan = 'annual';
-                    else if (amount >= 18000) plan = 'quarterly';
-                    else if (amount >= 6500) plan = 'monthly';
-                    else if (amount >= 1000) plan = 'weekly';
-                    else if (amount >= 500) plan = 'daily';
-                } else {
-                    plan = storedPlan || 'weekly';
-                }
-
-                // Atomically check-and-write to prevent race-condition double-grant
-                const txRef = doc(db, 'fapshi_transactions', cleanTransId);
-                await runTransaction(db, async (tx) => {
-                    const txSnap = await tx.get(txRef);
-                    if (txSnap.exists()) {
-                        console.warn(`[AuthContext] Fapshi transId ${cleanTransId} already processed. Skipping.`);
-                        return;
-                    }
-                    tx.set(txRef, {
-                        usedAt: new Date().toISOString(),
-                        userId: user.uid,
-                        plan,
-                        amount: amount ?? null,
-                    });
-                });
-
-                await upgradeToVip(plan);
+                await fetchProfile(user);
                 localStorage.removeItem('pendingVipPlan');
                 return true;
             }
@@ -559,7 +475,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         <AuthContext.Provider value={{
             user, userProfile, loading, error, isAdmin,
             signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, clearError: () => setError(null),
-            upgradeToVip, getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, verifyTransaction,
+            getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, verifyTransaction,
             requestPayout, getPayoutRequests, processPayout, updateUserCountry, updateVaultProgress, updatePortfolioConfig
         }}>
             {children}

@@ -174,7 +174,7 @@ function AppContent() {
         localStorage.removeItem('pendingSelarRef');
 
         const result = await verifySelarOrder(selarRef);
-        if (result.success && result.plan) {
+        if (result.success) {
           await verifyTransaction(`SELAR_${selarRef}`);
           showToast(
             language === 'fr' ? '✅ Paiement Selar confirmé ! Bienvenue VIP 🎉' : '✅ Selar payment confirmed! Welcome VIP 🎉',

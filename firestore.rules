@@ -167,7 +167,7 @@ service cloud.firestore {
 
     match /fapshi_transactions/{transId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow create: if false;
       allow update, delete: if false;
     }
 

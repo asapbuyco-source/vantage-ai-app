@@ -387,7 +387,7 @@ export const initScheduler = () => {
         const inMatchHours = (lagosHour >= 11 && lagosHour <= 23) || lagosHour === 0;
         if (!inMatchHours) return;
 
-            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            const token = process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
             const url = `https://api.sportmonks.com/v3/football/livescores/latest?include=league;participants;scores;events.type;events.player;state&api_token=${token}`;
             const res = await fetch(url);
@@ -629,7 +629,7 @@ export const initScheduler = () => {
     // ~1 SportMonks API call per day
     const lineupTask = cron.schedule('0 11 * * *', async () => {
         try {
-            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            const token = process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
             const dateKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
             const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateKey}?include=lineups.player;participants&api_token=${token}`;
@@ -684,7 +684,7 @@ export const initScheduler = () => {
     // Cost: ~1 SportMonks API call per day
     const statsTask = cron.schedule('30 23 * * *', async () => {
         try {
-            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            const token = process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
             const dateKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
             const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateKey}?include=statistics;participants&api_token=${token}`;
@@ -743,7 +743,7 @@ export const initScheduler = () => {
     // ~1 API call per day
     const tomorrowTask = cron.schedule('0 23 * * *', async () => {
         try {
-            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            const token = process.env.SPORTMONKS_API_TOKEN;
             if (!token) return;
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
@@ -813,7 +813,7 @@ export const initScheduler = () => {
     // team metadata, standings, top scorers. Saves ~200+ API calls/week.
     const seederTask = cron.schedule('0 2 * * 0', async () => {
         try {
-            const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+            const token = process.env.SPORTMONKS_API_TOKEN;
             const db = admin.firestore();
             await seedStaticData(db, token);
         } catch (e) {

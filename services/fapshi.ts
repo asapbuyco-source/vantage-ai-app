@@ -22,56 +22,32 @@ async function getFirebaseBearer(): Promise<string> {
   return `Bearer ${await current.getIdToken()}`;
 }
 
-export const initiatePayment = async (
-  amount: number,
-  email: string,
-  userId: string
+export const initiateFapshiPayment = async (
+  plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual',
+  email?: string
 ): Promise<FapshiInitResponse> => {
   const backendUrl = getBackendUrl();
   const redirectUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
 
-  const response = await fetch(`${backendUrl}/api/fapshi/initiate`, {
+  const response = await fetch(`${backendUrl}/api/payments/fapshi/initiate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: await getFirebaseBearer(),
     },
-    body: JSON.stringify({ amount, email, userId, redirectUrl }),
+    body: JSON.stringify({ plan, email, redirectUrl }),
   });
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || `Payment initiation failed: ${response.status}`);
+    throw new Error(err.error || err.message || `Payment initiation failed: ${response.status}`);
   }
 
   const data = await response.json();
   return { link: data.link, transId: data.transId };
 };
 
-export const checkPaymentStatus = async (transId: string): Promise<PaymentStatusResponse> => {
-  try {
-    const backendUrl = getBackendUrl();
-    const response = await fetch(`${backendUrl}/api/fapshi/status/${encodeURIComponent(transId)}`, {
-      method: 'GET',
-    });
-
-    if (!response.ok) {
-      console.warn(`[Fapshi] Proxy status HTTP ${response.status} for ${transId}`);
-      return { status: 'PENDING' };
-    }
-
-    const data = await response.json();
-    return {
-      status: data.status ?? 'UNKNOWN',
-      amount: data.amount !== undefined ? Number(data.amount) : undefined,
-    };
-  } catch (e) {
-    console.error('[Fapshi] Status check network error:', e);
-    return { status: 'UNKNOWN' };
-  }
-};
-
-export async function verifyFapshiPayment(transId: string): Promise<{ success: boolean; alreadyProcessed?: boolean; plan?: string; vipExpiry?: string }> {
+export async function verifyFapshiPayment(transId: string): Promise<{ status: PaymentStatusResponse['status']; alreadyProcessed?: boolean; plan?: string; vipExpiry?: string }> {
   const backendUrl = getBackendUrl();
   const res = await fetch(`${backendUrl}/api/payments/fapshi/verify`, {
     method: 'POST',

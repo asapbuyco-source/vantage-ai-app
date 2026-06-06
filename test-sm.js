@@ -7,7 +7,7 @@ async function testFetch() {
     console.log(`Sportmonks returned ${smFixtures ? smFixtures.length : 0} fixtures.`);
 
     // fetch directly and see
-    const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+    const token = process.env.SPORTMONKS_API_TOKEN;
     console.log("Token: ", token);
 
     // Get predictions

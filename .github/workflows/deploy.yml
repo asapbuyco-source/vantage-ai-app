@@ -31,7 +31,16 @@ jobs:
           # cache: 'npm' # Uncomment this if you have a package-lock.json committed
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Secret env scan
+        run: npm run security:env
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Logic tests
+        run: node test-logic.mjs
 
       - name: Build
         run: npm run build

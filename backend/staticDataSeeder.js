@@ -230,7 +230,7 @@ export async function seedStaticData(db, token, { force = false } = {}) {
 
 // ── CLI runner ────────────────────────────────────────────────────────────────
 if (process.argv[1].includes('staticDataSeeder')) {
-    const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+    const token = process.env.SPORTMONKS_API_TOKEN;
     if (!admin.apps.length) {
         try {
             const raw = process.env.FIREBASE_SERVICE_ACCOUNT || '{}';

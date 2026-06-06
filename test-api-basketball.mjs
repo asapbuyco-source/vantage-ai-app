@@ -3,10 +3,10 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
 
-const API_KEY = process.env.VITE_API_BASKETBALL_KEY;
+const API_KEY = process.env.API_BASKETBALL_KEY;
 
 if (!API_KEY) {
-    console.error('❌ Missing VITE_API_BASKETBALL_KEY in .env.local');
+    console.error('❌ Missing API_BASKETBALL_KEY in .env.local');
     process.exit(1);
 }
 

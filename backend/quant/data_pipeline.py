@@ -24,7 +24,7 @@ try:
 except ImportError:
     pass
 
-SM_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN") or os.environ.get("VITE_SPORTMONKS_API_TOKEN", "")
+SM_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN", "")
 SM_BASE = "https://api.sportmonks.com/v3/football"
 MAX_MATCHES = 100
 RECENT_DAYS = 90  # Look back 90 days for form data

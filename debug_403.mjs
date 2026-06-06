@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 
-const TOKEN_LOCAL = process.env.VITE_SPORTMONKS_API_TOKEN;
+const TOKEN_LOCAL = process.env.SPORTMONKS_API_TOKEN;
 const TOKEN_LOG = "jFxFL5OlyrkkV9Aa1WcgwNV5kPpMuCCGfvNgmgLx5FGJ21joEHsHG47809Bn";
 
 async function testToken(token, name) {

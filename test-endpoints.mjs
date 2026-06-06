@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 
 async function testEndpoint(name, path) {
-    const token = process.env.SPORTMONKS_API_TOKEN || process.env.VITE_SPORTMONKS_API_TOKEN;
+    const token = process.env.SPORTMONKS_API_TOKEN;
     if (!token) { console.error('❌ SPORTMONKS_API_TOKEN not set in environment'); process.exit(1); }
     const separator = path.includes('?') ? '&' : '?';
     const url = `https://api.sportmonks.com/v3/football${path}${separator}api_token=${token}`;

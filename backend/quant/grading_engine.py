@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 
 
 # ── Sportmonks helper ─────────────────────────────────────────────────────────
-SM_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN") or os.environ.get("VITE_SPORTMONKS_API_TOKEN", "")
+SM_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN", "")
 SM_BASE = "https://api.sportmonks.com/v3/football"
 
 FINISHED_STATES = {"FT", "AET", "PEN", "FINS"}

@@ -14,6 +14,7 @@ import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import sanitizeHtml from 'sanitize-html';
 import jwt from 'jsonwebtoken';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { initScheduler, stopScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance, repairCorruptedPredictions } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
 import { requireFirebaseUser } from './backend/authMiddleware.js';
@@ -205,7 +206,7 @@ app.use(cors({
 // ══════════════════════════════════════════════════════════════════════
 // SPORTMONKS API PROXY
 // ══════════════════════════════════════════════════════════════════════
-const SPORTMONKS_API_TOKEN = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+const SPORTMONKS_API_TOKEN = process.env.SPORTMONKS_API_TOKEN;
 
 if (!SPORTMONKS_API_TOKEN) {
     logger.error("[API] CRITICAL: SPORTMONKS_API_TOKEN environment variable is not set!");
@@ -246,7 +247,7 @@ app.use('/api/sportmonks', sportmonksLimiter, createProxyMiddleware({
 // We need to parse JSON bodies for the Gemini POST requests
 app.use(express.json({ limit: '5mb' }));
 
-const GOOGLE_GENAI_API_KEY = process.env.VITE_GOOGLE_GENAI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+const GOOGLE_GENAI_API_KEY = process.env.GOOGLE_GENAI_API_KEY;
 
 if (!GOOGLE_GENAI_API_KEY) {
     logger.error("[API] CRITICAL: GOOGLE_GENAI_API_KEY environment variable is not set!");
@@ -334,7 +335,7 @@ const adminAuth = (req, res, next) => {
 
 // GET /api/admin/token — exchange a Firebase ID token for a short-lived admin JWT.
 // The caller must be authenticated with Firebase and have isAdmin:true in Firestore.
-// This removes the need for VITE_ADMIN_API_SECRET in the browser bundle entirely.
+// This removes the need for any admin secret in the browser bundle.
 app.get('/api/admin/token', async (req, res) => {
     if (!process.env.ADMIN_API_SECRET) {
         return res.status(503).json({ error: 'Admin functionality is not configured on this server.' });
@@ -557,7 +558,7 @@ app.post('/api/admin/seed-static', adminAuth, async (req, res) => {
     try {
         const { seedStaticData } = await import('./backend/staticDataSeeder.js');
         const db = admin.firestore();
-        const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+        const token = process.env.SPORTMONKS_API_TOKEN;
         const force = req.body?.force === true;
         seedStaticData(db, token, { force }).then(() => {
             console.log('[Admin] Static data seed completed');
@@ -616,7 +617,7 @@ app.post('/api/openai/generate', adminAuth, openaiLimiter, async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════
 // FAPSHI PAYMENT PROXY
 // Keeps FAPSHI_USER_TOKEN and FAPSHI_API_KEY server-side only.
-// Frontend calls /api/fapshi/* — credentials never reach the browser bundle.
+// Legacy /api/fapshi/* routes are retired; active payment routes live under /api/payments/fapshi/*.
 // ══════════════════════════════════════════════════════════════════════
 
 const fapshiLimiter = rateLimit({
@@ -629,65 +630,41 @@ const fapshiLimiter = rateLimit({
 
 const FAPSHI_API_BASE = 'https://live.fapshi.com';
 
-// POST /api/fapshi/initiate — proxy Fapshi payment initiation
+function safeEqualString(a = '', b = '') {
+    const aBuf = Buffer.from(String(a));
+    const bBuf = Buffer.from(String(b));
+    return aBuf.length === bBuf.length && timingSafeEqual(aBuf, bBuf);
+}
+
+function verifySelarWebhook(req) {
+    const secret = process.env.SELAR_WEBHOOK_SECRET;
+    if (!secret) return { ok: false, status: 503, error: 'Selar webhook secret is not configured' };
+
+    const tokenHeader =
+        req.headers['x-selar-webhook-secret'] ||
+        req.headers['x-webhook-secret'] ||
+        req.headers['x-selar-secret'];
+    if (tokenHeader && safeEqualString(tokenHeader, secret)) return { ok: true };
+
+    const signatureHeader = req.headers['x-selar-signature'] || req.headers['x-webhook-signature'];
+    if (signatureHeader) {
+        const signature = String(signatureHeader).replace(/^sha256=/i, '');
+        const payload = JSON.stringify(req.body || {});
+        const expected = createHmac('sha256', secret).update(payload).digest('hex');
+        if (safeEqualString(signature, expected)) return { ok: true };
+    }
+
+    return { ok: false, status: 401, error: 'Invalid Selar webhook signature' };
+}
+
+// POST /api/fapshi/initiate — retired legacy payment initiation
 app.post('/api/fapshi/initiate', fapshiLimiter, async (req, res) => {
-    const userToken = process.env.FAPSHI_USER_TOKEN;
-    const apiKey = process.env.FAPSHI_API_KEY;
-    if (!userToken || !apiKey) {
-        return res.status(503).json({ error: 'Fapshi payment gateway is not configured on this server.' });
-    }
-    try {
-        const { amount, email, userId, redirectUrl } = req.body;
-        if (!amount || !email) {
-            return res.status(400).json({ error: 'amount and email are required' });
-        }
-        const externalId = `${userId || 'anon'}_${Date.now()}`;
-        const response = await fetch(`${FAPSHI_API_BASE}/initiate-pay`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apiuser': userToken,
-                'apikey': apiKey,
-            },
-            body: JSON.stringify({ amount, email, externalId, redirectUrl }),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            logger.warn({ status: response.status }, '[Fapshi] Initiate payment upstream error');
-            return res.status(response.status).json({ error: data.message || 'Fapshi initiation failed' });
-        }
-        res.json({ link: data.link, transId: data.transId });
-    } catch (e) {
-        logger.error({ error: e }, '[Fapshi] Initiate payment proxy error');
-        res.status(500).json({ error: 'Payment gateway request failed', details: e.message });
-    }
+    return res.status(410).json({ error: 'Legacy Fapshi initiation endpoint is retired. Use /api/payments/fapshi/initiate.' });
 });
 
-// GET /api/fapshi/status/:transId — proxy Fapshi payment status check
+// GET /api/fapshi/status/:transId — retired legacy payment status check
 app.get('/api/fapshi/status/:transId', fapshiLimiter, async (req, res) => {
-    const userToken = process.env.FAPSHI_USER_TOKEN;
-    const apiKey = process.env.FAPSHI_API_KEY;
-    if (!userToken || !apiKey) {
-        return res.status(503).json({ error: 'Fapshi payment gateway is not configured on this server.' });
-    }
-    try {
-        const { transId } = req.params;
-        if (!transId || !/^[a-zA-Z0-9_-]+$/.test(transId)) {
-            return res.status(400).json({ error: 'Invalid transId format' });
-        }
-        const response = await fetch(`${FAPSHI_API_BASE}/payment-status/${transId}`, {
-            method: 'GET',
-            headers: { 'apiuser': userToken, 'apikey': apiKey },
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            return res.status(response.status).json({ status: 'UNKNOWN', error: data.message });
-        }
-        res.json({ status: data.status, amount: data.amount });
-    } catch (e) {
-        logger.error({ error: e }, '[Fapshi] Status check proxy error');
-        res.status(500).json({ status: 'UNKNOWN', error: 'Gateway request failed' });
-    }
+    return res.status(410).json({ error: 'Legacy Fapshi status endpoint is retired. Use /api/payments/fapshi/verify.' });
 });
 
 // ══════════════════════════════════════════════════════════════════════
@@ -698,6 +675,9 @@ app.get('/api/fapshi/status/:transId', fapshiLimiter, async (req, res) => {
 
 app.post('/api/payments/fapshi/initiate', requireFirebaseUser, fapshiLimiter, async (req, res) => {
     try {
+        if (!process.env.FAPSHI_USER_TOKEN || !process.env.FAPSHI_API_KEY) {
+            return res.status(503).json({ error: 'Fapshi payment gateway is not configured on this server.' });
+        }
         const { plan, email, redirectUrl } = req.body || {};
         const cfg = assertValidPlan(plan);
         const uid = req.firebaseUser.uid;
@@ -741,6 +721,9 @@ app.post('/api/payments/fapshi/initiate', requireFirebaseUser, fapshiLimiter, as
 
 app.post('/api/payments/fapshi/verify', requireFirebaseUser, fapshiLimiter, async (req, res) => {
     try {
+        if (!process.env.FAPSHI_USER_TOKEN || !process.env.FAPSHI_API_KEY) {
+            return res.status(503).json({ error: 'Fapshi payment gateway is not configured on this server.' });
+        }
         const { transId } = req.body || {};
         if (!transId || !/^[a-zA-Z0-9_-]+$/.test(transId)) {
             return res.status(400).json({ error: 'Invalid transId' });
@@ -797,7 +780,7 @@ app.post('/api/payments/selar/initiate', requireFirebaseUser, async (req, res) =
         const productLink = process.env[`SELAR_${plan.toUpperCase()}_LINK`];
         if (!productLink) return res.status(503).json({ error: 'Selar product link not configured' });
 
-        const reference = `VAN_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
+        const reference = `VAN_${randomUUID().replace(/-/g, '').slice(0, 24)}`;
 
         await admin.firestore().collection('selar_pending').doc(reference).set({
             uid: req.firebaseUser.uid,
@@ -848,7 +831,15 @@ app.post('/api/payments/selar/verify', requireFirebaseUser, async (req, res) => 
 
 app.post('/api/payments/selar/webhook', async (req, res) => {
     try {
+        const authResult = verifySelarWebhook(req);
+        if (!authResult.ok) {
+            return res.status(authResult.status).json({ error: authResult.error });
+        }
+
         const { reference, status, amount } = req.body || {};
+        if (!reference || !/^VAN_[a-f0-9]{24}$/i.test(reference)) {
+            return res.status(400).json({ error: 'Invalid reference' });
+        }
         if (status !== 'successful') return res.status(202).json({ ignored: true });
 
         const db = admin.firestore();
@@ -857,12 +848,19 @@ app.post('/api/payments/selar/webhook', async (req, res) => {
         if (!snap.exists) return res.status(404).json({ error: 'Pending token not found' });
 
         const pending = snap.data();
+        const expected = assertValidPlan(pending.plan);
+        const paidAmount = Number(String(amount ?? '').replace(/[^\d.]/g, ''));
+        if (paidAmount !== expected.amount) {
+            logger.warn({ reference, paidAmount, expectedAmount: expected.amount }, '[Payments] Selar webhook amount mismatch');
+            return res.status(400).json({ error: 'Payment amount does not match selected plan' });
+        }
+
         await fulfillVipPayment({
             uid: pending.uid,
             provider: 'selar',
             transactionId: reference,
             plan: pending.plan,
-            amount: Number(amount || pending.amount),
+            amount: paidAmount,
             raw: req.body,
         });
 

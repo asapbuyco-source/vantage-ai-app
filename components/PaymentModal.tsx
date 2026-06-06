@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CreditCard, Smartphone, CheckCircle2, ShieldCheck, ArrowRight, Loader2, Globe, AlertTriangle, Mail, MessageCircle } from 'lucide-react';
 import { GlassCard } from './GlassCard';
-import { initiatePayment } from '../services/fapshi';
+import { initiateFapshiPayment } from '../services/fapshi';
 import { initiateSelarPayment } from '../services/selar';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -90,11 +90,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
 
     try {
       if (gateway === 'fapshi') {
-        const { link, transId } = await initiatePayment(
-          parseInt(plan.price),
-          user.email || 'user@vantage.ai',
-          user.uid
-        );
+        const { link, transId } = await initiateFapshiPayment(plan.id, user.email || undefined);
         // CRITICAL: Fapshi does NOT append transId to the redirectUrl automatically.
         // We must store it in localStorage so App.tsx can retrieve it on return.
         if (transId) {

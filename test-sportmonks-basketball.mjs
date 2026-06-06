@@ -3,7 +3,7 @@ import fetch from 'node-fetch';
 
 dotenv.config({ path: '.env.local' });
 
-const token = process.env.VITE_SPORTMONKS_API_TOKEN || process.env.SPORTMONKS_API_TOKEN;
+const token = process.env.SPORTMONKS_API_TOKEN;
 
 if (!token) {
     console.error('❌ No Sportmonks API token found in .env.local');

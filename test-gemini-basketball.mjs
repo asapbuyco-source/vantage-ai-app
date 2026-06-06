@@ -11,9 +11,9 @@ import * as fs from 'fs';
 
 dotenv.config({ path: '.env.local' });
 
-const API_KEY = process.env.VITE_GOOGLE_GENAI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+const API_KEY = process.env.GOOGLE_GENAI_API_KEY;
 if (!API_KEY) {
-    console.error('❌ VITE_GOOGLE_GENAI_API_KEY not found in .env.local');
+    console.error('❌ GOOGLE_GENAI_API_KEY not found in .env.local');
     process.exit(1);
 }
 
