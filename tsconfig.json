@@ -26,8 +26,29 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
+  "include": [
+    "App.tsx",
+    "index.tsx",
+    "vite-env.d.ts",
+    "types.ts",
+    "constants.ts",
+    "firebaseConfig.ts",
+    "i18n.ts",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "context/**/*.ts",
+    "context/**/*.tsx",
+    "pages/**/*.ts",
+    "pages/**/*.tsx",
+    "services/**/*.ts",
+    "services/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
   "exclude": [
     "node_modules",
+    "backend",
+    "get-gmail-token.js",
     "supabase",
     "supabaseClient.ts"
   ]
