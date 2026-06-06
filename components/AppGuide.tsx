@@ -113,7 +113,7 @@ export const AppGuide: React.FC<AppGuideProps> = ({ onBack }) => {
                   <AlertTriangle size={14} /> NE COMBINEZ PAS (No Accumulators)
                 </h4>
                 <p className="text-[11px] text-red-300">
-                  {language === 'fr' ? "Jouez chaque pari du Vault en SIMPLE. Combiner les paris détruit l'avantage mathématique et garantit la ruine à long terme." : "Play every Vault bet as a SINGLE. Accumulating bets destroys the mathematical edge and guarantees long-term ruin."}
+                  {language === 'fr' ? "Jouez chaque pari du Vault en SIMPLE. Combiner les paris augmente fortement la variance et peut annuler l'avantage du modèle." : "Play every Vault bet as a SINGLE. Accumulating bets sharply increases variance and can erase the model edge."}
                 </p>
               </div>
             </div>

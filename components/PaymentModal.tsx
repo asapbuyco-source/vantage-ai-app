@@ -41,7 +41,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
   const [loading, setLoading] = useState(false);
   const [gateway, setGateway] = useState<'fapshi' | 'selar'>('fapshi');
   const [paymentFailed, setPaymentFailed] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const userEmail = user?.email || '';
 
@@ -58,16 +57,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
   useEffect(() => {
     if (!isOpen) {
       setPaymentFailed(false);
-      setIsSubmitting(false);
       return;
     }
     setPaymentFailed(false);
-    setIsSubmitting(true);
-    const timer = setTimeout(() => {
-      setPaymentFailed(true);
-      setIsSubmitting(false);
-    }, 180000);
-    return () => clearTimeout(timer);
   }, [isOpen, plan]);
 
   const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
@@ -79,7 +71,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     }
 
     setLoading(true);
-    setIsSubmitting(false);
+    setPaymentFailed(false);
     localStorage.setItem('pendingVipPlan', plan.id);
 
     try {
@@ -118,6 +110,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
       }
     } catch (e: any) {
       showToast(e.message || "Payment initiation failed", "error");
+      setPaymentFailed(true);
       setLoading(false);
     }
   };

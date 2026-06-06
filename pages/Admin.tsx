@@ -80,7 +80,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
 
     // Auto-scheduler Settings
     // Scheduler & SEO Settings
-    const [footballGenTime, setFootballGenTime] = useState('08:00');
+    const [footballGenTime, setFootballGenTime] = useState('19:00');
     const [basketballGenTime, setBasketballGenTime] = useState('10:00');
     const [cricketGenTime, setCricketGenTime] = useState('10:30');
     const [gradingTime, setGradingTime] = useState('06:00');

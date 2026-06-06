@@ -56,7 +56,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
     const faqs = [
         {
             q: 'Is this guaranteed to win every time?',
-            a: 'No. Anyone promising a 100% win rate is lying to you. We promise a mathematically proven 7.9% Edge over the bookmakers. You will lose some bets, but by following our bankroll strategy, your money is mathematically expected to grow over the long term.'
+            a: 'No. Anyone promising a 100% win rate is lying to you. Vantage AI is built to find long-term positive expected value, not certainty. You will lose some bets, so the bankroll strategy matters as much as the pick.'
         },
         {
             q: 'Do I need a massive bankroll to start?',
@@ -103,9 +103,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                 </motion.div>
 
                 <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="text-4xl md:text-6xl lg:text-7xl font-black font-orbitron text-slate-900 dark:text-white leading-[1.1] mb-6 max-w-4xl mx-auto">
-                    Stop Gambling. <br className="hidden md:block" />
+                    Bet With Structure. <br className="hidden md:block" />
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-vantage-cyan to-vantage-purple">
-                        Start Investing in Data.
+                        Let Data Lead the Stake.
                     </span>
                 </motion.h1>
 
@@ -165,7 +165,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                             <Target size={32} className="text-purple-500" />
                         </div>
                         <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3">2. Positive EV (+EV)</h3>
-                        <p className="text-sm text-gray-500">When the bookmaker sets their odds higher than our calculated true probability, it creates a "Value Bet". Over time, betting on +EV guarantees profit.</p>
+                        <p className="text-sm text-gray-500">When the bookmaker sets odds higher than our calculated true probability, it creates a value opportunity. Over a large sample, consistently finding +EV is how disciplined bettors build an edge.</p>
                     </GlassCard>
                     
                     <GlassCard className="flex flex-col items-center text-center p-8 hover:border-green-500/50 transition-colors">
@@ -193,7 +193,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                                 <span className="text-yellow-400">Arb</span> Finder.
                             </h2>
                             <p className="text-gray-400 text-lg max-w-md">
-                                We scan hundreds of bookmakers every minute to find arbitrage opportunities. These are matches where you can bet on ALL outcomes and GUARANTEE a profit.
+                                We scan hundreds of bookmakers for arbitrage opportunities. When prices line up correctly, you can cover all outcomes and lock a small mathematical edge before odds move.
                             </p>
                             <ul className="space-y-3 text-left max-w-md mx-auto md:mx-0">
                                 <li className="flex items-center gap-3">
@@ -210,7 +210,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <CheckCircle size={18} className="text-yellow-400 shrink-0" />
-                                    <span className="text-gray-300">Guaranteed profit (no losing bets)</span>
+                                    <span className="text-gray-300">Designed for locked-edge opportunities</span>
                                 </li>
                             </ul>
                         </div>
@@ -249,7 +249,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                                     </div>
                                 </div>
                                 <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                                    <p className="text-xs text-gray-400 text-center">Guaranteed Profit</p>
+                                    <p className="text-xs text-gray-400 text-center">Calculated Edge</p>
                                     <p className="text-lg font-black text-green-400 text-center">+2.3%</p>
                                 </div>
                             </div>
@@ -262,7 +262,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
             <div id="pricing-section" className="max-w-6xl mx-auto px-4 mb-24">
                 <div className="text-center mb-12">
                     <h2 className="text-3xl font-bold font-orbitron text-slate-900 dark:text-white mb-4">Join the Syndicate</h2>
-                    <p className="text-gray-500">Stop paying for fake tips. Invest in verified quantitative data.</p>
+                    <p className="text-gray-500">Skip guesswork. Use verified quantitative data and disciplined staking.</p>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">

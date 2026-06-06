@@ -43,12 +43,13 @@ const StatPill = ({ label, value, icon }: { label: string; value: string; icon?:
   </div>
 );
 
-const getCountdownToNextPicks = () => {
+const getCountdownToNextPicks = (scheduleTime = '19:00') => {
   const now = new Date();
   const lagosNow = new Date(now.toLocaleString('en', { timeZone: 'Africa/Lagos' }));
+  const [targetHour, targetMinute] = scheduleTime.split(':').map(Number);
   const next = new Date(lagosNow);
-  next.setHours(7, 0, 0, 0);
-  if (lagosNow.getHours() >= 7 || (lagosNow.getHours() === 6 && lagosNow.getMinutes() >= 55)) next.setDate(next.getDate() + 1);
+  next.setHours(Number.isFinite(targetHour) ? targetHour : 19, Number.isFinite(targetMinute) ? targetMinute : 0, 0, 0);
+  if (lagosNow.getTime() >= next.getTime()) next.setDate(next.getDate() + 1);
   const diff = next.getTime() - lagosNow.getTime();
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
@@ -65,16 +66,19 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAllLeans, setShowAllLeans] = useState(false);
   const [freePicksCount, setFreePicksCount] = useState(3);
-  const [countdown, setCountdown] = useState(getCountdownToNextPicks());
+  const [scheduledTime, setScheduledTime] = useState('19:00');
+  const [countdown, setCountdown] = useState(getCountdownToNextPicks('19:00'));
 
   React.useEffect(() => {
-    const timer = setInterval(() => setCountdown(getCountdownToNextPicks()), 60000);
+    setCountdown(getCountdownToNextPicks(scheduledTime));
+    const timer = setInterval(() => setCountdown(getCountdownToNextPicks(scheduledTime)), 60000);
     return () => clearInterval(timer);
-  }, []);
+  }, [scheduledTime]);
 
   React.useEffect(() => {
     getAppSettings().then(s => {
       if (s.freePicksCount !== undefined) setFreePicksCount(s.freePicksCount);
+      if (s.footballGenTime) setScheduledTime(s.footballGenTime);
     });
   }, []);
 
@@ -125,6 +129,12 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
 
   const totalAnalyzed = predictions.length;
   const topLeagues = Object.entries(leagueBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const scheduledTimeDisplay = (() => {
+    const [h, m] = scheduledTime.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${String(h12).padStart(2, '0')}:${String(m || 0).padStart(2, '0')} ${period}`;
+  })();
 
   const renderRichMatchCard = (match: any, idx: number, blurred: boolean = false) => {
     const pred = getPredictionText(match);
@@ -365,6 +375,37 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
           {language === 'fr' ? 'Analyse' : 'Match'} <span className="text-vantage-cyan">{language === 'fr' ? 'des Matchs' : 'Analysis'}</span>
         </h1>
 
+        <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-500 shrink-0">
+              <Target size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                {language === 'fr' ? 'Votre action gratuite' : 'Your free action'}
+              </p>
+              <p className="text-sm font-black text-slate-900 dark:text-white">
+                {predictions.length > 0
+                  ? (language === 'fr' ? `${Math.min(freePicksCount, hookPicks.length)} picks ouverts aujourd'hui` : `${Math.min(freePicksCount, hookPicks.length)} picks unlocked today`)
+                  : (language === 'fr' ? `Prochains picks à ${scheduledTime}` : `Next picks at ${scheduledTimeDisplay}`)}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {predictions.length > 0
+                  ? (language === 'fr' ? 'Copiez un pick, puis consultez le VIP pour le staking Kelly.' : 'Copy one pick, then use VIP for Kelly staking.')
+                  : (language === 'fr' ? `Revenez dans ${countdown.h}h ${countdown.m}m.` : `Come back in ${countdown.h}h ${countdown.m}m.`)}
+              </p>
+            </div>
+            {!isVip && predictions.length > 0 && (
+              <button
+                onClick={() => setTab('vip')}
+                className="shrink-0 px-3 py-2 rounded-xl bg-vantage-purple text-white text-xs font-black"
+              >
+                {language === 'fr' ? 'VIP' : 'Unlock'}
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Live match count banner */}
         {!loading && totalAnalyzed > 0 && (
           <motion.div
@@ -398,7 +439,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
         <div className="text-center py-10">
           <Activity size={28} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
           <p className="text-gray-500 mb-2">{language === 'fr' ? "Aucune analyse disponible" : "No analysis available yet"}</p>
-          <p className="text-xs text-vantage-cyan font-medium italic">{language === 'fr' ? `Pronostics publiés chaque matin. Revenez dans ${countdown.h}h ${countdown.m}m.` : `Match analysis published every morning. Come back in ${countdown.h}h ${countdown.m}m.`}</p>
+          <p className="text-xs text-vantage-cyan font-medium italic">{language === 'fr' ? `Pronostics publiés à ${scheduledTime}. Revenez dans ${countdown.h}h ${countdown.m}m.` : `Match analysis publishes at ${scheduledTimeDisplay}. Come back in ${countdown.h}h ${countdown.m}m.`}</p>
         </div>
       ) : (
         <div className="space-y-6">

@@ -213,7 +213,7 @@ export const initScheduler = () => {
             const safeTime = (val, fallback) => (typeof val === 'string' && /^\d{1,2}:\d{2}$/.test(val) ? val : fallback);
 
             // Look for times in HH:MM format (safe defaults if Firestore value is missing/malformed)
-            const footballTime = safeTime(config.quantGenTime || config.footballGenTime, '07:00');
+            const footballTime = safeTime(config.quantGenTime || config.footballGenTime, '19:00');
             const basketballTime = safeTime(config.basketballGenTime, '10:00');
             const cricketTime = safeTime(config.cricketGenTime, '10:30');
             const gradingTime = safeTime(config.gradingTime, '06:00');
@@ -339,7 +339,7 @@ export const initScheduler = () => {
             }
 
             // ── Quant Pipeline Scheduler ───────────────────────────────────────────
-            const quantTime = safeTime(config.quantGenTime, '07:00');
+            const quantTime = safeTime(config.quantGenTime, '19:00');
             if (quantTime !== currentQuantTime) {
                 if (tasks.get('quant')) tasks.get('quant').stop();
                 currentQuantTime = quantTime;
@@ -808,9 +808,9 @@ export const initScheduler = () => {
                     category: 'no_edge',
                     confidence: 0,
                     odds: 0,
-                    prediction: 'Preview — Analysis runs at 07:00',
-                    prediction_en: 'Preview — Vantage AI analysis runs at 07:00 Lagos',
-                    prediction_fr: 'Aperçu — L\'analyse IA est disponible à 07h00',
+                    prediction: 'Preview — Analysis runs at 19:00',
+                    prediction_en: 'Preview — Vantage AI analysis runs at 19:00 Lagos',
+                    prediction_fr: 'Aperçu — L\'analyse IA est disponible à 19h00',
                 };
             });
 

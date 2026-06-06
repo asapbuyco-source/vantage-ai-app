@@ -735,7 +735,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                   <div className="text-center py-8 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10">
                     <BarChart2 size={28} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
                     <p className="text-sm font-medium text-gray-500">
-                      {quantPredictions.length === 0 ? 'Vantage AI analysis runs at 07:00 Lagos time' : 'No bets match this filter'}
+                      {quantPredictions.length === 0 ? 'Vantage AI analysis runs at 19:00 Lagos time' : 'No bets match this filter'}
                     </p>
                     <p className="text-xs text-gray-400 mt-1">Pure statistical models</p>
                   </div>
@@ -966,7 +966,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                 <p className="text-sm font-bold text-slate-700 dark:text-gray-300">Model picks appear above</p>
                 <p className="text-xs text-gray-500 mt-1">
                   pure statistical model
-                  <br />Picks are generated daily at <span className="font-semibold text-emerald-600">07:00 Lagos time</span>.
+                  <br />Picks are generated daily at <span className="font-semibold text-emerald-600">19:00 Lagos time</span>.
                 </p>
               </div>
             )}

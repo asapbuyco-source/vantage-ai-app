@@ -88,6 +88,8 @@ const slides = [
     },
 ];
 
+const firstRunSlideIds = new Set(['welcome', 'country', 'ev_explained', 'long_game', 'vip']);
+
 export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const { language, showToast } = useAppContext();
     const { updateUserCountry } = useAuth();
@@ -96,8 +98,9 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const [selectedCountry, setSelectedCountry] = useState<string>('other');
     const [isSaving, setIsSaving] = useState(false);
 
-    const current = slides[step];
-    const isLast = step === slides.length - 1;
+    const onboardingSlides = slides.filter(slide => firstRunSlideIds.has(slide.id));
+    const current = onboardingSlides[step];
+    const isLast = step === onboardingSlides.length - 1;
     const isCountrySlide = current.id === 'country';
 
     const countries = [
@@ -229,7 +232,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             <div className="relative z-10 px-6 pb-10 pt-4 flex flex-col items-center gap-4 flex-shrink-0 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
                 {/* Progress Dots */}
                 <div className="flex gap-2">
-                    {slides.map((_, idx) => (
+                    {onboardingSlides.map((_, idx) => (
                         <button
                             key={idx}
                             onClick={() => goTo(idx)}

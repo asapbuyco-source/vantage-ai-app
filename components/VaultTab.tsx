@@ -325,6 +325,18 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
     const wonCount = vaultDay?.picks.filter(p => p.result === 'won').length || 0;
     const lostCount = vaultDay?.picks.filter(p => p.result === 'lost').length || 0;
     const pendingCount = vaultDay?.picks.filter(p => p.result === 'pending').length || 0;
+    const hasBankroll = bankrollStart > 0;
+    const hasLockedPicks = (vaultDay?.picks.length || 0) > 0;
+    const hasStakePlan = Boolean(vaultDay?.picks.some(p => p.stakeAmount > 0));
+    const hasAnyResult = wonCount + lostCount > 0 || Boolean(vaultDay?.picks.some(p => p.result === 'void'));
+    const isBankrollUpdated = Boolean(vaultDay && vaultDay.bankrollEnd !== vaultDay.bankrollStart);
+    const journeySteps = [
+        { label: language === 'fr' ? 'Capital' : 'Bankroll', done: hasBankroll },
+        { label: language === 'fr' ? 'Picks verrouillés' : 'Picks locked', done: hasLockedPicks },
+        { label: language === 'fr' ? 'Paris simples' : 'Singles only', done: hasStakePlan },
+        { label: language === 'fr' ? 'Résultats' : 'Results', done: hasAnyResult },
+        { label: language === 'fr' ? 'Mise à jour' : 'Updated', done: isBankrollUpdated },
+    ];
 
     if (loading) {
         return (
@@ -381,14 +393,42 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                                 </h4>
                                 <p className="text-[11px] text-amber-500/80 leading-relaxed mt-1">
                                     {language === 'fr' 
-                                        ? 'Jouez chaque pick du Vault comme un pari SIMPLE. La taille de mise Kelly (Stake) est calculée mathématiquement pour des événements individuels. Combiner ces paris détruit l\'avantage mathématique et garantit une perte à long terme.' 
-                                        : 'Play every Vault pick as a SINGLE bet. The Kelly Stake size is mathematically calculated for individual events. Accumulating these picks destroys the mathematical edge and guarantees a long-term loss.'}
+                                        ? 'Jouez chaque pick du Vault comme un pari SIMPLE. La taille de mise Kelly (Stake) est calculée pour des événements individuels. Combiner ces paris augmente fortement la variance et peut annuler l\'avantage du modèle.' 
+                                        : 'Play every Vault pick as a SINGLE bet. The Kelly stake size is calculated for individual events. Combining these picks sharply increases variance and can erase the model edge.'}
                                 </p>
                             </div>
                         </div>
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                            {language === 'fr' ? 'Parcours du Vault' : 'Vault journey'}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                            {language === 'fr'
+                                ? 'Suivez chaque étape. Les picks du Vault doivent rester des paris simples.'
+                                : 'Follow each step. Vault picks should stay as single bets.'}
+                        </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-emerald-500/15 border border-emerald-500/25 px-2 py-1 text-[10px] font-black text-emerald-400">
+                        {VAULT_DECISION_TIME_LOCAL}
+                    </span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                    {journeySteps.map((step, idx) => (
+                        <div key={step.label} className="min-w-0">
+                            <div className={`h-1.5 rounded-full mb-1 ${step.done ? 'bg-emerald-400' : idx === 2 ? 'bg-amber-400/60' : 'bg-slate-700'}`} />
+                            <p className={`text-[9px] font-bold leading-tight ${step.done ? 'text-emerald-300' : 'text-gray-500'}`}>
+                                {step.label}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-2">
                 {/* Current Bankroll */}

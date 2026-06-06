@@ -24,8 +24,8 @@ export const ArbCalculator: React.FC<ArbCalculatorProps> = ({ arb, onClose }) =>
         return (parsedStake * impliedProbs[index]) / totalImpliedProb;
     });
 
-    const guaranteedReturn = parsedStake > 0 ? (stakes[0] * arb.legs[0].odds) : 0;
-    const netProfit = guaranteedReturn - parsedStake;
+    const projectedReturn = parsedStake > 0 ? (stakes[0] * arb.legs[0].odds) : 0;
+    const netProfit = projectedReturn - parsedStake;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -48,7 +48,7 @@ export const ArbCalculator: React.FC<ArbCalculatorProps> = ({ arb, onClose }) =>
                     <div className="text-center space-y-1">
                         <p className="text-sm font-bold text-white">{arb.match}</p>
                         <span className="inline-flex px-2 py-1 bg-green-500/10 text-green-400 text-xs font-bold rounded border border-green-500/20">
-                            {arb.profit_margin}% Guaranteed Profit
+                            {arb.profit_margin}% Calculated Edge
                         </span>
                     </div>
 
@@ -82,9 +82,9 @@ export const ArbCalculator: React.FC<ArbCalculatorProps> = ({ arb, onClose }) =>
 
                     <div className="pt-4 border-t border-white/10">
                         <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-400 font-bold">Guaranteed Return:</span>
+                            <span className="text-sm text-gray-400 font-bold">Projected Return:</span>
                             <span className="text-xl font-black text-white font-orbitron">
-                                {Math.round(guaranteedReturn).toLocaleString()} F
+                                {Math.round(projectedReturn).toLocaleString()} F
                             </span>
                         </div>
                         <div className="flex justify-between items-center mt-1">

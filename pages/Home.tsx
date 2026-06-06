@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon,
   Trophy, AlertTriangle, Hourglass, Search, SlidersHorizontal, ChevronDown,
-  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Radio, Copy, Check, Share2
+  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Radio, Copy, Check, Share2, Target
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { CircularProgress } from '../components/CircularProgress';
@@ -36,12 +36,13 @@ const TOP_LEAGUES = [
   'Champions League', 'Europa League', 'World Cup', 'Euro', 'Copa America'
 ];
 
-const getCountdownToNextPicks = () => {
+const getCountdownToNextPicks = (scheduleTime = '19:00') => {
   const now = new Date();
   const lagosNow = new Date(now.toLocaleString('en', { timeZone: 'Africa/Lagos' }));
+  const [targetHour, targetMinute] = scheduleTime.split(':').map(Number);
   const next = new Date(lagosNow);
-  next.setHours(7, 0, 0, 0);
-  if (lagosNow.getHours() >= 7 || (lagosNow.getHours() === 6 && lagosNow.getMinutes() >= 55)) next.setDate(next.getDate() + 1);
+  next.setHours(Number.isFinite(targetHour) ? targetHour : 19, Number.isFinite(targetMinute) ? targetMinute : 0, 0, 0);
+  if (lagosNow.getTime() >= next.getTime()) next.setDate(next.getDate() + 1);
   const diff = next.getTime() - lagosNow.getTime();
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
@@ -83,13 +84,14 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const isVip = userProfile?.isVip || isAdmin;
 
   // Load the scheduled football gen time from Firestore settings (for display only)
-  const [scheduledTime, setScheduledTime] = useState('08:00');
+  const [scheduledTime, setScheduledTime] = useState('19:00');
   const [freePicksCount, setFreePicksCount] = useState(3);
-  const [countdown, setCountdown] = useState(getCountdownToNextPicks());
+  const [countdown, setCountdown] = useState(getCountdownToNextPicks('19:00'));
   useEffect(() => {
-    const timer = setInterval(() => setCountdown(getCountdownToNextPicks()), 60000);
+    setCountdown(getCountdownToNextPicks(scheduledTime));
+    const timer = setInterval(() => setCountdown(getCountdownToNextPicks(scheduledTime)), 60000);
     return () => clearInterval(timer);
-  }, []);
+  }, [scheduledTime]);
   const [visibleCount, setVisibleCount] = useState(15);
   useEffect(() => {
     getAppSettings().then(s => {
@@ -234,6 +236,66 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
     weekday: 'short', day: 'numeric', month: 'short'
   });
 
+  const topPick = useMemo(() => {
+    const ranked = [...predictions].sort((a, b) => {
+      const rankPri = { high: 4, medium: 3, low: 2, none: 1 };
+      return (rankPri[b.value_rank as keyof typeof rankPri] || 0) - (rankPri[a.value_rank as keyof typeof rankPri] || 0) ||
+        ((b.confidence || 0) - (a.confidence || 0));
+    });
+    return ranked.find(m => m.value_rank === 'high' || m.value_rank === 'medium') || ranked[0];
+  }, [predictions]);
+
+  const commandCenter = useMemo(() => {
+    if (loading) {
+      return {
+        tone: 'cyan',
+        label: language === 'fr' ? 'Synchronisation' : 'Syncing',
+        title: language === 'fr' ? 'Chargement des signaux du jour' : "Loading today's signals",
+        detail: language === 'fr' ? 'Nous préparons votre tableau de bord.' : 'Preparing your dashboard.',
+        action: language === 'fr' ? 'Patientez' : 'Please wait',
+        onClick: undefined as undefined | (() => void),
+      };
+    }
+    if (liveCount > 0) {
+      return {
+        tone: 'red',
+        label: language === 'fr' ? 'Action en direct' : 'Live action',
+        title: language === 'fr' ? `${liveCount} match${liveCount > 1 ? 's' : ''} à suivre maintenant` : `${liveCount} live match${liveCount > 1 ? 'es' : ''} to check now`,
+        detail: language === 'fr' ? 'Voir les scores avant de placer ou suivre vos tickets.' : 'Check scores before placing or tracking tickets.',
+        action: language === 'fr' ? 'Voir le live' : 'Open live scores',
+        onClick: () => setTab('live'),
+      };
+    }
+    if (!topPick) {
+      return {
+        tone: 'amber',
+        label: language === 'fr' ? 'Prochain cycle' : 'Next cycle',
+        title: language === 'fr' ? `Nouveaux picks à ${scheduledTime}` : `New picks at ${scheduledTimeDisplay}`,
+        detail: language === 'fr' ? `Revenez dans ${countdown.h}h ${countdown.m}m.` : `Come back in ${countdown.h}h ${countdown.m}m.`,
+        action: language === 'fr' ? 'Voir les scores live' : 'Check live scores',
+        onClick: () => setTab('live'),
+      };
+    }
+    if (!isVip) {
+      return {
+        tone: 'purple',
+        label: language === 'fr' ? 'Meilleure prochaine action' : 'Best next action',
+        title: language === 'fr' ? 'Commencez avec les picks gratuits' : 'Start with today\'s free picks',
+        detail: language === 'fr' ? `${freePicksCount} picks ouverts, le reste est réservé au VIP.` : `${freePicksCount} picks unlocked, VIP reveals the full card.`,
+        action: language === 'fr' ? 'Voir les picks gratuits' : 'View free picks',
+        onClick: () => setTab('free'),
+      };
+    }
+    return {
+      tone: 'emerald',
+      label: language === 'fr' ? 'Meilleure prochaine action' : 'Best next action',
+      title: language === 'fr' ? 'Ouvrez votre meilleur signal' : 'Open your strongest signal',
+      detail: `${topPick.homeTeam} vs ${topPick.awayTeam} - ${getPredictionText(topPick)}`,
+      action: language === 'fr' ? 'Voir pourquoi' : 'See why',
+      onClick: () => setSelectedMatch(topPick),
+    };
+  }, [loading, liveCount, topPick, isVip, language, scheduledTime, scheduledTimeDisplay, countdown.h, countdown.m, freePicksCount, setTab]);
+
   const sortLabels: Record<SortKey, string> = {
     time: language === 'fr' ? 'Heure' : 'Time',
     league: language === 'fr' ? 'Ligue' : 'League',
@@ -278,6 +340,44 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         </div>
       </div>
 
+      {/* Daily Command Center */}
+      <button
+        disabled={!commandCenter.onClick}
+        onClick={commandCenter.onClick}
+        className={`w-full text-left rounded-2xl border p-4 transition-all shadow-sm disabled:cursor-default ${
+          commandCenter.tone === 'red'
+            ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/15'
+            : commandCenter.tone === 'purple'
+              ? 'bg-vantage-purple/10 border-vantage-purple/30 hover:bg-vantage-purple/15'
+              : commandCenter.tone === 'amber'
+                ? 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/15'
+                : commandCenter.tone === 'emerald'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/15'
+                  : 'bg-vantage-cyan/10 border-vantage-cyan/30'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+            commandCenter.tone === 'red' ? 'bg-red-500/15 text-red-500' :
+            commandCenter.tone === 'purple' ? 'bg-vantage-purple/15 text-vantage-purple' :
+            commandCenter.tone === 'amber' ? 'bg-amber-500/15 text-amber-500' :
+            commandCenter.tone === 'emerald' ? 'bg-emerald-500/15 text-emerald-500' :
+            'bg-vantage-cyan/15 text-vantage-cyan'
+          }`}>
+            {commandCenter.tone === 'red' ? <Radio size={20} /> : commandCenter.tone === 'amber' ? <Clock size={20} /> : <Target size={20} />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">{commandCenter.label}</p>
+            <h2 className="text-base font-black text-slate-900 dark:text-white leading-tight mt-0.5">{commandCenter.title}</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{commandCenter.detail}</p>
+          </div>
+          <div className="shrink-0 flex items-center gap-1 text-xs font-black text-slate-900 dark:text-white">
+            <span className="hidden sm:inline">{commandCenter.action}</span>
+            <ChevronRight size={18} />
+          </div>
+        </div>
+      </button>
+
       {/* Rolling Results Ticker */}
       {predictions.some(m => m.status === 'won' || m.status === 'lost') && (
         <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5">
@@ -316,18 +416,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
       )}
 
       {/* ── Zone A: Top Pick Hero ── */}
-      {(() => {
-        const topPick = useMemo(() => {
-          const ranked = [...predictions].sort((a, b) => {
-            const rankPri = { high: 4, medium: 3, low: 2, none: 1 };
-            return (rankPri[b.value_rank as keyof typeof rankPri] || 0) - (rankPri[a.value_rank as keyof typeof rankPri] || 0) ||
-                   ((b.confidence || 0) - (a.confidence || 0));
-          });
-          return ranked.find(m => m.value_rank === 'high' || m.value_rank === 'medium') || ranked[0];
-        }, [predictions]);
-
-        if (!topPick) return null;
-
+      {topPick && (() => {
         const pred = getPredictionText(topPick);
         return (
           <button
@@ -561,8 +650,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                     : activeSport === 'cricket'
                       ? (language === 'fr' ? "Pas de pronostics cricket pour aujourd'hui. Revenez plus tard." : 'No cricket predictions yet. Come back later.')
                     : (language === 'fr'
-                      ? `Les pronostics sont publiés chaque matin à ${scheduledTime}. Revenez dans ${countdown.h}h ${countdown.m}m.`
-                      : `Predictions are published every morning at ${scheduledTimeDisplay}. Come back in ${countdown.h}h ${countdown.m}m.`
+                      ? `Les pronostics sont publiés à ${scheduledTime}. Revenez dans ${countdown.h}h ${countdown.m}m.`
+                      : `Predictions publish at ${scheduledTimeDisplay}. Come back in ${countdown.h}h ${countdown.m}m.`
                     )}
                 </p>
               </>

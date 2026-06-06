@@ -98,8 +98,8 @@ export const ArbFinder: React.FC<ArbFinderProps> = ({ setTab }) => {
                     <Zap size={16} className="text-vantage-cyan shrink-0 mt-0.5" />
                     <p className="text-xs text-gray-400 leading-relaxed">
                         {language === 'fr'
-                            ? 'L\'IA scanne plusieurs bookmakers en temps réel pour trouver des écarts de cotes garantissant un profit sans risque.'
-                            : 'The AI scans multiple bookmakers in real-time to find odds discrepancies that guarantee a risk-free profit.'}
+                            ? 'L\'IA scanne plusieurs bookmakers en temps réel pour trouver des écarts de cotes où un staking discipliné peut verrouiller un petit edge.'
+                            : 'The AI scans multiple bookmakers in real-time to find odds discrepancies where disciplined stake sizing can lock in a small edge.'}
                     </p>
                 </div>
             </GlassCard>

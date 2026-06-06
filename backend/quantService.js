@@ -193,7 +193,7 @@ async function spawnPythonPipeline(dateStr = null, dryRun = false) {
 
 // ── Startup probe: resolve Python binary at module load time ─────────────────
 // This runs when server.js imports quantService.js, logging success/failure
-// immediately at startup rather than waiting for the 07:00 cron job.
+// immediately at startup rather than waiting for the 19:00 cron job.
 resolvePythonBin().then(bin => {
     logger.info(`[QuantService] 🐍 Python probe complete. Active binary: ${bin}`);
 }).catch(err => {
@@ -549,7 +549,7 @@ function getLagosDateKey() {
 
 // ── Startup probe: resolve Python binary at module load time ──────────────────
 // Runs when server.js imports quantService.js — logs success/failure
-// immediately at container boot instead of waiting for the 07:00 cron job.
+// immediately at container boot instead of waiting for the 19:00 cron job.
 resolvePythonBin().then(bin => {
     logger.info(`[QuantService] 🐍 Python probe complete. Active binary: ${bin}`);
 }).catch(err => {
