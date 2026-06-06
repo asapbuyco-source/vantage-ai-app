@@ -42,6 +42,9 @@ MARKETS = 'h2h' # Focusing on Moneyline (Match Winner) for highest reliability
 
 MIN_EV = 0.03               # 3% minimum expected value
 MIN_PROBABILITY = 0.50      # 50% minimum true probability
+MIN_VALUE_BETS = 3          # Keep the daily basketball card useful when markets are thin
+RELAXED_MIN_EV = 0.01       # Reduced defensive gate used only when strict value is scarce
+RELAXED_MIN_PROBABILITY = 0.47
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER: Get Lagos date
@@ -77,7 +80,7 @@ def fetch_odds():
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 2: Process consensus probabilities and find EV
 # ─────────────────────────────────────────────────────────────────────────────
-def process_games(games_data):
+def process_games(games_data, min_ev=MIN_EV, min_probability=MIN_PROBABILITY, relaxed=False):
     approved_bets = []
     
     for game in games_data:
@@ -136,7 +139,7 @@ def process_games(games_data):
         away_ev = (best_away_odds * consensus_prob_away) - 1.0
         
         bet = None
-        if home_ev >= MIN_EV and consensus_prob_home >= MIN_PROBABILITY:
+        if home_ev >= min_ev and consensus_prob_home >= min_probability:
             bet = {
                 "team": home_team,
                 "prediction_en": "Home Win",
@@ -145,7 +148,7 @@ def process_games(games_data):
                 "ev": home_ev,
                 "odds": best_home_odds
             }
-        elif away_ev >= MIN_EV and consensus_prob_away >= MIN_PROBABILITY:
+        elif away_ev >= min_ev and consensus_prob_away >= min_probability:
             bet = {
                 "team": away_team,
                 "prediction_en": "Away Win",
@@ -158,6 +161,11 @@ def process_games(games_data):
         if bet:
             confidence = round(bet["prob"] * 100)
             category = "safe" if confidence >= 70 else "value" if confidence >= 60 else "risky"
+            if relaxed and category == "safe":
+                category = "value"
+
+            relaxation_note_en = " | Relaxed gates: thin value slate" if relaxed else ""
+            relaxation_note_fr = " | Filtres assouplis: peu de value" if relaxed else ""
             
             approved_bets.append({
                 "id": f"bball_{game_id}",
@@ -173,14 +181,39 @@ def process_games(games_data):
                 "confidence": confidence,
                 "odds": round(bet["odds"], 2),
                 "category": category,
-                "analysis_en": f"Consensus EV: +{round(bet['ev']*100, 1)}% | Win Prob: {confidence}% | Best Odds: {bet['odds']}",
-                "analysis_fr": f"Consensus EV: +{round(bet['ev']*100, 1)}% | Prob Victoire: {confidence}% | Meilleure Cote: {bet['odds']}",
+                "analysis_en": f"Consensus EV: +{round(bet['ev']*100, 1)}% | Win Prob: {confidence}% | Best Odds: {bet['odds']}{relaxation_note_en}",
+                "analysis_fr": f"Consensus EV: +{round(bet['ev']*100, 1)}% | Prob Victoire: {confidence}% | Meilleure Cote: {bet['odds']}{relaxation_note_fr}",
                 "sport": "basketball",
                 "status": "pending",
                 "generatedBy": "quant_basketball",
+                "filterMode": "relaxed" if relaxed else "strict",
             })
             
     return approved_bets
+
+def ensure_minimum_value_bets(games_data, strict_bets):
+    if len(strict_bets) >= MIN_VALUE_BETS:
+        return strict_bets
+
+    relaxed_bets = process_games(
+        games_data,
+        min_ev=RELAXED_MIN_EV,
+        min_probability=RELAXED_MIN_PROBABILITY,
+        relaxed=True,
+    )
+    by_id = {bet["id"]: bet for bet in strict_bets}
+    for bet in relaxed_bets:
+        if bet["id"] not in by_id:
+            by_id[bet["id"]] = bet
+        if len(by_id) >= MIN_VALUE_BETS:
+            break
+
+    filled = list(by_id.values())
+    print(
+        f"[Basketball] Strict value slate had {len(strict_bets)} picks; "
+        f"relaxed defensive gates added {len(filled) - len(strict_bets)}."
+    )
+    return filled
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 3: Firestore Persistence
@@ -233,7 +266,8 @@ def main():
         return
         
     print(f"[Basketball] Found {len(games_data)} NBA games. Finding Consensus EV edges...")
-    approved = process_games(games_data)
+    strict_approved = process_games(games_data)
+    approved = ensure_minimum_value_bets(games_data, strict_approved)
     
     print(f"\n[Basketball] Pipeline complete!")
     print(f"  Games analyzed: {len(games_data)}")
