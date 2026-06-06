@@ -5,7 +5,7 @@ import { Match, AccumulatorSet, WinRateStats } from '../types';
 import {
     deleteTodaysPredictions, getGlobalTodayKey,
     saveTodaysPredictions, saveAccumulatorsForDate,
-    getDailyData, getWinRateStats, getTodaysBasketballPredictions, saveBasketballPredictions, normalizeQuantPrediction,
+    getDailyData, getWinRateStats, getTodaysBasketballPredictions, getTodaysCricketPredictions, saveBasketballPredictions, normalizeQuantPrediction,
 } from '../services/db';
 import { db } from '../firebaseConfig';
 import { generateSmartAccumulators } from '../services/gemini';
@@ -17,6 +17,7 @@ interface DataContextType {
     rawFixtures: Match[];
     accumulators: AccumulatorSet | null;
     basketballPredictions: Match[];
+    cricketPredictions: Match[];
     winRateStats: WinRateStats;
     loading: boolean;
     isSystemGenerating: boolean;
@@ -44,6 +45,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [rawFixtures, setRawFixtures] = useState<Match[]>([]);
     const [accumulators, setAccumulators] = useState<AccumulatorSet | null>(null);
     const [basketballPredictions, setBasketballPredictions] = useState<Match[]>([]);
+    const [cricketPredictions, setCricketPredictions] = useState<Match[]>([]);
     const [winRateStats, setWinRateStats] = useState<WinRateStats>(DEFAULT_WIN_RATES);
     const [loading, setLoading] = useState(true);
     const [isSystemGenerating, setIsSystemGenerating] = useState(false);
@@ -142,13 +144,22 @@ const fetchFromDB = async (bypassCache = false) => {
                     }
                 }
 
-                // Load basketball predictions passively (read-only)
+                // Load non-football predictions passively (read-only)
                 if (isToday) {
-                    const bball = await getTodaysBasketballPredictions();
+                    const [bball, cricket] = await Promise.all([
+                        getTodaysBasketballPredictions(),
+                        getTodaysCricketPredictions(),
+                    ]);
                     if (signal.aborted) return;
-                    if (mountedRef.current) setBasketballPredictions(bball || []);
+                    if (mountedRef.current) {
+                        setBasketballPredictions(bball || []);
+                        setCricketPredictions(cricket || []);
+                    }
                 } else {
-                    if (mountedRef.current) setBasketballPredictions([]);
+                    if (mountedRef.current) {
+                        setBasketballPredictions([]);
+                        setCricketPredictions([]);
+                    }
                 }
 
             } catch (e) {
@@ -224,6 +235,7 @@ const fetchFromDB = async (bypassCache = false) => {
             setPredictions([]);
             setAccumulators(null);
             setBasketballPredictions([]);
+            setCricketPredictions([]);
             setWinRateStats(DEFAULT_WIN_RATES);
             setLoading(false);
         }
@@ -267,6 +279,7 @@ const fetchFromDB = async (bypassCache = false) => {
             rawFixtures,
             accumulators,
             basketballPredictions,
+            cricketPredictions,
             winRateStats,
             loading,
             isSystemGenerating,

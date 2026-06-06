@@ -3,7 +3,7 @@ export type NavigationTab = 'home' | 'free' | 'vip' | 'guide' | 'profile' | 'adm
 
 export type Language = 'en' | 'fr';
 
-export type Sport = 'football' | 'basketball';
+export type Sport = 'football' | 'basketball' | 'cricket';
 
 export interface Match {
   id: string;

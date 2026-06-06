@@ -76,7 +76,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   const { t, language, setLanguage, theme, toggleTheme, showToast } = useAppContext();
   const { user, userProfile, isAdmin } = useAuth();
   const {
-    activeDate, predictions, rawFixtures, basketballPredictions,
+    activeDate, predictions, rawFixtures, basketballPredictions, cricketPredictions,
     winRateStats, loading, isSystemGenerating, systemError, liveCount
   } = useData();
 
@@ -148,7 +148,9 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   // rawFixtures = raw API fixtures with no AI analysis — only shown as a fallback if predictions are empty
   const fixturePool = activeSport === 'football'
     ? (predictions.length > 0 ? predictions : rawFixtures)
-    : basketballPredictions;
+    : activeSport === 'basketball'
+      ? basketballPredictions
+      : cricketPredictions;
 
   const filteredMatches = useMemo(() => {
     let result = [...fixturePool];
@@ -430,7 +432,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
       <div className="space-y-3 sticky top-[72px] z-20 bg-vantage-lightBg dark:bg-vantage-bg backdrop-blur-md py-2 -mx-2 px-2">
         {/* Sport Toggle */}
         <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 border border-slate-200 dark:border-white/10">
-          {(['football', 'basketball'] as Sport[]).map(sport => (
+          {(['football', 'basketball', 'cricket'] as Sport[]).map(sport => (
             <button
               key={sport}
               onClick={() => setActiveSport(sport)}
@@ -439,9 +441,11 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                 : 'text-gray-500'
                 }`}
             >
-              {sport === 'football' ? '⚽' : '🏀'}
+              {sport === 'football' ? '⚽' : sport === 'basketball' ? '🏀' : '🏏'}
               {sport === 'football'
                 ? (language === 'fr' ? 'Football' : 'Football')
+                : sport === 'cricket'
+                  ? (language === 'fr' ? 'Cricket' : 'Cricket')
                 : (language === 'fr' ? 'Basketball' : 'Basketball')}
             </button>
           ))}
@@ -554,6 +558,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                 <p className="text-xs text-gray-500 max-w-[220px] leading-relaxed">
                   {activeSport === 'basketball'
                     ? (language === 'fr' ? "Pas de pronostics basketball pour aujourd'hui. Revenez plus tard." : 'No basketball predictions yet. Come back later.')
+                    : activeSport === 'cricket'
+                      ? (language === 'fr' ? "Pas de pronostics cricket pour aujourd'hui. Revenez plus tard." : 'No cricket predictions yet. Come back later.')
                     : (language === 'fr'
                       ? `Les pronostics sont publiés chaque matin à ${scheduledTime}. Revenez dans ${countdown.h}h ${countdown.m}m.`
                       : `Predictions are published every morning at ${scheduledTimeDisplay}. Come back in ${countdown.h}h ${countdown.m}m.`

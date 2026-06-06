@@ -15,7 +15,7 @@ export const Screener: React.FC<ScreenerProps> = ({ matches }) => {
     const [minEV, setMinEV] = useState<number>(2); // 2% default
     const [minConf, setMinConf] = useState<number>(60);
     const [minOdds, setMinOdds] = useState<number>(1.2);
-    const [sportFilter, setSportFilter] = useState<'all' | 'football' | 'basketball'>('all');
+    const [sportFilter, setSportFilter] = useState<'all' | 'football' | 'basketball' | 'cricket'>('all');
     
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [showFilters, setShowFilters] = useState(true);
@@ -112,6 +112,7 @@ export const Screener: React.FC<ScreenerProps> = ({ matches }) => {
                                 <option value="all">All Markets</option>
                                 <option value="football">Football</option>
                                 <option value="basketball">Basketball</option>
+                                <option value="cricket">Cricket</option>
                             </select>
                         </div>
                     </div>

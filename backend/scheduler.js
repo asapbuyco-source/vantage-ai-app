@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import admin from 'firebase-admin';
 
 // ── Quant Engine (pure statistical — no AI/LLM) ───────────────────────────────
-import { runQuantPipeline, runQuantGrading, runQuantPerformance, runBasketballPipeline } from './quantService.js';
+import { runQuantPipeline, runQuantGrading, runQuantPerformance, runBasketballPipeline, runCricketPipeline } from './quantService.js';
 
 // ── Blog Generator (programmatic — no AI) ───────────────────────────────
 import { triggerBlogGeneration } from './blogGenerator.js';
@@ -120,6 +120,22 @@ export const triggerBasketballGeneration = async () => {
     }
 };
 
+export const triggerCricketGeneration = async () => {
+    console.log('[Scheduler] Running Cricket Quant Pipeline...');
+    try {
+        const result = await runCricketPipeline();
+        if (result && result.status === 'success') {
+            console.log(`[Scheduler] Cricket Quant done: ${result.generated} picks from ${result.matches_analyzed} fixtures.`);
+            return result;
+        }
+        console.warn(`[Scheduler] Cricket Quant: ${result?.status} - ${result?.reason || result?.error}`);
+        return { status: 'skipped', reason: result?.status };
+    } catch (e) {
+        console.error('[Scheduler] Cricket Pipeline error:', e.message);
+        return { status: 'error', error: e.message };
+    }
+};
+
 export const triggerGrading = async (customDate, forceRegrade) => {
     return triggerQuantGrading(customDate);
 };
@@ -172,6 +188,7 @@ const isWithinScheduleWindow = (scheduledTime) => {
 const tasks = new Map();
 let currentFootballTime = null;
 let currentBasketballTime = null;
+let currentCricketTime = null;
 let currentGradingTime = null;
 let currentBlogTime = null;
 let currentTelegramTime = null;
@@ -198,6 +215,7 @@ export const initScheduler = () => {
             // Look for times in HH:MM format (safe defaults if Firestore value is missing/malformed)
             const footballTime = safeTime(config.quantGenTime || config.footballGenTime, '07:00');
             const basketballTime = safeTime(config.basketballGenTime, '10:00');
+            const cricketTime = safeTime(config.cricketGenTime, '10:30');
             const gradingTime = safeTime(config.gradingTime, '06:00');
             const blogTime = safeTime(config.blogGenTime, '09:00');
             const telegramTime = safeTime(config.telegramSendTime, '08:30');
@@ -242,6 +260,23 @@ export const initScheduler = () => {
                 }, { timezone: "Africa/Lagos" });
                 tasks.set('basketball', basketballTask);
                 console.log(`✅ Scheduled Basketball Quant for ${basketballTime} (Quant→OpenAI→Gemini)`);
+            }
+
+            if (cricketTime !== currentCricketTime) {
+                if (tasks.get('cricket')) tasks.get('cricket').stop();
+                currentCricketTime = cricketTime;
+                const [cHour, cMin] = cricketTime.split(':');
+
+                const cricketTask = cron.schedule(`${cMin} ${cHour} * * *`, async () => {
+                    if (!isWithinScheduleWindow(currentCricketTime)) {
+                        console.warn(`[Scheduler] Cricket time-gate blocked: not within window of ${currentCricketTime}`);
+                        return;
+                    }
+                    console.log(`Running Cricket Quant Pipeline at ${cricketTime}...`);
+                    await triggerCricketGeneration();
+                }, { timezone: "Africa/Lagos" });
+                tasks.set('cricket', cricketTask);
+                console.log(`Scheduled Cricket Quant for ${cricketTime}`);
             }
 
             // ══════════════════════════════════════════════════════════════════
@@ -830,7 +865,7 @@ export const initScheduler = () => {
 export const stopScheduler = () => {
     const allTasks = [
         'sync', 'selar', 'liveScore', 'stats', 'tomorrow',
-        'basketball', 'blog', 'telegram', 'quant', 'quantGrading', 'repair', 'seeder',
+        'basketball', 'cricket', 'blog', 'telegram', 'quant', 'quantGrading', 'repair', 'seeder',
         'lineup'
     ];
     for (const name of allTasks) {

@@ -82,6 +82,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
     // Scheduler & SEO Settings
     const [footballGenTime, setFootballGenTime] = useState('08:00');
     const [basketballGenTime, setBasketballGenTime] = useState('10:00');
+    const [cricketGenTime, setCricketGenTime] = useState('10:30');
     const [gradingTime, setGradingTime] = useState('06:00');
     const [blogGenTime, setBlogGenTime] = useState('09:00');
     const [googleSiteVerificationTag, setGoogleSiteVerificationTag] = useState('');
@@ -107,6 +108,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             // Scheduler Times & SEO
             if (s.footballGenTime) setFootballGenTime(s.footballGenTime);
             if (s.basketballGenTime) setBasketballGenTime(s.basketballGenTime);
+            if (s.cricketGenTime) setCricketGenTime(s.cricketGenTime);
             if (s.gradingTime) setGradingTime(s.gradingTime);
             if (s.blogGenTime) setBlogGenTime(s.blogGenTime);
             if (s.googleSiteVerificationTag) setGoogleSiteVerificationTag(s.googleSiteVerificationTag);
@@ -198,6 +200,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             await saveAppSettings({
                 footballGenTime,
                 basketballGenTime,
+                cricketGenTime,
                 gradingTime,
                 blogGenTime
             });
@@ -437,6 +440,28 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             alert(`❌ Failed to run Basketball Pipeline: ${error.message}`);
         } finally {
             setIsBasketballPipelineRunning(false);
+        }
+    };
+
+    const [isCricketPipelineRunning, setIsCricketPipelineRunning] = useState(false);
+    const handleGenerateCricket = async () => {
+        setIsCricketPipelineRunning(true);
+        try {
+            const result = await adminFetch('/api/admin/generate-cricket', {
+                method: 'POST',
+                body: JSON.stringify({})
+            });
+
+            if (result.status === 'success') {
+                alert(`✅ Cricket Quant Pipeline complete: ${result.generated ?? 0} picks saved for ${result.date || 'today'}.`);
+            } else {
+                alert(`❌ Cricket pipeline error: ${result.error || result.message || 'Unknown error'}`);
+            }
+        } catch (error: any) {
+            console.error('Cricket pipeline error:', error);
+            alert(`❌ Failed to run Cricket Pipeline: ${error.message}`);
+        } finally {
+            setIsCricketPipelineRunning(false);
         }
     };
 
@@ -816,6 +841,15 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                             </button>
 
                             <button
+                                onClick={handleGenerateCricket}
+                                disabled={isSystemGenerating || isBasketballGenerating || isCricketPipelineRunning}
+                                className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-bold border border-emerald-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                            >
+                                {isCricketPipelineRunning ? <RefreshCw size={14} className="animate-spin" /> : <span>🏏</span>}
+                                {isCricketPipelineRunning ? 'Generating Picks...' : '🏏 Cricket Quant Picks'}
+                            </button>
+
+                            <button
                                 onClick={handleGenerateAccas}
                                 disabled={isSystemGenerating || isBasketballGenerating}
                                 className="w-full py-2 bg-vantage-cyan/10 hover:bg-vantage-cyan/20 text-vantage-cyan rounded-lg text-xs font-bold border border-vantage-cyan/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
@@ -1022,7 +1056,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                             Set the time (HH:MM) when Railway should automatically trigger prediction fetching and grading. Ensure you've provided the Firebase Admin service account to your Railway variables.
                         </p>
 
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div className="flex flex-col bg-black/20 p-3 rounded-lg border border-white/5">
                                 <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">⚽ Football Gen (Lagos)</span>
                                 <input
@@ -1038,6 +1072,15 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
                                     type="time"
                                     value={basketballGenTime}
                                     onChange={e => setBasketballGenTime(e.target.value)}
+                                    className="bg-transparent text-white text-sm outline-none font-mono"
+                                />
+                            </div>
+                            <div className="flex flex-col bg-black/20 p-3 rounded-lg border border-white/5">
+                                <span className="text-[10px] text-gray-500 uppercase font-bold mb-1">🏏 Cricket Gen (Lagos)</span>
+                                <input
+                                    type="time"
+                                    value={cricketGenTime}
+                                    onChange={e => setCricketGenTime(e.target.value)}
                                     className="bg-transparent text-white text-sm outline-none font-mono"
                                 />
                             </div>

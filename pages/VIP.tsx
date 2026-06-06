@@ -45,7 +45,7 @@ interface VIPProps {
 
 export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   const { t, language, showToast } = useAppContext();
-  const { predictions, accumulators: dataContextAccumulators, loading, basketballPredictions } = useData();
+  const { predictions, accumulators: dataContextAccumulators, loading, basketballPredictions, cricketPredictions } = useData();
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -65,7 +65,11 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
   }, []);
 
   const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault'>('predictions');
-  const [activeSport, setActiveSport] = useState<'football' | 'basketball'>('football');
+  const [activeSport, setActiveSport] = useState<'football' | 'basketball' | 'cricket'>('football');
+  const activeAltPredictions = activeSport === 'cricket' ? cricketPredictions : basketballPredictions;
+  const activeAltSportLabel = activeSport === 'cricket' ? 'Cricket' : 'Basketball';
+  const activeAltLeagueLabel = activeSport === 'cricket' ? 'Cricket' : 'NBA';
+  const activeAltIcon = activeSport === 'cricket' ? '🏏' : '🏀';
   const [picksDay, setPicksDay] = useState<'today' | 'tomorrow'>('today');
   const [tomorrowFixtures, setTomorrowFixtures] = useState<Match[]>([]);
   const [tomorrowLoading, setTomorrowLoading] = useState(false);
@@ -590,14 +594,24 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                   >
                     🏀 NBA
                   </button>
+                  <button
+                    onClick={() => setActiveSport('cricket')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                      activeSport === 'cricket'
+                        ? 'bg-white dark:bg-slate-800 shadow text-emerald-400'
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    🏏 Cricket
+                  </button>
                 </div>
 
                 {/* ── Basketball Feed ── */}
-                {activeSport === 'basketball' && (
-                  basketballPredictions && basketballPredictions.length > 0 ? (
+                {activeSport !== 'football' && (
+                  activeAltPredictions && activeAltPredictions.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                       <AnimatePresence>
-                        {basketballPredictions.map((match, idx) => {
+                        {activeAltPredictions.map((match, idx) => {
                           const cat = (match as any).category || 'value';
                           const cfg = CAT_CONFIG[cat as keyof typeof CAT_CONFIG] || CAT_CONFIG.value;
                           return (
@@ -610,12 +624,12 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                               <div className={`relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 flex flex-col ${cfg.border}`}>
                                 <div className="flex justify-between items-center px-4 pt-4 pb-2">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">NBA</span>
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{activeAltLeagueLabel}</span>
                                     <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.badge}`}>
                                       {cfg.icon} {cfg.label}
                                     </span>
                                   </div>
-                                  <span className="text-[10px] font-bold font-mono text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">🏀 Basketball</span>
+                                  <span className="text-[10px] font-bold font-mono text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">{activeAltIcon} {activeAltSportLabel}</span>
                                 </div>
                                 <div className="flex justify-between items-center px-4 py-3">
                                   <span className="text-xs font-bold text-slate-900 dark:text-white truncate w-5/12">{match.homeTeam}</span>
@@ -653,8 +667,8 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
                     </div>
                   ) : (
                     <div className="text-center py-8 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10">
-                      <span className="text-4xl block mb-2">🏀</span>
-                      <p className="text-sm font-medium text-gray-500">No NBA value bets found today</p>
+                      <span className="text-4xl block mb-2">{activeAltIcon}</span>
+                      <p className="text-sm font-medium text-gray-500">No {activeAltSportLabel} value bets found today</p>
                       <p className="text-xs text-gray-400 mt-1">The model only flags genuine +EV edges</p>
                     </div>
                   )

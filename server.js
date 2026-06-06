@@ -15,7 +15,7 @@ import OpenAI from 'openai';
 import sanitizeHtml from 'sanitize-html';
 import jwt from 'jsonwebtoken';
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
-import { initScheduler, stopScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance, repairCorruptedPredictions } from './backend/scheduler.js';
+import { initScheduler, stopScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerCricketGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance, repairCorruptedPredictions } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
 import { requireFirebaseUser } from './backend/authMiddleware.js';
 import { assertValidPlan, inferPlanFromAmount } from './backend/paymentPlans.js';
@@ -396,6 +396,18 @@ app.post('/api/admin/generate-basketball', adminAuth, async (req, res) => {
         logger.error({ error: e }, '[API] Basketball pipeline error');
         Sentry.captureException(e);
         res.status(500).json({ error: 'Basketball pipeline failed', details: e.message });
+    }
+});
+
+app.post('/api/admin/generate-cricket', adminAuth, async (req, res) => {
+    try {
+        logger.info('[API] Manual Cricket Quant Pipeline triggered via Admin');
+        const result = await triggerCricketGeneration();
+        res.json(result);
+    } catch (e) {
+        logger.error({ error: e }, '[API] Cricket pipeline error');
+        Sentry.captureException(e);
+        res.status(500).json({ error: 'Cricket pipeline failed', details: e.message });
     }
 });
 

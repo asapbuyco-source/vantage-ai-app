@@ -605,6 +605,7 @@ export interface AppSettings {
     annualPlanEnabled?: boolean;
     footballGenTime?: string;
     basketballGenTime?: string;
+    cricketGenTime?: string;
     blogGenTime?: string; // Daily time to generate AI SEO blog
     googleSiteVerificationTag?: string; // GSC Meta tag for injection
     gradingTime?: string;
@@ -787,4 +788,35 @@ export const confirmVaultBet = async (uid: string, dateKey: string, fixtureId: s
         if (idx >= 0) picks[idx] = { ...picks[idx], confirmed: true };
         tx.update(ref, { picks });
     });
+};
+
+export const getTodaysCricketPredictions = async (): Promise<Match[]> => {
+    try {
+        const todayStr = getGlobalTodayKey();
+        const docRef = doc(db, "cricket_predictions", todayStr);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            return (data.matches as Match[]) || [];
+        }
+    } catch (e) {
+        console.warn("[DB] Error fetching cricket predictions:", e);
+    }
+    return [];
+};
+
+export const saveCricketPredictions = async (matches: Match[]): Promise<void> => {
+    try {
+        if (!auth.currentUser) return;
+        const todayStr = getGlobalTodayKey();
+        const docRef = doc(db, "cricket_predictions", todayStr);
+        await setDoc(docRef, {
+            matches,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log(`[DB] Cricket predictions saved for ${todayStr}.`);
+    } catch (e) {
+        console.error("[DB] Cricket predictions save error:", e);
+        throw e;
+    }
 };

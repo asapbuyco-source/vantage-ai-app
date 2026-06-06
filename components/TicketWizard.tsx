@@ -18,7 +18,7 @@ interface TicketWizardProps {
 
 export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
     const { t, language } = useAppContext();
-    const { predictions, basketballPredictions } = useData();
+    const { predictions, basketballPredictions, cricketPredictions } = useData();
     const { toggleSavedPick, isPickSaved } = useAppContext();
     const { userProfile } = useAuth();
     const isVip = userProfile?.isVip || false;
@@ -38,7 +38,10 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedTicket, setGeneratedTicket] = useState<Match[] | null>(null);
 
-    const allMatches = useMemo(() => [...predictions, ...basketballPredictions], [predictions, basketballPredictions]);
+    const allMatches = useMemo(
+        () => [...predictions, ...basketballPredictions, ...cricketPredictions],
+        [predictions, basketballPredictions, cricketPredictions]
+    );
 
     const generateTicket = () => {
         setIsGenerating(true);

@@ -66,6 +66,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /cricket_predictions/{dateStr} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /daily_blogs/{dateStr} {
       allow read: if true;
       allow write: if isAdmin();

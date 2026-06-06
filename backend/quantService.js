@@ -82,6 +82,7 @@ function buildPythonEnv() {
         ].join(':'),
         // Only forward the API tokens and config that Python needs
         SPORTMONKS_API_TOKEN: process.env.SPORTMONKS_API_TOKEN || '',
+        SPORTMONKS_CRICKET_API_TOKEN: process.env.SPORTMONKS_CRICKET_API_TOKEN || '',
         API_FOOTBALL_KEY: process.env.API_FOOTBALL_KEY || '',
         API_BASKETBALL_KEY: process.env.API_BASKETBALL_KEY || '',
         ODDS_API_KEY: process.env.ODDS_API_KEY || '',
@@ -460,6 +461,83 @@ export const runBasketballPipeline = async (dateStr = null, dryRun = false) => {
         };
     } catch (err) {
         logger.error(`[QuantService] 🏀 Basketball pipeline failed: ${err.message}`);
+        return { status: 'error', error: err.message };
+    }
+};
+
+export const runCricketPipeline = async (dateStr = null, dryRun = false) => {
+    const label = dryRun ? 'DRY RUN' : (dateStr || 'today');
+    logger.info(`[QuantService] Starting Cricket Pipeline (${label})...`);
+
+    try {
+        const { stdout } = await withExponentialBackoff(
+            async () => {
+                const pythonBin = await resolvePythonBin();
+                return new Promise((resolve, reject) => {
+                    const args = ['cricket_pipeline.py'];
+                    if (dateStr) args.push(dateStr);
+                    if (dryRun) args.push('--dry-run');
+
+                    logger.info(`[QuantService] Spawning: ${pythonBin} ${args.join(' ')}`);
+
+                    const py = spawn(pythonBin, args, {
+                        cwd: path.join(__dirname, 'quant'),
+                        env: buildPythonEnv(),
+                    });
+
+                    let stdout = '';
+                    let stderr = '';
+
+                    py.stdout.on('data', (data) => {
+                        const line = data.toString();
+                        stdout += line;
+                        line.split('\n').filter(Boolean).forEach(l => logger.info(`[Python|Cricket] ${l}`));
+                    });
+                    py.stderr.on('data', (data) => {
+                        const line = data.toString();
+                        stderr += line;
+                        line.split('\n').filter(Boolean).forEach(l => logger.warn(`[Python|Cricket|ERR] ${l}`));
+                    });
+
+                    py.on('close', (code) => {
+                        if (code !== 0) {
+                            reject(new Error(`Cricket pipeline exited with code ${code}: ${stderr.slice(-500)}`));
+                            return;
+                        }
+                        resolve({ stdout, stderr });
+                    });
+
+                    py.on('error', (err) => reject(new Error(`Failed to spawn cricket pipeline: ${err.message}`)));
+
+                    setTimeout(() => {
+                        py.kill('SIGTERM');
+                        reject(new Error('Cricket pipeline timed out after 5 minutes'));
+                    }, 5 * 60 * 1000);
+                });
+            },
+            {
+                maxAttempts: 2,
+                baseDelayMs: 2000,
+                backoffMultiplier: 2.5,
+                maxDelayMs: 15000,
+                label: 'Cricket pipeline execution'
+            }
+        );
+
+        const fixturesMatch = stdout.match(/Fixtures analyzed:\s*(\d+)/);
+        const picksMatch = stdout.match(/Value picks identified:\s*(\d+)/);
+        const fixturesAnalyzed = fixturesMatch ? parseInt(fixturesMatch[1]) : 0;
+        const generated = picksMatch ? parseInt(picksMatch[1]) : 0;
+
+        logger.info(`[QuantService] Cricket done: ${generated} picks from ${fixturesAnalyzed} fixtures.`);
+        return {
+            status: 'success',
+            generated,
+            matches_analyzed: fixturesAnalyzed,
+            date: dateStr || getLagosDateKey(),
+        };
+    } catch (err) {
+        logger.error(`[QuantService] Cricket pipeline failed: ${err.message}`);
         return { status: 'error', error: err.message };
     }
 };
