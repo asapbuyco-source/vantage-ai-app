@@ -146,7 +146,17 @@ def _get(path: str, params: dict | None = None) -> list | dict | None:
         try:
             resp = requests.get(f"{SM_BASE}{path}", params=base_params, timeout=45)
             resp.raise_for_status()
-            return resp.json()
+            payload = resp.json()
+            if isinstance(payload, dict):
+                if "data" not in payload:
+                    msg = payload.get("message") or payload.get("error") or payload.get("errors") or "missing data field"
+                    print(f"[DataPipeline] Sportmonks response on {path} had no data field: {str(msg)[:300]}", file=sys.stderr)
+                elif payload.get("data") in (None, []):
+                    important_path = path.startswith("/fixtures/date/") or path.startswith("/leagues/")
+                    if important_path:
+                        meta = payload.get("pagination") or payload.get("subscription") or payload.get("rate_limit") or {}
+                        print(f"[DataPipeline] Sportmonks returned empty data for {path}. meta={str(meta)[:300]}", file=sys.stderr)
+            return payload
         except Exception as e:
             if attempt < max_attempts - 1:
                 delay = base_delay * (2 ** attempt)
@@ -155,6 +165,68 @@ def _get(path: str, params: dict | None = None) -> list | dict | None:
             else:
                 print(f"[DataPipeline] API error on {path} after {max_attempts} attempts: {e}", file=sys.stderr)
     return None
+
+
+def _af_fetch_fixtures(date_str: str) -> list:
+    """Fallback fixture source when Sportmonks returns an empty slate.
+
+    API-Football fallback intentionally does not create value bets by itself
+    because odds may be unavailable. It keeps the dashboard populated with
+    real fixtures and model probability leans instead of leaving users with a
+    blank day.
+    """
+    if not AF_KEY:
+        print("[DataPipeline] API-Football fallback skipped: API_FOOTBALL_KEY is not configured.", file=sys.stderr)
+        return []
+
+    data = _af_get("fixtures", {"date": date_str, "timezone": "Africa/Lagos"})
+    rows = data.get("response", []) if isinstance(data, dict) else []
+    if not rows:
+        errors = data.get("errors") if isinstance(data, dict) else None
+        print(f"[DataPipeline] API-Football fallback returned 0 fixtures for {date_str}. errors={str(errors)[:300]}", file=sys.stderr)
+        return []
+
+    fixtures = []
+    for row in rows[:MAX_MATCHES]:
+        fixture = row.get("fixture", {}) or {}
+        league = row.get("league", {}) or {}
+        teams = row.get("teams", {}) or {}
+        home = teams.get("home", {}) or {}
+        away = teams.get("away", {}) or {}
+        if not fixture.get("id") or not home.get("id") or not away.get("id"):
+            continue
+        fixtures.append({
+            "_provider": "api_football",
+            "id": fixture.get("id"),
+            "league_id": league.get("id") or 0,
+            "league": {
+                "id": league.get("id") or 0,
+                "name": league.get("name") or "Unknown League",
+                "image_path": league.get("logo") or "",
+            },
+            "starting_at": fixture.get("date") or "",
+            "participants": [
+                {
+                    "id": home.get("id"),
+                    "name": home.get("name") or "Home",
+                    "image_path": home.get("logo") or "",
+                    "meta": {"location": "home"},
+                },
+                {
+                    "id": away.get("id"),
+                    "name": away.get("name") or "Away",
+                    "image_path": away.get("logo") or "",
+                    "meta": {"location": "away"},
+                },
+            ],
+            "scores": [],
+            "odds": [],
+            "statistics": [],
+            "sidelined": [],
+        })
+
+    print(f"[DataPipeline] API-Football fallback supplied {len(fixtures)} fixtures for {date_str}.")
+    return fixtures
 
 
 def _get_paginated(path: str, params: dict | None = None, max_pages: int = 5) -> list:
@@ -675,8 +747,11 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         max_pages=3,
     )
     if not raw:
-        print("[DataPipeline] No fixtures returned.", file=sys.stderr)
-        return []
+        print("[DataPipeline] No Sportmonks fixtures returned. Trying API-Football fallback...", file=sys.stderr)
+        raw = _af_fetch_fixtures(date_str)
+        if not raw:
+            print("[DataPipeline] No fixtures returned from Sportmonks or API-Football.", file=sys.stderr)
+            return []
 
     # ── 🚨 Global Past Match Filter (Bypassed if date_str is in the past) ──
     is_today = date_str == datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
@@ -725,6 +800,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
                     "priority": priority,
                     "home_p": home_p,
                     "away_p": away_p,
+                    "source": item.get("_provider", "sportmonks"),
                 })
 
     # Sort by priority
@@ -749,7 +825,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
             
             # Must have at least basic 1X2 odds to be useful
             raw_odds = item.get("odds") or []
-            if not raw_odds:
+            if not raw_odds and item.get("_provider") != "api_football":
                 continue
 
             # Skip already-starte matches
@@ -770,6 +846,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
                 "priority": 0,
                 "home_p": home_p,
                 "away_p": away_p,
+                "source": item.get("_provider", "sportmonks"),
             })
     
     # Cap at MAX_MATCHES
@@ -782,6 +859,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
 
     for entry in approved:
         item = entry["raw"]
+        source = entry.get("source", "sportmonks")
         home_p = entry["home_p"]
         away_p = entry["away_p"]
         home_id = home_p.get("id")
@@ -850,30 +928,40 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
 
         # Fetch team form (recent matches)
         try:
-            home_recent = _get_paginated(
-                f"/fixtures/between/{from_date}/{date_str}",
-                {"include": "participants;scores;statistics", "filters": f"participantSearch:{home_id}", "per_page": 10},
-                max_pages=1,
-            )
-            away_recent = _get_paginated(
-                f"/fixtures/between/{from_date}/{date_str}",
-                {"include": "participants;scores;statistics", "filters": f"participantSearch:{away_id}", "per_page": 10},
-                max_pages=1,
-            )
-            home_stats = _parse_form(home_recent, home_id)
-            away_stats = _parse_form(away_recent, away_id)
-            home_stats.team_name = md.home_team
-            away_stats.team_name = md.away_team
-            md.home_stats = home_stats
-            md.away_stats = away_stats
+            if source == "api_football":
+                home_stats = TeamStats(team_id=home_id, team_name=md.home_team)
+                away_stats = TeamStats(team_id=away_id, team_name=md.away_team)
+                md.home_stats = home_stats
+                md.away_stats = away_stats
+                print(f"[DataPipeline] API-Football fallback stats defaults for {md.home_team} vs {md.away_team}")
+            else:
+                home_recent = _get_paginated(
+                    f"/fixtures/between/{from_date}/{date_str}",
+                    {"include": "participants;scores;statistics", "filters": f"participantSearch:{home_id}", "per_page": 10},
+                    max_pages=1,
+                )
+                away_recent = _get_paginated(
+                    f"/fixtures/between/{from_date}/{date_str}",
+                    {"include": "participants;scores;statistics", "filters": f"participantSearch:{away_id}", "per_page": 10},
+                    max_pages=1,
+                )
+                home_stats = _parse_form(home_recent, home_id)
+                away_stats = _parse_form(away_recent, away_id)
+                home_stats.team_name = md.home_team
+                away_stats.team_name = md.away_team
+                md.home_stats = home_stats
+                md.away_stats = away_stats
         except Exception as e:
             print(f"[DataPipeline] Form fetch error for {md.home_team} vs {md.away_team}: {e}", file=sys.stderr)
 
         # Fetch H2H via API-Football.com (cached in Firestore)
         try:
-            hw, aw, dr, avg_g, btts_r = _fetch_h2h_cached(
-                md.home_team, md.away_team, home_id, away_id, lid
-            )
+            if source == "api_football":
+                hw, aw, dr, avg_g, btts_r = 0, 0, 0, _league_avg(lid), 0.45
+            else:
+                hw, aw, dr, avg_g, btts_r = _fetch_h2h_cached(
+                    md.home_team, md.away_team, home_id, away_id, lid
+                )
             md.h2h_home_wins = hw
             md.h2h_away_wins = aw
             md.h2h_draws = dr

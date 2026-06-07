@@ -51,7 +51,15 @@ async function smGet(token, path, params = {}) {
         console.warn(`[Seeder] API error ${res.status} for ${path}`);
         return null;
     }
-    return res.json();
+    const json = await res.json();
+    if (!Object.prototype.hasOwnProperty.call(json, 'data')) {
+        const msg = json?.message || json?.error || json?.errors || 'missing data field';
+        console.warn(`[Seeder] Sportmonks response for ${path} had no data field: ${JSON.stringify(msg).slice(0, 300)}`);
+    } else if (json.data == null || (Array.isArray(json.data) && json.data.length === 0)) {
+        const meta = json?.pagination || json?.subscription || json?.rate_limit || {};
+        console.warn(`[Seeder] Sportmonks returned empty data for ${path}. meta=${JSON.stringify(meta).slice(0, 300)}`);
+    }
+    return json;
 }
 
 async function smGetPaginated(token, path, params = {}) {
