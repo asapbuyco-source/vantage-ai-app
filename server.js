@@ -39,9 +39,10 @@ if (SENTRY_DSN) {
         environment: process.env.NODE_ENV || 'development',
         tracesSampleRate: 0.1, // 10% of transactions for performance monitoring
         integrations: [
-            new Sentry.Integrations.Http({ tracing: true }),
-            new Sentry.Integrations.OnUncaughtException(),
-            new Sentry.Integrations.OnUnhandledRejection(),
+            Sentry.httpIntegration(),
+            Sentry.expressIntegration(),
+            Sentry.onUncaughtExceptionIntegration(),
+            Sentry.onUnhandledRejectionIntegration(),
         ],
     });
     console.log('✅ Sentry initialized for error tracking');
@@ -113,11 +114,6 @@ try {
 app.set('trust proxy', 1);
 
 // ── Sentry Middleware ─────────────────────────────────────────────────────────
-if (SENTRY_DSN) {
-    // Request handler must be the first middleware
-    app.use(Sentry.Handlers.requestHandler());
-}
-
 // Basic health check endpoint for Render/Railway (Needs to be above CORS so it isn't blocked by missing origin)
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -1107,8 +1103,8 @@ app.use(async (req, res, next) => {
 
 // ── Sentry Error Handler ──────────────────────────────────────────────────────
 // This must be last before app.listen
-if (SENTRY_DSN) {
-    app.use(Sentry.Handlers.errorHandler());
+if (SENTRY_DSN && typeof Sentry.setupExpressErrorHandler === 'function') {
+    Sentry.setupExpressErrorHandler(app);
 }
 
 // Global error handler (catches all unhandled errors)
@@ -1122,6 +1118,6 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     logger.info({ port: PORT, origins: allowedOrigins }, '🚀 Backend proxy server running');
 });
