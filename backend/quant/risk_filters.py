@@ -96,6 +96,23 @@ def check_odds_staleness(odds_fetched_at: str, max_hours: float = 2.0) -> float:
         return 0.75  # Parse error = assume mildly stale
 
 
+def odds_age_minutes(odds_fetched_at: str) -> float | None:
+    """Return odds age in minutes, or None if the timestamp is missing/invalid."""
+    if not odds_fetched_at:
+        return None
+    try:
+        fetched = datetime.fromisoformat(odds_fetched_at.replace("Z", "+00:00"))
+        return max(0.0, (datetime.now(timezone.utc) - fetched).total_seconds() / 60)
+    except Exception:
+        return None
+
+
+def is_odds_fresh_for_vault(odds_fetched_at: str, max_minutes: float = 75.0) -> bool:
+    """Vault staking requires a real, fresh odds timestamp."""
+    age = odds_age_minutes(odds_fetched_at)
+    return age is not None and age <= max_minutes
+
+
 def filter_bets(bets: list[ValueBet], league_tier: int = 1) -> list[ValueBet]:
     """
     Filter a list of bets.

@@ -61,6 +61,16 @@ export interface Match {
   market_prob?: number;          // bookmaker implied probability
   market_implied_prob?: number;  // alias
   inefficiency?: number;         // model_prob - market_prob
+  raw_probability?: number;
+  calibrated_probability?: number;
+  calibration_factor?: number;
+  calibration_tier?: 'stable' | 'watch' | 'fragile' | 'none' | string;
+  odds_fetched_at?: string;
+  odds_age_minutes?: number | null;
+  odds_fresh?: boolean;
+  vault_eligible?: boolean;
+  max_stake_pct?: number;
+  provider_source?: string;
   bet_type?: string;             // e.g. "Home Win", "Over 2.5 Goals", "BTTS"
   expected_goals_home?: number;  // xG home
   expected_goals_away?: number;  // xG away
@@ -76,7 +86,7 @@ export interface Match {
   btts_prob?: number;
   double_chance_1x?: number;
   double_chance_x2?: number;
-  all_value_bets?: Array<{ market: string; prob: number; odds: number; ev: number }>;
+  all_value_bets?: Array<{ market: string; prob: number; raw_prob?: number; odds: number; ev: number; calibration_tier?: string }>;
   // ── Match Analysis Platform fields (snake_case from pipeline) ────────────────
   value_rank?: 'high' | 'medium' | 'low' | 'none';
   league_tier?: number;
@@ -328,6 +338,12 @@ export interface VaultPick {
   category?: string;
   valueRank?: string;
   qualityScore?: number;
+  oddsFresh?: boolean;
+  oddsAgeMinutes?: number | null;
+  calibrationTier?: string;
+  calibrationFactor?: number;
+  rawProbability?: number | null;
+  providerSource?: string;
   source?: 'vault_strategy';
   kellyStakePct: number;
   stakeAmount: number;

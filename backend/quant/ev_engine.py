@@ -36,6 +36,41 @@ MARKET_INEFFICIENCY = {
     "btts": 0.05,        # 5% for BTTS Yes/No
 }
 
+# MARKET-CAL-01: Final market-specific probability haircuts before EV/Kelly.
+# probability_engine.py already calibrates the core goals/BTTS grid, but result
+# markets and fragile defensive markets still need a final conservative layer.
+# These factors are intentionally asymmetric: we punish historically overconfident
+# markets more than stable markets.
+MARKET_PROBABILITY_HAIRCUTS = {
+    "Away Win": 0.84,
+    "Draw": 0.90,
+    "BTTS No": 0.88,
+    "Over 3.5 Goals": 0.86,
+    "Under 2.5 Goals": 0.93,
+    "Under 3.5 Goals": 0.94,
+    "BTTS": 0.95,
+    "Over 2.5 Goals": 0.95,
+    "Home Win": 0.96,
+    "Draw No Bet (Away)": 0.90,
+    "AH Away +0.5": 0.90,
+    "Double Chance (X2)": 0.92,
+}
+
+FRAGILE_MARKETS = {"Away Win", "Draw", "BTTS No", "Over 3.5 Goals"}
+
+
+def calibrate_market_probability(raw_prob: float, market: str) -> tuple[float, float, str]:
+    """Return calibrated probability, factor, and trust tier for auditability."""
+    factor = MARKET_PROBABILITY_HAIRCUTS.get(market, 0.97)
+    calibrated = max(0.01, min(0.99, raw_prob * factor))
+    if market in FRAGILE_MARKETS:
+        tier = "fragile"
+    elif factor < 0.95:
+        tier = "watch"
+    else:
+        tier = "stable"
+    return calibrated, factor, tier
+
 def _get_market_category(market: str) -> str:
     """Classify a market into a category for threshold selection."""
     m = market.lower()
@@ -64,6 +99,7 @@ MARKET_TO_PROB = {
     "Over 1.5 Goals": "over15",
     "Under 1.5 Goals": "under15",   # ISSUE-02: was missing — profitable defensive market
     "Over 2.5 Goals": "over25",
+    "Under 2.5 Goals": "under25",
     "Over 3.5 Goals": "over35",
     "Under 3.5 Goals": "under35",
     "BTTS": "btts",
@@ -108,6 +144,9 @@ class ValueBet:
     expected_value: float   # EV (positive = value)
     inefficiency: float     # model_prob - market_prob
     is_value: bool          # Passes all filters
+    raw_model_prob: float = 0.0
+    calibration_factor: float = 1.0
+    calibration_tier: str = "stable"
 
 
 def devig_1x2(home_odds: float, draw_odds: float, away_odds: float) -> tuple[float, float, float]:
@@ -262,9 +301,10 @@ def evaluate_all_markets(
         market_devig["BTTS No"] = devig_outright(odds.btts_no_odds, [odds.btts_yes_odds, odds.btts_no_odds])
 
     for market, prob_attr in MARKET_TO_PROB.items():
-        model_prob = getattr(probs, prob_attr, None)
-        if model_prob is None:
+        raw_model_prob = getattr(probs, prob_attr, None)
+        if raw_model_prob is None:
             continue
+        model_prob, calibration_factor, calibration_tier = calibrate_market_probability(raw_model_prob, market)
 
         odds_attr = MARKET_TO_ODDS_FIELD.get(market, "")
         market_odds = getattr(odds, odds_attr, 0.0) if odds_attr else 0.0
@@ -297,6 +337,9 @@ def evaluate_all_markets(
             expected_value=round(ev, 4),
             inefficiency=round(inefficiency, 4),
             is_value=is_value,
+            raw_model_prob=round(raw_model_prob, 4),
+            calibration_factor=round(calibration_factor, 4),
+            calibration_tier=calibration_tier,
         ))
 
     results.sort(key=lambda x: x.expected_value, reverse=True)

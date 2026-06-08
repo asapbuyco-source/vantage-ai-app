@@ -46,6 +46,12 @@ function getVaultProbability(match: any): number {
     return match.probability ?? ((match.confidence ?? 0) / 100);
 }
 
+function isVaultEligible(match: any): boolean {
+    if (match.vault_eligible === false) return false;
+    if (match.odds_fresh === false) return false;
+    return true;
+}
+
 function getVaultGeneratedAt(match: any, lockedAt: string): string {
     return match.generated_at ?? match.generatedAt ?? match.created_at ?? match.createdAt ?? lockedAt;
 }
@@ -56,6 +62,7 @@ function getVaultKickoffUtc(match: any): string {
 
 function selectVaultPicks(predictions: any[]): any[] {
     return [...predictions]
+        .filter(isVaultEligible)
         .filter(m => getVaultEvPct(m) >= 2)
         .filter(m => getVaultOdds(m) > 1 && getVaultProbability(m) > 0 && getVaultKellyPct(m) > 0)
         .sort((a, b) => {
@@ -243,6 +250,12 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             category: m.category ?? '',
             valueRank: m.value_rank ?? '',
             qualityScore: getVaultQualityScore(m),
+            oddsFresh: m.odds_fresh ?? true,
+            oddsAgeMinutes: m.odds_age_minutes ?? null,
+            calibrationTier: m.calibration_tier ?? 'stable',
+            calibrationFactor: m.calibration_factor ?? 1,
+            rawProbability: m.raw_probability ?? null,
+            providerSource: m.provider_source ?? 'sportmonks',
             source: 'vault_strategy',
             kellyStakePct: getVaultKellyPct(m),
             stakeAmount: Math.round(startingBankroll * (getVaultKellyPct(m) / 100)),
@@ -516,7 +529,9 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                         {language === 'fr' ? 'Aucun pick disponible' : 'No picks available today'}
                     </div>
                     <div className="text-gray-500 text-xs">
-                        {language === 'fr' ? "Revenez demain pour les nouveaux picks." : "Check back tomorrow for new picks."}
+                        {language === 'fr'
+                            ? "Les picks faibles, sans edge net ou avec des cotes trop anciennes sont filtres."
+                            : "Weak picks, unclear edges, or stale odds are filtered out."}
                     </div>
                 </div>
             ) : (
@@ -555,6 +570,16 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                                             {pick.kellyStakePct > 0 && (
                                                 <span className="text-[10px] text-gray-500">
                                                     • {pick.kellyStakePct.toFixed(1)}% Kelly
+                                                </span>
+                                            )}
+                                            {pick.calibrationTier && pick.calibrationTier !== 'stable' && (
+                                                <span className="text-[10px] text-amber-300">
+                                                    {pick.calibrationTier}
+                                                </span>
+                                            )}
+                                            {typeof pick.oddsAgeMinutes === 'number' && (
+                                                <span className="text-[10px] text-gray-500">
+                                                    {Math.round(pick.oddsAgeMinutes)}m odds
                                                 </span>
                                             )}
                                         </div>

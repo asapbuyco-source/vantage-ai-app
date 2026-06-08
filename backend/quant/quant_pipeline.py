@@ -36,8 +36,14 @@ from elo_rating import load_ratings_from_firestore, match_probabilities as elo_p
 from form_model import compute_form_probabilities
 from probability_engine import compute_combined, CombinedProbabilities
 from ev_engine import evaluate_all_markets, get_best_value_bet
-from risk_filters import filter_bets, grade_risk, check_odds_staleness
-from kelly_optimizer import kelly_stake_pct
+from risk_filters import (
+    filter_bets,
+    grade_risk,
+    check_odds_staleness,
+    odds_age_minutes,
+    is_odds_fresh_for_vault,
+)
+from kelly_optimizer import kelly_stake_pct, market_max_stake_pct
 from accumulator_engine import generate_accumulators, accumulator_to_dict
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -112,7 +118,8 @@ def _mock_matches() -> list[MatchData]:
                       dc_1x_odds=1.20, dc_x2_odds=1.35, dc_12_odds=1.15,
                       over15_odds=1.25, under15_odds=3.00,
                       over25_odds=ov25o, under25_odds=un25o,
-                      btts_yes_odds=bttsy, btts_no_odds=bttsn)
+                      btts_yes_odds=bttsy, btts_no_odds=bttsn,
+                      odds_fetched_at=_now_iso())
         m = MatchData(
             fixture_id=str(5000+i), league=league, league_id=lid, league_tier=1,
             home_team=home, home_team_id=100+i,
@@ -326,13 +333,29 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                             best_bet = safe_bet
 
             # ── Odds Staleness Guard ────────────────────────────────────────
-            staleness_mult = check_odds_staleness(match.odds.odds_fetched_at) if match.odds else 1.0
+            odds_fetched_at = match.odds.odds_fetched_at if match.odds else ""
+            odds_age_min = odds_age_minutes(odds_fetched_at)
+            odds_fresh = is_odds_fresh_for_vault(odds_fetched_at, max_minutes=75.0)
+            staleness_mult = check_odds_staleness(odds_fetched_at, max_hours=1.0) if match.odds else 0.0
+
+            vault_eligible = bool(
+                best_bet
+                and best_bet.odds > 1.0
+                and odds_fresh
+                and category in ("safe", "value")
+                and value_rank in ("high", "medium")
+            )
 
             # ── Kelly stake (ISSUE-01 fixed) ────────────────────────────────
-            if best_bet:
+            if best_bet and vault_eligible:
                 # Kelly already applies kelly_fraction=0.25 internally in kelly_stake_pct().
                 # Don't apply it again here.
-                base_kelly = kelly_stake_pct(best_bet.model_prob, best_bet.odds)
+                base_kelly = kelly_stake_pct(
+                    best_bet.model_prob,
+                    best_bet.odds,
+                    best_bet.market,
+                    best_bet.calibration_tier,
+                )
                 kelly = round(max(0, base_kelly * staleness_mult), 2)
             else:
                 kelly = 0.0
@@ -349,6 +372,7 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 "away_team_id": match.away_team_id,
                 "home_team_logo": match.home_logo,
                 "away_team_logo": match.away_logo,
+                "provider_source": getattr(match, "provider_source", "sportmonks"),
                 "kickoff_utc": match.kickoff_utc,
                 "kickoff_local": match.kickoff_local,
                 # ── Best bet for this match ─────────────────────────────────
@@ -364,6 +388,18 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 "market_implied_prob": best_bet.market_prob if best_bet else 0,
                 "inefficiency": best_bet.inefficiency if best_bet else 0,
                 "kelly_stake": kelly,
+                "raw_probability": round(best_bet.raw_model_prob, 4) if best_bet else 0,
+                "calibrated_probability": round(best_bet.model_prob, 4) if best_bet else 0,
+                "calibration_factor": best_bet.calibration_factor if best_bet else 1.0,
+                "calibration_tier": best_bet.calibration_tier if best_bet else "none",
+                "odds_fetched_at": odds_fetched_at,
+                "odds_age_minutes": round(odds_age_min, 1) if odds_age_min is not None else None,
+                "odds_fresh": odds_fresh,
+                "vault_eligible": vault_eligible,
+                "max_stake_pct": round(
+                    market_max_stake_pct(best_bet.market, best_bet.calibration_tier) * 100,
+                    2,
+                ) if best_bet else 0,
                 # OPP-03: Flag high-value away wins as potential upsets
                 "upset_alert": best_bet is not None and best_bet.market == "Away Win" and best_bet.expected_value >= 0.05,
                 # ── Match analysis data (rich stats for cards) ──────────────
@@ -417,14 +453,21 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 "timestamp": _now_iso(),
                 # All approved bets for this match (metadata)
                 "all_value_bets": [
-                    {"market": b.market, "prob": b.model_prob, "odds": b.odds, "ev": b.expected_value}
+                    {
+                        "market": b.market,
+                        "prob": b.model_prob,
+                        "raw_prob": b.raw_model_prob,
+                        "odds": b.odds,
+                        "ev": b.expected_value,
+                        "calibration_tier": b.calibration_tier,
+                    }
                     for b in approved_bets[:5]
                 ],
             }
             predictions.append(pred)
 
             # ── Add to accumulator pool ONLY if it has real value ───────────
-            if best_bet and category in ("safe", "value"):
+            if best_bet and vault_eligible:
                 bet_pool.append({
                     "fixture_id": match.fixture_id,
                     "league": match.league,

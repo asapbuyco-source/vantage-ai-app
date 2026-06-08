@@ -111,6 +111,7 @@ class MatchData:
     kickoff_local: str
     home_logo: str = ""
     away_logo: str = ""
+    provider_source: str = "sportmonks"
     home_stats: Optional[TeamStats] = None
     away_stats: Optional[TeamStats] = None
     home_sidelined_count: int = 0
@@ -889,6 +890,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
             kickoff_local=kickoff_local,
             home_logo=home_p.get("image_path", ""),
             away_logo=away_p.get("image_path", ""),
+            provider_source=source,
         )
 
         # Parse odds (now includes DC, DNB, O/U 1.5/3.5, AH, line movement)

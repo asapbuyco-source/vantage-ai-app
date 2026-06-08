@@ -128,7 +128,7 @@ def run_vault_simulation(days: int, starting_bankroll: float, use_cache: bool = 
     print(f"\n{'='*70}")
     print(f"  VAULT SIMULATOR — {days}-DAY BACKTEST")
     print(f"  Starting Bankroll: {starting_bankroll:,.0f} FCFA")
-    print(f"  Strategy: Quarter-Kelly (0.25x), 5% cap, max {MAX_DAILY_PICKS} picks/day")
+    print(f"  Strategy: Quarter-Kelly (0.25x), 3% default cap, max {MAX_DAILY_PICKS} picks/day")
     print(f"  Cache: {'ON' if cache else 'OFF'}")
     print(f"{'='*70}\n")
 
@@ -238,6 +238,9 @@ def run_vault_simulation(days: int, starting_bankroll: float, use_cache: bool = 
             kelly_pct = pred.get("kelly_stake", 0)
             league_tier = pred.get("league_tier", 2)
 
+            if pred.get("vault_eligible") is False or pred.get("odds_fresh") is False:
+                continue
+
             if odds <= 1.0 or probability <= 0:
                 continue
 
@@ -246,13 +249,13 @@ def run_vault_simulation(days: int, starting_bankroll: float, use_cache: bool = 
                 continue
 
             # Kelly stake calculation (matches VaultTab + kelly_optimizer)
-            # kelly_pct is already quarter-Kelly capped at 5%
+            # kelly_pct is already quarter-Kelly capped by market risk.
             # VaultTab: stakeAmount = Math.round(currentBankroll * (kellyStakePct / 100))
             if kelly_pct <= 0:
                 continue
 
             stake_pct = kelly_pct / 100.0
-            stake_pct = min(stake_pct, MAX_STAKE_PCT)  # Hard cap at 5%
+            stake_pct = min(stake_pct, MAX_STAKE_PCT)  # Default hard cap at 3%
             stake_amount = round(bankroll * stake_pct, 2)
 
             if stake_amount < 1:  # Minimum 1 FCFA
@@ -325,7 +328,7 @@ def run_vault_simulation(days: int, starting_bankroll: float, use_cache: bool = 
             # Recalculate stake based on bankroll at time of pick
             # (matches VaultTab: stake = bankroll * kelly_pct / 100)
             stake = round(bankroll * (pick["kelly_pct"] / 100), 2)
-            stake = min(stake, bankroll * MAX_STAKE_PCT)  # 5% cap
+            stake = min(stake, bankroll * MAX_STAKE_PCT)  # Default hard cap at 3%
             stake = max(stake, 1.0) if stake >= 1 else 0  # Min 1 FCFA
             if stake < 1:
                 pick["stake_amount"] = 0
