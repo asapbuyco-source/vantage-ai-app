@@ -645,6 +645,111 @@ LEAGUE PRIORITY (scan in this order — this reflects actual African betting vol
     }
 };
 
+const MAX_ACCUMULATOR_KELLY = 0.02;
+
+function getAccumulatorMarketBase(market: string): string {
+    const m = (market || '').toLowerCase();
+    if (m.includes('over') || m.includes('under')) return 'goals_total';
+    if (m.includes('btts')) return 'btts';
+    if (m.includes('double chance')) return 'double_chance';
+    if (m.includes('draw no bet')) return 'dnb';
+    if (m.includes('home win') || m.includes('away win') || m === 'draw') return 'result';
+    return m || 'unknown';
+}
+
+function applyAccumulatorCorrelationPenalty(legs: AccumulatorLeg[], combinedProb: number): number {
+    const leagueCounts = legs.reduce<Record<string, number>>((acc, leg) => {
+        const key = leg.league || 'unknown';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, {});
+    const duplicateLeagueLegs = Object.values(leagueCounts).reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+
+    const fixtureCounts = legs.reduce<Record<string, number>>((acc, leg) => {
+        acc[leg.fixture_id] = (acc[leg.fixture_id] || 0) + 1;
+        return acc;
+    }, {});
+    const duplicateFixtureLegs = Object.values(fixtureCounts).reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+
+    const marketCounts = legs.reduce<Record<string, number>>((acc, leg) => {
+        const key = getAccumulatorMarketBase(leg.market);
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, {});
+    const duplicateMarketLegs = Object.values(marketCounts).reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+
+    return combinedProb
+        * Math.pow(0.92, duplicateLeagueLegs)
+        * Math.pow(0.85, duplicateFixtureLegs)
+        * Math.pow(0.94, duplicateMarketLegs);
+}
+
+function getMatchAccumulatorId(match: Match): string {
+    return String(match.id || match.fixture_id || match.fixtureId);
+}
+
+function getMatchAccumulatorMarket(match: Match): string {
+    return match.bet_type || match.prediction_en || match.prediction || '';
+}
+
+function isAccumulatorEligible(match: Match): boolean {
+    if (match.vault_eligible === false) return false;
+    if (match.odds_fresh === false) return false;
+    const probability = match.calibrated_probability || match.probability || ((match.confidence || 0) / 100);
+    return (match.odds || 0) > 1 && probability > 0;
+}
+
+function canAddAccumulatorMatch(
+    selected: Match[],
+    candidate: Match,
+    usedIds: Set<string>,
+    hasMultipleSports: boolean,
+    relaxed = false
+): boolean {
+    const id = getMatchAccumulatorId(candidate);
+    if (!id || usedIds.has(id) || selected.some(match => getMatchAccumulatorId(match) === id)) return false;
+
+    const leagueCount = selected.filter(match => match.league === candidate.league).length;
+    if (leagueCount >= (relaxed ? 3 : 2)) return false;
+
+    if (hasMultipleSports && !relaxed) {
+        const sportCount = selected.filter(match => (match.sport || 'football') === (candidate.sport || 'football')).length;
+        if (sportCount >= 2) return false;
+    }
+
+    const marketBase = getAccumulatorMarketBase(getMatchAccumulatorMarket(candidate));
+    const marketCount = selected.filter(match => getAccumulatorMarketBase(getMatchAccumulatorMarket(match)) === marketBase).length;
+    const marketCap = marketBase === 'goals_total' && !relaxed ? 1 : 2;
+    return marketCount < marketCap;
+}
+
+function selectAccumulatorIds(
+    candidateIds: string[],
+    pool: Match[],
+    usedIds: Set<string>,
+    count: number,
+    relaxed = false
+): string[] {
+    const selected: Match[] = [];
+    const hasMultipleSports = new Set(pool.map(match => match.sport || 'football')).size > 1;
+    const byId = new Map(pool.map(match => [getMatchAccumulatorId(match), match]));
+    const ordered = [
+        ...candidateIds.map(id => byId.get(String(id))).filter(Boolean) as Match[],
+        ...pool
+            .filter(match => !candidateIds.includes(getMatchAccumulatorId(match)))
+            .sort((a, b) => (b.confidence || 0) - (a.confidence || 0)),
+    ];
+
+    for (const match of ordered) {
+        if (selected.length >= count) break;
+        if (!canAddAccumulatorMatch(selected, match, usedIds, hasMultipleSports, relaxed)) continue;
+        selected.push(match);
+        usedIds.add(getMatchAccumulatorId(match));
+    }
+
+    return selected.map(getMatchAccumulatorId);
+}
+
 function buildTicket(
     tier: string,
     matchIds: string[],
@@ -655,13 +760,12 @@ function buildTicket(
     const legs: AccumulatorLeg[] = [];
     let combinedOdds = 1.0;
     let combinedProb = 1.0;
-    let combinedEvSum = 0;
 
     for (const id of matchIds) {
         const match = allMatches.find(m => m.id === id);
         if (match) {
             const odds = match.odds || 1.5;
-            const prob = match.probability || (match.confidence / 100) || 0.7;
+            const prob = match.calibrated_probability || match.probability || (match.confidence / 100) || 0.7;
             const ev = match.expected_value || 0.05;
             
             legs.push({
@@ -679,11 +783,11 @@ function buildTicket(
 
             combinedOdds *= odds;
             combinedProb *= prob;
-            combinedEvSum += ev;
         }
     }
 
     if (legs.length === 0) return [];
+    combinedProb = applyAccumulatorCorrelationPenalty(legs, combinedProb);
 
     const tierMeta: Record<string, { label: string; desc: string; icon: string }> = {
         baseline: { label: 'The Baseline', desc: 'Highest probability treble', icon: 'ShieldCheck' },
@@ -697,7 +801,7 @@ function buildTicket(
     let kellyStake = 0;
     if (combinedOdds > 1) {
         const rawKelly = (combinedOdds * combinedProb - 1) / (combinedOdds - 1);
-        kellyStake = Math.max(0, Math.min(0.05, rawKelly * 0.5));
+        kellyStake = Math.max(0, Math.min(MAX_ACCUMULATOR_KELLY, rawKelly * 0.1));
     }
     const kellyPct = parseFloat((kellyStake * 100).toFixed(1));
 
@@ -709,8 +813,8 @@ function buildTicket(
         leg_count: legs.length,
         combined_odds: parseFloat(combinedOdds.toFixed(2)),
         combined_prob: parseFloat(combinedProb.toFixed(3)),
-        combined_ev: parseFloat((combinedEvSum / legs.length).toFixed(3)),
-        kelly_stake: kellyPct || 1.5,
+        combined_ev: parseFloat(((combinedProb * combinedOdds) - 1).toFixed(3)),
+        kelly_stake: kellyPct,
         kelly_stake_unit: '%',
         legs: legs
     };
@@ -728,6 +832,7 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
     // We filter out ANY match that is flagged as Uncertain BEFORE sending to the AI.
     // This physically prevents the AI from picking them for accumulators.
     const eligibleMatches = matches.filter(m => {
+        if (!isAccumulatorEligible(m)) return false;
         const analysis = (m.analysis_en || "").toLowerCase();
         // Check for 'uncertain' or 'no play' indicators
         if (analysis.startsWith('uncertain')) return false;
@@ -746,8 +851,14 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
             id: m.id,
             match: `${m.homeTeam} vs ${m.awayTeam}`,
             prediction: m.prediction_en,
+            market: m.bet_type || m.prediction_en || m.prediction,
+            league: m.league,
+            sport: m.sport || 'football',
             odds: m.odds,
             confidence: m.confidence,
+            probability: m.calibrated_probability || m.probability || (m.confidence / 100),
+            expected_value: m.expected_value || ((m.ev_pct || 0) / 100),
+            calibration_tier: m.calibration_tier || 'stable',
             category: m.category,
             analysis: m.analysis_en
         }));
@@ -762,13 +873,14 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
             CRITICAL CONSTRAINTS (NON-NEGOTIABLE):
             1. MUTUAL EXCLUSIVITY: A match ID MUST NOT appear in more than one portfolio.
             2. SAFETY FIRST: When in doubt between two matches, always pick the higher-confidence, lower-variance one.
-            3. ALLOCATION STRATEGY:
+            3. CORRELATION CONTROL: Avoid more than 2 picks from the same league, avoid more than 2 picks from the same sport when alternatives exist, and avoid more than 1 goals-total market in a single portfolio.
+            4. ALLOCATION STRATEGY:
                - Step 1: Identify the top 2-3 matches by confidence (≥78%) → assign to 'baseline'.
                - Step 2: Next tier by confidence (70-77%) or higher-EV value plays → assign to 'alpha_edge'.
                - Step 3: Balanced 4-leg matches → assign to 'syndicate'.
                - Step 4: High-variance value plays → assign to 'variance_play'.
-            4. DIVERSITY: Do not include the same league more than twice in a single portfolio.
-            5. If fewer than 2 matches qualify for a tier, assign an empty array for that tier.
+            5. DIVERSITY: Do not include the same league more than twice in a single portfolio.
+            6. If fewer than 2 matches qualify for a tier, assign an empty array for that tier.
 
             --------------------------------------------------
             PORTFOLIO 1: "baseline" (Capital Preservation)
@@ -831,11 +943,17 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
         ));
 
         const result = JSON.parse(response.text || "{}");
+        const usedIds = new Set<string>();
+        const baseline = selectAccumulatorIds(result.baseline || [], eligibleMatches, usedIds, 3);
+        const alphaEdge = selectAccumulatorIds(result.alpha_edge || [], eligibleMatches, usedIds, 5);
+        const syndicate = selectAccumulatorIds(result.syndicate || [], eligibleMatches, usedIds, 4);
+        const variancePlay = selectAccumulatorIds(result.variance_play || [], eligibleMatches, usedIds, 6, true);
+
         return {
-            baseline: buildTicket('baseline', result.baseline || [], matches),
-            alpha_edge: buildTicket('alpha_edge', result.alpha_edge || [], matches),
-            syndicate: buildTicket('syndicate', result.syndicate || [], matches),
-            variance_play: buildTicket('variance_play', result.variance_play || [], matches)
+            baseline: buildTicket('baseline', baseline, matches),
+            alpha_edge: buildTicket('alpha_edge', alphaEdge, matches),
+            syndicate: buildTicket('syndicate', syndicate, matches),
+            variance_play: buildTicket('variance_play', variancePlay, matches)
         };
 
     } catch (e: any) {
@@ -846,23 +964,11 @@ export const generateSmartAccumulators = async (matches: Match[]): Promise<Accum
         const uniqueMatches = [...eligibleMatches].sort((a, b) => b.confidence - a.confidence);
         const usedIds = new Set<string>();
 
-        const getUnused = (count: number) => {
-            const selected: string[] = [];
-            for (const m of uniqueMatches) {
-                if (selected.length >= count) break;
-                if (!usedIds.has(m.id)) {
-                    selected.push(m.id);
-                    usedIds.add(m.id);
-                }
-            }
-            return selected;
-        };
-
         // 2. Allocate strictly
-        const baseline = getUnused(2);
-        const alpha_edge = getUnused(3);
-        const syndicate = getUnused(4);
-        const variance_play = getUnused(4);
+        const baseline = selectAccumulatorIds([], uniqueMatches, usedIds, 2);
+        const alpha_edge = selectAccumulatorIds([], uniqueMatches, usedIds, 3);
+        const syndicate = selectAccumulatorIds([], uniqueMatches, usedIds, 4);
+        const variance_play = selectAccumulatorIds([], uniqueMatches, usedIds, 4, true);
 
         return {
             baseline: buildTicket('baseline', baseline, matches),

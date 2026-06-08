@@ -16,6 +16,123 @@ interface TicketWizardProps {
     setTab?: (tab: NavigationTab) => void;
 }
 
+type RiskLevel = 'low' | 'med' | 'high';
+
+const DEFAULT_SPORT = 'football';
+
+function getMatchKey(match: Match): string {
+    return String(match.fixture_id ?? match.fixtureId ?? match.id);
+}
+
+function getMatchSport(match: Match): string {
+    return match.sport ?? DEFAULT_SPORT;
+}
+
+function getModelProbability(match: Match): number {
+    return match.calibrated_probability ?? match.probability ?? ((match.confidence ?? 0) / 100);
+}
+
+function getExpectedValue(match: Match): number {
+    return match.expected_value ?? ((match.ev_pct ?? 0) / 100);
+}
+
+function getMarketBase(market: string): string {
+    const m = (market || '').toLowerCase();
+    if (m.includes('over') || m.includes('under')) return 'goals_total';
+    if (m.includes('btts')) return 'btts';
+    if (m.includes('double chance')) return 'double_chance';
+    if (m.includes('draw no bet')) return 'dnb';
+    if (m.includes('home win') || m.includes('away win') || m === 'draw') return 'result';
+    return m || 'unknown';
+}
+
+function getTicketMarket(match: Match): string {
+    return match.bet_type ?? match.prediction_en ?? match.prediction ?? '';
+}
+
+function getTeamKeys(match: Match): string[] {
+    return [match.homeTeam || match.home_team || '', match.awayTeam || match.away_team || '']
+        .map(t => t.trim().toLowerCase())
+        .filter(Boolean);
+}
+
+function isTicketEligible(match: Match): boolean {
+    if (match.vault_eligible === false) return false;
+    if (match.odds_fresh === false) return false;
+    return (match.odds ?? 0) > 1 && getModelProbability(match) > 0;
+}
+
+function getRiskSettings(riskLevel: RiskLevel, hasMultipleSports: boolean) {
+    if (riskLevel === 'low') {
+        return {
+            minConfidence: 80,
+            maxLegs: 4,
+            sameLeagueCap: 2,
+            sameSportCap: hasMultipleSports ? 2 : 99,
+            marketCaps: { goals_total: 1, btts: 1, result: 2, double_chance: 2, dnb: 2 } as Record<string, number>,
+            overshoot: 1.12,
+        };
+    }
+    if (riskLevel === 'high') {
+        return {
+            minConfidence: 0,
+            maxLegs: 6,
+            sameLeagueCap: 3,
+            sameSportCap: 99,
+            marketCaps: { goals_total: 2, btts: 2, result: 3, double_chance: 3, dnb: 3 } as Record<string, number>,
+            overshoot: 1.35,
+        };
+    }
+    return {
+        minConfidence: 70,
+        maxLegs: 5,
+        sameLeagueCap: 2,
+        sameSportCap: hasMultipleSports ? 2 : 99,
+        marketCaps: { goals_total: 1, btts: 1, result: 2, double_chance: 2, dnb: 2 } as Record<string, number>,
+        overshoot: 1.2,
+    };
+}
+
+function countBy<T>(items: T[], getter: (item: T) => string): Record<string, number> {
+    return items.reduce<Record<string, number>>((acc, item) => {
+        const key = getter(item);
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, {});
+}
+
+function violatesCorrelationGuard(selected: Match[], candidate: Match, riskLevel: RiskLevel, hasMultipleSports: boolean): boolean {
+    const settings = getRiskSettings(riskLevel, hasMultipleSports);
+    const candidateKey = getMatchKey(candidate);
+    if (selected.some(match => getMatchKey(match) === candidateKey)) return true;
+
+    const leagueCounts = countBy(selected, match => match.league || 'unknown');
+    if ((leagueCounts[candidate.league || 'unknown'] || 0) >= settings.sameLeagueCap) return true;
+
+    const sportCounts = countBy(selected, getMatchSport);
+    if ((sportCounts[getMatchSport(candidate)] || 0) >= settings.sameSportCap) return true;
+
+    const marketCounts = countBy(selected, match => getMarketBase(getTicketMarket(match)));
+    const marketBase = getMarketBase(getTicketMarket(candidate));
+    const marketCap = settings.marketCaps[marketBase] ?? 2;
+    if ((marketCounts[marketBase] || 0) >= marketCap) return true;
+
+    if (riskLevel !== 'high') {
+        const usedTeams = new Set(selected.flatMap(getTeamKeys));
+        if (getTeamKeys(candidate).some(team => usedTeams.has(team))) return true;
+    }
+
+    return false;
+}
+
+function ticketQualityScore(match: Match): number {
+    const confidence = match.confidence ?? 0;
+    const prob = getModelProbability(match);
+    const ev = getExpectedValue(match);
+    const odds = match.odds ?? 0;
+    return confidence + prob * 35 + ev * 120 - Math.max(0, odds - 2.5) * 4;
+}
+
 export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
     const { t, language } = useAppContext();
     const { predictions, basketballPredictions, cricketPredictions } = useData();
@@ -34,7 +151,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
         }
     }, [userProfile?.portfolioBankroll]);
     const [goal, setGoal] = useState<string>('5000');
-    const [risk, setRisk] = useState<'low' | 'med' | 'high'>('med');
+    const [risk, setRisk] = useState<RiskLevel>('med');
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedTicket, setGeneratedTicket] = useState<Match[] | null>(null);
 
@@ -57,39 +174,37 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
         }, 1500);
     };
 
-    const findBestCombination = (matches: Match[], target: number, riskLevel: 'low' | 'med' | 'high'): Match[] | null => {
+    const findBestCombination = (matches: Match[], target: number, riskLevel: RiskLevel): Match[] | null => {
         if (matches.length === 0) return null;
 
-        // Filter by risk
-        let pool = matches.filter(m => {
-            if (riskLevel === 'low') return m.confidence >= 80;
-            if (riskLevel === 'med') return m.confidence >= 70;
-            return true; // aggressive uses all
-        });
+        const hasMultipleSports = new Set(matches.map(getMatchSport)).size > 1;
+        const settings = getRiskSettings(riskLevel, hasMultipleSports);
 
-        if (pool.length === 0) pool = matches; // Fallback if too restrictive
+        let pool = matches.filter(m => isTicketEligible(m) && (m.confidence ?? 0) >= settings.minConfidence);
+        if (pool.length === 0) {
+            pool = matches.filter(isTicketEligible);
+        }
+        if (pool.length === 0) return null;
 
-        // Simplified greedy algorithm to find combinations
-        // We want matching odds product to be close to 'target'
         let bestTicket: Match[] = [];
         let currentOdds = 1;
 
-        // Sort pool by confidence descending (always prioritize the best bets)
-        const sortedPool = [...pool].sort((a, b) => b.confidence - a.confidence);
+        const sortedPool = [...pool].sort((a, b) => ticketQualityScore(b) - ticketQualityScore(a));
 
         for (const match of sortedPool) {
-            // Prevent adding matches that push the ticket way over the target
-            if (currentOdds * match.odds <= target * 1.15) { 
+            if (bestTicket.length >= settings.maxLegs) break;
+            if (violatesCorrelationGuard(bestTicket, match, riskLevel, hasMultipleSports)) continue;
+
+            const nextOdds = currentOdds * match.odds;
+            if (nextOdds <= target * settings.overshoot) {
                 bestTicket.push(match);
-                currentOdds *= match.odds;
-            } else if (bestTicket.length < 5 && (currentOdds * match.odds <= target * 1.3)) {
-                // If we are close and just need one more, allow slight overshoot
+                currentOdds = nextOdds;
+            } else if (bestTicket.length < 2 && nextOdds <= target * 1.35) {
                 bestTicket.push(match);
-                currentOdds *= match.odds;
+                currentOdds = nextOdds;
                 break;
             }
-            if (currentOdds >= target * 0.95) break; 
-            if (bestTicket.length >= 5) break; 
+            if (currentOdds >= target * 0.95) break;
         }
 
         return bestTicket.length > 0 ? bestTicket : null;
