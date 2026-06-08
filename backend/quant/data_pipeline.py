@@ -29,7 +29,7 @@ SM_BASE = "https://api.sportmonks.com/v3/football"
 MAX_MATCHES = 100
 RECENT_DAYS = 90  # Look back 90 days for form data
 
-# API-Football.com (for H2H data — free plan, 100 calls/day)
+# API-Football (for H2H data — free plan, 100 calls/day)
 AF_KEY = os.environ.get("API_FOOTBALL_KEY", "")
 AF_BASE = "https://v3.football.api-sports.io"
 
