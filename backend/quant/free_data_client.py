@@ -267,9 +267,46 @@ def fetch_team_form(team_id, limit=10):
 
 # ── Odds Parsing (per fixture from cached league data) ─────────────────────────
 
+def _normalize_team_name(name):
+    """Strip common suffixes and normalize for cross-API matching."""
+    n = name.lower().strip()
+    for suffix in (' fc', ' cf', ' afc', ' sc', ' united', ' city', ' town', ' albion', ' rovers', ' rangers'):
+        if n.endswith(suffix):
+            n = n[:-len(suffix)]
+    return n
+
+
+def _teams_match(a, b):
+    """Return True if team name 'a' matches 'b' using multiple strategies."""
+    a, b = a.lower().strip(), b.lower().strip()
+    if not a or not b:
+        return False
+    # Exact match
+    if a == b:
+        return True
+    # Normalized match (strip suffixes)
+    if _normalize_team_name(a) == _normalize_team_name(b):
+        return True
+    # Substring: shorter is inside longer
+    if len(a) <= len(b) and a in b:
+        return True
+    if len(b) <= len(a) and b in a:
+        return True
+    # First-word match (for national teams: "Netherlands" vs "Netherlands")
+    a_first = a.split()[0] if a.split() else a
+    b_first = b.split()[0] if b.split() else b
+    if a_first == b_first and len(a_first) >= 3:
+        return True
+    # First 6 chars overlap
+    if a[:6] == b[:6] and len(a) >= 5 and len(b) >= 5:
+        return True
+    return False
+
+
 def find_odds_for_fixture(home_team, away_team, league_id):
     """
     Find odds for a specific fixture from the cached league-wide odds data.
+    Uses robust multi-strategy team name matching.
     Returns OddsData-compatible dict.
     """
     sport_key = ODDS_SPORT_MAP.get(league_id, "")
@@ -280,17 +317,19 @@ def find_odds_for_fixture(home_team, away_team, league_id):
     if not games:
         return {}
 
-    # Find matching game by team name fuzzy match
+    # Try each game, check both home/home+away/away and swapped order
     for game in games:
         ht = game.get("home_team", "").lower()
         at = game.get("away_team", "").lower()
-        ht_search = home_team.lower()
-        at_search = away_team.lower()
 
-        home_match = (ht_search[:5] in ht or ht[:5] in ht_search)
-        away_match = (at_search[:5] in at or at[:5] in at_search)
+        # Forward match: fd home = odds home, fd away = odds away
+        if _teams_match(home_team, game.get("home_team", "")) and \
+           _teams_match(away_team, game.get("away_team", "")):
+            return _parse_odds_api_response(game)
 
-        if home_match and away_match:
+        # Swapped match: fd home = odds away, fd away = odds home
+        if _teams_match(home_team, game.get("away_team", "")) and \
+           _teams_match(away_team, game.get("home_team", "")):
             return _parse_odds_api_response(game)
 
     return {}
