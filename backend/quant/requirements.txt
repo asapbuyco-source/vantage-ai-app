@@ -5,8 +5,11 @@
 scipy>=1.11.0          # Poisson PMF calculations
 numpy>=1.24.0          # Array operations
 
-# HTTP requests (Sportmonks API calls)
+# HTTP requests (Sportmonks API + free data stack calls)
 requests>=2.31.0
+
+# Understat xG data (free data stack)
+understatapi>=0.4.0
 
 # Firebase Admin (for Firestore read/write from Python)
 firebase-admin>=6.2.0

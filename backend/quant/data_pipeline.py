@@ -230,6 +230,194 @@ def _af_fetch_fixtures(date_str: str) -> list:
     return fixtures
 
 
+def fetch_matches_free(date_str: str) -> list:
+    """
+    Free data source fallback replacing Sportmonks.
+    Uses football-data.org + The Odds API + Understat + API-Football H2H.
+    Returns list of MatchData objects.
+    """
+    from free_data_client import (
+        fetch_fixtures_today, fetch_team_form,
+        find_odds_for_fixture, fetch_xg_from_understat,
+        estimate_btts_odds,
+    )
+    from team_id_map import get_af_id_from_fd_id
+
+    print(f"[DataPipeline] Using FREE data stack for {date_str}", file=sys.stderr)
+
+    raw_fixtures = fetch_fixtures_today(date_str)
+    if not raw_fixtures:
+        print("[DataPipeline] No fixtures from football-data.org", file=sys.stderr)
+        return []
+
+    print(f"[DataPipeline] Got {len(raw_fixtures)} fixtures from free stack", file=sys.stderr)
+
+    matches = []
+    for fix in raw_fixtures:
+        try:
+            league_id = fix["league_id"]
+            home_id = fix["home_team_id"]
+            away_id = fix["away_team_id"]
+            home_name = fix["home_team"]
+            away_name = fix["away_team"]
+
+            # Resolve team IDs for H2H/API-Football
+            af_home_id = get_af_id_from_fd_id(home_id, home_name)
+            af_away_id = get_af_id_from_fd_id(away_id, away_name)
+
+            # Team Form
+            home_form_raw = fetch_team_form(home_id, limit=10)
+            away_form_raw = fetch_team_form(away_id, limit=10)
+
+            home_stats = _build_free_team_stats(
+                home_id, home_name, home_form_raw, is_home=True
+            )
+            away_stats = _build_free_team_stats(
+                away_id, away_name, away_form_raw, is_home=False
+            )
+
+            # xG from Understat
+            home_xg, away_xg = fetch_xg_from_understat(home_name, away_name)
+
+            # Fall back to goal-based xG approximation
+            if home_xg is None:
+                home_xg = max(0.5, home_stats.avg_scored * 0.95)
+            if away_xg is None:
+                away_xg = max(0.5, away_stats.avg_scored * 0.95)
+
+            # Odds
+            odds_dict = find_odds_for_fixture(home_name, away_name, league_id)
+
+            od = OddsData(
+                home_odds=odds_dict.get("home_odds", 0.0),
+                draw_odds=odds_dict.get("draw_odds", 0.0),
+                away_odds=odds_dict.get("away_odds", 0.0),
+                over25_odds=odds_dict.get("over25_odds", 0.0),
+                under25_odds=odds_dict.get("under25_odds", 0.0),
+                over15_odds=odds_dict.get("over15_odds", 0.0),
+                under15_odds=odds_dict.get("under15_odds", 0.0),
+                over35_odds=odds_dict.get("over35_odds", 0.0),
+                under35_odds=odds_dict.get("under35_odds", 0.0),
+                btts_yes_odds=odds_dict.get("btts_yes_odds", 0.0),
+                btts_no_odds=odds_dict.get("btts_no_odds", 0.0),
+                odds_fetched_at=datetime.now(timezone.utc).isoformat()
+            )
+
+            # Estimate BTTS odds if bookmaker data missing
+            if od.btts_yes_odds <= 0:
+                home_btts = 1 - home_stats.clean_sheet_rate if home_stats.clean_sheet_rate else 0.65
+                away_btts = 1 - away_stats.clean_sheet_rate if away_stats.clean_sheet_rate else 0.60
+                btts_y, btts_n = estimate_btts_odds(home_btts, away_btts)
+                od.btts_yes_odds = btts_y
+                od.btts_no_odds = btts_n
+
+            # H2H via API-Football (already in pipeline)
+            hw, aw, dr, avg_g, btts_r = 0, 0, 0, _league_avg(league_id), 0.45
+            if af_home_id and af_away_id:
+                try:
+                    hw, aw, dr, avg_g, btts_r = _fetch_h2h_cached(
+                        home_name, away_name, af_home_id, af_away_id, league_id
+                    )
+                except Exception as e:
+                    print(f"[DataPipeline] H2H fetch failed: {e}", file=sys.stderr)
+
+            # Kickoff time (convert UTC to Lagos local)
+            kickoff_utc = fix.get("kickoff_utc", "")
+            kickoff_local = kickoff_utc
+            try:
+                kick = datetime.fromisoformat(kickoff_utc.replace("Z", "+00:00"))
+                kick_lagos = kick + timedelta(hours=1)  # Lagos = UTC+1
+                kickoff_local = kick_lagos.strftime("%H:%M")
+            except Exception:
+                pass
+
+            league_info = get_league_info(league_id)
+            league_tier = league_info["tier"] if league_info else 2
+
+            md = MatchData(
+                fixture_id=fix["id"],
+                league=fix.get("league_name", ""),
+                league_id=league_id,
+                league_tier=league_tier,
+                home_team=home_name,
+                home_team_id=home_id,
+                away_team=away_name,
+                away_team_id=away_id,
+                kickoff_utc=kickoff_utc,
+                kickoff_local=kickoff_local,
+                home_logo=fix.get("home_logo", ""),
+                away_logo=fix.get("away_logo", ""),
+                provider_source="free_stack",
+                home_stats=home_stats,
+                away_stats=away_stats,
+                h2h_home_wins=hw,
+                h2h_away_wins=aw,
+                h2h_draws=dr,
+                h2h_avg_goals=avg_g,
+                h2h_btts_rate=btts_r,
+                odds=od,
+                expected_goals_home=max(0.5, home_xg),
+                expected_goals_away=max(0.5, away_xg),
+            )
+            matches.append(md)
+            print(f"[DataPipeline] [FREE] {home_name} vs {away_name} "
+                  f"(xG: {home_xg:.2f}-{away_xg:.2f}, odds: {od.home_odds:.1f}/{od.draw_odds:.1f}/{od.away_odds:.1f})",
+                  file=sys.stderr)
+        except Exception as e:
+            print(f"[DataPipeline] Error on {fix.get('home_team')} vs {fix.get('away_team')}: {e}", file=sys.stderr)
+
+    return matches
+
+
+def _build_free_team_stats(team_id, team_name, form_raw, is_home=True):
+    """
+    Build a TeamStats object from football-data.org form results.
+    Mirrors _parse_form() output shape so the model pipeline works unchanged.
+    """
+    stats = TeamStats(team_id=team_id, team_name=team_name)
+    if not form_raw:
+        return stats
+
+    wins = sum(1 for m in form_raw if m["result"] == "W")
+    recent5 = form_raw[:5]
+    results = [m["result"] for m in recent5]
+
+    stats.form = " ".join(results)
+    stats.form_score = sum(3 if r == "W" else (1 if r == "D" else 0)
+                           for r in results) / (3 * len(results)) if results else 0.5
+    stats.win_rate = wins / len(form_raw) if form_raw else 0
+    stats.matches_analyzed = len(form_raw)
+
+    home_matches = [m for m in form_raw if m["is_home"]]
+    away_matches = [m for m in form_raw if not m["is_home"]]
+
+    all_scored = [m["goals_scored"] for m in form_raw]
+    all_conceded = [m["goals_conceded"] for m in form_raw]
+    stats.avg_scored = sum(all_scored) / len(all_scored) if all_scored else 1.2
+    stats.avg_conceded = sum(all_conceded) / len(all_conceded) if all_conceded else 1.2
+
+    if home_matches:
+        stats.home_avg_scored = sum(m["goals_scored"] for m in home_matches) / len(home_matches)
+        stats.home_avg_conceded = sum(m["goals_conceded"] for m in home_matches) / len(home_matches)
+    if away_matches:
+        stats.away_avg_scored = sum(m["goals_scored"] for m in away_matches) / len(away_matches)
+        stats.away_avg_conceded = sum(m["goals_conceded"] for m in away_matches) / len(away_matches)
+
+    clean_sheets = sum(1 for m in form_raw if m["goals_conceded"] == 0)
+    stats.clean_sheet_rate = clean_sheets / len(form_raw) if form_raw else 0
+
+    # xG approximation from goals (when Understat unavailable)
+    stats.avg_xg_created = stats.avg_scored * 0.95
+    stats.avg_xg_conceded = stats.avg_conceded * 0.95
+    stats.avg_possession = 50.0
+    stats.avg_shots_on_target = stats.avg_scored * 3.5
+
+    # Opponent IDs for form model
+    stats.recent_opponents = [m.get("opponent_id", 0) for m in recent5]
+
+    return stats
+
+
 def _get_paginated(path: str, params: dict | None = None, max_pages: int = 5) -> list:
     """Paginated GET, returns flattened data array."""
     all_data = []
@@ -738,21 +926,21 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         date_str = datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
 
     print(f"[DataPipeline] Fetching fixtures for {date_str}...")
-    # Upgrade #10: Include lineups and sidelined for richer "Valid Test" data
-    # Note: Only available in Sportmonks Pro/Enterprise plans.
+
+    # Auto-fallback to free data stack if no Sportmonks token
+    if not SM_TOKEN:
+        print("[DataPipeline] No SPORTMONKS_API_TOKEN — using free data stack", file=sys.stderr)
+        return fetch_matches_free(date_str)
+
     include_str = "league;participants;scores;odds;statistics;lineups;sidelined"
-    
     raw = _get_paginated(
         f"/fixtures/date/{date_str}",
         params={"include": include_str, "per_page": 100},
         max_pages=3,
     )
     if not raw:
-        print("[DataPipeline] No Sportmonks fixtures returned. Trying API-Football fallback...", file=sys.stderr)
-        raw = _af_fetch_fixtures(date_str)
-        if not raw:
-            print("[DataPipeline] No fixtures returned from Sportmonks or API-Football.", file=sys.stderr)
-            return []
+        print("[DataPipeline] No Sportmonks fixtures returned. Trying free stack fallback...", file=sys.stderr)
+        return fetch_matches_free(date_str)
 
     # ── 🚨 Global Past Match Filter (Bypassed if date_str is in the past) ──
     is_today = date_str == datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")

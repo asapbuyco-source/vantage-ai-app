@@ -13,6 +13,11 @@ import json
 import requests
 from datetime import datetime, timezone, timedelta
 
+try:
+    from free_data_client import fetch_match_result_free
+except ImportError:
+    fetch_match_result_free = None
+
 
 # ── Sportmonks helper ─────────────────────────────────────────────────────────
 SM_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN", "")
@@ -266,6 +271,66 @@ def _grade_bet(market: str, home_goals: int, away_goals: int) -> str:
     return "void"  # Unknown market
 
 
+def _fetch_results_from_free(date_str, predictions):
+    """
+    Fetch match results from football-data.org for grading.
+    Tries fixture_id match first, then falls back to team name matching.
+    """
+    results = {}
+    if not fetch_match_result_free:
+        return results
+
+    fixture_ids_seen = set()
+    for pred in predictions:
+        fid = str(pred.get("fixture_id", ""))
+        if not fid or fid in fixture_ids_seen:
+            continue
+        fixture_ids_seen.add(fid)
+
+        result = fetch_match_result_free(fid)
+        if result:
+            results[fid] = result
+            print(f"[Grading-Free] Fixture {fid} result: {result['home_goals']}-{result['away_goals']}")
+
+    if results:
+        print(f"[Grading-Free] Fetched {len(results)} results by fixture_id")
+        return results
+
+    # Fallback: team name matching
+    try:
+        from free_data_client import _fd_get
+        data = _fd_get("/matches", {"dateFrom": date_str, "dateTo": date_str, "status": "FINISHED"})
+        if not data:
+            return {}
+        matches = data.get("matches", [])
+    except Exception:
+        return {}
+
+    matched = 0
+    for pred in predictions:
+        home_pred = (pred.get("home_team") or pred.get("homeTeam") or "").lower().strip()
+        away_pred = (pred.get("away_team") or pred.get("awayTeam") or "").lower().strip()
+        if not home_pred or not away_pred:
+            continue
+
+        for m in matches:
+            home_api = m.get("homeTeam", {}).get("name", "").lower()
+            away_api = m.get("awayTeam", {}).get("name", "").lower()
+            if (home_pred[:5] in home_api or home_api[:5] in home_pred) and \
+               (away_pred[:5] in away_api or away_api[:5] in away_pred):
+                score = m.get("score", {}).get("fullTime", {})
+                hg = score.get("home")
+                ag = score.get("away")
+                if hg is not None and ag is not None:
+                    fid = str(m.get("id", ""))
+                    results[fid] = {"home_goals": hg, "away_goals": ag, "state": "FT", "closing_odds": {}}
+                    matched += 1
+                break
+
+    print(f"[Grading-Free] Team-name matched {matched} results")
+    return results
+
+
 def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
     """
     Grade all quant predictions for a given date.
@@ -309,8 +374,15 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
         return {"status": "skipped", "reason": "already_graded", "date": date_str}
 
     print(f"[Grading] Fetching results + closing odds for {date_str}...")
-    results_map = _fetch_results_for_date(date_str)
-    print(f"[Grading] Found {len(results_map)} finished fixtures from Sportmonks.")
+    results_map = {}
+    if SM_TOKEN:
+        results_map = _fetch_results_for_date(date_str)
+        print(f"[Grading] Found {len(results_map)} finished fixtures from Sportmonks.")
+    if (not results_map or len(results_map) < 3) and fetch_match_result_free:
+        print(f"[Grading] Using free data fallback for {date_str}...")
+        free_results = _fetch_results_from_free(date_str, predictions)
+        results_map.update(free_results)
+        print(f"[Grading] Total results available: {len(results_map)}")
 
     graded_count = 0
     clv_sum = 0.0

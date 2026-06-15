@@ -397,6 +397,49 @@ export const initScheduler = () => {
     });
     tasks.set('selar', selarTask);
 
+    // ── Free Live Score Fetcher (football-data.org) ───────────────────────────────
+const fetchLiveScoresFree = async () => {
+    const fdKey = process.env.FOOTBALL_DATA_KEY;
+    if (!fdKey) return [];
+
+    try {
+        const res = await fetch(
+            'https://api.football-data.org/v4/matches?status=LIVE,IN_PLAY,PAUSED',
+            { headers: { 'X-Auth-Token': fdKey }, signal: AbortSignal.timeout(15000) }
+        );
+        if (!res.ok) return [];
+        const json = await res.json();
+        return (json.matches || []).map(m => {
+            const score = m.score || {};
+            const fullTime = score.fullTime || {};
+            const halfTime = score.halfTime || {};
+            const home = m.homeTeam || {};
+            const away = m.awayTeam || {};
+            return {
+                id: String(m.id),
+                homeTeam: home.name || 'Unknown',
+                awayTeam: away.name || 'Unknown',
+                homeTeamLogo: home.crest || '',
+                awayTeamLogo: away.crest || '',
+                homeTeamId: home.id,
+                awayTeamId: away.id,
+                homeScore: fullTime.home ?? halfTime.home ?? 0,
+                awayScore: fullTime.away ?? halfTime.away ?? 0,
+                league: (m.competition || {}).name || 'Unknown League',
+                leagueId: (m.competition || {}).id || 0,
+                stateShort: m.status || 'LIVE',
+                stateLong: m.status || 'Live',
+                minute: m.minute || 0,
+                events: [],
+                source: 'football-data.org',
+            };
+        });
+    } catch (e) {
+        console.warn('[LiveScore-Free] Fetch error:', e.message);
+        return [];
+    }
+};
+
     // ── Live Scores Poller (every 90 seconds → saves ~480 API calls/day vs 60s) ──
     // We store the whole list in ONE Firestore document so frontend reads 1 doc.
     // Uses ~960 SportMonks API calls/day during matchdays; zero on quiet days.
@@ -422,77 +465,81 @@ export const initScheduler = () => {
         const inMatchHours = (lagosHour >= 11 && lagosHour <= 23) || lagosHour === 0;
         if (!inMatchHours) return;
 
-            const token = process.env.SPORTMONKS_API_TOKEN;
-            if (!token) return;
-            const url = `https://api.sportmonks.com/v3/football/livescores/latest?include=league;participants;scores;events.type;events.player;state&api_token=${token}`;
-            const res = await fetch(url);
-            if (!res.ok) return;
-            const json = await res.json();
-            const raw = json.data || [];
+            const smToken = process.env.SPORTMONKS_API_TOKEN;
+            let matches = [];
 
-            const matches = raw.map(item => {
-                const home = item.participants?.find(p => p.meta?.location === 'home') || {};
-                const away = item.participants?.find(p => p.meta?.location === 'away') || {};
-                const homeScore = item.scores?.find(s => s.participant_id === home.id && s.description === 'CURRENT')?.score?.goals ?? 0;
-                const awayScore = item.scores?.find(s => s.participant_id === away.id && s.description === 'CURRENT')?.score?.goals ?? 0;
-                // Map ALL event types: goals, yellow/red cards, substitutions, VAR, penalties
-                const EVENT_TYPE_MAP = {
-                    'GOAL': 'goal', 'OWN-GOAL': 'own_goal', 'PENALTY': 'penalty',
-                    'MISSED-PENALTY': 'penalty_miss', 'YELLOW-CARD': 'yellow_card', 
-                    'YELLOWRED-CARD': 'red_card', 'RED-CARD': 'red_card',
-                    'SUBST': 'substitution', 'VAR': 'var',
-                };
-                const events = (item.events || []).map(ev => {
-                    const rawName = ev.type?.name || ev.type?.code || ev.type?.developer_name || 'Event';
-                    let mappedType = EVENT_TYPE_MAP[ev.type?.developer_name] || EVENT_TYPE_MAP[ev.type?.code] || 'event';
-                    
-                    // Fallback heuristics if map misses
-                    if (mappedType === 'event') {
-                        const str = rawName.toLowerCase();
-                        if (str.includes('goal') && !str.includes('own')) mappedType = 'goal';
-                        else if (str.includes('own') && str.includes('goal')) mappedType = 'own_goal';
-                        else if (str.includes('penalty') && !str.includes('miss')) mappedType = 'penalty';
-                        else if (str.includes('penalty') && str.includes('miss')) mappedType = 'penalty_miss';
-                        else if (str.includes('yellow')) mappedType = 'yellow_card';
-                        else if (str.includes('red')) mappedType = 'red_card';
-                        else if (str.includes('subst')) mappedType = 'substitution';
-                        else if (str.includes('var')) mappedType = 'var';
-                    }
-                    
-                    return {
-                        id: ev.id,
-                        type: mappedType,
-                        name: rawName,
-                        // LIVE-1 FIX: Sportmonks standard plan returns player data as flat fields
-                        // (ev.player_name / ev.related_player_name), NOT as nested objects (ev.player.name).
-                        // ev.player is either undefined or just a numeric ID on this plan.
-                        playerName: ev.player_name || ev.player?.name || ev.related_player?.name || '',
-                        playerNameOut: ev.related_player_name || ev.related_player?.name || '',
-                        minute: ev.minute || 0,
-                        extraMinute: ev.extra_minute || 0,
-                        teamId: ev.participant_id,
-                        isHome: ev.participant_id === home.id,
-                        result: ev.result || ev.score_name || '', // Score at time of goal e.g. "1-0"
-                    };
-                });
-                return {
-                    id: String(item.id),
-                    homeTeam: home.name || 'Unknown',
-                    awayTeam: away.name || 'Unknown',
-                    homeTeamLogo: home.image_path || '',
-                    awayTeamLogo: away.image_path || '',
-                    homeTeamId: home.id,
-                    awayTeamId: away.id,
-                    homeScore,
-                    awayScore,
-                    league: item.league?.name || 'Unknown League',
-                    leagueId: item.league_id,
-                    stateShort: item.state?.short_name || item.state?.state || 'LIVE',
-                    stateLong: item.state?.name || 'Live',
-                    minute: item.minute || 0,
-                    events,
-                };
-            });
+            // Try Sportmonks first if token exists
+            if (smToken) {
+                const url = `https://api.sportmonks.com/v3/football/livescores/latest?include=league;participants;scores;events.type;events.player;state&api_token=${smToken}`;
+                const res = await fetch(url);
+                if (res.ok) {
+                    const json = await res.json();
+                    const raw = json.data || [];
+
+                    matches = raw.map(item => {
+                        const home = item.participants?.find(p => p.meta?.location === 'home') || {};
+                        const away = item.participants?.find(p => p.meta?.location === 'away') || {};
+                        const homeScore = item.scores?.find(s => s.participant_id === home.id && s.description === 'CURRENT')?.score?.goals ?? 0;
+                        const awayScore = item.scores?.find(s => s.participant_id === away.id && s.description === 'CURRENT')?.score?.goals ?? 0;
+                        const EVENT_TYPE_MAP = {
+                            'GOAL': 'goal', 'OWN-GOAL': 'own_goal', 'PENALTY': 'penalty',
+                            'MISSED-PENALTY': 'penalty_miss', 'YELLOW-CARD': 'yellow_card',
+                            'YELLOWRED-CARD': 'red_card', 'RED-CARD': 'red_card',
+                            'SUBST': 'substitution', 'VAR': 'var',
+                        };
+                        const events = (item.events || []).map(ev => {
+                            const rawName = ev.type?.name || ev.type?.code || ev.type?.developer_name || 'Event';
+                            let mappedType = EVENT_TYPE_MAP[ev.type?.developer_name] || EVENT_TYPE_MAP[ev.type?.code] || 'event';
+                            if (mappedType === 'event') {
+                                const str = rawName.toLowerCase();
+                                if (str.includes('goal') && !str.includes('own')) mappedType = 'goal';
+                                else if (str.includes('own') && str.includes('goal')) mappedType = 'own_goal';
+                                else if (str.includes('penalty') && !str.includes('miss')) mappedType = 'penalty';
+                                else if (str.includes('penalty') && str.includes('miss')) mappedType = 'penalty_miss';
+                                else if (str.includes('yellow')) mappedType = 'yellow_card';
+                                else if (str.includes('red')) mappedType = 'red_card';
+                                else if (str.includes('subst')) mappedType = 'substitution';
+                                else if (str.includes('var')) mappedType = 'var';
+                            }
+                            return {
+                                id: ev.id,
+                                type: mappedType,
+                                name: rawName,
+                                playerName: ev.player_name || ev.player?.name || ev.related_player?.name || '',
+                                playerNameOut: ev.related_player_name || ev.related_player?.name || '',
+                                minute: ev.minute || 0,
+                                extraMinute: ev.extra_minute || 0,
+                                teamId: ev.participant_id,
+                                isHome: ev.participant_id === home.id,
+                                result: ev.result || ev.score_name || '',
+                            };
+                        });
+                        return {
+                            id: String(item.id),
+                            homeTeam: home.name || 'Unknown',
+                            awayTeam: away.name || 'Unknown',
+                            homeTeamLogo: home.image_path || '',
+                            awayTeamLogo: away.image_path || '',
+                            homeTeamId: home.id,
+                            awayTeamId: away.id,
+                            homeScore,
+                            awayScore,
+                            league: item.league?.name || 'Unknown League',
+                            leagueId: item.league_id,
+                            stateShort: item.state?.short_name || item.state?.state || 'LIVE',
+                            stateLong: item.state?.name || 'Live',
+                            minute: item.minute || 0,
+                            events,
+                        };
+                    });
+                }
+            }
+
+            // Fallback to football-data.org if Sportmonks returned nothing
+            if (matches.length === 0) {
+                console.log('[Live] Sportmonks unavailable — using football-data.org');
+                matches = await fetchLiveScoresFree();
+            }
 
             const db = admin.firestore();
             // FIX: Only write to Firestore when we have actual live matches.
@@ -776,50 +823,93 @@ export const initScheduler = () => {
     // ── Tomorrow's Fixture Pre-Fetch (daily at 23:00 Lagos) ─────────────────
     // Fetches tomorrow's fixtures and stores odds for VIP tomorrow preview.
     // ~1 API call per day
-    const tomorrowTask = cron.schedule('0 23 * * *', async () => {
+const tomorrowTask = cron.schedule('0 23 * * *', async () => {
         try {
-            const token = process.env.SPORTMONKS_API_TOKEN;
-            if (!token) return;
+            const smToken = process.env.SPORTMONKS_API_TOKEN;
+            const fdKey = process.env.FOOTBALL_DATA_KEY;
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             const dateKey = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
 
-            const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateKey}?include=league;participants&api_token=${token}`;
-            const res = await fetch(url);
-            if (!res.ok) { console.warn('[Tomorrow] API error:', res.status); return; }
-            const json = await res.json();
-            const raw = json.data || [];
+            let fixtures = [];
 
-            const fixtures = raw.map(item => {
-                const home = item.participants?.find(p => p.meta?.location === 'home') || {};
-                const away = item.participants?.find(p => p.meta?.location === 'away') || {};
-                // Convert starting_at to local time display
-                const kickoff = item.starting_at ? new Date(item.starting_at) : null;
-                const timeStr = kickoff ? kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' }) : 'TBD';
-                return {
-                    id: String(item.id),
-                    fixtureId: item.id,
-                    homeTeam: home.name || 'Unknown',
-                    awayTeam: away.name || 'Unknown',
-                    homeTeamLogo: home.image_path || '',
-                    awayTeamLogo: away.image_path || '',
-                    league: item.league?.name || 'Unknown League',
-                    time: timeStr,
-                    category: 'no_edge',
-                    confidence: 0,
-                    odds: 0,
-                    prediction: 'Preview — Analysis runs at 19:00',
-                    prediction_en: 'Preview — Vantage AI analysis runs at 19:00 Lagos',
-                    prediction_fr: 'Aperçu — L\'analyse IA est disponible à 19h00',
-                };
-            });
+            // Try Sportmonks first
+            if (smToken) {
+                const url = `https://api.sportmonks.com/v3/football/fixtures/date/${dateKey}?include=league;participants&api_token=${smToken}`;
+                const res = await fetch(url);
+                if (res.ok) {
+                    const json = await res.json();
+                    const raw = json.data || [];
+                    fixtures = raw.map(item => {
+                        const home = item.participants?.find(p => p.meta?.location === 'home') || {};
+                        const away = item.participants?.find(p => p.meta?.location === 'away') || {};
+                        const kickoff = item.starting_at ? new Date(item.starting_at) : null;
+                        const timeStr = kickoff ? kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' }) : 'TBD';
+                        return {
+                            id: String(item.id),
+                            fixtureId: item.id,
+                            homeTeam: home.name || 'Unknown',
+                            awayTeam: away.name || 'Unknown',
+                            homeTeamLogo: home.image_path || '',
+                            awayTeamLogo: away.image_path || '',
+                            league: item.league?.name || 'Unknown League',
+                            time: timeStr,
+                            category: 'no_edge',
+                            confidence: 0,
+                            odds: 0,
+                            prediction: 'Preview — Analysis runs at 19:00',
+                            prediction_en: 'Preview — Vantage AI analysis runs at 19:00 Lagos',
+                            prediction_fr: 'Aperçu — L\'analyse IA est disponible à 19h00',
+                        };
+                    });
+                }
+            }
 
-            const db = admin.firestore();
-            await db.collection('daily_predictions').doc(dateKey).set({
-                rawFixtures: fixtures,
-                updatedAt: new Date().toISOString(),
-            }, { merge: true });
-            console.log(`[Tomorrow] 📅 Stored ${fixtures.length} fixtures for ${dateKey}`);
+            // Fallback to football-data.org
+            if (fixtures.length === 0 && fdKey) {
+                const freeComps = ['PL', 'BL1', 'PD', 'SA', 'FL1', 'CL', 'EL'];
+                for (const comp of freeComps) {
+                    try {
+                        const res = await fetch(
+                            `https://api.football-data.org/v4/competitions/${comp}/matches?dateFrom=${dateKey}&dateTo=${dateKey}`,
+                            { headers: { 'X-Auth-Token': fdKey } }
+                        );
+                        if (!res.ok) continue;
+                        const json = await res.json();
+                        for (const m of (json.matches || [])) {
+                            const kickoff = m.utcDate ? new Date(m.utcDate) : null;
+                            const timeStr = kickoff ? kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lagos' }) : 'TBD';
+                            fixtures.push({
+                                id: String(m.id),
+                                fixtureId: m.id,
+                                homeTeam: (m.homeTeam || {}).name || 'Unknown',
+                                awayTeam: (m.awayTeam || {}).name || 'Unknown',
+                                homeTeamLogo: (m.homeTeam || {}).crest || '',
+                                awayTeamLogo: (m.awayTeam || {}).crest || '',
+                                league: (m.competition || {}).name || 'Unknown League',
+                                time: timeStr,
+                                category: 'no_edge',
+                                confidence: 0,
+                                odds: 0,
+                                prediction: 'Preview — Analysis runs at 19:00',
+                                prediction_en: 'Preview — Vantage AI analysis runs at 19:00 Lagos',
+                                prediction_fr: 'Aperçu — L\'analyse IA est disponible à 19h00',
+                            });
+                        }
+                    } catch (_) {}
+                }
+            }
+
+            if (fixtures.length > 0) {
+                const db = admin.firestore();
+                await db.collection('daily_predictions').doc(dateKey).set({
+                    rawFixtures: fixtures,
+                    updatedAt: new Date().toISOString(),
+                }, { merge: true });
+                console.log(`[Tomorrow] 📅 Stored ${fixtures.length} fixtures for ${dateKey}`);
+            } else {
+                console.log(`[Tomorrow] No fixtures available for ${dateKey}`);
+            }
         } catch (e) {
             console.warn('[Scheduler] Tomorrow fixtures fetch error:', e.message);
         }
