@@ -237,7 +237,7 @@ def fetch_matches_free(date_str: str) -> list:
     Returns list of MatchData objects.
     """
     from free_data_client import (
-        fetch_fixtures_today, fetch_team_form,
+        fetch_fixtures_today, fetch_fixtures_past, fetch_team_form,
         find_odds_for_fixture, fetch_xg_from_understat,
         estimate_btts_odds,
     )
@@ -245,7 +245,13 @@ def fetch_matches_free(date_str: str) -> list:
 
     print(f"[DataPipeline] Using FREE data stack for {date_str}", file=sys.stderr)
 
-    raw_fixtures = fetch_fixtures_today(date_str)
+    # Use FINISHED filter for past dates, SCHEDULED/TIMED for today/future
+    today_str = datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
+    is_past = date_str < today_str
+    if is_past:
+        raw_fixtures = fetch_fixtures_past(date_str)
+    else:
+        raw_fixtures = fetch_fixtures_today(date_str)
     if not raw_fixtures:
         print("[DataPipeline] No fixtures from football-data.org", file=sys.stderr)
         return []

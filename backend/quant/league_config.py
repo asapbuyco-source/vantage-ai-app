@@ -13,6 +13,7 @@ TIER_1 = {
     82:   "Bundesliga",
     384:  "Serie A",
     5:    "UEFA Europa League",
+    294:  "FIFA World Cup",
 }
 
 # ── Tier 2: Strong mid-tier European ──────────────────────────────────────

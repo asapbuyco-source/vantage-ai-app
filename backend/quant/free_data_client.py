@@ -36,6 +36,7 @@ FDORG_LEAGUE_MAP = {
     462:  "PPL",    # Primeira Liga
     253:  "BSA",    # Brasileirao Serie A
     600:  "MLS",    # MLS
+    294:  "WC",     # FIFA World Cup
 }
 
 # ── The Odds API sport key map ─────────────────────────────────────────────────
@@ -50,6 +51,7 @@ ODDS_SPORT_MAP = {
     72:  "soccer_netherlands_eredivisie",
     253: "soccer_brazil_campeonato",
     600: "soccer_usa_mls",
+    294: "soccer_fifa_world_cup",
 }
 
 # ── football-data.org rate limiter (10 calls/min free tier) ───────────────────
@@ -155,6 +157,22 @@ def fetch_fixtures_today(date_str):
     Fetch today's fixtures from football-data.org for all tracked leagues.
     Returns list of normalized fixture dicts.
     """
+    return _fetch_fixtures_for_date(date_str, "SCHEDULED,TIMED")
+
+
+def fetch_fixtures_past(date_str):
+    """
+    Fetch past (finished) fixtures from football-data.org.
+    Used by backtesting and vault simulator.
+    """
+    return _fetch_fixtures_for_date(date_str, "FINISHED")
+
+
+def _fetch_fixtures_for_date(date_str, status_filter):
+    """
+    Fetch fixtures from football-data.org for a date with a given status filter.
+    Used for both live (SCHEDULED,TIMED) and historical (FINISHED) queries.
+    """
     fixtures = []
     fetched_ids = set()
 
@@ -162,7 +180,7 @@ def fetch_fixtures_today(date_str):
         data = _fd_get(f"/competitions/{fd_code}/matches", {
             "dateFrom": date_str,
             "dateTo": date_str,
-            "status": "SCHEDULED,TIMED"
+            "status": status_filter
         })
         if not data:
             continue

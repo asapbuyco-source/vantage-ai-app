@@ -571,7 +571,8 @@ const fetchLiveScoresFree = async () => {
                             );
                             if (liveMatch) {
                                 // Only write scores for matches that are actually in play or finished
-                                const activeStates = ['1H', '2H', 'HT', 'ET', 'PEN', 'FT', 'AET', 'LIVE', 'BREAK'];
+                                // Supports both Sportmonks and football-data.org state values
+                                const activeStates = ['1H', '2H', 'HT', 'ET', 'PEN', 'FT', 'AET', 'LIVE', 'BREAK', 'IN_PLAY', 'PAUSED', 'FINISHED'];
                                 const matchState = (liveMatch.stateShort || '').toUpperCase();
                                 if (!activeStates.includes(matchState)) continue;  // Skip NS, WAIT, POSTP, etc.
                                 
@@ -590,8 +591,9 @@ const fetchLiveScoresFree = async () => {
                         }
 
                         // ── AUTO-GRADE FINISHED MATCHES ──
+                        // Supports both Sportmonks (FT/AET/PEN) and football-data.org (FINISHED)
                         const ftMatches = matches.filter(m =>
-                            ['FT', 'AET', 'PEN'].includes((m.stateShort || '').toUpperCase())
+                            ['FT', 'AET', 'PEN', 'FINISHED'].includes((m.stateShort || '').toUpperCase())
                         );
 
                         let gradingUpdated = false;

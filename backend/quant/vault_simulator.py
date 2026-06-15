@@ -58,6 +58,11 @@ from poisson_model import compute_probabilities, compute_dynamic_rho
 from elo_rating import load_ratings_from_firestore, match_probabilities as elo_probs, get_team_rating, is_derby_match, DEFAULT_ELO
 from data_pipeline import TeamStats
 
+try:
+    from free_data_client import fetch_match_result_free
+except ImportError:
+    fetch_match_result_free = None
+
 LAGOS_TZ = timezone(timedelta(hours=1))
 MAX_DAILY_PICKS = 7
 VAULT_STRATEGY_VERSION = "vault-sim-v2"
@@ -212,11 +217,29 @@ def run_vault_simulation(days: int, starting_bankroll: float, use_cache: bool = 
             if not fid:
                 continue
 
-            # Fetch actual result (with cache)
-            if cache:
-                raw_match = cache.get_or_fetch(f"/fixtures/{fid}", {"include": "scores;participants"}, original_get if original_get else _get)
-            else:
-                raw_match = _get(f"/fixtures/{fid}", {"include": "scores;participants"})
+            # Fetch actual result (with cache, fallback to free stack)
+            raw_match = None
+            if SM_TOKEN:
+                if cache:
+                    raw_match = cache.get_or_fetch(f"/fixtures/{fid}", {"include": "scores;participants"}, original_get if original_get else _get)
+                else:
+                    raw_match = _get(f"/fixtures/{fid}", {"include": "scores;participants"})
+
+            # Fallback to free data stack if Sportmonks returned nothing
+            if (not raw_match or not raw_match.get("data")) and fetch_match_result_free:
+                free_result = fetch_match_result_free(fid)
+                if free_result:
+                    # Wrap in Sportmonks-compatible dict for get_actual_result
+                    raw_match = {"data": {
+                        "scores": [
+                            {"participant_id": 1, "description": "CURRENT", "score": {"goals": free_result["home_goals"]}},
+                            {"participant_id": 2, "description": "CURRENT", "score": {"goals": free_result["away_goals"]}},
+                        ],
+                        "participants": [
+                            {"id": 1, "meta": {"location": "home"}},
+                            {"id": 2, "meta": {"location": "away"}},
+                        ]
+                    }}
 
             if not raw_match or not raw_match.get("data"):
                 continue
