@@ -314,11 +314,21 @@ def fetch_matches_free(date_str: str) -> list:
             # xG from Understat
             home_xg, away_xg = fetch_xg_from_understat(home_name, away_name)
 
-            # Fall back to goal-based xG approximation
+            # Fall back to goal-based xG approximation.
+            # Use league-aware defaults when no form data is available:
+            # World Cup / international = 1.25 goals/team avg; club = 1.2.
+            is_intl = fix.get("league_id") == 294  # FIFA World Cup
+            _xg_default = 1.25 if is_intl else 1.20
             if home_xg is None:
-                home_xg = max(0.5, home_stats.avg_scored * 0.95)
+                if home_stats.avg_scored > 0:
+                    home_xg = max(0.8, home_stats.avg_scored * 0.95)
+                else:
+                    home_xg = _xg_default
             if away_xg is None:
-                away_xg = max(0.5, away_stats.avg_scored * 0.95)
+                if away_stats.avg_scored > 0:
+                    away_xg = max(0.8, away_stats.avg_scored * 0.95)
+                else:
+                    away_xg = _xg_default
 
             # Odds
             odds_dict = find_odds_for_fixture(home_name, away_name, league_id)
