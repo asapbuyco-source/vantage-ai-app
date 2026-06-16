@@ -185,6 +185,9 @@ export const Screener: React.FC<ScreenerProps> = ({ matches }) => {
                                         <td className="py-3 px-4">
                                             <div className="flex items-center justify-center gap-2">
                                                 <span className="font-mono text-xs text-emerald-400 font-bold">{conf}%</span>
+                                                {m.data_quality !== undefined && m.data_quality < 0.6 && (
+                                                    <span className="text-amber-500 text-[10px]" title={`Data quality: ${(m.data_quality * 100).toFixed(0)}%`}>⚠</span>
+                                                )}
                                                 <span className="text-gray-600">/</span>
                                                 <span className="font-mono text-xs text-gray-400">{implied.toFixed(1)}%</span>
                                             </div>

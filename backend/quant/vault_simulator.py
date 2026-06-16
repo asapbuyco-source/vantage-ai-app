@@ -264,6 +264,9 @@ def run_vault_simulation(days: int, starting_bankroll: float, use_cache: bool = 
             if pred.get("vault_eligible") is False or pred.get("odds_fresh") is False:
                 continue
 
+            if league_tier >= 5:
+                continue
+
             if odds <= 1.0 or probability <= 0:
                 continue
 

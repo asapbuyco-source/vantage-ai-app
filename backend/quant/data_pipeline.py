@@ -92,6 +92,7 @@ class OddsData:
     opening_away_odds: float = 0.0
     opening_draw_odds: float = 0.0
     odds_fetched_at: str = ""  # ISO timestamp for staleness guard
+    odds_last_bookmaker_update: str = ""  # When the bookmaker last updated the line
 
     def has_odds(self) -> bool:
         return self.home_odds > 1.0 and self.away_odds > 1.0
@@ -306,7 +307,8 @@ def fetch_matches_free(date_str: str) -> list:
                 under35_odds=odds_dict.get("under35_odds", 0.0),
                 btts_yes_odds=odds_dict.get("btts_yes_odds", 0.0),
                 btts_no_odds=odds_dict.get("btts_no_odds", 0.0),
-                odds_fetched_at=datetime.now(timezone.utc).isoformat()
+                odds_fetched_at=datetime.now(timezone.utc).isoformat(),
+                odds_last_bookmaker_update=odds_dict.get("odds_last_bookmaker_update", ""),
             )
 
             # Estimate BTTS odds if bookmaker data missing

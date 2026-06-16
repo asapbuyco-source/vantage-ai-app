@@ -62,6 +62,36 @@ def _safe_print(text: str, file=sys.stdout):
         print(text.encode('ascii', 'replace').decode('ascii'), file=file)
 
 
+def _model_agreement_for_bet(best_bet, probs: CombinedProbabilities) -> float:
+    """Pick the right per-market confidence score from CombinedProbabilities."""
+    if not best_bet:
+        return 0.0
+    m = best_bet.market.lower()
+    if any(k in m for k in ["over", "under"]):
+        return probs.goals_confidence
+    if "btts" in m:
+        return probs.btts_confidence
+    return probs.result_confidence
+
+
+def _data_quality_score(match, best_bet, odds_fresh: bool, home_stats, away_stats) -> float:
+    """Score 0-1 based on data quality factors affecting prediction reliability."""
+    score = 1.0
+    if not odds_fresh:
+        score -= 0.15
+    if match.league_tier >= 4:
+        score -= 0.10
+    if match.league_tier == 5:
+        score -= 0.15
+    if not home_stats or not home_stats.matches_analyzed or home_stats.matches_analyzed < 5:
+        score -= 0.10
+    if not best_bet or best_bet.odds <= 1.0:
+        score -= 0.20
+    if getattr(match, 'provider_source', '') == 'api_football':
+        score -= 0.05
+    return max(0.0, round(score, 2))
+
+
 def _get_firestore():
     try:
         import firebase_admin
@@ -344,6 +374,7 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 and odds_fresh
                 and category in ("safe", "value")
                 and value_rank in ("high", "medium")
+                and match.league_tier < 5  # tier-5 / unknown leagues are analysis-only
             )
 
             # ── Kelly stake (ISSUE-01 fixed) ────────────────────────────────
@@ -379,7 +410,9 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 "bet_type": best_bet.market if best_bet else "N/A",
                 "prediction": best_bet.market if best_bet else "N/A",
                 "probability": round(best_bet.model_prob, 4) if best_bet else 0,
-                "confidence": round(best_bet.model_prob * 100, 1) if best_bet else 0,
+                "confidence": round(best_bet.model_prob * 100, 1) if best_bet else 0,  # UI compat — misleading label kept
+                "model_agreement": round(_model_agreement_for_bet(best_bet, probs), 2) if best_bet else 0,
+                "data_quality": round(_data_quality_score(match, best_bet, odds_fresh, home_stats, away_stats), 2) if best_bet else 0,
                 "odds": best_bet.odds if best_bet else 0,
                 "pick_time_odds": best_bet.odds if best_bet else 0,
                 "clv_tracked": True,

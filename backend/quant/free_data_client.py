@@ -344,10 +344,16 @@ def _parse_odds_api_response(game):
         "over35_odds": 0.0, "under35_odds": 0.0,
         "btts_yes_odds": 0.0, "btts_no_odds": 0.0,
         "opening_home_odds": 0.0, "opening_away_odds": 0.0, "opening_draw_odds": 0.0,
+        "odds_last_bookmaker_update": "",
     }
 
     home_team = game.get("home_team", "")
+    latest_bookmaker_update = ""
     for bookmaker in game.get("bookmakers", []):
+        lu = bookmaker.get("last_update", "")
+        if lu and lu > latest_bookmaker_update:
+            latest_bookmaker_update = lu
+
         for market in bookmaker.get("markets", []):
             key = market.get("key", "")
             outcomes = market.get("outcomes", [])
@@ -383,6 +389,7 @@ def _parse_odds_api_response(game):
                         elif "3.5" in point:
                             result["under35_odds"] = max(result["under35_odds"], price)
 
+    result["odds_last_bookmaker_update"] = latest_bookmaker_update
     return result
 
 

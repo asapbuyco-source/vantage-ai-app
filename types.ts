@@ -65,7 +65,8 @@ export interface Match {
   calibrated_probability?: number;
   calibration_factor?: number;
   calibration_tier?: 'stable' | 'watch' | 'fragile' | 'none' | string;
-  odds_fetched_at?: string;
+odds_fetched_at?: string;
+  odds_last_bookmaker_update?: string;  // when the bookmaker last updated their line
   odds_age_minutes?: number | null;
   odds_fresh?: boolean;
   vault_eligible?: boolean;
@@ -75,7 +76,9 @@ export interface Match {
   expected_goals_home?: number;  // xG home
   expected_goals_away?: number;  // xG away
   model?: 'quant' | 'ai';       // source of prediction
-  model_confidence?: number;     // 0–1 model agreement score
+  model_confidence?: number;     // 0–1 model agreement score (alias: model_agreement)
+  model_agreement?: number;      // 0–1 per-market model agreement (goals/result/btts)
+  data_quality?: number;         // 0–1 data quality score (odds freshness, league tier, sample size)
   home_win_prob?: number;        // all market probs from quant model
   draw_prob?: number;
   away_win_prob?: number;
@@ -206,6 +209,8 @@ export interface AccumulatorTicket {
   combined_ev: number;
   kelly_stake: number;
   kelly_stake_unit: string;
+  risk_level?: string;          // moderate / high / very_high / extreme
+  risk_warning?: string;        // human-readable risk warning
   legs: AccumulatorLeg[];
 }
 

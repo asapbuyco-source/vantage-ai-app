@@ -17,6 +17,7 @@ preventing the system from overstating its edge by 5-8%.
 import math
 from dataclasses import dataclass
 from typing import Optional
+from calibration_registry import get_calibration_factor, get_calibration_tier, FRAGILE_MARKETS, CALIBRATION_VERSION
 from probability_engine import CombinedProbabilities
 from data_pipeline import OddsData
 
@@ -29,46 +30,41 @@ MIN_INEFFICIENCY = 0.06  # Default 6% model vs market gap (used for goals/BTTS)
 # so requiring 6%+ gap blocks almost all 1X2 bets. Lower threshold for result markets.
 # FIX #6: Raised "result" from 0.03 to 0.04 to match risk_filters.MIN_INEFFICIENCY=0.04.
 # Previously, bets with 3.x% inefficiency were flagged is_value=True here but then
-# silently rejected by risk_filters \u2014 producing confusing phantom value bets.
+# silently rejected by risk_filters — producing confusing phantom value bets.
 MARKET_INEFFICIENCY = {
     "result": 0.04,      # 4% for Home Win, Away Win, Draw, DC, DNB (aligned with risk_filters)
     "goals": 0.05,       # 5% for Over/Under goals
     "btts": 0.05,        # 5% for BTTS Yes/No
 }
 
-# MARKET-CAL-01: Final market-specific probability haircuts before EV/Kelly.
-# probability_engine.py already calibrates the core goals/BTTS grid, but result
-# markets and fragile defensive markets still need a final conservative layer.
-# These factors are intentionally asymmetric: we punish historically overconfident
-# markets more than stable markets.
-MARKET_PROBABILITY_HAIRCUTS = {
-    "Away Win": 0.84,
-    "Draw": 0.90,
-    "BTTS No": 0.88,
-    "Over 3.5 Goals": 0.86,
-    "Under 2.5 Goals": 0.93,
-    "Under 3.5 Goals": 0.94,
-    "BTTS": 0.95,
-    "Over 2.5 Goals": 0.95,
-    "Home Win": 0.96,
-    "Draw No Bet (Away)": 0.90,
-    "AH Away +0.5": 0.90,
-    "Double Chance (X2)": 0.92,
+# Legacy map: ev_engine uses display names; registry uses internal keys.
+# Normalise here so get_calibration_factor gets the right key.
+_MARKET_KEY_MAP = {
+    "Away Win": "away_win",
+    "Draw": "draw",
+    "BTTS No": "btts_no",
+    "Over 3.5 Goals": "over35",
+    "Under 2.5 Goals": "under25",
+    "Under 3.5 Goals": "under35",
+    "BTTS": "btts",
+    "Over 2.5 Goals": "over25",
+    "Home Win": "home_win",
+    "Draw No Bet (Away)": "Draw No Bet (Away)",
+    "AH Away +0.5": "AH Away +0.5",
+    "Double Chance (X2)": "Double Chance (X2)",
 }
 
-FRAGILE_MARKETS = {"Away Win", "Draw", "BTTS No", "Over 3.5 Goals"}
+
+def _market_to_key(market: str) -> str:
+    return _MARKET_KEY_MAP.get(market, market.lower().replace(" ", "_").replace("-", "_"))
 
 
 def calibrate_market_probability(raw_prob: float, market: str) -> tuple[float, float, str]:
     """Return calibrated probability, factor, and trust tier for auditability."""
-    factor = MARKET_PROBABILITY_HAIRCUTS.get(market, 0.97)
+    key = _market_to_key(market)
+    factor = get_calibration_factor(key, 0.97)
     calibrated = max(0.01, min(0.99, raw_prob * factor))
-    if market in FRAGILE_MARKETS:
-        tier = "fragile"
-    elif factor < 0.95:
-        tier = "watch"
-    else:
-        tier = "stable"
+    tier = get_calibration_tier(key)
     return calibrated, factor, tier
 
 def _get_market_category(market: str) -> str:

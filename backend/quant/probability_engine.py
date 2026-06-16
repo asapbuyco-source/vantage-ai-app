@@ -24,6 +24,7 @@ Safety downgrades now use the appropriate per-market confidence score.
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+from calibration_registry import get_calibration_factor
 from poisson_model import MarketProbabilities, compute_probabilities
 from elo_rating import match_probabilities as elo_match_probs
 from form_model import compute_form_probabilities, FormProbabilities
@@ -40,30 +41,10 @@ W_ELO     = 0.25  # Elo ratings (secondary — good for match outcomes)
 W_FORM    = 0.10  # Form model (10% — recency-weighted team performance)
 W_H2H     = 0.05  # FIX-3: Enabled H2H contribution (was 0.00)
 
-# ── MODEL-07: Empirical probability calibration factors ────────────────────────
-# Derived from 30-day backtest: predicted probability bucket vs actual hit rate.
-# Format: raw_probability → calibrated_probability (as a multiplier)
-# CAL-01: Applied to each market BEFORE returning CombinedProbabilities.
-# This corrects the systematic overconfidence in Poisson-derived probabilities.
-MARKET_CALIBRATION = {
-    # Market              AvgPred  AvgActual  DiscountFactor
-    "over25":             (0.92,   0.82,      0.89),   # O2.5: 92% pred → 82% actual
-    "under25":            (0.08,   0.18,      1.00),   # Un25: model is UNDER-confident — use as-is
-    "over15":             (0.85,   0.80,      0.94),   # O1.5: 85% pred → 80% actual
-    "under15":            (0.15,   0.43,      1.00),   # Un15: model is UNDER-confident
-    "over35":             (0.75,   0.64,      0.86),   # O3.5: very overconfident
-    "under35":            (0.25,   0.36,      1.00),   # Un35: model is UNDER-confident
-    "btts":               (0.55,   0.55,      0.95),   # BTTS Yes: mild overconfidence
-    "btts_no":            (0.45,   0.42,      0.93),   # BTTS No: 88% pred → 58% actual (0.66 would overcorrect)
-    "home_win":           (0.65,   0.65,      0.95),   # Mild overconfidence
-    "away_win":           (0.65,   0.44,      0.80),   # Away: model WAY overconfident
-    "draw":               (0.22,   0.22,      0.90),   # Draw rarely taken — keep conservative
-}
-
 
 def _calibrate(raw: float, market_key: str, default: float = 0.92) -> float:
     """Apply empirical calibration discount to a raw probability."""
-    factor = MARKET_CALIBRATION.get(market_key, (None, None, default))[2]
+    factor = get_calibration_factor(market_key, default)
     return max(0.01, min(0.99, raw * factor))
 
 

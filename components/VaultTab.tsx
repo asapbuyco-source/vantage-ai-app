@@ -49,6 +49,7 @@ function getVaultProbability(match: any): number {
 function isVaultEligible(match: any): boolean {
     if (match.vault_eligible === false) return false;
     if (match.odds_fresh === false) return false;
+    if (match.data_quality !== undefined && match.data_quality < 0.50) return false;
     return true;
 }
 

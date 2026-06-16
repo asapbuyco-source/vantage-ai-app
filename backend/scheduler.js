@@ -386,6 +386,24 @@ export const initScheduler = () => {
     tasks.set('sync', syncTask);
     syncSchedules(); // On startup: reads schedule times and registers cron jobs — does NOT generate
 
+    // ── Auto-recovery: trigger quant pipeline on startup if today's predictions are missing ─
+    (async () => {
+        try {
+            const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+            const db = admin.firestore();
+            const doc = await db.collection('quant_predictions').doc(todayKey).get();
+            if (!doc.exists || !doc.data()?.predictions?.length) {
+                console.log(`[Scheduler] 🔄 Auto-recovery: No quant predictions for ${todayKey} — running pipeline now...`);
+                const result = await triggerQuantPipeline(todayKey, false);
+                console.log(`[Scheduler] 🔄 Auto-recovery result: ${result?.status} — ${result?.generated || 0} bets`);
+            } else {
+                console.log(`[Scheduler] ✅ Quant predictions already exist for ${todayKey} (${doc.data()?.predictions?.length || 0} bets)`);
+            }
+        } catch (e) {
+            console.warn('[Scheduler] Auto-recovery check failed:', e.message);
+        }
+    })();
+
     // ── Selar Payment Email Listener ──────────────────────────────────────────
     // Runs every 2 minutes to check for new VIP purchases (was: every 30s which risked quota limits)
     const selarTask = cron.schedule('*/2 * * * *', async () => {
@@ -403,10 +421,13 @@ const fetchLiveScoresFree = async () => {
     if (!fdKey) return [];
 
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
         const res = await fetch(
             'https://api.football-data.org/v4/matches?status=LIVE,IN_PLAY,PAUSED',
-            { headers: { 'X-Auth-Token': fdKey }, signal: AbortSignal.timeout(15000) }
+            { headers: { 'X-Auth-Token': fdKey }, signal: controller.signal }
         );
+        clearTimeout(timeoutId);
         if (!res.ok) return [];
         const json = await res.json();
         return (json.matches || []).map(m => {
@@ -867,9 +888,9 @@ const tomorrowTask = cron.schedule('0 23 * * *', async () => {
                 }
             }
 
-            // Fallback to football-data.org
+            // Fallback to football-data.org (covers club + international tournaments)
             if (fixtures.length === 0 && fdKey) {
-                const freeComps = ['PL', 'BL1', 'PD', 'SA', 'FL1', 'CL', 'EL'];
+                const freeComps = ['PL', 'BL1', 'PD', 'SA', 'FL1', 'CL', 'EL', 'WC', 'EC', 'CLI', 'BSA', 'PPL', 'DED'];
                 for (const comp of freeComps) {
                     try {
                         const res = await fetch(

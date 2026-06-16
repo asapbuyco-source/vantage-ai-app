@@ -49,6 +49,21 @@ class RejectionStats:
     invalid_odds: int = 0
     invalid_stake: int = 0
 
+    def to_dict(self) -> dict:
+        return {
+            "missing_generated_at": self.missing_generated_at,
+            "missing_kickoff": self.missing_kickoff,
+            "generated_after_cutoff": self.generated_after_cutoff,
+            "ungraded": self.ungraded,
+            "invalid_odds": self.invalid_odds,
+            "invalid_stake": self.invalid_stake,
+            "total_rejected": (
+                self.missing_generated_at + self.missing_kickoff
+                + self.generated_after_cutoff + self.ungraded
+                + self.invalid_odds + self.invalid_stake
+            ),
+        }
+
 
 @dataclass
 class ValidBacktestReport:
@@ -326,6 +341,59 @@ def main() -> int:
         print_report(report)
 
     return 0 if report.valid else 2
+
+
+def export_valid_report(days: int = 30, bankroll: float = 10000.0) -> dict:
+    """
+    Run a valid backtest and return a JSON-serializable report dict.
+    This is the OFFICIAL performance report for the strategy — use this,
+    not grid_search.py or vault_simulator.py, for any performance claims.
+    """
+    docs = load_firestore(days)
+    if not docs:
+        return {
+            "status": "no_data",
+            "days_scanned": days,
+            "message": "No Firestore documents found. Check FIREBASE_SERVICE_ACCOUNT.",
+        }
+    bets, rejected = extract_valid_bets(docs)
+    if not bets:
+        report = run_valid_backtest(docs, bankroll, min_bets=0, min_active_days=0)
+        return {
+            "status": "no_valid_bets",
+            "days_scanned": days,
+            "rejected": rejected.to_dict(),
+            **asdict(report),
+        }
+    report = run_valid_backtest(docs, bankroll)
+    return {
+        "status": "success",
+        "days_scanned": days,
+        "active_days": report.active_days,
+        "total_bets": report.total_bets,
+        "wins": report.wins,
+        "losses": report.losses,
+        "voids": report.voids,
+        "hit_rate": round(report.hit_rate_pct / 100.0, 4),
+        "starting_bankroll": report.starting_bankroll,
+        "final_bankroll": report.final_bankroll,
+        "roi": round(report.profit / report.starting_bankroll, 4),
+        "betting_roi": round(report.betting_roi_pct / 100.0, 4),
+        "max_drawdown": round(report.max_drawdown_pct / 100.0, 4),
+        "total_staked": report.total_staked,
+        "avg_clv": 0.0,
+        "rejected": rejected.to_dict(),
+        "valid": report.valid,
+        "validation_issues": [report.reason] if not report.valid else [],
+        "generated_at": _now_iso(),
+        "backtest_version": "valid-v2",
+        "official_note": "This is the authoritative performance report. Other tools (grid_search, vault_simulator) may show inflated results.",
+    }
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
 
 
 if __name__ == "__main__":

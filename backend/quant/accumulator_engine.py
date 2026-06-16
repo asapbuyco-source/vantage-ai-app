@@ -28,6 +28,8 @@ TIER_CONFIG = {
         "min_combined_odds": 1.50, # Relaxed from 2.00
         "sort_key": "prob",   # sort by probability
         "count": 1,
+        "risk_level": "moderate",
+        "risk_warning": "Multi-leg — higher variance than single bets. Stake conservatively.",
     },
     "alpha_edge": {
         "label": "The Alpha Edge",
@@ -39,6 +41,8 @@ TIER_CONFIG = {
         "min_combined_odds": 2.00, # Relaxed from 2.50
         "sort_key": "ev",     # sort by expected value
         "count": 1,
+        "risk_level": "high",
+        "risk_warning": "EV-optimized — combines uncorrelated edges but variance compounds.",
     },
     "syndicate": {
         "label": "The Syndicate",
@@ -50,17 +54,21 @@ TIER_CONFIG = {
         "min_combined_odds": 3.00, # Relaxed from 4.00
         "sort_key": "composite",  # sort by EV*0.5 + prob*0.5
         "count": 1,
+        "risk_level": "very_high",
+        "risk_warning": "High-risk — for entertainment only. Do NOT stake from core bankroll.",
     },
     "variance_play": {
         "label": "The Variance Play",
         "description": "High-yield moonshot — big odds, calculated risk",
         "icon": "🚀",
-        "max_legs": 5,      
+        "max_legs": 5,
         "min_legs": 3, # Relaxed from 4
         "min_prob": 0.50,  # Relaxed from 0.58
         "min_combined_odds": 5.00, # Relaxed from 8.00
         "sort_key": "ev",
         "count": 1,
+        "risk_level": "extreme",
+        "risk_warning": "Extreme variance — 5-leg accumulator. Bankroll suicide without a separate dedicated fund.",
     },
 }
 
@@ -223,6 +231,7 @@ def generate_accumulators(value_bets: list[dict]) -> dict[str, list[dict]]:
 
 def accumulator_to_dict(acca: Accumulator) -> dict:
     """Serialize an accumulator to a Firestore-ready dict."""
+    config = TIER_CONFIG.get(acca.tier, {})
     return {
         "tier": acca.tier,
         "tier_label": acca.tier_label,
@@ -233,7 +242,9 @@ def accumulator_to_dict(acca: Accumulator) -> dict:
         "combined_prob": acca.combined_prob,
         "combined_ev": acca.combined_ev,
         "kelly_stake": acca.kelly_stake,
-        "kelly_stake_unit": "pct_of_bankroll",  # BUG-02: explicit unit to prevent misinterpretation
+        "kelly_stake_unit": "pct_of_bankroll",
+        "risk_level": config.get("risk_level", "unknown"),
+        "risk_warning": config.get("risk_warning", ""),
         "legs": [
             {
                 "fixture_id": l.fixture_id,
