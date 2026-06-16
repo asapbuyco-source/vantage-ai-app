@@ -214,7 +214,7 @@ def _fetch_fixtures_for_date(date_from, date_to, status_filter):
                 "provider": "football-data.org"
             })
 
-    dprint(f"[FreeData] Got {len(fixtures)} fixtures from football-data.org for {date_str}")
+    dprint(f"[FreeData] Got {len(fixtures)} fixtures from football-data.org from {date_from} to {date_to}")
     return fixtures
 
 
