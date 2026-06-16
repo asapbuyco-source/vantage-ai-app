@@ -11,6 +11,8 @@ import os
 import json
 import time
 import requests
+import urllib3
+urllib3.disable_warnings()
 from datetime import datetime, timezone
 
 # ── API Keys ───────────────────────────────────────────────────────────────────
@@ -71,7 +73,8 @@ def _fd_get(path, params=None):
             f"{FOOTBALL_DATA_BASE}{path}",
             headers={"X-Auth-Token": FOOTBALL_DATA_KEY},
             params=params or {},
-            timeout=15
+            timeout=15,
+            verify=False
         )
         _last_fd_call = time.time()
         if resp.status_code == 200:
@@ -123,7 +126,8 @@ def fetch_all_odds_for_sport(sport_key):
                 "markets": "h2h,totals",
                 "oddsFormat": "decimal",
             },
-            timeout=15
+            timeout=15,
+            verify=False
         )
         if resp.status_code == 200:
             data = resp.json()

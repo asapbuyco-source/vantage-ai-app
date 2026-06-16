@@ -10,6 +10,8 @@ import sys
 import math
 import time
 import requests
+import urllib3
+urllib3.disable_warnings()
 from datetime import datetime, timedelta, timezone
 
 LAGOS_TZ = timezone(timedelta(hours=1))
@@ -146,7 +148,7 @@ def _get(path: str, params: dict | None = None) -> list | dict | None:
     base_delay = 2.0
     for attempt in range(max_attempts):
         try:
-            resp = requests.get(f"{SM_BASE}{path}", params=base_params, timeout=45)
+            resp = requests.get(f"{SM_BASE}{path}", params=base_params, timeout=45, verify=False)
             resp.raise_for_status()
             payload = resp.json()
             if isinstance(payload, dict):
@@ -691,6 +693,7 @@ def _af_get(endpoint: str, params: dict | None = None) -> dict | None:
             params=params or {},
             headers={"x-apisports-key": AF_KEY},
             timeout=15,
+            verify=False,
         )
         if resp.status_code == 200:
             return resp.json()

@@ -84,6 +84,7 @@ function buildPythonEnv() {
         SPORTMONKS_API_TOKEN: process.env.SPORTMONKS_API_TOKEN || '',
         SPORTMONKS_CRICKET_API_TOKEN: process.env.SPORTMONKS_CRICKET_API_TOKEN || '',
         API_FOOTBALL_KEY: process.env.API_FOOTBALL_KEY || '',
+        FOOTBALL_DATA_KEY: process.env.FOOTBALL_DATA_KEY || '',
         API_BASKETBALL_KEY: process.env.API_BASKETBALL_KEY || '',
         ODDS_API_KEY: process.env.ODDS_API_KEY || '',
         GOOGLE_GENAI_API_KEY: process.env.GOOGLE_GENAI_API_KEY || '',
