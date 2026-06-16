@@ -251,13 +251,39 @@ def fetch_matches_free(date_str: str) -> list:
     # Use FINISHED filter for past dates, SCHEDULED/TIMED for today/future
     today_str = datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
     is_past = date_str < today_str
+    
+    target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+    next_dt = target_dt + timedelta(days=1)
+    next_date_str = next_dt.strftime("%Y-%m-%d")
+    
+    # Cutoff is 04:00 AM Lagos Time the next day (which is 03:00 UTC)
+    cutoff_utc = next_dt.replace(hour=3, minute=0, second=0, tzinfo=timezone.utc)
+
     if is_past:
-        raw_fixtures = fetch_fixtures_past(date_str)
+        raw_fixtures = fetch_fixtures_past(date_str, next_date_str)
     else:
-        raw_fixtures = fetch_fixtures_today(date_str)
+        raw_fixtures = fetch_fixtures_today(date_str, next_date_str)
+        
     if not raw_fixtures:
         print("[DataPipeline] No fixtures from football-data.org", file=sys.stderr)
         return []
+
+    # Filter out matches >= 04:00 AM Lagos Time of the next day
+    valid_fixtures = []
+    for fix in raw_fixtures:
+        kickoff_utc = fix.get("kickoff_utc", "")
+        if kickoff_utc:
+            try:
+                kick = datetime.fromisoformat(kickoff_utc.replace("Z", "+00:00"))
+                if kick.tzinfo is None:
+                    kick = kick.replace(tzinfo=timezone.utc)
+                if kick >= cutoff_utc:
+                    continue
+            except Exception:
+                pass
+        valid_fixtures.append(fix)
+
+    raw_fixtures = valid_fixtures
 
     print(f"[DataPipeline] Got {len(raw_fixtures)} fixtures from free stack", file=sys.stderr)
 
@@ -944,10 +970,15 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
         return fetch_matches_free(date_str)
 
     include_str = "league;participants;scores;odds;statistics;lineups;sidelined"
+    target_dt = datetime.strptime(date_str, "%Y-%m-%d")
+    next_dt = target_dt + timedelta(days=1)
+    next_date_str = next_dt.strftime("%Y-%m-%d")
+    cutoff_utc = next_dt.replace(hour=3, minute=0, second=0, tzinfo=timezone.utc)
+
     raw = _get_paginated(
-        f"/fixtures/date/{date_str}",
+        f"/fixtures/between/{date_str}/{next_date_str}",
         params={"include": include_str, "per_page": 100},
-        max_pages=3,
+        max_pages=5,
     )
     if not raw:
         print("[DataPipeline] No Sportmonks fixtures returned. Trying free stack fallback...", file=sys.stderr)
@@ -955,24 +986,31 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
 
     # ── 🚨 Global Past Match Filter (Bypassed if date_str is in the past) ──
     is_today = date_str == datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
-    if is_today:
-        future_raw = []
-        now_utc = datetime.now(timezone.utc)
-        for item in raw:
-            starting_at = item.get("starting_at", "")
-            if starting_at:
-                try:
-                    kick = datetime.fromisoformat(starting_at.replace("Z", "+00:00"))
-                    if kick.tzinfo is None:
-                        kick = kick.replace(tzinfo=timezone.utc)
-                    # Filter out matches starting within 30 minutes to avoid late predictions
-                    if kick > (now_utc + timedelta(minutes=30)):
-                        future_raw.append(item)
-                except Exception:
-                    pass
-        raw = future_raw
-    else:
-        print(f"[DataPipeline] Past date requested ({date_str}). Bypassing future filter.")
+    valid_raw = []
+    now_utc = datetime.now(timezone.utc)
+    for item in raw:
+        starting_at = item.get("starting_at", "")
+        if starting_at:
+            try:
+                kick = datetime.fromisoformat(starting_at.replace("Z", "+00:00"))
+                if kick.tzinfo is None:
+                    kick = kick.replace(tzinfo=timezone.utc)
+                
+                # Filter out matches >= 04:00 AM Lagos Time of the next day
+                if kick >= cutoff_utc:
+                    continue
+                
+                # If is_today, filter out matches starting within 30 minutes to avoid late predictions
+                if is_today and kick <= (now_utc + timedelta(minutes=30)):
+                    continue
+                
+                valid_raw.append(item)
+            except Exception:
+                pass
+    raw = valid_raw
+    
+    if not is_today:
+        print(f"[DataPipeline] Past date requested ({date_str}). Future filter bypassed.")
 
     print(f"[DataPipeline] Raw fixtures (future only): {len(raw)}")
 

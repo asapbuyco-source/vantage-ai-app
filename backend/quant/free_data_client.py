@@ -156,23 +156,23 @@ def dprint(msg):
 
 # ── Fixture Fetching ───────────────────────────────────────────────────────────
 
-def fetch_fixtures_today(date_str):
+def fetch_fixtures_today(date_str, end_date_str=None):
     """
     Fetch today's fixtures from football-data.org for all tracked leagues.
     Returns list of normalized fixture dicts.
     """
-    return _fetch_fixtures_for_date(date_str, "SCHEDULED,TIMED")
+    return _fetch_fixtures_for_date(date_str, end_date_str or date_str, "SCHEDULED,TIMED")
 
 
-def fetch_fixtures_past(date_str):
+def fetch_fixtures_past(date_str, end_date_str=None):
     """
     Fetch past (finished) fixtures from football-data.org.
     Used by backtesting and vault simulator.
     """
-    return _fetch_fixtures_for_date(date_str, "FINISHED")
+    return _fetch_fixtures_for_date(date_str, end_date_str or date_str, "FINISHED")
 
 
-def _fetch_fixtures_for_date(date_str, status_filter):
+def _fetch_fixtures_for_date(date_from, date_to, status_filter):
     """
     Fetch fixtures from football-data.org for a date with a given status filter.
     Used for both live (SCHEDULED,TIMED) and historical (FINISHED) queries.
@@ -182,8 +182,8 @@ def _fetch_fixtures_for_date(date_str, status_filter):
 
     for league_id, fd_code in FDORG_LEAGUE_MAP.items():
         data = _fd_get(f"/competitions/{fd_code}/matches", {
-            "dateFrom": date_str,
-            "dateTo": date_str,
+            "dateFrom": date_from,
+            "dateTo": date_to,
             "status": status_filter
         })
         if not data:
