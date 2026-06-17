@@ -56,33 +56,59 @@ ODDS_SPORT_MAP = {
     294: "soccer_fifa_world_cup",
 }
 
-# ── football-data.org rate limiter (10 calls/min free tier) ───────────────────
-_last_fd_call = 0
-FD_RATE_LIMIT = 6.5  # 1 call per 6.5s = ~9/min (safe under 10/min cap)
+# ── football-data.org wrapper (replaces raw request boilerplate) ───────────────────
+class FootballData:
+    def __init__(self, api_key):
+        self.api_key = api_key
+        self.base_url = "https://api.football-data.org/v4"
+        self._last_call = 0
+        self.rate_limit = 6.5
 
-def _fd_get(path, params=None):
-    """GET from football-data.org with rate limiting."""
-    global _last_fd_call
-    if not FOOTBALL_DATA_KEY:
+    def _get(self, path, params=None):
+        if not self.api_key:
+            return None
+        elapsed = time.time() - self._last_call
+        if elapsed < self.rate_limit:
+            time.sleep(self.rate_limit - elapsed)
+        try:
+            resp = requests.get(
+                f"{self.base_url}{path}",
+                headers={"X-Auth-Token": self.api_key},
+                params=params or {},
+                timeout=15,
+                verify=False
+            )
+            self._last_call = time.time()
+            if resp.status_code == 200:
+                return resp.json()
+            print(f"[FreeData] football-data.org error {resp.status_code} for {path}", file=__import__('sys').stderr)
+        except Exception as e:
+            print(f"[FreeData] football-data.org request failed: {e}", file=__import__('sys').stderr)
         return None
-    elapsed = time.time() - _last_fd_call
-    if elapsed < FD_RATE_LIMIT:
-        time.sleep(FD_RATE_LIMIT - elapsed)
-    try:
-        resp = requests.get(
-            f"{FOOTBALL_DATA_BASE}{path}",
-            headers={"X-Auth-Token": FOOTBALL_DATA_KEY},
-            params=params or {},
-            timeout=15,
-            verify=False
-        )
-        _last_fd_call = time.time()
-        if resp.status_code == 200:
-            return resp.json()
-        print(f"[FreeData] football-data.org error {resp.status_code} for {path}", file=__import__('sys').stderr)
-    except Exception as e:
-        print(f"[FreeData] football-data.org request failed: {e}", file=__import__('sys').stderr)
-    return None
+
+    def competition_matches(self, competition_id, date_from=None, date_to=None, status=None):
+        params = {}
+        if date_from: params["dateFrom"] = date_from
+        if date_to: params["dateTo"] = date_to
+        if status: params["status"] = status
+        data = self._get(f"/competitions/{competition_id}/matches", params)
+        return data.get("matches", []) if data else []
+
+    def team_matches(self, team_id, status=None, limit=None):
+        params = {}
+        if status: params["status"] = status
+        if limit: params["limit"] = limit
+        data = self._get(f"/teams/{team_id}/matches", params)
+        return data.get("matches", []) if data else []
+
+    def match_result(self, fixture_id):
+        return self._get(f"/matches/{fixture_id}")
+
+    def live_matches(self):
+        data = self._get("/matches", {"status": "LIVE,IN_PLAY,PAUSED"})
+        return data.get("matches", []) if data else []
+
+fd_api = FootballData(api_key=FOOTBALL_DATA_KEY)
 
 # ── Odds Cache (file-based, 4-hour TTL) ────────────────────────────────────────
 ODDS_CACHE_FILE = ".vantage_cache/odds_cache.json"
@@ -181,15 +207,13 @@ def _fetch_fixtures_for_date(date_from, date_to, status_filter):
     fetched_ids = set()
 
     for league_id, fd_code in FDORG_LEAGUE_MAP.items():
-        data = _fd_get(f"/competitions/{fd_code}/matches", {
-            "dateFrom": date_from,
-            "dateTo": date_to,
-            "status": status_filter
-        })
-        if not data:
-            continue
-
-        matches = data.get("matches", [])
+        matches = fd_api.competition_matches(
+            competition_id=fd_code,
+            date_from=date_from,
+            date_to=date_to,
+            status=status_filter
+        )
+        
         for m in matches:
             fid = str(m.get("id", ""))
             if fid in fetched_ids:
@@ -220,22 +244,29 @@ def _fetch_fixtures_for_date(date_from, date_to, status_filter):
 
 # ── Team Form Fetching ─────────────────────────────────────────────────────────
 
-def fetch_team_form(team_id, limit=10):
+def fetch_team_form(team_id, limit=10, league_id=None):
     """
     Fetch last N finished matches for a team from football-data.org.
     Returns list of match result dicts with goals, result, opponent info.
+    For international games (World Cup), uses soccerdata/FBref via international_data.py.
+    Falls back to Sofascore for leagues that return 403 from football-data.org (EL/MLS).
     """
-    if not team_id:
-        return []
+    is_intl = league_id in INTERNATIONAL_LEAGUE_IDS if league_id else False
+    if is_intl:
+        try:
+            from international_data import fetch_intl_form
+            return fetch_intl_form(team_id, limit=limit)
+        except Exception as e:
+            dprint(f"[FreeData] International form fetch failed: {e}")
 
-    data = _fd_get(
-        f"/teams/{team_id}/matches",
-        {"status": "FINISHED", "limit": limit}
+    matches = fd_api.team_matches(
+        team_id=team_id,
+        status="FINISHED",
+        limit=limit
     )
-    if not data:
-        return []
+    if not matches:
+        return _fetch_team_form_sofascore(team_id, limit)
 
-    matches = data.get("matches", [])
     results = []
     for m in matches:
         home = m.get("homeTeam", {})
@@ -267,6 +298,15 @@ def fetch_team_form(team_id, limit=10):
             "opponent_name": away.get("name") if is_home else home.get("name"),
         })
     return results
+
+def _fetch_team_form_sofascore(team_id, limit=10):
+    """Fallback fetch for teams/leagues that return 403 from football-data.org."""
+    try:
+        from sofascore_client import fetch_team_form as sofascore_form
+        return sofascore_form(team_id, limit)
+    except Exception as e:
+        dprint(f"[FreeData] Sofascore form fallback failed: {e}")
+        return []
 
 
 # ── Odds Parsing (per fixture from cached league data) ─────────────────────────
@@ -424,48 +464,73 @@ UNDERSTAT_NAME_MAP = {
     "Olympique de Marseille": "Marseille",
 }
 
+INTERNATIONAL_LEAGUE_IDS = {294, 3016, 3015, 3014, 3013, 3012, 3011, 3010, 3009, 3008, 3007}
+
 def normalize_for_understat(team_name):
     """Map football-data.org name to Understat name if known."""
     return UNDERSTAT_NAME_MAP.get(team_name, team_name)
 
-def fetch_xg_from_understat(home_team, away_team, season=2025):
+def _calc_avg_xg(match_data, is_home=True, last_n=10):
+    """Calculate average xG from Understat match_data (new get_match_data format)."""
+    try:
+        if is_home:
+            matches = [m for m in match_data if m.get("h_a") == "h"]
+        else:
+            matches = [m for m in match_data if m.get("h_a") == "a"]
+        recent = matches[-last_n:]
+        if not recent:
+            return None
+        xg_key = "xG" if is_home else "xGA"
+        vals = [float(m.get(xg_key, 0)) for m in recent if m.get(xg_key) is not None]
+        return sum(vals) / len(vals) if vals else None
+    except Exception:
+        return None
+
+def fetch_xg_from_understat(home_team, away_team, season=2025, league_id=None):
     """
     Fetch team xG averages from Understat.
     Returns (home_xg_avg, away_xg_avg) or (None, None) if unavailable.
-    Only works for top 6 European leagues (Understat coverage).
+    For international games (league_id in INTERNATIONAL_LEAGUE_IDS), delegates to
+    international_data.py. Only works for top European leagues (Understat coverage).
     """
+    is_intl = league_id in INTERNATIONAL_LEAGUE_IDS if league_id else False
+    if is_intl:
+        try:
+            from international_data import fetch_intl_xg
+            return fetch_intl_xg(home_team, away_team)
+        except Exception as e:
+            dprint(f"[FreeData] International xG fetch failed, falling back to Understat: {e}")
+
     try:
         from understatapi import UnderstatClient
         home_name = normalize_for_understat(home_team)
         away_name = normalize_for_understat(away_team)
 
         with UnderstatClient() as client:
-            home_data = client.team(team=home_name).get_data(season=str(season))
-            away_data = client.team(team=away_name).get_data(season=str(season))
+            home_data = client.team(team=home_name).get_match_data(season=str(season))
+            away_data = client.team(team=away_name).get_match_data(season=str(season))
 
-            home_xg = _avg_xg_from_understat(home_data, is_home=True)
-            away_xg = _avg_xg_from_understat(away_data, is_home=False)
+            home_xg = _calc_avg_xg(home_data, is_home=True)
+            away_xg = _calc_avg_xg(away_data, is_home=False)
             return home_xg, away_xg
     except Exception as e:
         dprint(f"[FreeData] Understat xG fetch failed: {e}")
         return None, None
 
-def _avg_xg_from_understat(team_data, is_home=True, last_n=10):
-    """Average xG from last N home or away matches."""
-    try:
-        history = team_data.get("history", [])
-        if is_home:
-            matches = [m for m in history if m.get("h_a") == "h"]
-        else:
-            matches = [m for m in history if m.get("h_a") == "a"]
-        recent = matches[-last_n:]
-        if not recent:
-            return None
-        xg_key = "xG" if is_home else "xGA"
-        vals = [float(m.get(xg_key, 0)) for m in recent]
-        return sum(vals) / len(vals) if vals else None
-    except Exception:
-        return None
+def fetch_xg_for_match(home_team, away_team, season=2025, league_id=None):
+    """
+    Route xG fetch to appropriate source based on league type.
+    International games -> international_data.py (soccerdata/FBref)
+    Club games -> Understat
+    """
+    is_intl = league_id in INTERNATIONAL_LEAGUE_IDS if league_id else False
+    if is_intl:
+        try:
+            from international_data import fetch_intl_xg
+            return fetch_intl_xg(home_team, away_team)
+        except Exception:
+            pass
+    return fetch_xg_from_understat(home_team, away_team, season)
 
 
 # ── BTTS Odds Estimation (when bookmaker data is missing) ──────────────────────
@@ -495,17 +560,17 @@ def fetch_live_scores_free():
     if not FOOTBALL_DATA_KEY:
         return []
 
-    data = _fd_get("/matches", {"status": "LIVE,IN_PLAY,PAUSED"})
-    if not data:
+    matches = fd_api.live_matches()
+    if not matches:
         return []
 
-    matches = []
-    for m in data.get("matches", []):
+    live_games = []
+    for m in matches:
         home = m.get("homeTeam", {})
         away = m.get("awayTeam", {})
         score = m.get("score", {}).get("fullTime", {}) or m.get("score", {}).get("halfTime", {}) or {}
 
-        matches.append({
+        live_games.append({
             "id": str(m.get("id", "")),
             "homeTeam": home.get("name", ""),
             "awayTeam": away.get("name", ""),
@@ -524,7 +589,7 @@ def fetch_live_scores_free():
             "source": "football-data.org",
         })
 
-    return matches
+    return live_games
 
 
 # ── Match Result Fetching (for grading) ────────────────────────────────────────
@@ -537,7 +602,7 @@ def fetch_match_result_free(fixture_id):
     if not FOOTBALL_DATA_KEY:
         return None
 
-    data = _fd_get(f"/matches/{fixture_id}")
+    data = fd_api.match_result(fixture_id)
     if not data:
         return None
 

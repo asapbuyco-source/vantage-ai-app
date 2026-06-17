@@ -33,6 +33,8 @@ import math
 if TYPE_CHECKING:
     from data_pipeline import TeamStats
 
+INTERNATIONAL_LEAGUE_IDS = {294, 3016, 3015, 3014, 3013, 3012, 3011, 3010, 3009, 3008, 3007}
+
 # ── Model weights (must sum to 1.00) ─────────────────────────────────────────
 # FIX-3: Enabled H2H contribution (5%). H2H data is fetched via API-Football.
 # H2H provides ~5% signal on match outcomes when 3+ meetings exist.
@@ -103,11 +105,14 @@ def compute_combined(
     rho: float | None = None,
     weights_override: dict | None = None,
     league_tier: int = 2,
+    league_id: int | None = None,
 ) -> CombinedProbabilities:
     """
     Combine Poisson + Elo + Form + H2H into final probabilities.
     FIX-3: H2H contributes 5% when 3+ meetings exist.
     FIX-5: league_tier read from match (not TeamStats) for correct home advantage.
+    For international matches (league_id in INTERNATIONAL_LEAGUE_IDS), uses
+    international Elo via international_data.py instead of club Elo.
 
     Args:
         mu_home: Expected goals for home team (from data_pipeline)
@@ -193,7 +198,22 @@ def compute_combined(
     poisson: MarketProbabilities = compute_probabilities(adj_mu_home, adj_mu_away, rho)
 
     # ── Model 2: Elo ───────────────────────────────────────────────────────
-    elo = elo_match_probs(home_team_id, away_team_id)
+    is_intl = league_id in INTERNATIONAL_LEAGUE_IDS if league_id else False
+    if is_intl:
+        try:
+            from international_data import get_intl_elo, intl_match_probabilities as intl_probs
+            home_elo = get_intl_elo(getattr(home_stats, 'team_name', '') or str(home_team_id))
+            away_elo = get_intl_elo(getattr(away_stats, 'team_name', '') or str(away_team_id))
+            intl_elo = intl_probs(home_elo, away_elo)
+            elo = {
+                "home_win": intl_elo["home_win"],
+                "draw": intl_elo["draw"],
+                "away_win": intl_elo["away_win"],
+            }
+        except Exception:
+            elo = elo_match_probs(home_team_id, away_team_id)
+    else:
+        elo = elo_match_probs(home_team_id, away_team_id)
 
     # ── Model 3: Form (FIX-6: opponent strength aware + FIX-10: league-tier aware) ─
     form: FormProbabilities = compute_form_probabilities(

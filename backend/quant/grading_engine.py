@@ -229,6 +229,50 @@ def _compute_clv(pick_odds: float, closing_odds: float) -> float:
         return 0.0
     return round((closing_implied - pick_implied) / pick_implied, 4)
 
+def _compute_ev(pick_odds: float, win_prob: float) -> float:
+    """
+    Compute Expected Value of a bet.
+
+    EV = (win_prob * pick_odds) - (1 - win_prob)
+       = win_prob * (pick_odds - 1) - (1 - win_prob)
+
+    Positive EV → profitable bet on average.
+    Negative EV → unprofitable bet on average.
+    """
+    if pick_odds <= 1.0 or win_prob <= 0.0 or win_prob >= 1.0:
+        return 0.0
+    return (win_prob * pick_odds) - (1.0 - win_prob)
+
+def _has_negative_ev(pred: dict) -> bool:
+    """
+    Check if a prediction has negative expected value.
+    Returns True if EV < 0 (bad EV should not be pushed to users).
+    """
+    pick_odd = float(pred.get("pick_time_odds", 0) or pred.get("odds", 0) or 0)
+    if pick_odd <= 1.0:
+        return False
+    market = pred.get("bet_type", "")
+    home_prob = float(pred.get("home_prob", 0) or 0)
+    away_prob = float(pred.get("away_prob", 0) or 0)
+    draw_prob = float(pred.get("draw_prob", 0) or 0)
+    over25_prob = float(pred.get("over25_prob", 0) or 0)
+    btts_yes_prob = float(pred.get("btts_yes_prob", 0) or 0)
+    win_prob = 0.0
+    if "home win" in market.lower() and home_prob > 0:
+        win_prob = home_prob
+    elif "away win" in market.lower() and away_prob > 0:
+        win_prob = away_prob
+    elif market.lower() == "draw" and draw_prob > 0:
+        win_prob = draw_prob
+    elif "over 2.5" in market.lower() and over25_prob > 0:
+        win_prob = over25_prob
+    elif "btts" in market.lower() and "no" not in market.lower() and btts_yes_prob > 0:
+        win_prob = btts_yes_prob
+    if win_prob <= 0:
+        return False
+    ev = _compute_ev(pick_odd, win_prob)
+    return ev < 0
+
 
 def _grade_bet(market: str, home_goals: int, away_goals: int) -> str:
     """Return 'won', 'lost', or 'void' for a specific bet given the result."""
@@ -387,10 +431,16 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
     graded_count = 0
     clv_sum = 0.0
     clv_count = 0
-    
+
     pending_preds = []
+    negative_ev_count = 0
 
     for pred in to_grade:
+        if _has_negative_ev(pred):
+            pred["status"] = "no_bet"
+            pred["ev_negative"] = True
+            negative_ev_count += 1
+            continue
         fid = str(pred.get("fixture_id", ""))
         result = results_map.get(fid)
         if not result:
@@ -469,9 +519,11 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
         print(f"[Grading] Elo update failed (non-fatal): {e}", file=sys.stderr)
 
     clv_str = f" | Avg CLV: {avg_clv:+.2%} ({clv_count} bets)" if avg_clv is not None else ""
-    print(f"[Grading] Graded {graded_count}/{len(predictions)} predictions for {date_str}.{clv_str}")
+    neg_ev_str = f" | {negative_ev_count} predictions filtered (negative EV)" if negative_ev_count > 0 else ""
+    print(f"[Grading] Graded {graded_count}/{len(predictions)} predictions for {date_str}.{clv_str}{neg_ev_str}")
     return {"status": "success", "total": len(predictions), "graded": graded_count,
-            "date": date_str, "avg_clv": avg_clv, "clv_sample_size": clv_count}
+            "date": date_str, "avg_clv": avg_clv, "clv_sample_size": clv_count,
+            "negative_ev_filtered": negative_ev_count}
 
 
 if __name__ == "__main__":

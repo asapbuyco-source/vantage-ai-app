@@ -415,48 +415,49 @@ export const initScheduler = () => {
     });
     tasks.set('selar', selarTask);
 
-    // ── Free Live Score Fetcher (football-data.org) ───────────────────────────────
-const fetchLiveScoresFree = async () => {
-    const fdKey = process.env.FOOTBALL_DATA_KEY;
-    if (!fdKey) return [];
-
+    // ── Sofascore Live Score Fetcher (replaces football-data.org) ─────────────────
+const fetchLiveScoresSofascore = async () => {
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
         const res = await fetch(
-            'https://api.football-data.org/v4/matches?status=LIVE,IN_PLAY,PAUSED',
-            { headers: { 'X-Auth-Token': fdKey }, signal: controller.signal }
+            'https://api.sofascore.com/api/v1/sport/football/events/live',
+            { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: controller.signal }
         );
         clearTimeout(timeoutId);
-        if (!res.ok) return [];
+        if (!res.ok) {
+            console.warn('[LiveScore-Sofascore] Fetch error:', res.status);
+            return [];
+        }
         const json = await res.json();
-        return (json.matches || []).map(m => {
-            const score = m.score || {};
-            const fullTime = score.fullTime || {};
-            const halfTime = score.halfTime || {};
+        const events = json.events || [];
+        return events.map(m => {
             const home = m.homeTeam || {};
             const away = m.awayTeam || {};
+            const homeScore = m.homeScore || {};
+            const awayScore = m.awayScore || {};
+            const status = m.status || {};
             return {
                 id: String(m.id),
                 homeTeam: home.name || 'Unknown',
                 awayTeam: away.name || 'Unknown',
-                homeTeamLogo: home.crest || '',
-                awayTeamLogo: away.crest || '',
+                homeTeamLogo: home.logo || '',
+                awayTeamLogo: away.logo || '',
                 homeTeamId: home.id,
                 awayTeamId: away.id,
-                homeScore: fullTime.home ?? halfTime.home ?? 0,
-                awayScore: fullTime.away ?? halfTime.away ?? 0,
-                league: (m.competition || {}).name || 'Unknown League',
-                leagueId: (m.competition || {}).id || 0,
-                stateShort: m.status || 'LIVE',
-                stateLong: m.status || 'Live',
+                homeScore: homeScore.current || homeScore.full || 0,
+                awayScore: awayScore.current || awayScore.full || 0,
+                league: m.tournament?.name || 'Unknown League',
+                leagueId: m.tournament?.id || 0,
+                stateShort: status.description || 'LIVE',
+                stateLong: status.description || 'Live',
                 minute: m.minute || 0,
                 events: [],
-                source: 'football-data.org',
+                source: 'sofascore',
             };
         });
     } catch (e) {
-        console.warn('[LiveScore-Free] Fetch error:', e.message);
+        console.warn('[LiveScore-Sofascore] Fetch error:', e.message);
         return [];
     }
 };
@@ -556,10 +557,10 @@ const fetchLiveScoresFree = async () => {
                 }
             }
 
-            // Fallback to football-data.org if Sportmonks returned nothing
+            // Fallback to Sofascore if Sportmonks returned nothing
             if (matches.length === 0) {
-                console.log('[Live] Sportmonks unavailable — using football-data.org');
-                matches = await fetchLiveScoresFree();
+                console.log('[Live] Sportmonks unavailable — using Sofascore');
+                matches = await fetchLiveScoresSofascore();
             }
 
             const db = admin.firestore();

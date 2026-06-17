@@ -20,3 +20,13 @@ grpcio>=1.59.0
 
 # Utilities
 python-dateutil>=2.8.2 # Date parsing helpers
+
+# International data (FBref/soccerdata)
+soccerdata>=1.6.0
+
+# football-data-api PyPI package (cleaner boilerplate request handling)
+football-data-api>=0.1.0
+
+# Data parsing
+pandas>=2.0.0
+lxml>=4.9.0

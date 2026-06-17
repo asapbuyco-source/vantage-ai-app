@@ -35,6 +35,24 @@ RECENT_DAYS = 90  # Look back 90 days for form data
 AF_KEY = os.environ.get("API_FOOTBALL_KEY", "")
 AF_BASE = "https://v3.football.api-sports.io"
 
+# ── ClubElo Seeding (override manual club Elo system) ───────────────────────
+def _seed_club_elo_cache():
+    """Seed Elo cache from ClubElo at startup."""
+    try:
+        from clubelo_client import seed_elo_cache as _seed_elo
+        elos = _seed_elo()
+        if elos:
+            print(f"[DataPipeline] ClubElo cache seeded with {len(elos)} ratings", file=sys.stderr)
+    except Exception as e:
+        print(f"[DataPipeline] ClubElo seeding failed (non-fatal): {e}", file=sys.stderr)
+
+_club_elo_seeded = False
+def _ensure_club_elo_seeded():
+    global _club_elo_seeded
+    if not _club_elo_seeded:
+        _seed_club_elo_cache()
+        _club_elo_seeded = True
+
 
 # ── Data Structures ───────────────────────────────────────────────────────────
 @dataclass
@@ -241,7 +259,7 @@ def fetch_matches_free(date_str: str) -> list:
     """
     from free_data_client import (
         fetch_fixtures_today, fetch_fixtures_past, fetch_team_form,
-        find_odds_for_fixture, fetch_xg_from_understat,
+        find_odds_for_fixture, fetch_xg_for_match,
         estimate_btts_odds,
     )
     from team_id_map import get_af_id_from_fd_id
@@ -300,9 +318,9 @@ def fetch_matches_free(date_str: str) -> list:
             af_home_id = get_af_id_from_fd_id(home_id, home_name)
             af_away_id = get_af_id_from_fd_id(away_id, away_name)
 
-            # Team Form
-            home_form_raw = fetch_team_form(home_id, limit=10)
-            away_form_raw = fetch_team_form(away_id, limit=10)
+            # Team Form (routes to international_data.py for World Cup)
+            home_form_raw = fetch_team_form(home_id, limit=10, league_id=league_id)
+            away_form_raw = fetch_team_form(away_id, limit=10, league_id=league_id)
 
             home_stats = _build_free_team_stats(
                 home_id, home_name, home_form_raw, is_home=True
@@ -311,13 +329,13 @@ def fetch_matches_free(date_str: str) -> list:
                 away_id, away_name, away_form_raw, is_home=False
             )
 
-            # xG from Understat
-            home_xg, away_xg = fetch_xg_from_understat(home_name, away_name)
+            # xG from Understat (routes to international_data.py for World Cup)
+            home_xg, away_xg = fetch_xg_for_match(home_name, away_name, league_id=league_id)
 
             # Fall back to goal-based xG approximation.
             # Use league-aware defaults when no form data is available:
             # World Cup / international = 1.25 goals/team avg; club = 1.2.
-            is_intl = fix.get("league_id") == 294  # FIFA World Cup
+            is_intl = league_id == 294  # FIFA World Cup
             _xg_default = 1.25 if is_intl else 1.20
             if home_xg is None:
                 if home_stats.avg_scored > 0:
@@ -969,6 +987,8 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
     Fetch and normalize matches for the given date (YYYY-MM-DD).
     Returns a list of MatchData sorted by league tier, up to MAX_MATCHES.
     """
+    _ensure_club_elo_seeded()
+
     if date_str is None:
         date_str = datetime.now(LAGOS_TZ).strftime("%Y-%m-%d")
 
