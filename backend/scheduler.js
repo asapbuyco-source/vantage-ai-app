@@ -809,13 +809,7 @@ export const initScheduler = () => {
                     console.warn('[Live] Error auto-updating prediction scores:', e.message);
                 }
 
-            } else {
-                // No live matches — update timestamp only so the UI knows the poller ran
-                await db.collection('live_scores').doc('current').set({
-                    count: 0,
-                    updatedAt: new Date().toISOString(),
-                }, { merge: true });
-            }
+
         } catch (e) {
             console.warn('[Scheduler] Live scores poll error:', e.message);
         } finally {
