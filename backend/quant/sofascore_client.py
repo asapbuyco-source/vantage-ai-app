@@ -145,6 +145,45 @@ def fetch_team_form(team_id: int, limit: int = 10) -> list:
         print(f"[Sofascore] Team form fetch failed for {team_id}: {e}", file=sys.stderr)
         return []
 
+def fetch_historical_xg_sofascore(team_id: int, limit: int = 5) -> float:
+    """
+    Fetch average xG for a team from recent matches on Sofascore.
+    Queries match stats for the last N matches.
+    """
+    try:
+        resp = _sofascore_session.get(
+            f"{SOFASCORE_BASE}/team/{team_id}/events/last/{limit}",
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return 0.0
+        events = resp.json().get("events", [])
+        
+        total_xg = 0.0
+        count = 0
+        for e in events:
+            fix_id = e.get("id")
+            if not fix_id: continue
+            
+            stats = fetch_match_stats(fix_id)
+            if not stats: continue
+            
+            is_home = e.get("homeTeam", {}).get("id") == team_id
+            xg_stat = stats.get("Expected goals")
+            if not xg_stat: continue
+            
+            val = xg_stat.get("home") if is_home else xg_stat.get("away")
+            try:
+                total_xg += float(val)
+                count += 1
+            except:
+                pass
+                
+        return total_xg / count if count > 0 else 0.0
+    except Exception as e:
+        print(f"[Sofascore] Historical xG fetch failed for {team_id}: {e}", file=sys.stderr)
+        return 0.0
+
 def fetch_match_stats(fixture_id: int) -> dict:
     """
     Fetch detailed match statistics from Sofascore.
@@ -192,6 +231,7 @@ def _normalize_sofascore_event(event: dict) -> dict:
         "stateShort": status.get("description", "") or status.get("shortName", "LIVE"),
         "stateLong": status.get("description", "Live"),
         "minute": event.get("minute", 0) or 0,
+        "kickoff_utc": event.get("startTimestamp", 0),
         "events": [],
         "source": "sofascore",
     }

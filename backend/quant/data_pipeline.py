@@ -330,7 +330,9 @@ def fetch_matches_free(date_str: str) -> list:
             )
 
             # xG from Understat (routes to international_data.py for World Cup)
-            home_xg, away_xg = fetch_xg_for_match(home_name, away_name, league_id=league_id)
+            home_xg, away_xg = fetch_xg_for_match(
+                home_name, away_name, league_id=league_id, home_id=home_id, away_id=away_id
+            )
 
             # Fall back to goal-based xG approximation.
             # Use league-aware defaults when no form data is available:

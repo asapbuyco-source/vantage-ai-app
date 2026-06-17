@@ -54,7 +54,61 @@ ODDS_SPORT_MAP = {
     253: "soccer_brazil_campeonato",
     600: "soccer_usa_mls",
     294: "soccer_fifa_world_cup",
+    462: "soccer_portugal_primeira_liga",
+    9:   "soccer_england_championship",
+    7:   "soccer_uefa_europa_conference_league",
+    1204: "soccer_scotland_premiership",
+    138: "soccer_belgium_first_div",
+    176: "soccer_turkey_super_league",
+    288: "soccer_poland_ekstraklasa",
+    325: "soccer_argentina_primera_division",
+    392: "soccer_norway_eliteserien",
+    395: "soccer_italy_serie_b",
+    567: "soccer_spain_segunda_division",
+    572: "soccer_sweden_allsvenskan",
 }
+
+SOFASCORE_LEAGUE_MAP = {
+    8:    ["Premier League"],
+    2:    ["UEFA Champions League"],
+    564:  ["LaLiga"],
+    82:   ["Bundesliga"],
+    384:  ["Serie A"],
+    5:    ["UEFA Europa League"],
+    294:  ["World Cup"],
+    301:  ["Ligue 1"],
+    462:  ["Liga Portugal", "Primeira Liga"],
+    7:    ["UEFA Europa Conference League", "UEFA Conference League"],
+    72:   ["Eredivisie"],
+    9:    ["Championship"],
+    1204: ["Premiership"],
+    138:  ["Pro League"],
+    600:  ["Major League Soccer", "MLS"],
+    253:  ["Brasileirão Série A"],
+    325:  ["Liga Profesional", "Liga Profesional de Fútbol"],
+    176:  ["Trendyol Süper Lig", "Super Lig"],
+    570:  ["Saudi Pro League"],
+    392:  ["Eliteserien"],
+    572:  ["Allsvenskan"],
+    288:  ["Ekstraklasa"],
+    1186: ["CAF Champions League"],
+    1187: ["CAF Confederation Cup"],
+    567:  ["LaLiga 2"],
+    85:   ["2. Bundesliga"],
+    395:  ["Serie B"],
+    302:  ["Ligue 2"],
+    10:   ["League One"],
+    12:   ["League Two"],
+    254:  ["Brasileirão Série B"],
+    14:   ["National League"],
+    51:   ["Liga Portugal 2"],
+}
+
+def get_internal_league_id_from_sofascore(ss_name):
+    for lid, names in SOFASCORE_LEAGUE_MAP.items():
+        if ss_name in names:
+            return lid
+    return None
 
 # ── football-data.org wrapper (replaces raw request boilerplate) ───────────────────
 class FootballData:
@@ -200,45 +254,48 @@ def fetch_fixtures_past(date_str, end_date_str=None):
 
 def _fetch_fixtures_for_date(date_from, date_to, status_filter):
     """
-    Fetch fixtures from football-data.org for a date with a given status filter.
-    Used for both live (SCHEDULED,TIMED) and historical (FINISHED) queries.
+    Fetch fixtures from Sofascore for a date.
+    Used for both live and historical queries, unlocking 30+ leagues.
     """
+    from sofascore_client import fetch_todays_fixtures_sofascore
+    
     fixtures = []
+    ss_fixtures = fetch_todays_fixtures_sofascore(date_from)
     fetched_ids = set()
 
-    for league_id, fd_code in FDORG_LEAGUE_MAP.items():
-        matches = fd_api.competition_matches(
-            competition_id=fd_code,
-            date_from=date_from,
-            date_to=date_to,
-            status=status_filter
-        )
-        
-        for m in matches:
-            fid = str(m.get("id", ""))
-            if fid in fetched_ids:
-                continue
-            fetched_ids.add(fid)
+    for sf in ss_fixtures:
+        league_name = sf.get("league", "")
+        league_id = get_internal_league_id_from_sofascore(league_name)
+        if not league_id:
+            continue
 
-            home = m.get("homeTeam", {})
-            away = m.get("awayTeam", {})
-            utc_date = m.get("utcDate", "")
+        fid = str(sf.get("id", ""))
+        if fid in fetched_ids:
+            continue
+            
+        state = sf.get("stateShort", "")
+        if "FINISHED" in status_filter and state not in ("FT", "AET", "PEN"):
+            continue
+        if "SCHEDULED" in status_filter and state in ("FT", "AET", "PEN", "Postponed", "Canceled"):
+            continue
+            
+        fetched_ids.add(fid)
 
-            fixtures.append({
-                "id": fid,
-                "league_id": league_id,
-                "league_name": m.get("competition", {}).get("name", ""),
-                "home_team": home.get("name", ""),
-                "home_team_id": home.get("id"),
-                "away_team": away.get("name", ""),
-                "away_team_id": away.get("id"),
-                "home_logo": home.get("crest", ""),
-                "away_logo": away.get("crest", ""),
-                "kickoff_utc": utc_date,
-                "provider": "football-data.org"
-            })
+        fixtures.append({
+            "id": fid,
+            "league_id": league_id,
+            "league_name": league_name,
+            "home_team": sf.get("homeTeam", ""),
+            "home_team_id": sf.get("homeTeamId"),
+            "away_team": sf.get("awayTeam", ""),
+            "away_team_id": sf.get("awayTeamId"),
+            "home_logo": sf.get("homeTeamLogo", ""),
+            "away_logo": sf.get("awayTeamLogo", ""),
+            "kickoff_utc": sf.get("kickoff_utc", date_from),
+            "provider": "sofascore"
+        })
 
-    dprint(f"[FreeData] Got {len(fixtures)} fixtures from football-data.org from {date_from} to {date_to}")
+    dprint(f"[FreeData] Got {len(fixtures)} fixtures from Sofascore for {date_from}")
     return fixtures
 
 
@@ -517,11 +574,12 @@ def fetch_xg_from_understat(home_team, away_team, season=2025, league_id=None):
         dprint(f"[FreeData] Understat xG fetch failed: {e}")
         return None, None
 
-def fetch_xg_for_match(home_team, away_team, season=2025, league_id=None):
+def fetch_xg_for_match(home_team, away_team, season=2025, league_id=None, home_id=None, away_id=None):
     """
     Route xG fetch to appropriate source based on league type.
     International games -> international_data.py (soccerdata/FBref)
-    Club games -> Understat
+    Top 6 Club games -> Understat
+    Other leagues -> Sofascore Historical Stats
     """
     is_intl = league_id in INTERNATIONAL_LEAGUE_IDS if league_id else False
     if is_intl:
@@ -530,7 +588,22 @@ def fetch_xg_for_match(home_team, away_team, season=2025, league_id=None):
             return fetch_intl_xg(home_team, away_team)
         except Exception:
             pass
-    return fetch_xg_from_understat(home_team, away_team, season)
+            
+    hx, ax = fetch_xg_from_understat(home_team, away_team, season)
+    
+    # Fallback to Sofascore for unsupported lower leagues
+    if (hx is None or ax is None) and home_id and away_id:
+        try:
+            from sofascore_client import fetch_historical_xg_sofascore
+            ss_hx = fetch_historical_xg_sofascore(home_id)
+            ss_ax = fetch_historical_xg_sofascore(away_id)
+            if ss_hx > 0 and ss_ax > 0:
+                dprint(f"[FreeData] Using Sofascore historical xG for {home_team} vs {away_team}")
+                return ss_hx, ss_ax
+        except Exception as e:
+            dprint(f"[FreeData] Sofascore xG fallback failed: {e}")
+            
+    return hx, ax
 
 
 # ── BTTS Odds Estimation (when bookmaker data is missing) ──────────────────────
