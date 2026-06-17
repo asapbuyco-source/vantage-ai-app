@@ -441,7 +441,7 @@ export const initScheduler = () => {
             clearTimeout(timeoutId);
             if (!res.ok) {
                 console.warn('[LiveScore-Sofascore] Fetch error:', res.status);
-                return [];
+                return null;
             }
             const json = await res.json();
             const events = json.events || [];
@@ -472,7 +472,7 @@ export const initScheduler = () => {
             });
         } catch (e) {
             console.warn('[LiveScore-Sofascore] Fetch error:', e.message);
-            return [];
+            return null;
         }
     };
 
@@ -497,7 +497,7 @@ export const initScheduler = () => {
             clearTimeout(timeoutId);
             if (!res.ok) {
                 console.warn('[LiveScore-Fotmob] Fetch error:', res.status);
-                return [];
+                return null;
             }
             const json = await res.json();
             const liveMatches = [];
@@ -530,7 +530,7 @@ export const initScheduler = () => {
             return liveMatches;
         } catch (e) {
             console.warn('[LiveScore-Fotmob] Fetch error:', e.message);
-            return [];
+            return null;
         }
     };
 
@@ -562,14 +562,17 @@ export const initScheduler = () => {
 
             const smToken = process.env.SPORTMONKS_API_TOKEN;
             let matches = [];
+            let apiSuccess = false;
 
             // Try Sportmonks first if token exists
             if (smToken) {
                 const url = `https://api.sportmonks.com/v3/football/livescores/latest?include=league;participants;scores;events.type;events.player;state&api_token=${smToken}`;
-                const res = await fetch(url);
-                if (res.ok) {
-                    const json = await res.json();
-                    const raw = json.data || [];
+                try {
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        apiSuccess = true;
+                        const json = await res.json();
+                        const raw = json.data || [];
 
                     matches = raw.map(item => {
                         const home = item.participants?.find(p => p.meta?.location === 'home') || {};
@@ -627,30 +630,47 @@ export const initScheduler = () => {
                             events,
                         };
                     });
+                    } else {
+                        console.warn(`[Live] Sportmonks HTTP ${res.status}`);
+                    }
+                } catch (e) {
+                    console.error('[Live] Sportmonks network error:', e.message);
                 }
             }
 
-            // Fallback chain: Sofascore → Fotmob
-            if (matches.length === 0) {
+            // Fallback chain: Sofascore → Fotmob (only if previous API failed)
+            if (!apiSuccess) {
                 console.log('[Live] Sportmonks unavailable — trying Sofascore');
-                matches = await fetchLiveScoresSofascore();
+                const sofaResult = await fetchLiveScoresSofascore();
+                if (sofaResult !== null) {
+                    matches = sofaResult;
+                    apiSuccess = true;
+                }
             }
-            if (matches.length === 0) {
+            if (!apiSuccess) {
                 console.log('[Live] Sofascore unavailable — trying Fotmob');
-                matches = await fetchLiveScoresFotmob();
+                const fotmobResult = await fetchLiveScoresFotmob();
+                if (fotmobResult !== null) {
+                    matches = fotmobResult;
+                    apiSuccess = true;
+                }
+            }
+
+            if (!apiSuccess) {
+                console.warn('[Live] ❌ All live score sources failed. Aborting poll cycle.');
+                return;
             }
 
             const db = admin.firestore();
-            // FIX: Only write to Firestore when we have actual live matches.
-            // Previously an API error or quiet period would overwrite with an empty
-            // array and wipe all live data from the dashboard immediately.
-            if (matches.length > 0) {
-                await db.collection('live_scores').doc('current').set({
-                    matches,
-                    count: matches.length,
-                    updatedAt: new Date().toISOString(),
-                });
-                console.log(`[Live] ⚡ Wrote ${matches.length} live matches to Firestore`);
+            // FIX: Write to Firestore if we successfully polled, even if matches is empty.
+            // If it's a quiet period (0 matches), we WANT to clear out old matches from the DB
+            // so the dashboard accurately shows "No live matches".
+            await db.collection('live_scores').doc('current').set({
+                matches,
+                count: matches.length,
+                updatedAt: new Date().toISOString(),
+            });
+            console.log(`[Live] ⚡ Wrote ${matches.length} live matches to Firestore`);
                 
 // ── AUTO-UPDATE PREDICTIONS SCORE ──
                 try {
