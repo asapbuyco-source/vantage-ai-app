@@ -415,52 +415,125 @@ export const initScheduler = () => {
     });
     tasks.set('selar', selarTask);
 
-    // ── Sofascore Live Score Fetcher (replaces football-data.org) ─────────────────
-const fetchLiveScoresSofascore = async () => {
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-        const res = await fetch(
-            'https://api.sofascore.com/api/v1/sport/football/events/live',
-            { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: controller.signal }
-        );
-        clearTimeout(timeoutId);
-        if (!res.ok) {
-            console.warn('[LiveScore-Sofascore] Fetch error:', res.status);
+    // ── Sofascore Live Score Fetcher ────────────────────────────────────────────
+    // Full browser-spoofing headers required — Sofascore blocks datacenter IPs
+    // that only send a bare User-Agent without matching Origin/Referer headers.
+    const SOFASCORE_BROWSER_HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Origin': 'https://www.sofascore.com',
+        'Referer': 'https://www.sofascore.com/',
+        'Cache-Control': 'no-cache',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site',
+    };
+
+    const fetchLiveScoresSofascore = async () => {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const res = await fetch(
+                'https://api.sofascore.com/api/v1/sport/football/events/live',
+                { headers: SOFASCORE_BROWSER_HEADERS, signal: controller.signal }
+            );
+            clearTimeout(timeoutId);
+            if (!res.ok) {
+                console.warn('[LiveScore-Sofascore] Fetch error:', res.status);
+                return [];
+            }
+            const json = await res.json();
+            const events = json.events || [];
+            return events.map(m => {
+                const home = m.homeTeam || {};
+                const away = m.awayTeam || {};
+                const homeScore = m.homeScore || {};
+                const awayScore = m.awayScore || {};
+                const status = m.status || {};
+                return {
+                    id: String(m.id),
+                    homeTeam: home.name || 'Unknown',
+                    awayTeam: away.name || 'Unknown',
+                    homeTeamLogo: `https://api.sofascore.com/api/v1/team/${home.id}/image`,
+                    awayTeamLogo: `https://api.sofascore.com/api/v1/team/${away.id}/image`,
+                    homeTeamId: home.id,
+                    awayTeamId: away.id,
+                    homeScore: homeScore.current ?? homeScore.display ?? 0,
+                    awayScore: awayScore.current ?? awayScore.display ?? 0,
+                    league: m.tournament?.name || 'Unknown League',
+                    leagueId: m.tournament?.id || 0,
+                    stateShort: status.description || 'LIVE',
+                    stateLong: status.description || 'Live',
+                    minute: m.time?.played ?? m.time?.current ?? 0,
+                    events: [],
+                    source: 'sofascore',
+                };
+            });
+        } catch (e) {
+            console.warn('[LiveScore-Sofascore] Fetch error:', e.message);
             return [];
         }
-        const json = await res.json();
-        const events = json.events || [];
-        return events.map(m => {
-            const home = m.homeTeam || {};
-            const away = m.awayTeam || {};
-            const homeScore = m.homeScore || {};
-            const awayScore = m.awayScore || {};
-            const status = m.status || {};
-            return {
-                id: String(m.id),
-                homeTeam: home.name || 'Unknown',
-                awayTeam: away.name || 'Unknown',
-                homeTeamLogo: home.logo || '',
-                awayTeamLogo: away.logo || '',
-                homeTeamId: home.id,
-                awayTeamId: away.id,
-                homeScore: homeScore.current || homeScore.full || 0,
-                awayScore: awayScore.current || awayScore.full || 0,
-                league: m.tournament?.name || 'Unknown League',
-                leagueId: m.tournament?.id || 0,
-                stateShort: status.description || 'LIVE',
-                stateLong: status.description || 'Live',
-                minute: m.minute || 0,
-                events: [],
-                source: 'sofascore',
-            };
-        });
-    } catch (e) {
-        console.warn('[LiveScore-Sofascore] Fetch error:', e.message);
-        return [];
-    }
-};
+    };
+
+    // ── Fotmob Live Score Fetcher (secondary fallback) ────────────────────────
+    const fetchLiveScoresFotmob = async () => {
+        try {
+            const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const res = await fetch(
+                `https://www.fotmob.com/api/matches?date=${today}`,
+                {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                        'Accept': 'application/json',
+                        'Referer': 'https://www.fotmob.com/',
+                        'Origin': 'https://www.fotmob.com',
+                    },
+                    signal: controller.signal
+                }
+            );
+            clearTimeout(timeoutId);
+            if (!res.ok) {
+                console.warn('[LiveScore-Fotmob] Fetch error:', res.status);
+                return [];
+            }
+            const json = await res.json();
+            const liveMatches = [];
+            for (const league of (json.leagues || [])) {
+                for (const match of (league.matches || [])) {
+                    const s = match.status;
+                    if (!s || s.started === false || s.finished === true) continue;
+                    const home = match.home || {};
+                    const away = match.away || {};
+                    liveMatches.push({
+                        id: String(match.id),
+                        homeTeam: home.name || 'Unknown',
+                        awayTeam: away.name || 'Unknown',
+                        homeTeamLogo: `https://images.fotmob.com/image_resources/logo/teamlogo/${home.id}.png`,
+                        awayTeamLogo: `https://images.fotmob.com/image_resources/logo/teamlogo/${away.id}.png`,
+                        homeTeamId: home.id,
+                        awayTeamId: away.id,
+                        homeScore: home.score ?? 0,
+                        awayScore: away.score ?? 0,
+                        league: league.name || 'Unknown League',
+                        leagueId: league.id || 0,
+                        stateShort: s.liveTime?.short || 'LIVE',
+                        stateLong: s.liveTime?.long || 'Live',
+                        minute: s.liveTime?.short ? parseInt(s.liveTime.short) || 0 : 0,
+                        events: [],
+                        source: 'fotmob',
+                    });
+                }
+            }
+            return liveMatches;
+        } catch (e) {
+            console.warn('[LiveScore-Fotmob] Fetch error:', e.message);
+            return [];
+        }
+    };
+
 
     // ── Live Scores Poller (every 90 seconds → saves ~480 API calls/day vs 60s) ──
     // We store the whole list in ONE Firestore document so frontend reads 1 doc.
@@ -557,10 +630,14 @@ const fetchLiveScoresSofascore = async () => {
                 }
             }
 
-            // Fallback to Sofascore if Sportmonks returned nothing
+            // Fallback chain: Sofascore → Fotmob
             if (matches.length === 0) {
-                console.log('[Live] Sportmonks unavailable — using Sofascore');
+                console.log('[Live] Sportmonks unavailable — trying Sofascore');
                 matches = await fetchLiveScoresSofascore();
+            }
+            if (matches.length === 0) {
+                console.log('[Live] Sofascore unavailable — trying Fotmob');
+                matches = await fetchLiveScoresFotmob();
             }
 
             const db = admin.firestore();
