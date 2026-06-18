@@ -567,15 +567,15 @@ export const runLiveMomentumEngine = async () => {
                 cwd: path.join(__dirname, 'quant'),
                 env: buildPythonEnv(),
             });
-            py.stdout.on('data', d => logger.info([Python|LiveMom] ));
-            py.stderr.on('data', d => logger.warn([Python|LiveMom|ERR] ));
+            py.stdout.on('data', d => logger.info(`[Python|LiveMom] ${d}`));
+            py.stderr.on('data', d => logger.warn(`[Python|LiveMom|ERR] ${d}`));
             py.on('close', code => {
                 if (code === 0) resolve({ status: 'success' });
-                else resolve({ status: 'error', reason: exit code  });
+                else resolve({ status: 'error', reason: `exit code ${code}` });
             });
         });
     } catch (e) {
-        logger.error([QuantService] Live momentum failed: );
+        logger.error(`[QuantService] Live momentum failed: ${e.message}`);
         return { status: 'error', error: e.message };
     }
 };
