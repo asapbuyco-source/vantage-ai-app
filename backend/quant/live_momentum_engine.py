@@ -11,7 +11,12 @@ RAPIDAPI_HOST = 'flashscore4.p.rapidapi.com'
 def init_firebase():
     if not firebase_admin._apps:
         try:
-            cred = credentials.ApplicationDefault()
+            service_account_raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+            if service_account_raw:
+                sa = json.loads(service_account_raw)
+                cred = credentials.Certificate(sa)
+            else:
+                cred = credentials.ApplicationDefault()
             firebase_admin.initialize_app(cred)
             return firestore.client()
         except Exception as e:

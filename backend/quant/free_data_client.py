@@ -290,52 +290,49 @@ def _country_code(name: str) -> str:
 
 def _fetch_fixtures_for_date(date_from, date_to, status_filter):
     """
-    Fetch fixtures from Sofascore for a date.
-    Used for both live and historical queries, unlocking 30+ leagues.
-    Includes a fallback to The Odds API for today's matches when Sofascore fails.
+    Fetch fixtures from The Odds API for a date.
+    This replaces Sofascore/football-data.org as the primary free fixture source.
     """
-    from sofascore_client import fetch_todays_fixtures_sofascore
+    import requests
+    from datetime import datetime
     
     fixtures = []
-    ss_fixtures = fetch_todays_fixtures_sofascore(date_from)
-
-    # ── Fallback to The Odds API for today/future matches if Sofascore is blocked ──
-    if not ss_fixtures:
-        dprint("[FreeData] Sofascore returned 0 fixtures. Attempting The Odds API fallback...")
-        import requests
-        from datetime import datetime
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        if date_from >= today_str and ODDS_API_KEY:
-            try:
-                for sport_key in set(ODDS_SPORT_MAP.values()):
-                    games = fetch_all_odds_for_sport(sport_key)
-                    if not games:
-                        continue
-                        
-                    for ev in games:
-                        commence_time = ev.get("commence_time", "")
-                        if date_from in commence_time:
-                            ss_fixtures.append({
-                                "id": abs(hash(ev.get("home_team","") + ev.get("away_team","") + commence_time)) % 9_000_000,
-                                "league": sport_key.replace("soccer_", "").replace("_", " ").title(),
-                                "homeTeam": ev.get("home_team"),
-                                "homeTeamId": abs(hash(ev.get("home_team", ""))) % 9_000_000,
-                                "awayTeam": ev.get("away_team"),
-                                "awayTeamId": abs(hash(ev.get("away_team", ""))) % 9_000_000,
-                                "homeTeamLogo": f"https://flagcdn.com/w40/{_country_code(ev.get('home_team',''))}.png",
-                                "awayTeamLogo": f"https://flagcdn.com/w40/{_country_code(ev.get('away_team',''))}.png",
-                                "kickoff_utc": commence_time,
-                                "stateShort": "TIMED",
-                                "_odds_bookmakers": ev.get("bookmakers", []),
-                            })
-                dprint(f"[FreeData] The Odds API fallback supplied {len(ss_fixtures)} fixtures across {len(set(ODDS_SPORT_MAP.values()))} sports.")
-            except Exception as e:
-                dprint(f"[FreeData] The Odds API fallback error: {e}")
+    
+    # We only fetch odds for today/future since The Odds API doesn't do historical.
+    # We allow a small window (if date_from is today or future)
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if date_from >= today_str and ODDS_API_KEY:
+        try:
+            for sport_key in set(ODDS_SPORT_MAP.values()):
+                games = fetch_all_odds_for_sport(sport_key)
+                if not games:
+                    continue
+                    
+                for ev in games:
+                    commence_time = ev.get("commence_time", "")
+                    if date_from in commence_time:
+                        fixtures.append({
+                            "id": abs(hash(ev.get("home_team","") + ev.get("away_team","") + commence_time)) % 9_000_000,
+                            "league": sport_key.replace("soccer_", "").replace("_", " ").title(),
+                            "homeTeam": ev.get("home_team"),
+                            "homeTeamId": abs(hash(ev.get("home_team", ""))) % 9_000_000,
+                            "awayTeam": ev.get("away_team"),
+                            "awayTeamId": abs(hash(ev.get("away_team", ""))) % 9_000_000,
+                            "homeTeamLogo": f"https://flagcdn.com/w40/{_country_code(ev.get('home_team',''))}.png",
+                            "awayTeamLogo": f"https://flagcdn.com/w40/{_country_code(ev.get('away_team',''))}.png",
+                            "kickoff_utc": commence_time,
+                            "stateShort": "TIMED",
+                            "_odds_bookmakers": ev.get("bookmakers", []),
+                        })
+            dprint(f"[FreeData] The Odds API supplied {len(fixtures)} fixtures across {len(set(ODDS_SPORT_MAP.values()))} sports.")
+        except Exception as e:
+            dprint(f"[FreeData] The Odds API error: {e}")
 
     fetched_ids = set()
 
-    for sf in ss_fixtures:
+    for sf in fixtures:
         league_name = sf.get("league", "")
+        # Try to infer league ID from name, or use a default Tier 2 ID
         league_id = get_internal_league_id_from_sofascore(league_name)
         if not league_id:
             continue
@@ -399,7 +396,7 @@ def fetch_team_form(team_id, limit=10, league_id=None):
         limit=limit
     )
     if not matches:
-        return _fetch_team_form_sofascore(team_id, limit)
+        return []
 
     results = []
     for m in matches:
@@ -432,16 +429,6 @@ def fetch_team_form(team_id, limit=10, league_id=None):
             "opponent_name": away.get("name") if is_home else home.get("name"),
         })
     return results
-
-def _fetch_team_form_sofascore(team_id, limit=10):
-    """Fallback fetch for teams/leagues that return 403 from football-data.org."""
-    try:
-        from sofascore_client import fetch_team_form as sofascore_form
-        return sofascore_form(team_id, limit)
-    except Exception as e:
-        dprint(f"[FreeData] Sofascore form fallback failed: {e}")
-        return []
-
 
 # ── Odds Parsing (per fixture from cached league data) ─────────────────────────
 
@@ -676,18 +663,7 @@ def fetch_xg_for_match(home_team, away_team, season=2025, league_id=None, home_i
             
     hx, ax = fetch_xg_from_understat(home_team, away_team, season)
     
-    # Fallback to Sofascore for unsupported lower leagues
-    if (hx is None or ax is None) and home_id and away_id:
-        try:
-            from sofascore_client import fetch_historical_xg_sofascore
-            ss_hx = fetch_historical_xg_sofascore(home_id)
-            ss_ax = fetch_historical_xg_sofascore(away_id)
-            if ss_hx > 0 and ss_ax > 0:
-                dprint(f"[FreeData] Using Sofascore historical xG for {home_team} vs {away_team}")
-                return ss_hx, ss_ax
-        except Exception as e:
-            dprint(f"[FreeData] Sofascore xG fallback failed: {e}")
-            
+
     return hx, ax
 
 

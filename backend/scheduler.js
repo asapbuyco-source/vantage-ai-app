@@ -438,121 +438,75 @@ export const initScheduler = () => {
     });
     tasks.set('momentum', momentumTask);
 
-    // ── Sofascore Live Score Fetcher ────────────────────────────────────────────
-    // Full browser-spoofing headers required — Sofascore blocks datacenter IPs
-    // that only send a bare User-Agent without matching Origin/Referer headers.
-    const SOFASCORE_BROWSER_HEADERS = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Origin': 'https://www.sofascore.com',
-        'Referer': 'https://www.sofascore.com/',
-        'Cache-Control': 'no-cache',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
-    };
-
-    const fetchLiveScoresSofascore = async () => {
+    // ── RapidAPI Flashscore Live Fetcher (fallback) ───────────────────────────
+    const fetchLiveScoresRapidAPI = async () => {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 15000);
+            
+            const rapidapiKey = process.env.RAPIDAPI_KEY || '96329fba36msh293dfd95c0b7196p102286jsndc9aa594e4c3';
+            const rapidapiHost = 'flashscore4.p.rapidapi.com';
+            
+            // Note: Disable strict SSL verification in Node equivalent to python's verify=False
+            // Not strictly needed in Node fetch but included agent if we wanted. 
+            // Using standard fetch should work on Railway.
             const res = await fetch(
-                'https://api.sofascore.com/api/v1/sport/football/events/live',
-                { headers: SOFASCORE_BROWSER_HEADERS, signal: controller.signal }
-            );
-            clearTimeout(timeoutId);
-            if (!res.ok) {
-                console.warn('[LiveScore-Sofascore] Fetch error:', res.status);
-                return null;
-            }
-            const json = await res.json();
-            const events = json.events || [];
-            return events.map(m => {
-                const home = m.homeTeam || {};
-                const away = m.awayTeam || {};
-                const homeScore = m.homeScore || {};
-                const awayScore = m.awayScore || {};
-                const status = m.status || {};
-                return {
-                    id: String(m.id),
-                    homeTeam: home.name || 'Unknown',
-                    awayTeam: away.name || 'Unknown',
-                    homeTeamLogo: `https://api.sofascore.com/api/v1/team/${home.id}/image`,
-                    awayTeamLogo: `https://api.sofascore.com/api/v1/team/${away.id}/image`,
-                    homeTeamId: home.id,
-                    awayTeamId: away.id,
-                    homeScore: homeScore.current ?? homeScore.display ?? 0,
-                    awayScore: awayScore.current ?? awayScore.display ?? 0,
-                    league: m.tournament?.name || 'Unknown League',
-                    leagueId: m.tournament?.id || 0,
-                    stateShort: status.description || 'LIVE',
-                    stateLong: status.description || 'Live',
-                    minute: m.time?.played ?? m.time?.current ?? 0,
-                    events: [],
-                    source: 'sofascore',
-                };
-            });
-        } catch (e) {
-            console.warn('[LiveScore-Sofascore] Fetch error:', e.message);
-            return null;
-        }
-    };
-
-    // ── Fotmob Live Score Fetcher (secondary fallback) ────────────────────────
-    const fetchLiveScoresFotmob = async () => {
-        try {
-            const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
-            const res = await fetch(
-                `https://www.fotmob.com/api/matches?date=${today}`,
+                `https://${rapidapiHost}/api/flashscore/v2/matches/live?sport_id=1`,
                 {
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-                        'Accept': 'application/json',
-                        'Referer': 'https://www.fotmob.com/',
-                        'Origin': 'https://www.fotmob.com',
+                        'x-rapidapi-host': rapidapiHost,
+                        'x-rapidapi-key': rapidapiKey
                     },
                     signal: controller.signal
                 }
             );
             clearTimeout(timeoutId);
+            
             if (!res.ok) {
-                console.warn('[LiveScore-Fotmob] Fetch error:', res.status);
+                console.warn('[LiveScore-RapidAPI] Fetch error:', res.status);
                 return null;
             }
-            const json = await res.json();
+            const tournaments = await res.json();
             const liveMatches = [];
-            for (const league of (json.leagues || [])) {
-                for (const match of (league.matches || [])) {
-                    const s = match.status;
-                    if (!s || s.started === false || s.finished === true) continue;
-                    const home = match.home || {};
-                    const away = match.away || {};
+            
+            for (const tournament of tournaments) {
+                if (!tournament.matches) continue;
+                for (const m of tournament.matches) {
+                    // Only process matches that are actually live
+                    const s = m.match_status;
+                    if (!s || s.is_finished) continue;
+                    
+                    const home = m.home_team || {};
+                    const away = m.away_team || {};
+                    
+                    let minute = 0;
+                    if (s.live_time) {
+                        minute = parseInt(s.live_time) || 0;
+                    }
+                    
                     liveMatches.push({
-                        id: String(match.id),
+                        id: String(m.match_id),
                         homeTeam: home.name || 'Unknown',
                         awayTeam: away.name || 'Unknown',
-                        homeTeamLogo: `https://images.fotmob.com/image_resources/logo/teamlogo/${home.id}.png`,
-                        awayTeamLogo: `https://images.fotmob.com/image_resources/logo/teamlogo/${away.id}.png`,
-                        homeTeamId: home.id,
-                        awayTeamId: away.id,
-                        homeScore: home.score ?? 0,
-                        awayScore: away.score ?? 0,
-                        league: league.name || 'Unknown League',
-                        leagueId: league.id || 0,
-                        stateShort: s.liveTime?.short || 'LIVE',
-                        stateLong: s.liveTime?.long || 'Live',
-                        minute: s.liveTime?.short ? parseInt(s.liveTime.short) || 0 : 0,
+                        homeTeamLogo: home.small_image_path || '',
+                        awayTeamLogo: away.small_image_path || '',
+                        homeTeamId: home.team_id || '',
+                        awayTeamId: away.team_id || '',
+                        homeScore: m.scores?.home ?? 0,
+                        awayScore: m.scores?.away ?? 0,
+                        league: tournament.name || 'Unknown League',
+                        leagueId: tournament.tournament_id || '',
+                        stateShort: s.stage || 'LIVE',
+                        stateLong: s.stage || 'Live',
+                        minute: minute,
                         events: [],
-                        source: 'fotmob',
+                        source: 'rapidapi',
                     });
                 }
             }
             return liveMatches;
         } catch (e) {
-            console.warn('[LiveScore-Fotmob] Fetch error:', e.message);
+            console.warn('[LiveScore-RapidAPI] Fetch error:', e.message);
             return null;
         }
     };
@@ -661,20 +615,12 @@ export const initScheduler = () => {
                 }
             }
 
-            // Fallback chain: Sofascore → Fotmob (only if previous API failed)
+            // Fallback chain: RapidAPI (if Sportmonks failed)
             if (!apiSuccess) {
-                console.log('[Live] Sportmonks unavailable — trying Sofascore');
-                const sofaResult = await fetchLiveScoresSofascore();
-                if (sofaResult !== null) {
-                    matches = sofaResult;
-                    apiSuccess = true;
-                }
-            }
-            if (!apiSuccess) {
-                console.log('[Live] Sofascore unavailable — trying Fotmob');
-                const fotmobResult = await fetchLiveScoresFotmob();
-                if (fotmobResult !== null) {
-                    matches = fotmobResult;
+                console.log('[Live] Sportmonks unavailable — trying RapidAPI');
+                const rapidResult = await fetchLiveScoresRapidAPI();
+                if (rapidResult !== null) {
+                    matches = rapidResult;
                     apiSuccess = true;
                 }
             }
