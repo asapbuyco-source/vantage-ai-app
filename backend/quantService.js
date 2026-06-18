@@ -556,3 +556,26 @@ resolvePythonBin().then(bin => {
 }).catch(err => {
     logger.error(`[QuantService] 💀 Python probe FAILED at startup: ${err.message}`);
 });
+
+
+export const runLiveMomentumEngine = async () => {
+    logger.info('[QuantService] Running live momentum engine...');
+    try {
+        const pythonBin = await resolvePythonBin();
+        return new Promise((resolve, reject) => {
+            const py = spawn(pythonBin, ['live_momentum_engine.py'], {
+                cwd: path.join(__dirname, 'quant'),
+                env: buildPythonEnv(),
+            });
+            py.stdout.on('data', d => logger.info([Python|LiveMom] ));
+            py.stderr.on('data', d => logger.warn([Python|LiveMom|ERR] ));
+            py.on('close', code => {
+                if (code === 0) resolve({ status: 'success' });
+                else resolve({ status: 'error', reason: exit code  });
+            });
+        });
+    } catch (e) {
+        logger.error([QuantService] Live momentum failed: );
+        return { status: 'error', error: e.message };
+    }
+};

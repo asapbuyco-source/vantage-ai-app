@@ -20,31 +20,28 @@ urllib3.disable_warnings()
 from datetime import datetime, timezone
 from typing import Optional
 
-# ── HTTP session: prefer tls_client (bypasses Cloudflare) ─────────────────────
-try:
-    import tls_client as _tls_client
-    _session = _tls_client.Session(client_identifier="chrome_120")
-    _TLS_MODE = True
-except ImportError:
-    import requests as _requests_mod
-    _session = _requests_mod.Session()
-    _session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json",
-    })
-    _session.verify = False
-    _TLS_MODE = False
+# ── HTTP session using RapidAPI proxy ─────────────────────────────────────────
+import requests as _requests_mod
+
+RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "96329fba36msh293dfd95c0b7196p102286jsndc9aa594e4c3")
+
+_session = _requests_mod.Session()
+_session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
+    "x-rapidapi-host": "sportapi7.p.rapidapi.com",
+    "x-rapidapi-key": RAPIDAPI_KEY
+})
+_session.verify = False
 
 # ── Base URLs ─────────────────────────────────────────────────────────────────
-# www.sofascore.com/api/v1 bypasses Cloudflare; api.sofascore.com does not.
-SOFASCORE_BASE = "https://www.sofascore.com/api/v1"
-SOFASCORE_EVENTS_BASE = "https://www.sofascore.com/api/v1/event"
+# Using the sportapi7 RapidAPI proxy to entirely bypass Cloudflare on the server
+SOFASCORE_BASE = "https://sportapi7.p.rapidapi.com/api/v1"
+SOFASCORE_EVENTS_BASE = "https://sportapi7.p.rapidapi.com/api/v1/event"
 
 def _get(url: str, timeout: int = 15):
-    """Unified GET with tls_client or requests fallback."""
+    """Unified GET using the RapidAPI session."""
     try:
-        if _TLS_MODE:
-            return _session.get(url, timeout_seconds=timeout)
         return _session.get(url, timeout=timeout, verify=False)
     except Exception as e:
         print(f"[Sofascore] GET failed for {url}: {e}", file=sys.stderr)
@@ -262,7 +259,7 @@ def fetch_todays_fixtures_sofascore(date_str: str = None) -> list:
             return []
         data = resp.json()
         events = data.get("events", [])
-        print(f"[Sofascore] Fetched {len(events)} events for {date_str} via {'tls_client' if _TLS_MODE else 'requests'}")
+        print(f"[Sofascore] Fetched {len(events)} events for {date_str} via RapidAPI (sportapi7)")
         return [_normalize_sofascore_event(e) for e in events]
     except Exception as e:
         print(f"[Sofascore] Today's fixtures fetch failed: {e}", file=sys.stderr)

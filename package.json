@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "security:env": "node scripts/scan-vite-secrets.mjs",
     "security:audit": "npm audit --audit-level=moderate",
-    "check": "npm run security:env && npm run typecheck && npm run build"
+    "check": "npm run security:env && npm run typecheck && npm run build",
+    "postinstall": "pip install -r backend/quant/requirements.txt"
   },
   "dependencies": {
     "@google/genai": "^1.43.0",

@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import admin from 'firebase-admin';
 
 // ── Quant Engine (pure statistical — no AI/LLM) ───────────────────────────────
-import { runQuantPipeline, runQuantGrading, runQuantPerformance, runBasketballPipeline, runCricketPipeline } from './quantService.js';
+import { runQuantPipeline, runQuantGrading, runQuantPerformance, runBasketballPipeline, runCricketPipeline, runLiveMomentumEngine } from './quantService.js';
 
 // ── Blog Generator (programmatic — no AI) ───────────────────────────────
 import { triggerBlogGeneration } from './blogGenerator.js';
@@ -10,6 +10,7 @@ import { triggerBlogGeneration } from './blogGenerator.js';
 import { checkRecentSelarEmails } from './gmailListener.js';
 import { sendDailyPredictionsToTelegram } from './telegramService.js';
 import { seedStaticData } from './staticDataSeeder.js';
+import { fetchAndStoreNews } from './news_fetcher.js';
 
 /**
  * Standalone accumulator trigger (Quant Engine based)
@@ -414,6 +415,28 @@ export const initScheduler = () => {
         }
     });
     tasks.set('selar', selarTask);
+
+    // ── Daily News Fetcher (football-news11) ──────────────────────────────────
+    // Runs at 05:00 every day to populate the static news feed for the app
+    const newsTask = cron.schedule('0 5 * * *', async () => {
+        try {
+            await fetchAndStoreNews();
+        } catch (e) {
+            console.error('[Scheduler] Error in News Fetcher:', e);
+        }
+    });
+    tasks.set('news', newsTask);
+
+    // ── Live Momentum Engine (flashscore4) ────────────────────────────────────
+    // Runs every 5 minutes to calculate in-game pressure and flag value bets
+    const momentumTask = cron.schedule('*/5 * * * *', async () => {
+        try {
+            await runLiveMomentumEngine();
+        } catch (e) {
+            console.error('[Scheduler] Error in Live Momentum Engine:', e);
+        }
+    });
+    tasks.set('momentum', momentumTask);
 
     // ── Sofascore Live Score Fetcher ────────────────────────────────────────────
     // Full browser-spoofing headers required — Sofascore blocks datacenter IPs

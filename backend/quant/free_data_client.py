@@ -307,19 +307,17 @@ def _fetch_fixtures_for_date(date_from, date_to, status_filter):
         today_str = datetime.now().strftime("%Y-%m-%d")
         if date_from >= today_str and ODDS_API_KEY:
             try:
-                resp = requests.get(
-                    "https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds",
-                    params={"apiKey": ODDS_API_KEY, "regions": "eu"},
-                    timeout=15,
-                    verify=False
-                )
-                if resp.status_code == 200:
-                    for ev in resp.json():
+                for sport_key in set(ODDS_SPORT_MAP.values()):
+                    games = fetch_all_odds_for_sport(sport_key)
+                    if not games:
+                        continue
+                        
+                    for ev in games:
                         commence_time = ev.get("commence_time", "")
                         if date_from in commence_time:
                             ss_fixtures.append({
                                 "id": abs(hash(ev.get("home_team","") + ev.get("away_team","") + commence_time)) % 9_000_000,
-                                "league": "World Cup",
+                                "league": sport_key.replace("soccer_", "").replace("_", " ").title(),
                                 "homeTeam": ev.get("home_team"),
                                 "homeTeamId": abs(hash(ev.get("home_team", ""))) % 9_000_000,
                                 "awayTeam": ev.get("away_team"),
@@ -328,10 +326,9 @@ def _fetch_fixtures_for_date(date_from, date_to, status_filter):
                                 "awayTeamLogo": f"https://flagcdn.com/w40/{_country_code(ev.get('away_team',''))}.png",
                                 "kickoff_utc": commence_time,
                                 "stateShort": "TIMED",
-                                # Carry odds so pipeline can build OddsData directly
                                 "_odds_bookmakers": ev.get("bookmakers", []),
                             })
-                    dprint(f"[FreeData] The Odds API fallback supplied {len(ss_fixtures)} fixtures.")
+                dprint(f"[FreeData] The Odds API fallback supplied {len(ss_fixtures)} fixtures across {len(set(ODDS_SPORT_MAP.values()))} sports.")
             except Exception as e:
                 dprint(f"[FreeData] The Odds API fallback error: {e}")
 

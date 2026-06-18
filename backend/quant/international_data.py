@@ -106,7 +106,7 @@ def fetch_intl_xg(home_team: str, away_team: str) -> tuple:
     if sd is None:
         return None, None
     try:
-        fbref = sd.FBREf(leagues=["FIFA World Cup"])
+        fbref = sd.FBref(leagues=["FIFA World Cup"])
         team_names = [home_team, away_team]
         xgs = {}
         for team in team_names:
@@ -135,7 +135,7 @@ def fetch_intl_form(team_id_or_name, limit=10) -> list:
     if sd is None:
         return []
     try:
-        fbref = sd.FBREf(leagues=["FIFA World Cup"])
+        fbref = sd.FBref(leagues=["FIFA World Cup"])
         team_name = str(team_id_or_name)
         results = []
         try:
@@ -183,7 +183,7 @@ def fetch_intl_h2h(home_team: str, away_team: str, limit: int = 8) -> tuple:
     if sd is None:
         return (0, 0, 0, 2.0, 0.45)
     try:
-        fbref = sd.FBREf(leagues=["FIFA World Cup"])
+        fbref = sd.FBref(leagues=["FIFA World Cup"])
         all_matches = fbref.read_team_history([home_team, away_team])
         if all_matches is None or all_matches.empty:
             return (0, 0, 0, 2.0, 0.45)
