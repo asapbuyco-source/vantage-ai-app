@@ -254,14 +254,16 @@ def _af_fetch_fixtures(date_str: str) -> list:
 def fetch_matches_free(date_str: str) -> list:
     """
     Free data source fallback replacing Sportmonks.
-    Uses football-data.org + The Odds API + Understat + API-Football H2H.
+    Uses sportscore1 RapidAPI for team form/xG, The Odds API for odds,
+    and API-Football H2H.
     Returns list of MatchData objects.
     """
     from free_data_client import (
-        fetch_fixtures_today, fetch_fixtures_past, fetch_team_form,
-        find_odds_for_fixture, fetch_xg_for_match,
+        fetch_fixtures_today, fetch_fixtures_past,
+        find_odds_for_fixture,
         estimate_btts_odds,
     )
+    from sportscore_client import fetch_team_recent_matches, compute_team_xg
     from team_id_map import get_af_id_from_fd_id
 
     print(f"[DataPipeline] Using FREE data stack for {date_str}", file=sys.stderr)
@@ -318,9 +320,9 @@ def fetch_matches_free(date_str: str) -> list:
             af_home_id = get_af_id_from_fd_id(home_id, home_name)
             af_away_id = get_af_id_from_fd_id(away_id, away_name)
 
-            # Team Form (routes to international_data.py for World Cup)
-            home_form_raw = fetch_team_form(home_id, limit=10, league_id=league_id)
-            away_form_raw = fetch_team_form(away_id, limit=10, league_id=league_id)
+            # Team Form and xG via SportScore1 RapidAPI
+            home_form_raw = fetch_team_recent_matches(home_name, limit=10)
+            away_form_raw = fetch_team_recent_matches(away_name, limit=10)
 
             home_stats = _build_free_team_stats(
                 home_id, home_name, home_form_raw, is_home=True
@@ -329,26 +331,22 @@ def fetch_matches_free(date_str: str) -> list:
                 away_id, away_name, away_form_raw, is_home=False
             )
 
-            # xG from Understat (routes to international_data.py for World Cup)
-            home_xg, away_xg = fetch_xg_for_match(
-                home_name, away_name, league_id=league_id, home_id=home_id, away_id=away_id
-            )
+            # xG from SportScore1
+            home_xg, away_xg = compute_team_xg(home_name, limit=10), compute_team_xg(away_name, limit=10)
 
-            # Fall back to goal-based xG approximation.
-            # Use league-aware defaults when no form data is available:
-            # World Cup / international = 1.25 goals/team avg; club = 1.2.
-            is_intl = league_id == 294  # FIFA World Cup
-            _xg_default = 1.25 if is_intl else 1.20
+            # Use league-aware dynamic average when no xG data available.
+            # Falls back to computed avg from form data or league average.
+            league_avg = _league_avg(league_id)
             if home_xg is None:
                 if home_stats.avg_scored > 0:
                     home_xg = max(0.8, home_stats.avg_scored * 0.95)
                 else:
-                    home_xg = _xg_default
+                    home_xg = league_avg / 2
             if away_xg is None:
                 if away_stats.avg_scored > 0:
                     away_xg = max(0.8, away_stats.avg_scored * 0.95)
                 else:
-                    away_xg = _xg_default
+                    away_xg = league_avg / 2
 
             # Odds
             odds_dict = find_odds_for_fixture(home_name, away_name, league_id)

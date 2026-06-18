@@ -374,10 +374,8 @@ def _fetch_fixtures_for_date(date_from, date_to, status_filter):
 
 def fetch_team_form(team_id, limit=10, league_id=None):
     """
-    Fetch last N finished matches for a team from football-data.org.
-    Returns list of match result dicts with goals, result, opponent info.
-    For international games (World Cup), uses soccerdata/FBref via international_data.py.
-    Falls back to Sofascore for leagues that return 403 from football-data.org (EL/MLS).
+    Fetch last N finished matches for a team.
+    Routes through sportscore_client for primary data, with fallbacks.
     """
     is_intl = league_id in INTERNATIONAL_LEAGUE_IDS if league_id else False
     if is_intl:
@@ -386,6 +384,14 @@ def fetch_team_form(team_id, limit=10, league_id=None):
             return fetch_intl_form(team_id, limit=limit)
         except Exception as e:
             dprint(f"[FreeData] International form fetch failed: {e}")
+
+    try:
+        from sportscore_client import fetch_team_recent_matches as sportscore_form
+        results = sportscore_form(str(team_id), limit=limit)
+        if results:
+            return results
+    except Exception as e:
+        dprint(f"[FreeData] SportScore1 form fetch failed: {e}")
 
     matches = fd_api.team_matches(
         team_id=team_id,
