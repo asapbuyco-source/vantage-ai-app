@@ -12,7 +12,7 @@ requests>=2.31.0
 tls-client>=1.0.1
 
 # Understat xG data (free data stack)
-understatapi>=0.4.0
+# understatapi>=0.4.0   # DEV ONLY — used in run_diagnostics.py, not production pipeline
 
 # Firebase Admin (for Firestore read/write from Python)
 firebase-admin>=6.2.0
@@ -25,7 +25,9 @@ grpcio>=1.59.0
 python-dateutil>=2.8.2 # Date parsing helpers
 
 # International data (FBref/soccerdata)
-soccerdata>=1.6.0
+# soccerdata>=1.6.0      # DEV ONLY — optional, try/except imported in international_data.py.
+                        # Has heavy build deps (selenium, playwright). Install locally for development:
+                        # pip install soccerdata
 
 
 # Data parsing
