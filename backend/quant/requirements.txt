@@ -8,6 +8,9 @@ numpy>=1.24.0          # Array operations
 # HTTP requests (Sportmonks API + free data stack calls)
 requests>=2.31.0
 
+# Cloudflare bypass (Chrome TLS fingerprint - needed for Sofascore on cloud/Railway)
+tls-client>=1.0.1
+
 # Understat xG data (free data stack)
 understatapi>=0.4.0
 

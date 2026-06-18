@@ -7,26 +7,48 @@ Unofficial Sofascore API client for fetching:
   - Match stats
   - Head-to-head records
 
-Used as primary live score provider (replacing football-data.org)
-and fallback for leagues that return 403 (EL/MLS).
+Uses tls_client (Chrome TLS fingerprint) to bypass Cloudflare on Railway/cloud.
+Falls back to requests if tls_client is unavailable.
+
+Working base URL: https://www.sofascore.com/api/v1  (NOT api.sofascore.com)
 """
 
 import os
 import sys
-import requests
 import urllib3
 urllib3.disable_warnings()
 from datetime import datetime, timezone
 from typing import Optional
 
-SOFASCORE_BASE = "https://api.sofascore.com/api/v1"
+# ── HTTP session: prefer tls_client (bypasses Cloudflare) ─────────────────────
+try:
+    import tls_client as _tls_client
+    _session = _tls_client.Session(client_identifier="chrome_120")
+    _TLS_MODE = True
+except ImportError:
+    import requests as _requests_mod
+    _session = _requests_mod.Session()
+    _session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json",
+    })
+    _session.verify = False
+    _TLS_MODE = False
+
+# ── Base URLs ─────────────────────────────────────────────────────────────────
+# www.sofascore.com/api/v1 bypasses Cloudflare; api.sofascore.com does not.
+SOFASCORE_BASE = "https://www.sofascore.com/api/v1"
 SOFASCORE_EVENTS_BASE = "https://www.sofascore.com/api/v1/event"
 
-_sofascore_session = requests.Session()
-_sofascore_session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Accept": "application/json",
-})
+def _get(url: str, timeout: int = 15):
+    """Unified GET with tls_client or requests fallback."""
+    try:
+        if _TLS_MODE:
+            return _session.get(url, timeout_seconds=timeout)
+        return _session.get(url, timeout=timeout, verify=False)
+    except Exception as e:
+        print(f"[Sofascore] GET failed for {url}: {e}", file=sys.stderr)
+        return None
 
 def fetch_live_scores_sofascore() -> list:
     """
@@ -34,12 +56,9 @@ def fetch_live_scores_sofascore() -> list:
     Returns list of normalized live match dicts.
     """
     try:
-        resp = _sofascore_session.get(
-            f"{SOFASCORE_BASE}/sport/football/events/live",
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            print(f"[Sofascore] Live scores error: {resp.status_code}", file=sys.stderr)
+        resp = _get(f"{SOFASCORE_BASE}/sport/football/events/live")
+        if resp is None or resp.status_code != 200:
+            print(f"[Sofascore] Live scores error: {getattr(resp, 'status_code', 'N/A')}", file=sys.stderr)
             return []
         data = resp.json()
         events = data.get("events", [])
@@ -54,11 +73,8 @@ def fetch_fixture(fixture_id: int) -> Optional[dict]:
     Returns normalized fixture dict or None.
     """
     try:
-        resp = _sofascore_session.get(
-            f"{SOFASCORE_EVENTS_BASE}/{fixture_id}",
-            timeout=15,
-        )
-        if resp.status_code != 200:
+        resp = _get(f"{SOFASCORE_EVENTS_BASE}/{fixture_id}")
+        if resp is None or resp.status_code != 200:
             return None
         data = resp.json()
         event = data.get("event", {})
@@ -73,11 +89,8 @@ def fetch_h2h(home_team_id: int, away_team_id: int) -> dict:
     Returns dict with wins/draws/goals info.
     """
     try:
-        resp = _sofascore_session.get(
-            f"{SOFASCORE_BASE}/team/{home_team_id}/h2h/{away_team_id}",
-            timeout=15,
-        )
-        if resp.status_code != 200:
+        resp = _get(f"{SOFASCORE_BASE}/team/{home_team_id}/h2h/{away_team_id}")
+        if resp is None or resp.status_code != 200:
             return {"home_wins": 0, "away_wins": 0, "draws": 0, "matches": []}
         data = resp.json()
         matches = data.get("matches", [])
@@ -106,11 +119,8 @@ def fetch_team_form(team_id: int, limit: int = 10) -> list:
     Returns list of match result dicts.
     """
     try:
-        resp = _sofascore_session.get(
-            f"{SOFASCORE_BASE}/team/{team_id}/events/last/{limit}",
-            timeout=15,
-        )
-        if resp.status_code != 200:
+        resp = _get(f"{SOFASCORE_BASE}/team/{team_id}/events/last/{limit}")
+        if resp is None or resp.status_code != 200:
             return []
         data = resp.json()
         events = data.get("events", [])
@@ -151,34 +161,30 @@ def fetch_historical_xg_sofascore(team_id: int, limit: int = 5) -> float:
     Queries match stats for the last N matches.
     """
     try:
-        resp = _sofascore_session.get(
-            f"{SOFASCORE_BASE}/team/{team_id}/events/last/{limit}",
-            timeout=15,
-        )
-        if resp.status_code != 200:
+        resp = _get(f"{SOFASCORE_BASE}/team/{team_id}/events/last/{limit}")
+        if resp is None or resp.status_code != 200:
             return 0.0
         events = resp.json().get("events", [])
-        
+
         total_xg = 0.0
         count = 0
         for e in events:
             fix_id = e.get("id")
-            if not fix_id: continue
-            
+            if not fix_id:
+                continue
             stats = fetch_match_stats(fix_id)
-            if not stats: continue
-            
+            if not stats:
+                continue
             is_home = e.get("homeTeam", {}).get("id") == team_id
             xg_stat = stats.get("Expected goals")
-            if not xg_stat: continue
-            
+            if not xg_stat:
+                continue
             val = xg_stat.get("home") if is_home else xg_stat.get("away")
             try:
                 total_xg += float(val)
                 count += 1
-            except:
+            except Exception:
                 pass
-                
         return total_xg / count if count > 0 else 0.0
     except Exception as e:
         print(f"[Sofascore] Historical xG fetch failed for {team_id}: {e}", file=sys.stderr)
@@ -190,11 +196,8 @@ def fetch_match_stats(fixture_id: int) -> dict:
     Returns dict of stat categories with home/away values.
     """
     try:
-        resp = _sofascore_session.get(
-            f"{SOFASCORE_EVENTS_BASE}/{fixture_id}/statistics",
-            timeout=15,
-        )
-        if resp.status_code != 200:
+        resp = _get(f"{SOFASCORE_EVENTS_BASE}/{fixture_id}/statistics")
+        if resp is None or resp.status_code != 200:
             return {}
         data = resp.json()
         statistics = data.get("statistics", [])
@@ -216,6 +219,14 @@ def _normalize_sofascore_event(event: dict) -> dict:
     home_score = event.get("homeScore", {})
     away_score = event.get("awayScore", {})
     status = event.get("status", {})
+    tournament = event.get("tournament", {})
+    league_name = (
+        tournament.get("name", "")
+        or event.get("league", {}).get("name", "")
+    )
+    # Strip group suffix e.g. "FIFA World Cup, Group A" → "World Cup"
+    if "World Cup" in league_name or "World Championship" in league_name:
+        league_name = "World Cup"
     return {
         "id": str(event.get("id", "")),
         "homeTeam": home_team.get("name", ""),
@@ -226,8 +237,8 @@ def _normalize_sofascore_event(event: dict) -> dict:
         "awayTeamId": away_team.get("id"),
         "homeScore": home_score.get("current", 0) or home_score.get("full", 0) or 0,
         "awayScore": away_score.get("current", 0) or away_score.get("full", 0) or 0,
-        "league": event.get("tournament", {}).get("name", "") or event.get("league", {}).get("name", ""),
-        "leagueId": event.get("tournament", {}).get("id", 0) or event.get("league", {}).get("id", 0),
+        "league": league_name,
+        "leagueId": tournament.get("id", 0) or event.get("league", {}).get("id", 0),
         "stateShort": status.get("description", "") or status.get("shortName", "LIVE"),
         "stateLong": status.get("description", "Live"),
         "minute": event.get("minute", 0) or 0,
@@ -239,19 +250,19 @@ def _normalize_sofascore_event(event: dict) -> dict:
 def fetch_todays_fixtures_sofascore(date_str: str = None) -> list:
     """
     Fetch today's fixtures from Sofascore.
+    Uses www.sofascore.com/api/v1 (bypasses Cloudflare via tls_client).
     Returns list of normalized fixture dicts.
     """
     if date_str is None:
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     try:
-        resp = _sofascore_session.get(
-            f"{SOFASCORE_BASE}/sport/football/events/{date_str}",
-            timeout=15,
-        )
-        if resp.status_code != 200:
+        resp = _get(f"{SOFASCORE_BASE}/sport/football/scheduled-events/{date_str}")
+        if resp is None or resp.status_code != 200:
+            print(f"[Sofascore] Today's fixtures error: {getattr(resp, 'status_code', 'N/A')}", file=sys.stderr)
             return []
         data = resp.json()
         events = data.get("events", [])
+        print(f"[Sofascore] Fetched {len(events)} events for {date_str} via {'tls_client' if _TLS_MODE else 'requests'}")
         return [_normalize_sofascore_event(e) for e in events]
     except Exception as e:
         print(f"[Sofascore] Today's fixtures fetch failed: {e}", file=sys.stderr)

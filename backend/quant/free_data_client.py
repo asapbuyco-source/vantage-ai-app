@@ -13,6 +13,14 @@ import time
 import requests
 import urllib3
 urllib3.disable_warnings()
+
+# ── Global SSL patch (Windows dev environment: broken CA bundle) ───────────────
+# Suppress SSL errors for all requests in this module without per-call boilerplate.
+_orig_request = requests.Session.request
+def _ssl_off_request(self, method, url, **kwargs):
+    kwargs.setdefault("verify", False)
+    return _orig_request(self, method, url, **kwargs)
+requests.Session.request = _ssl_off_request
 from datetime import datetime, timezone
 
 # ── API Keys ───────────────────────────────────────────────────────────────────
@@ -98,6 +106,8 @@ SOFASCORE_LEAGUE_MAP = {
     395:  ["Serie B"],
     302:  ["Ligue 2"],
     10:   ["League One"],
+    # Alias used by The Odds API fallback (maps to FIFA World Cup id=294)
+    294:  ["World Cup", "World Championship", "FIFA World Cup 2026"],
     12:   ["League Two"],
     254:  ["Brasileirão Série B"],
     14:   ["National League"],
@@ -252,15 +262,79 @@ def fetch_fixtures_past(date_str, end_date_str=None):
     return _fetch_fixtures_for_date(date_str, end_date_str or date_str, "FINISHED")
 
 
+# ── Country code map for flag images (ISO 3166-1 alpha-2) ─────────────────────
+_COUNTRY_CODE_MAP = {
+    "argentina": "ar", "australia": "au", "belgium": "be", "brazil": "br",
+    "cameroon": "cm", "canada": "ca", "chile": "cl", "colombia": "co",
+    "costa rica": "cr", "croatia": "hr", "czech republic": "cz", "denmark": "dk",
+    "ecuador": "ec", "egypt": "eg", "england": "gb-eng", "france": "fr",
+    "germany": "de", "ghana": "gh", "greece": "gr", "honduras": "hn",
+    "iran": "ir", "ireland": "ie", "italy": "it", "ivory coast": "ci",
+    "japan": "jp", "jordan": "jo", "mexico": "mx", "morocco": "ma",
+    "netherlands": "nl", "new zealand": "nz", "nigeria": "ng", "norway": "no",
+    "panama": "pa", "paraguay": "py", "peru": "pe", "poland": "pl",
+    "portugal": "pt", "qatar": "qa", "romania": "ro", "russia": "ru",
+    "saudi arabia": "sa", "scotland": "gb-sct", "senegal": "sn",
+    "serbia": "rs", "south africa": "za", "south korea": "kr", "spain": "es",
+    "sweden": "se", "switzerland": "ch", "tunisia": "tn", "turkey": "tr",
+    "ukraine": "ua", "uruguay": "uy", "usa": "us", "united states": "us",
+    "wales": "gb-wls", "dr congo": "cd", "cape verde": "cv", "algeria": "dz",
+    "cuba": "cu", "curaçao": "cw", "curacao": "cw", "new zealand": "nz",
+    "bosnia & herzegovina": "ba", "bosnia and herzegovina": "ba",
+}
+
+def _country_code(name: str) -> str:
+    """Return ISO 3166-1 alpha-2 country code for flag CDN URL. Defaults to 'xx'."""
+    return _COUNTRY_CODE_MAP.get(name.lower().strip(), "xx")
+
+
 def _fetch_fixtures_for_date(date_from, date_to, status_filter):
     """
     Fetch fixtures from Sofascore for a date.
     Used for both live and historical queries, unlocking 30+ leagues.
+    Includes a fallback to The Odds API for today's matches when Sofascore fails.
     """
     from sofascore_client import fetch_todays_fixtures_sofascore
     
     fixtures = []
     ss_fixtures = fetch_todays_fixtures_sofascore(date_from)
+
+    # ── Fallback to The Odds API for today/future matches if Sofascore is blocked ──
+    if not ss_fixtures:
+        dprint("[FreeData] Sofascore returned 0 fixtures. Attempting The Odds API fallback...")
+        import requests
+        from datetime import datetime
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        if date_from >= today_str and ODDS_API_KEY:
+            try:
+                resp = requests.get(
+                    "https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds",
+                    params={"apiKey": ODDS_API_KEY, "regions": "eu"},
+                    timeout=15,
+                    verify=False
+                )
+                if resp.status_code == 200:
+                    for ev in resp.json():
+                        commence_time = ev.get("commence_time", "")
+                        if date_from in commence_time:
+                            ss_fixtures.append({
+                                "id": abs(hash(ev.get("home_team","") + ev.get("away_team","") + commence_time)) % 9_000_000,
+                                "league": "World Cup",
+                                "homeTeam": ev.get("home_team"),
+                                "homeTeamId": abs(hash(ev.get("home_team", ""))) % 9_000_000,
+                                "awayTeam": ev.get("away_team"),
+                                "awayTeamId": abs(hash(ev.get("away_team", ""))) % 9_000_000,
+                                "homeTeamLogo": f"https://flagcdn.com/w40/{_country_code(ev.get('home_team',''))}.png",
+                                "awayTeamLogo": f"https://flagcdn.com/w40/{_country_code(ev.get('away_team',''))}.png",
+                                "kickoff_utc": commence_time,
+                                "stateShort": "TIMED",
+                                # Carry odds so pipeline can build OddsData directly
+                                "_odds_bookmakers": ev.get("bookmakers", []),
+                            })
+                    dprint(f"[FreeData] The Odds API fallback supplied {len(ss_fixtures)} fixtures.")
+            except Exception as e:
+                dprint(f"[FreeData] The Odds API fallback error: {e}")
+
     fetched_ids = set()
 
     for sf in ss_fixtures:
@@ -292,10 +366,10 @@ def _fetch_fixtures_for_date(date_from, date_to, status_filter):
             "home_logo": sf.get("homeTeamLogo", ""),
             "away_logo": sf.get("awayTeamLogo", ""),
             "kickoff_utc": sf.get("kickoff_utc", date_from),
-            "provider": "sofascore"
+            "provider": sf.get("provider", "sofascore")
         })
 
-    dprint(f"[FreeData] Got {len(fixtures)} fixtures from Sofascore for {date_from}")
+    dprint(f"[FreeData] Got {len(fixtures)} fixtures from free stack for {date_from}")
     return fixtures
 
 
@@ -374,7 +448,15 @@ def _normalize_team_name(name):
     for suffix in (' fc', ' cf', ' afc', ' sc', ' united', ' city', ' town', ' albion', ' rovers', ' rangers'):
         if n.endswith(suffix):
             n = n[:-len(suffix)]
-    return n
+            
+    # Hardcoded aliases for common national team mismatches
+    aliases = {
+        "czechia": "czech republic",
+        "usa": "united states",
+        "south korea": "korea republic",
+        "dr congo": "congo dr",
+    }
+    return aliases.get(n, n)
 
 
 def _teams_match(a, b):
