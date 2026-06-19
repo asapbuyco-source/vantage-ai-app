@@ -603,3 +603,28 @@ export const runPlayerStatsClient = async () => {
         return { status: 'error', error: e.message };
     }
 };
+
+export const runLineupSyncer = async (dateStr = null) => {
+    logger.info('[QuantService] Running lineup syncer...');
+    try {
+        const pythonBin = await resolvePythonBin();
+        const args = ['lineup_syncer.py'];
+        if (dateStr) args.push(dateStr);
+        return new Promise((resolve) => {
+            const py = spawn(pythonBin, args, {
+                cwd: path.join(__dirname, 'quant'),
+                env: buildPythonEnv(),
+            });
+            py.stdout.on('data', d => logger.info(`[Python|LineupSyncer] ${d}`));
+            py.stderr.on('data', d => logger.warn(`[Python|LineupSyncer|ERR] ${d}`));
+            py.on('close', code => {
+                if (code === 0) resolve({ status: 'success' });
+                else resolve({ status: 'error', reason: `exit code ${code}` });
+            });
+            py.on('error', err => resolve({ status: 'error', error: err.message }));
+        });
+    } catch (e) {
+        logger.error(`[QuantService] Lineup sync failed: ${e.message}`);
+        return { status: 'error', error: e.message };
+    }
+};

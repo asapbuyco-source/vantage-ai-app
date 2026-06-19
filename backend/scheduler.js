@@ -8,6 +8,7 @@ import {
     runQuantPerformance,
     runQuantPipeline,
     runPlayerStatsClient,
+    runLineupSyncer,
 } from './quantService.js';
 
 const tasks = new Map();
@@ -246,6 +247,18 @@ export const initScheduler = () => {
     }, { timezone: 'Africa/Lagos' });
     tasks.set('accumulator', accumulatorTask);
     console.log('🎯 Accumulator generation scheduled at 10:00 Lagos');
+
+    // Lineup sync at 11:00 Lagos time (after team sheets are typically published)
+    const lineupTask = cron.schedule('0 11 * * *', async () => {
+        console.log('[Scheduler] Running lineup sync...');
+        try {
+            await runLineupSyncer();
+        } catch (e) {
+            console.error('[Scheduler] Lineup sync error:', e.message);
+        }
+    }, { timezone: 'Africa/Lagos' });
+    tasks.set('lineupSync', lineupTask);
+    console.log('📋 Lineup sync scheduled at 11:00 Lagos');
 
     // Repair corrupted predictions at 23:30 Lagos time
     const repairTask = cron.schedule('30 23 * * *', async () => {

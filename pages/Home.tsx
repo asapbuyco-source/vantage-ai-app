@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon,
   Trophy, AlertTriangle, Hourglass, Search, SlidersHorizontal, ChevronDown,
@@ -13,7 +14,6 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { NavigationTab, Match, Sport } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
-import { MatchDetailsModal } from '../components/MatchDetailsModal';
 import { getAppSettings } from '../services/db';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 
@@ -74,6 +74,7 @@ const FormDots = ({ form }: { form?: string }) => {
 };
 
 export const Home: React.FC<HomeProps> = ({ setTab }) => {
+  const navigate = useNavigate();
   const { t, language, setLanguage, theme, toggleTheme, showToast } = useAppContext();
   const { user, userProfile, isAdmin } = useAuth();
   const {
@@ -111,7 +112,6 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
   // ─── Filters ─────────────────────────────────────────────────────────────
   const [activeSport, setActiveSport] = useState<Sport>('football');
   const [sortKey, setSortKey] = useState<SortKey>('league');
-  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -286,13 +286,13 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         onClick: () => setTab('free'),
       };
     }
-    return {
+return {
       tone: 'emerald',
       label: language === 'fr' ? 'Meilleure prochaine action' : 'Best next action',
       title: language === 'fr' ? 'Ouvrez votre meilleur signal' : 'Open your strongest signal',
       detail: `${topPick.homeTeam} vs ${topPick.awayTeam} - ${getPredictionText(topPick)}`,
       action: language === 'fr' ? 'Voir pourquoi' : 'See why',
-      onClick: () => setSelectedMatch(topPick),
+      onClick: () => navigate(`/match/${topPick.id}`),
     };
   }, [loading, liveCount, topPick, isVip, language, scheduledTime, scheduledTimeDisplay, countdown.h, countdown.m, freePicksCount, setTab]);
 
@@ -419,8 +419,8 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
       {topPick && (() => {
         const pred = getPredictionText(topPick);
         return (
-          <button
-            onClick={() => !isVip ? setTab('vip') : setSelectedMatch(topPick)}
+<button
+            onClick={() => !isVip ? setTab('vip') : navigate(`/match/${topPick.id}`)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-vantage-cyan/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all text-left"
           >
             <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
@@ -689,8 +689,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
                     >
                       <button
                         onClick={() => {
-                          window.scrollTo({ top: 0, behavior: 'instant' });
-                          setSelectedMatch(match);
+                          navigate(`/match/${match.id}`);
                         }}
                         className="w-full text-left group"
                       >
@@ -923,12 +922,6 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
           <ArrowRight size={20} className="relative text-white shrink-0 group-hover:translate-x-1 transition-transform" />
         </button>
       </motion.div>
-
-      <MatchDetailsModal
-        match={selectedMatch}
-        onClose={() => setSelectedMatch(null)}
-        setTab={setTab}
-      />
     </div>
   );
 };

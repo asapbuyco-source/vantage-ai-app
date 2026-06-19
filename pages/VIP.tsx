@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar, Activity, Pencil, Banknote } from 'lucide-react';
+import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar, Activity, Pencil, Banknote, Radio } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
@@ -1033,6 +1033,36 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-6">
               Stop guessing. Get access to our quantitative models, live CLV tracking, and +EV betting signals.
             </p>
+
+            <div className="relative mx-auto mb-6 max-w-md overflow-hidden rounded-2xl border border-vantage-cyan/20 bg-slate-950 text-left shadow-2xl shadow-vantage-cyan/10">
+              <img
+                src="/images/vip-matchday-banner.jpg"
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 h-full w-full object-cover"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-slate-950/70" />
+              <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/75 to-slate-950/25" />
+              <div className="relative z-10 p-5">
+                <div className="mb-10 inline-flex items-center gap-2 rounded-full border border-vantage-cyan/30 bg-vantage-cyan/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-vantage-cyan">
+                  <Radio size={11} />
+                  Matchday Terminal
+                </div>
+                <div className="max-w-[13rem]">
+                  <p className="text-xl font-black leading-tight text-white">
+                    Full card, model edge, and staking plan in one view.
+                  </p>
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {['+EV', 'CLV', 'Kelly'].map(label => (
+                      <div key={label} className="rounded-lg border border-white/10 bg-white/10 px-2 py-2 text-center backdrop-blur-sm">
+                        <span className="text-[10px] font-black text-white">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* Fake Content Behind Blur */}
             <div className="relative mx-auto max-w-md rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-4 select-none">

@@ -21,6 +21,7 @@ import { LiveScores } from './pages/LiveScores';
 import { BlogIndex } from './pages/BlogIndex';
 import { BlogPost } from './pages/BlogPost';
 import { ArbFinder } from './pages/ArbFinder';
+import { MatchDetails } from './pages/MatchDetails';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
@@ -303,6 +304,9 @@ function AppContent() {
       {/* ───── Public Blog Routes (NO auth required — for SEO/Google) ───── */}
       <Route path="/blog" element={<BlogIndex />} />
       <Route path="/blog/:date" element={<BlogPost />} />
+
+      {/* ───── Match Details Page (full-screen, no bottom nav) ───── */}
+      <Route path="/match/:id" element={<MatchDetails />} />
 
       {/* ───── All other routes = main authenticated app ───── */}
       <Route path="*" element={

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, RefreshCw, Clock, Zap, ChevronDown, ChevronUp, Radio } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Activity, RefreshCw, Clock, Zap, Radio, ChevronRight } from 'lucide-react';
 import { getLiveMatchesFromDB } from '../services/sportsData';
 import { LiveMatch, NavigationTab } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
@@ -84,6 +85,7 @@ function getStateConfig(short: string, language: string) {
 }
 
 const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number; language: string }> = ({ match, idx, language }) => {
+  const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
   const stateConf = getStateConfig(match.stateShort, language);
   const isLive = !['FT', 'NS', 'POSTP', 'ABD', 'CANC', 'TBD'].includes(match.stateShort?.toUpperCase());
@@ -93,7 +95,8 @@ const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number; language: string 
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: idx * 0.05 }}
-      className="rounded-2xl border border-white/8 bg-[#1a1d26] overflow-hidden"
+      className="rounded-2xl border border-white/8 bg-[#1a1d26] overflow-hidden cursor-pointer hover:border-vantage-cyan/40 transition-colors"
+      onClick={() => navigate(`/match/${match.id}`)}
     >
       {/* Score row */}
       <div className="px-4 py-3.5">
@@ -157,50 +160,14 @@ const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number; language: string 
         </div>
 
         {/* Goals summary row */}
-        {match.events && match.events.length > 0 && (
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="mt-3 w-full flex items-center justify-between pt-3 border-t border-white/5 text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
-          >
-            <span className="flex items-center gap-1.5">
-              <Zap size={10} className="text-vantage-cyan" />
-              {match.events.filter(e => e.type === 'goal').length} goals · {match.events.length} events
-            </span>
-            {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          </button>
-        )}
+        <div className="mt-3 flex items-center justify-between pt-3 border-t border-white/5">
+          <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
+            <Zap size={10} className="text-vantage-cyan" />
+            {match.events?.filter(e => e.type === 'goal').length || 0} goals · {match.events?.length || 0} events
+          </span>
+          <ChevronRight size={14} className="text-gray-500" />
+        </div>
       </div>
-
-      {/* Events panel */}
-      <AnimatePresence>
-        {expanded && match.events && match.events.length > 0 && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="px-4 pb-4 space-y-1.5 border-t border-white/5">
-              <p className="text-[9px] uppercase tracking-widest text-gray-600 pt-3 mb-2">Match Events</p>
-              {match.events.slice(0, 10).map((ev, i) => (
-                <div key={ev.id || i} className="flex items-center gap-2 text-xs">
-                  <span className="text-[10px] text-gray-500 font-mono w-6 text-right shrink-0">{ev.minute}'</span>
-                  <span>{getEventIcon(ev.type)}</span>
-                  <span className="text-gray-300 font-medium truncate">
-                    {getEventDisplay(ev, language)}
-                  </span>
-                  {ev.isHome !== undefined && (
-                    <span className={`text-[9px] ${ev.isHome ? 'text-vantage-cyan' : 'text-vantage-purple'}`}>
-                      {ev.isHome ? 'H' : 'A'}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 };

@@ -17,7 +17,8 @@ TIER_1 = {
     82:   "Bundesliga",
     384:  "Serie A",
     5:    "UEFA Europa League",
-    294:  "FIFA World Cup",
+    294:  "FIFA World Cup (Legacy)",
+    1:    "FIFA World Cup",
 }
 
 # ── Tier 2: Strong mid-tier European ──────────────────────────────────────
@@ -33,13 +34,15 @@ TIER_2 = {
 
 # ── Tier 3: Reliable data, good volume ────────────────────────────────────
 TIER_3 = {
-    600:  "MLS",
-    253:  "Brasileirão Série A",
+    253:  "Major League Soccer",
+    71:   "Brasileirão Série A",
     325:  "Argentine Primera División",
     176:  "Turkish Süper Lig",
     570:  "Saudi Pro League",
-    392:  "Eliteserien (Norway)",
-    572:  "Allsvenskan (Sweden)",
+    103:  "Eliteserien (Norway)",
+    113:  "Allsvenskan (Sweden)",
+    244:  "Veikkausliiga (Finland)",
+    292:  "K League 1 (South Korea)",
     288:  "Ekstraklasa (Poland)",
     1186: "CAF Champions League",
     1187: "CAF Confederation Cup",

@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp, Clock, Target, Loader2, Copy, Check, Lock, Zap,
   BarChart3, Shield, Activity, Flame, ChevronRight, Eye, EyeOff,
@@ -59,6 +60,7 @@ const getCountdownToNextPicks = (scheduleTime = '19:00') => {
 
 
 export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
+  const navigate = useNavigate();
   const { t, language } = useAppContext();
   const { predictions, loading } = useData();
   const { userProfile, isAdmin } = useAuth();
@@ -151,8 +153,10 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: idx * 0.05, duration: 0.3 }}
+        onClick={() => navigate(`/match/${match.id}`)}
+        className="cursor-pointer"
       >
-        <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-[#1a1d26] backdrop-blur-md shadow-lg">
+        <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-[#1a1d26] backdrop-blur-md shadow-lg hover:border-vantage-cyan/40 transition-colors">
 
           {/* ── Header row: league + time ── */}
           <div className="flex justify-between items-center px-4 pt-3.5 pb-2">

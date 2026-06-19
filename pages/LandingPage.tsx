@@ -93,37 +93,46 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
             </div>
 
             {/* 2. High-Conversion Hero Section */}
-            <div className="flex-1 flex flex-col items-center justify-center text-center px-4 md:px-8 mb-16 relative">
-                {/* Ambient glow */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl h-64 bg-vantage-cyan/20 blur-[100px] rounded-full pointer-events-none" />
+            <div className="relative -mx-4 md:-mx-8 mb-16 min-h-[620px] overflow-hidden px-4 py-20 text-center md:min-h-[680px] md:px-8 md:py-24 flex flex-col items-center justify-center">
+                <img
+                    src="/images/football-hero.jpg"
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="eager"
+                    fetchPriority="high"
+                />
+                <div className="absolute inset-0 bg-slate-950/75 dark:bg-slate-950/80" />
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.55)_0%,rgba(15,23,42,0.25)_45%,rgba(15,23,42,0.92)_100%)]" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.16)_0%,transparent_52%)] pointer-events-none" />
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center space-x-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-6">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative z-10 inline-flex items-center space-x-2 bg-emerald-400/10 border border-emerald-300/30 rounded-full px-4 py-1.5 mb-6 backdrop-blur-md">
                     <CheckCircle size={14} className="text-green-500" />
-                    <span className="text-[11px] font-bold tracking-widest text-green-500 uppercase">Verified Edge over Bookmakers</span>
+                    <span className="text-[11px] font-bold tracking-widest text-emerald-200 uppercase">Verified Edge over Bookmakers</span>
                 </motion.div>
 
-                <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="text-4xl md:text-6xl lg:text-7xl font-black font-orbitron text-slate-900 dark:text-white leading-[1.1] mb-6 max-w-4xl mx-auto">
+                <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="relative z-10 text-4xl md:text-6xl lg:text-7xl font-black font-orbitron text-white leading-[1.1] mb-6 max-w-4xl mx-auto drop-shadow-2xl">
                     Bet With Structure. <br className="hidden md:block" />
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-vantage-cyan to-vantage-purple">
                         Let Data Lead the Stake.
                     </span>
                 </motion.h1>
 
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="text-base md:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-                    Vantage AI uses quantitative modeling and fractional Kelly staking to find <span className="font-bold text-slate-700 dark:text-white">Positive EV (+EV)</span> bets. We tell you what to bet, and exactly how much to stake to grow your bankroll safely.
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="relative z-10 text-base md:text-xl text-slate-200 max-w-2xl mx-auto mb-10 leading-relaxed">
+                    Vantage AI uses quantitative modeling and fractional Kelly staking to find <span className="font-bold text-white">Positive EV (+EV)</span> bets. We tell you what to bet, and exactly how much to stake to grow your bankroll safely.
                 </motion.p>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="relative z-10 flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto">
                     <button onClick={onGetStarted} className="w-full sm:w-auto py-4 px-10 bg-vantage-cyan text-slate-900 font-black text-lg rounded-xl shadow-[0_0_30px_rgba(34,211,238,0.3)] hover:scale-105 hover:shadow-[0_0_40px_rgba(34,211,238,0.5)] transition-all flex items-center justify-center gap-2">
                         Get Started Free
                         <ArrowRight size={20} />
                     </button>
-                    <button onClick={scrollToPricing} className="w-full sm:w-auto py-4 px-8 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-slate-900 dark:text-white font-bold text-lg rounded-xl hover:bg-gray-50 dark:hover:bg-white/10 transition-all flex items-center justify-center gap-2">
-                        <Lock size={18} className="text-gray-400" />
+                    <button onClick={scrollToPricing} className="w-full sm:w-auto py-4 px-8 bg-white/10 border border-white/20 text-white font-bold text-lg rounded-xl hover:bg-white/15 transition-all flex items-center justify-center gap-2 backdrop-blur-md">
+                        <Lock size={18} className="text-slate-300" />
                         View VIP Plans
                     </button>
                 </motion.div>
-                <p className="text-xs text-gray-400 mt-4 font-medium uppercase tracking-widest">No credit card required for free picks</p>
+                <p className="relative z-10 text-xs text-slate-300 mt-4 font-medium uppercase tracking-widest">No credit card required for free picks</p>
             </div>
 
             {/* 3. Social Proof Ticker */}

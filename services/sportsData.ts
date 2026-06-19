@@ -582,6 +582,7 @@ export interface LineupPlayer {
     name: string;
     number?: number;
     position?: string;
+    grid?: string;
     teamId?: number;
     teamName: string;
     isHome: boolean;
