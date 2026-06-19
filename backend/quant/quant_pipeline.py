@@ -25,6 +25,13 @@ Usage:
 
 import os
 import sys
+
+# Auto-configure gRPC SSL certificate bundle path for Windows/Local environments
+try:
+    import certifi
+    os.environ["GRPC_DEFAULT_SSL_ROOTS_FILE_PATH"] = certifi.where()
+except ImportError:
+    pass
 import json
 import math
 from datetime import datetime, timezone, timedelta

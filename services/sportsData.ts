@@ -1,7 +1,9 @@
 // ══════════════════════════════════════════════════════════════════════
-// BACKEND PROXY INTEGRATION
-// We now route all Sportmonks requests through our Express backend
-// This solves CORS and hides the API key from the frontend.
+// BACKEND PROXY INTEGRATION (DEPRECATED - Sportmonks retired)
+// All football data is now served via API-Football through Firestore.
+// The backend writes predictions to Firestore; frontend reads from there.
+// Sportmonks API calls are deprecated and return 410 Gone.
+// Use Firestore-based readers instead (see bottom of file).
 // ══════════════════════════════════════════════════════════════════════
 let BACKEND_URL = import.meta.env?.VITE_BACKEND_URL || "http://localhost:8080";
 if (BACKEND_URL && !BACKEND_URL.startsWith('http')) {
@@ -13,7 +15,11 @@ if (BACKEND_URL.includes('railwayapp') && !BACKEND_URL.includes('railway.app')) 
 }
 // Remove trailing slash if present
 BACKEND_URL = BACKEND_URL.replace(/\/$/, "");
-const API_BASE = `${BACKEND_URL}/api/sportmonks`;
+
+// NOTE: /api/sportmonks now returns 410 Gone.
+// All data should be read from Firestore directly (see FIRESTORE-BASED READERS section).
+// The Sportmonks API token is deprecated; API_FOOTBALL_KEY is now required.
+const API_BASE = `${BACKEND_URL}/api/football`;
 
 // ── Short in-memory cache (5 min) for Firestore reads ─────────────────────────
 // Reduces DB reads when user navigates between tabs quickly.
@@ -190,8 +196,11 @@ async function apiFetch<T>(path: string, skipCache = false): Promise<T | null> {
 
 /**
  * Fetches today's fixtures from Sportmonks.
+ * @deprecated Use Firestore readers instead. Sportmonks API returns 410 Gone.
+ *             Use getLiveMatchesFromDB and getTomorrowFixturesFromDB.
  */
 export const getTodaysFixtures = async (dateStr?: string): Promise<Fixture[]> => {
+    console.warn('[sportsData] getTodaysFixtures is deprecated. Use Firestore readers instead.');
     // API_KEY is no longer needed on the frontend, as it's handled by the backend proxy.
     const dateToFetch = dateStr || new Date().toISOString().split('T')[0];
 
@@ -294,6 +303,8 @@ export const filterGlobalFixtures = (fixtures: Fixture[]) => {
 
 /**
  * Fetches team statistics to derive form data using Sportmonks.
+ * @deprecated Use Firestore readers instead. Sportmonks API returns 410 Gone.
+ *             Form data is now included in quant_predictions in Firestore.
  */
 export const getTeamForm = async (
     teamId: number,
@@ -331,8 +342,10 @@ export const getTeamForm = async (
 
 /**
  * Fetches the last 5 head-to-head meetings between two teams via Sportmonks.
+ * @deprecated Use getH2HFromDB() instead. Sportmonks API returns 410 Gone.
  */
 export const getH2H = async (homeId: number, awayId: number): Promise<H2HRecord | null> => {
+    console.warn('[sportsData] getH2H is deprecated. Use getH2HFromDB() instead.');
     const data: any[] | null = await apiFetch(`/fixtures/head-to-head/${homeId}/${awayId}?include=participants;scores`);
     if (!data || data.length === 0) return null;
 
@@ -368,8 +381,10 @@ export const getH2H = async (homeId: number, awayId: number): Promise<H2HRecord 
 
 /**
  * Fetches pre-match bookmaker 1X2 odds for a fixture via Sportmonks.
+ * @deprecated Use getLiveOddsFromDB() instead. Sportmonks API returns 410 Gone.
  */
 export const getMatchOdds = async (fixtureId: number): Promise<MatchOdds | null> => {
+    console.warn('[sportsData] getMatchOdds is deprecated. Use getLiveOddsFromDB() instead.');
     // 1X2 market ID is typically 1 in Sportmonks
     const data: any[] | null = await apiFetch(`/odds/pre-match/fixtures/${fixtureId}`);
     if (!data || data.length === 0) return null;
@@ -412,8 +427,10 @@ export const getMatchOdds = async (fixtureId: number): Promise<MatchOdds | null>
 
 /**
  * Fetches active injury list via Sportmonks.
+ * @deprecated Sportmonks API returns 410 Gone. Injury data is now included in quant_predictions.
  */
 export const getTeamInjuries = async (teamId: number): Promise<InjuryReport | null> => {
+    console.warn('[sportsData] getTeamInjuries is deprecated. Injury data is included in quant_predictions.');
     const data: any[] | null = await apiFetch(`/sidelined/teams/${teamId}?include=player;type`);
     if (!data) return null;
 

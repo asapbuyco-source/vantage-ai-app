@@ -12,6 +12,13 @@ import datetime
 import json
 import os
 import sys
+
+# Auto-configure gRPC SSL certificate bundle path for Windows/Local environments
+try:
+    import certifi
+    os.environ["GRPC_DEFAULT_SSL_ROOTS_FILE_PATH"] = certifi.where()
+except ImportError:
+    pass
 import urllib.parse
 import urllib.request
 import urllib.error
@@ -97,6 +104,9 @@ def _fixture_date_range(date_str):
 
 
 def fetch_fixtures(date_str):
+    if not SPORTMONKS_CRICKET_API_TOKEN:
+        print("[Cricket] No SPORTMONKS_CRICKET_API_TOKEN configured. Skipping cricket fixtures.")
+        return []
     params = {
         "filter[starts_between]": _fixture_date_range(date_str),
         "include": "localteam,visitorteam,league,venue,odds",

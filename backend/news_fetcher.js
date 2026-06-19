@@ -25,6 +25,11 @@ export const fetchAndStoreNews = async () => {
                     }
                 });
 
+                if (response.status === 429 || response.status === 403) {
+                    console.warn(`[NewsFetcher] Rate limited (${response.status}) for league ${leagueId}. Returning fallback.`);
+                    return { status: 'error', fallback: true, message: 'No news available due to rate limiting.' };
+                }
+
                 if (response.ok) {
                     const data = await response.json();
                     if (data.result && Array.isArray(data.result)) {
@@ -40,7 +45,7 @@ export const fetchAndStoreNews = async () => {
 
         if (allNews.length === 0) {
             console.log('[NewsFetcher] No news fetched today.');
-            return { status: 'skipped', reason: 'no_news_data' };
+            return { status: 'error', fallback: true, message: 'No news available.' };
         }
 
         // Deduplicate by ID

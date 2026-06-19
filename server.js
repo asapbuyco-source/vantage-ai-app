@@ -14,7 +14,7 @@ import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import sanitizeHtml from 'sanitize-html';
 import jwt from 'jsonwebtoken';
-import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { initScheduler, stopScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerCricketGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance, repairCorruptedPredictions } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
 import { requireFirebaseUser } from './backend/authMiddleware.js';
@@ -200,42 +200,38 @@ app.use(cors({
 }));
 
 // ══════════════════════════════════════════════════════════════════════
-// SPORTMONKS API PROXY
+// SPORTMONKS API PROXY (DEPRECATED)
+// This proxy is deprecated. API-Football is now the primary data source.
+// Sportmonks token is now optional (deprecated).
 // ══════════════════════════════════════════════════════════════════════
 const SPORTMONKS_API_TOKEN = process.env.SPORTMONKS_API_TOKEN;
 
-if (!SPORTMONKS_API_TOKEN) {
-    logger.error("[API] CRITICAL: SPORTMONKS_API_TOKEN environment variable is not set!");
-    Sentry.captureMessage("CRITICAL: SPORTMONKS_API_TOKEN missing", "fatal");
+if (SPORTMONKS_API_TOKEN) {
+    logger.warn("[API] SPORTMONKS_API_TOKEN is set but Sportmonks is deprecated. Use API_FOOTBALL_KEY instead.");
 }
 
-// 100 requests per 15 minutes per IP for Sportmonks
+// 100 requests per 15 minutes per IP for Sportmonks (rate limit preserved but returns 410 Gone)
 const sportmonksLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: { error: 'Too many requests to Sportmonks API from this IP, please try again after 15 minutes' }
+    message: { error: 'Too many requests, please try again after 15 minutes' }
 });
 
-app.use('/api/sportmonks', sportmonksLimiter, createProxyMiddleware({
-    target: 'https://api.sportmonks.com/v3/football',
-    changeOrigin: true,
-    pathRewrite: (path, req) => {
-        const rewritten = path.replace(/^\/api\/sportmonks/, '');
-        const token = SPORTMONKS_API_TOKEN || '';
-        const separator = rewritten.includes('?') ? '&' : '?';
-        return `${rewritten}${separator}api_token=${token}`;
-    },
-    onProxyReq: (proxyReq, req, res) => {
-        // Token is now appended via pathRewrite
-    },
-    onError: (err, req, res) => {
-        logger.error({ error: err, url: req.url }, 'Sportmonks proxy error');
-        Sentry.captureException(err);
-        res.status(500).json({ error: 'Proxy implementation error', details: err.message });
-    }
-}));
+app.use('/api/sportmonks', sportmonksLimiter, (req, res) => {
+    res.status(410).json({
+        error: 'Gone',
+        message: 'Sportmonks API proxy has been deprecated. All data is now served via API-Football through the /api/football/* endpoints or directly from Firestore.'
+    });
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// RAW BODY CAPTURE (for webhook signature verification)
+// Captures raw bytes before JSON parsing so HMAC can be verified
+// ══════════════════════════════════════════════════════════════════════
+app.use('/api/payments/selar/webhook', express.raw({ type: 'application/json', limit: '5mb' }));
+app.use('/api/payments', express.json({ limit: '5mb' }));
 
 // ══════════════════════════════════════════════════════════════════════
 // GEMINI API PROXY
@@ -563,18 +559,10 @@ app.post('/api/admin/test-openai', adminAuth, async (req, res) => {
 
 // ── Static Data Seed Trigger ─────────────────────────────────────────────────
 app.post('/api/admin/seed-static', adminAuth, async (req, res) => {
-    try {
-        const { seedStaticData } = await import('./backend/staticDataSeeder.js');
-        const db = admin.firestore();
-        const token = process.env.SPORTMONKS_API_TOKEN;
-        const force = req.body?.force === true;
-        seedStaticData(db, token, { force }).then(() => {
-            console.log('[Admin] Static data seed completed');
-        }).catch(e => console.error('[Admin] Seed error:', e.message));
-        res.json({ status: 'started', message: `Static seed ${force ? '(forced)' : ''} started. Check server logs.` });
-    } catch (e) {
-        res.status(500).json({ status: 'error', message: e.message });
-    }
+    res.status(410).json({
+        status: 'deprecated',
+        message: 'Sportmonks static seeding has been removed. API-Football is now the primary data source.',
+    });
 });
 
 // ══════════════════════════════════════════════════════════════════════
@@ -657,12 +645,31 @@ function verifySelarWebhook(req) {
     const signatureHeader = req.headers['x-selar-signature'] || req.headers['x-webhook-signature'];
     if (signatureHeader) {
         const signature = String(signatureHeader).replace(/^sha256=/i, '');
-        const payload = JSON.stringify(req.body || {});
+        // Use raw body bytes for HMAC verification (Buffer from express.raw, or string from JSON.parse)
+        let payload;
+        if (Buffer.isBuffer(req.body)) {
+            payload = req.body;
+        } else if (typeof req.body === 'string') {
+            payload = req.body;
+        } else {
+            payload = JSON.stringify(req.body || {});
+        }
         const expected = createHmac('sha256', secret).update(payload).digest('hex');
         if (safeEqualString(signature, expected)) return { ok: true };
     }
 
     return { ok: false, status: 401, error: 'Invalid Selar webhook signature' };
+}
+
+function parseSelarWebhookBody(req) {
+    if (Buffer.isBuffer(req.body)) {
+        if (req.body.length === 0) return {};
+        return JSON.parse(req.body.toString('utf8'));
+    }
+    if (typeof req.body === 'string') {
+        return req.body ? JSON.parse(req.body) : {};
+    }
+    return req.body || {};
 }
 
 // POST /api/fapshi/initiate — retired legacy payment initiation
@@ -844,7 +851,8 @@ app.post('/api/payments/selar/webhook', async (req, res) => {
             return res.status(authResult.status).json({ error: authResult.error });
         }
 
-        const { reference, status, amount } = req.body || {};
+        const payload = parseSelarWebhookBody(req);
+        const { reference, status, amount } = payload;
         if (!reference || !/^VAN_[a-f0-9]{24}$/i.test(reference)) {
             return res.status(400).json({ error: 'Invalid reference' });
         }
@@ -869,7 +877,7 @@ app.post('/api/payments/selar/webhook', async (req, res) => {
             transactionId: reference,
             plan: pending.plan,
             amount: paidAmount,
-            raw: req.body,
+            raw: payload,
         });
 
         await ref.set({
@@ -897,17 +905,28 @@ app.get('/api/push/vapid-key', (req, res) => {
     res.json({ publicKey: VAPID_PUBLIC_KEY });
 });
 
-app.post('/api/push/subscribe', async (req, res) => {
+const pushLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many push subscription requests, please try again in 1 minute' }
+});
+
+app.post('/api/push/subscribe', pushLimiter, requireFirebaseUser, async (req, res) => {
     try {
         const subscription = req.body;
-        if (!subscription || !subscription.endpoint || !subscription.keys) {
+        if (!subscription || !subscription.endpoint || !subscription.keys || !subscription.keys.p256dh || !subscription.keys.auth) {
             return res.status(400).json({ error: 'Invalid subscription object' });
         }
-        
+
         if (admin.apps.length > 0) {
-            const subId = subscription.keys.auth || Date.now().toString();
+            const uid = req.firebaseUser.uid;
+            const endpointHash = createHash('sha256').update(subscription.endpoint).digest('hex').substring(0, 16);
+            const subId = `${uid}_${endpointHash}`;
             await admin.firestore().collection('push_subscriptions').doc(subId).set({
                 subscription,
+                uid,
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
         }

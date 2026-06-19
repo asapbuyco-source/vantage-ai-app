@@ -287,6 +287,57 @@ export const sendDailyPredictionsToTelegram = async () => {
 };
 
 /**
+ * Processes all pending Telegram alerts queued in Firestore by the Python pipeline.
+ * Reads from the `pending_telegram_alerts` collection, sends each alert,
+ * and deletes the processed documents.
+ */
+export const processPendingTelegramAlerts = async () => {
+    console.log('[Telegram] Processing pending alerts...');
+    try {
+        const settings = await getTelegramSettings();
+        if (!settings?.enabled || !settings?.token || !settings?.chatId) {
+            console.warn('[Telegram] Settings incomplete. Skipping pending alerts.');
+            return { status: 'skipped', reason: 'incomplete_settings' };
+        }
+
+        const db = admin.firestore();
+        const snapshot = await db.collection('pending_telegram_alerts')
+            .where('processed', '==', false)
+            .limit(10)
+            .get();
+
+        if (snapshot.empty) {
+            console.log('[Telegram] No pending alerts.');
+            return { status: 'skipped', reason: 'no_pending_alerts' };
+        }
+
+        let sent = 0;
+        let failed = 0;
+        const batch = db.batch();
+
+        for (const doc of snapshot.docs) {
+            const alert = doc.data();
+            try {
+                await sendMessage(settings.token, settings.chatId, alert.message);
+                batch.update(doc.ref, { processed: true, sent_at: new Date().toISOString() });
+                sent++;
+            } catch (err) {
+                console.error(`[Telegram] Failed to send alert ${doc.id}:`, err.message);
+                batch.update(doc.ref, { processed: true, error: err.message, sent_at: new Date().toISOString() });
+                failed++;
+            }
+        }
+
+        await batch.commit();
+        console.log(`[Telegram] Processed ${sent + failed} pending alerts (${sent} sent, ${failed} failed).`);
+        return { status: 'success', sent, failed };
+    } catch (e) {
+        console.error('[Telegram] Error processing pending alerts:', e.message);
+        return { status: 'error', error: e.message };
+    }
+};
+
+/**
  * Sends a custom test message to verify the bot configuration.
  * Called by the admin "Test Telegram" button via server.js.
  */

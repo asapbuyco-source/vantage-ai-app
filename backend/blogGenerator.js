@@ -124,6 +124,97 @@ const selectMultiple = (arr, count) => {
     return shuffled.slice(0, count);
 };
 
+const generateDataDrivenPreview = (db, allMatches, league) => {
+    if (!allMatches || allMatches.length === 0) {
+        return null;
+    }
+
+    const todayStr = getGlobalTodayKey();
+    const templates = TEMPLATES_EN;
+    const leagueName = league || 'Top Leagues';
+
+    const topPicks = allMatches
+        .filter(m => m.confidence >= 70)
+        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+        .slice(0, 5);
+
+    if (topPicks.length === 0) {
+        return null;
+    }
+
+    const titleTemplate = selectRandom(templates.titles)
+        .replace('{league}', leagueName)
+        .replace('{date}', todayStr);
+    const title = titleTemplate;
+
+    const introTemplate = selectRandom(templates.intros)
+        .replace('{league}', leagueName)
+        .replace('{count}', String(topPicks.length))
+        .replace('{date}', todayStr);
+    const intro = `[Data-Driven Preview] ${introTemplate}`;
+
+    let matchesHtml = '';
+    for (const match of topPicks) {
+        const home = match.homeTeam || match.home_team || 'Home';
+        const away = match.awayTeam || match.away_team || 'Away';
+        const prediction = match.prediction_en || match.prediction || 'N/A';
+        const confidence = match.confidence || 0;
+        const odds = match.odds || 1.5;
+        const form = match.form || 'N/A';
+        const xg = match.xg ? `xG: ${match.xg}` : '';
+        const ev = match.ev_pct ? `EV: +${match.ev_pct}%` : '';
+
+        const headerTemplate = selectRandom(templates.matchHeaders)
+            .replace('{home}', home).replace('{away}', away);
+
+        const analysisTemplate = selectRandom(templates.matchAnalysis)
+            .replace('{home}', home)
+            .replace('{away}', away)
+            .replace('{league}', match.league || leagueName)
+            .replace('{prediction}', prediction)
+            .replace('{confidence}', String(confidence))
+            .replace('{odds}', String(odds));
+
+        let extraInfo = [form, xg, ev].filter(Boolean).join(' | ');
+        matchesHtml += `<h2>${headerTemplate}</h2>\n<p>${analysisTemplate}</p>\n`;
+        if (extraInfo) {
+            matchesHtml += `<p><i>${extraInfo}</i></p>\n`;
+        }
+    }
+
+    let content = `<h1>${title}</h1>\n`;
+    content += `<p>${intro}</p>\n`;
+    content += matchesHtml;
+    content += `<p><strong>${selectRandom(templates.outros)}</strong></p>`;
+
+    const excerpt = content.replace(/<[^>]+>/g, '').substring(0, 160).trim() + '...';
+    const docId = `${todayStr}_en_data_driven`;
+
+    db.collection('daily_blogs').doc(docId).set({
+        title,
+        content,
+        excerpt,
+        tags: ['football', 'predictions', 'data-driven', leagueName],
+        generatedAt: new Date().toISOString(),
+        generatedBy: 'programmatic-data-driven',
+        updatedAt: new Date().toISOString(),
+        language: 'en',
+        footballCount: topPicks.length,
+        basketballCount: 0,
+        date: todayStr,
+        isDataDrivenFallback: true,
+    });
+
+    return {
+        status: 'success',
+        title,
+        generatedLength: content.length,
+        footballPicks: topPicks.length,
+        basketballPicks: 0,
+        isDataDrivenFallback: true,
+    };
+};
+
 const injectKeywords = (text, keywords) => {
     const selected = selectMultiple(keywords, 3);
     let result = text;
@@ -167,6 +258,10 @@ export const generateBlogPost = async (language = 'en', leagueOverride = null) =
         .slice(0, 5);
 
     if (topPicks.length === 0) {
+        const fallbackContent = generateDataDrivenPreview(db, allMatches, leagueOverride);
+        if (fallbackContent) {
+            return fallbackContent;
+        }
         return { status: 'skipped', reason: 'predictions_pending_analysis' };
     }
 

@@ -127,22 +127,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
             </div>
 
             {/* 3. Social Proof Ticker */}
-            <div className="w-full bg-slate-900 dark:bg-black/40 border-y border-white/10 py-6 mb-20 overflow-hidden relative">
+            <div className="w-full bg-slate-900 dark:bg-black/40 border-y border-white/10 py-6 mb-4 overflow-hidden relative">
                 <div className="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8 text-center divide-y md:divide-y-0 md:divide-x divide-white/10">
                     <div className="flex flex-col items-center justify-center pt-4 md:pt-0">
                         <span className="text-4xl font-black text-white font-orbitron mb-1">1,000+</span>
-                        <span className="text-xs font-bold text-vantage-cyan uppercase tracking-widest">Bets Logged</span>
+                        <span className="text-xs font-bold text-vantage-cyan uppercase tracking-widest">Bets Tracked</span>
                     </div>
                     <div className="flex flex-col items-center justify-center pt-4 md:pt-0">
                         <span className="text-4xl font-black text-white font-orbitron mb-1">67.4%</span>
-                        <span className="text-xs font-bold text-vantage-cyan uppercase tracking-widest">Verified Win Rate</span>
+                        <span className="text-xs font-bold text-vantage-cyan uppercase tracking-widest">Historical Performance*</span>
                     </div>
                     <div className="flex flex-col items-center justify-center pt-4 md:pt-0">
                         <span className="text-4xl font-black text-white font-orbitron mb-1">7.9%</span>
-                        <span className="text-xs font-bold text-green-400 uppercase tracking-widest">Return on Investment</span>
+                        <span className="text-xs font-bold text-green-400 uppercase tracking-widest">Avg. ROI*</span>
                     </div>
                 </div>
             </div>
+            <p className="text-[10px] text-gray-500 dark:text-gray-600 text-center px-4 mb-16 max-w-2xl mx-auto">
+                *Past performance is not indicative of future results. All betting involves risk. Our data-driven predictions identify positive expected value but do not guarantee wins. 18+
+            </p>
 
             {/* 4. Education: The 3-Step Blueprint */}
             <div className="max-w-6xl mx-auto px-4 mb-24">

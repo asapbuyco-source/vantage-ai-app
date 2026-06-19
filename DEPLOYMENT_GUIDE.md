@@ -8,11 +8,17 @@ You must add these variables to your **Railway project settings** (under the "Va
 
 | Variable | Description | Required? | Location Used |
 | :--- | :--- | :--- | :--- |
-| `VITE_SPORTMONKS_API_TOKEN` | Your API key for fetching real-time match fixtures, odds, form, and H2H data. | **Yes** | Frontend & Backend (`sportsData.ts`, `server.js`) |
-| `VITE_GOOGLE_GENAI_API_KEY` | Your API key for Gemini AI. Powers the daily predictions, match analysis, and blog generation. | **Yes** | Frontend & Backend (`gemini.ts`, `server.js`) |
-| `VITE_GEMINI_AI_API_KEY` | (Legacy alias) Use the same value as `VITE_GOOGLE_GENAI_API_KEY`. Some parts of the codebase might still check for this. | Optional | `gemini.ts` fallback |
 | `VITE_BACKEND_URL` | The public URL of your deployed server. Used by the React frontend to communicate with your backend API. | **Yes** | Frontend (API calls) |
-| `ADMIN_API_SECRET` | A secret passcode (e.g., a random string) to protect administrative endpoints (like manual AI generation). If omitted, the endpoints fail-open in dev mode. | **Yes** | Backend (`server.js`) |
+| `API_FOOTBALL_KEY` | API-Football key. This is the primary football source for fixtures, odds, predictions, injuries, form, and H2H. | **Yes** | Backend Python quant pipeline |
+| `FIREBASE_SERVICE_ACCOUNT` | Minified Firebase Admin SDK service-account JSON. Required for scheduler writes, payments, admin token exchange, and push subscriptions. | **Yes** | Backend (`server.js`) |
+| `ADMIN_API_SECRET` | Strong random secret used to sign/validate admin JWTs and legacy server-to-server admin calls. | **Yes** | Backend (`server.js`) |
+| `ADMIN_JWT_SECRET` | Optional separate JWT signing secret. Use a strong value in production. | Recommended | Backend (`server.js`) |
+| `GOOGLE_GENAI_API_KEY` | Gemini key for legacy/admin AI features and blog generation. | Optional | Backend (`server.js`) |
+| `OPENAI_API_KEY` | OpenAI key for admin/test generation features if enabled. | Optional | Backend (`server.js`) |
+| `SELAR_WEBHOOK_SECRET` | Secret used to verify Selar payment webhooks. | **Yes** | Backend payment webhook |
+| `FAPSHI_USER_TOKEN` / `FAPSHI_API_KEY` | Fapshi credentials for Cameroon MoMo payments. | If Fapshi enabled | Backend payment routes |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web push notification keys. | If push enabled | Backend push routes |
+| `SPORTMONKS_API_TOKEN` | Deprecated legacy token. Do not configure for new deployments unless you restore Sportmonks-specific features. | No | Deprecated |
 | `PORT` | The port your server listens on. (Railway usually sets this automatically). | Auto | Backend (`server.js`) |
 | `NODE_ENV` | Defines the environment. Set this to `production`. | Recommended | Backend `server.js` |
 

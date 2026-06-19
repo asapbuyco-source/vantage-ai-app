@@ -9,6 +9,13 @@ Fetches final results from Sportmonks and updates each prediction with:
 
 import os
 import sys
+
+# Auto-configure gRPC SSL certificate bundle path for Windows/Local environments
+try:
+    import certifi
+    os.environ["GRPC_DEFAULT_SSL_ROOTS_FILE_PATH"] = certifi.where()
+except ImportError:
+    pass
 import json
 import requests
 from datetime import datetime, timezone, timedelta
@@ -19,9 +26,7 @@ except ImportError:
     fetch_match_result_free = None
 
 
-# ── Sportmonks helper ─────────────────────────────────────────────────────────
-SM_TOKEN = os.environ.get("SPORTMONKS_API_TOKEN", "")
-SM_BASE = "https://api.sportmonks.com/v3/football"
+# (Sportmonks helpers removed — using sport-highlights-api instead)
 
 FINISHED_STATES = {"FT", "AET", "PEN", "FINS"}
 VOIDED_STATES = {"CANCL", "POSTP", "INT", "ABANDONED", "TBA", "NS"}
@@ -97,116 +102,7 @@ def resolveMarket(market: str) -> MarketType:
     return MarketType.UNKNOWN
 
 
-def _sm_get(path: str, params: dict | None = None) -> dict | None:
-    if not SM_TOKEN:
-        return None
-    p = {"api_token": SM_TOKEN}
-    if params:
-        p.update(params)
-    try:
-        r = requests.get(f"{SM_BASE}{path}", params=p, timeout=15)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        print(f"[Grading] API error on {path}: {e}", file=sys.stderr)
-        return None
-
-
-def _fetch_results_for_date(date_str: str) -> dict[str, dict]:
-    """
-    Fetch completed fixtures for a date, including closing odds for CLV tracking.
-    Returns a map: fixture_id → {home_goals, away_goals, state, closing_odds}
-    """
-    result = _sm_get(
-        f"/fixtures/date/{date_str}",
-        {"include": "participants;scores;state;odds", "per_page": 200},
-    )
-    data = result.get("data", []) if result else []
-    out = {}
-    for item in data:
-        state = item.get("state", {}).get("state", "") or item.get("state", {}).get("short_name", "")
-        if state not in FINISHED_STATES:
-            # Try state name as fallback
-            state_name = item.get("state", {}).get("name", "").upper()
-            if "FINISH" not in state_name and "FULL" not in state_name:
-                continue
-        participants = item.get("participants", [])
-        home_p = next((p for p in participants if p.get("meta", {}).get("location") == "home"), None)
-        away_p = next((p for p in participants if p.get("meta", {}).get("location") == "away"), None)
-        if not home_p or not away_p:
-            continue
-        scores = item.get("scores", [])
-        hg = next((s["score"]["goals"] for s in scores
-                   if s.get("participant_id") == home_p["id"] and s.get("description") == "CURRENT"), None)
-        ag = next((s["score"]["goals"] for s in scores
-                   if s.get("participant_id") == away_p["id"] and s.get("description") == "CURRENT"), None)
-        if hg is None or ag is None:
-            continue
-
-        # ── Parse closing odds for CLV tracking ───────────────────────────
-        closing_odds = _parse_closing_odds(item.get("odds") or [])
-
-        out[str(item["id"])] = {
-            "home_goals": hg, "away_goals": ag, "state": state,
-            "closing_odds": closing_odds,
-        }
-    return out
-
-
-def _parse_closing_odds(odds_list: list) -> dict:
-    """
-    Parse closing odds from Sportmonks odds data.
-    Returns a dict mapping market names to their closing decimal odds.
-    These are the last odds available before the match started (closing line).
-    """
-    closing = {}
-    if not odds_list:
-        return closing
-
-    raw_odds = odds_list if isinstance(odds_list, list) else (odds_list.get("data", []) if isinstance(odds_list, dict) else [])
-
-    for odd in raw_odds:
-        market_id = odd.get("market_id")
-        label = str(odd.get("label") or "").lower()
-        name = str(odd.get("name") or "").lower()
-        price = float(odd.get("value") or 0.0)
-        if price <= 1.0:
-            continue
-
-        # BUG-04: Collect ALL prices per market, then take MIN (sharpest closing line).
-        # Previously used max() which inflated closing odds and biased CLV downward.
-        # 1X2 Match Winner
-        if market_id == 1:
-            if "home" in label or "1" == label:
-                closing["Home Win"] = min(closing.get("Home Win", 9999), price)
-            elif "draw" in label or "x" == label:
-                closing["Draw"] = min(closing.get("Draw", 9999), price)
-            elif "away" in label or "2" == label:
-                closing["Away Win"] = min(closing.get("Away Win", 9999), price)
-        # Over/Under Goals
-        elif market_id == 80:
-            total = str(odd.get("total") or "")
-            is_over = "over" in label or "over" in name
-            is_under = "under" in label or "under" in name
-            if "1.5" in total:
-                if is_over: closing["Over 1.5 Goals"] = min(closing.get("Over 1.5 Goals", 9999), price)
-                elif is_under: closing["Under 1.5 Goals"] = min(closing.get("Under 1.5 Goals", 9999), price)
-            elif "2.5" in total:
-                if is_over: closing["Over 2.5 Goals"] = min(closing.get("Over 2.5 Goals", 9999), price)
-                elif is_under: closing["Under 2.5 Goals"] = min(closing.get("Under 2.5 Goals", 9999), price)
-            elif "3.5" in total:
-                if is_over: closing["Over 3.5 Goals"] = min(closing.get("Over 3.5 Goals", 9999), price)
-                elif is_under: closing["Under 3.5 Goals"] = min(closing.get("Under 3.5 Goals", 9999), price)
-        # BTTS
-        elif market_id == 14:
-            if "yes" in label or "yes" in name:
-                closing["BTTS"] = min(closing.get("BTTS", 9999), price)
-            elif "no" in label or "no" in name:
-                closing["BTTS No"] = min(closing.get("BTTS No", 9999), price)
-
-    # Clean up sentinel values (9999 means no odds were found)
-    closing = {k: v for k, v in closing.items() if v < 9000}
-    return closing
+# (Sportmonks helper functions removed — using sport-highlights-api instead)
 
 
 def _compute_clv(pick_odds: float, closing_odds: float) -> float:
@@ -419,14 +315,41 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
 
     print(f"[Grading] Fetching results + closing odds for {date_str}...")
     results_map = {}
-    if SM_TOKEN:
-        results_map = _fetch_results_for_date(date_str)
-        print(f"[Grading] Found {len(results_map)} finished fixtures from Sportmonks.")
-    if (not results_map or len(results_map) < 3) and fetch_match_result_free:
-        print(f"[Grading] Using free data fallback for {date_str}...")
-        free_results = _fetch_results_from_free(date_str, predictions)
-        results_map.update(free_results)
-        print(f"[Grading] Total results available: {len(results_map)}")
+    
+    # Use api_football_client for grading
+    try:
+        from api_football_client import fetch_fixtures_by_date
+        af_fixtures = fetch_fixtures_by_date(date_str)
+        if af_fixtures:
+            for item in af_fixtures:
+                fixture = item.get("fixture", {})
+                match_id = str(fixture.get("id") or "")
+                if not match_id:
+                    continue
+                    
+                status = fixture.get("status", {}).get("short")
+                if status not in ["FT", "AET", "PEN"]:
+                    continue
+                    
+                goals = item.get("goals", {})
+                hg = goals.get("home")
+                ag = goals.get("away")
+                
+                if hg is None or ag is None:
+                    continue
+                    
+                try:
+                    results_map[match_id] = {
+                        "home_goals": int(hg),
+                        "away_goals": int(ag),
+                        "state": "Finished",
+                        "closing_odds": {}
+                    }
+                except Exception:
+                    pass
+            print(f"[Grading] Found {len(results_map)} finished fixtures from API-Football.")
+    except Exception as e:
+        print(f"[Grading] API-Football grading fetch failed: {e}", file=sys.stderr)
 
     graded_count = 0
     clv_sum = 0.0
@@ -473,7 +396,7 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
         graded_count += 1
 
     if pending_preds:
-        print(f"[Grading] {len(pending_preds)} matches not found on Sportmonks. Grading unavailable for these matches.")
+        print(f"[Grading] {len(pending_preds)} matches not found on sport-highlights-api or fallback. Grading unavailable for these matches.")
 
     avg_clv = round(clv_sum / clv_count, 4) if clv_count > 0 else None
 

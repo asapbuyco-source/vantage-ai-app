@@ -81,6 +81,7 @@ function buildPythonEnv() {
             process.env.PATH || '',
         ].join(':'),
         // Only forward the API tokens and config that Python needs
+        RAPIDAPI_KEY: process.env.RAPIDAPI_KEY || '',
         SPORTMONKS_API_TOKEN: process.env.SPORTMONKS_API_TOKEN || '',
         SPORTMONKS_CRICKET_API_TOKEN: process.env.SPORTMONKS_CRICKET_API_TOKEN || '',
         API_FOOTBALL_KEY: process.env.API_FOOTBALL_KEY || '',
@@ -576,6 +577,29 @@ export const runLiveMomentumEngine = async () => {
         });
     } catch (e) {
         logger.error(`[QuantService] Live momentum failed: ${e.message}`);
+        return { status: 'error', error: e.message };
+    }
+};
+
+export const runPlayerStatsClient = async () => {
+    logger.info('[QuantService] Running player stats client...');
+    try {
+        const pythonBin = await resolvePythonBin();
+        return new Promise((resolve) => {
+            const py = spawn(pythonBin, ['player_stats_client.py'], {
+                cwd: path.join(__dirname, 'quant'),
+                env: buildPythonEnv(),
+            });
+            py.stdout.on('data', d => logger.info(`[Python|PlayerStats] ${d}`));
+            py.stderr.on('data', d => logger.warn(`[Python|PlayerStats|ERR] ${d}`));
+            py.on('close', code => {
+                if (code === 0) resolve({ status: 'success' });
+                else resolve({ status: 'error', reason: `exit code ${code}` });
+            });
+            py.on('error', err => resolve({ status: 'error', error: err.message }));
+        });
+    } catch (e) {
+        logger.error(`[QuantService] Player stats failed: ${e.message}`);
         return { status: 'error', error: e.message };
     }
 };
