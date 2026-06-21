@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
     Sparkles, TrendingUp, Target, ShieldCheck,
     Flame, RefreshCw, Check, ChevronRight,
@@ -12,9 +13,7 @@ import { TeamLogo } from './TeamLogo';
 import { useAuth } from '../context/AuthContext';
 import { Match, NavigationTab } from '../types';
 
-interface TicketWizardProps {
-    setTab?: (tab: NavigationTab) => void;
-}
+interface TicketWizardProps {}
 
 type RiskLevel = 'low' | 'med' | 'high';
 
@@ -133,7 +132,8 @@ function ticketQualityScore(match: Match): number {
     return confidence + prob * 35 + ev * 120 - Math.max(0, odds - 2.5) * 4;
 }
 
-export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
+export const TicketWizard: React.FC<TicketWizardProps> = () => {
+    const navigate = useNavigate();
     const { t, language } = useAppContext();
     const { predictions, basketballPredictions, cricketPredictions } = useData();
     const { toggleSavedPick, isPickSaved } = useAppContext();
@@ -325,7 +325,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = ({ setTab }) => {
                                             : 'The AI Concierge is an exclusive feature for VIP members.'}
                                     </p>
                                     <button
-                                        onClick={() => setTab && setTab('vip')}
+                                        onClick={() => navigate('/vip')}
                                         className="px-6 py-2.5 bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white text-xs font-bold rounded-full shadow-lg hover:scale-105 transition-transform"
                                     >
                                         {language === 'fr' ? 'Devenir VIP' : 'Upgrade to VIP'}

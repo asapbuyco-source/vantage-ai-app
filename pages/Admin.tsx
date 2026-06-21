@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Shield, Users, Crown, Search, RefreshCw, ChevronLeft, CheckCircle2, XCircle, ShieldAlert, Trash2, StopCircle, Ban, Lock, AlertTriangle, Database, Activity, Server, Zap, Globe, Cpu, ChevronDown, ChevronUp, Play, Coins, Wallet, BookCheck, ImagePlus, Link, Layers, Send, Bell, Gift, Save, BarChart3 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -12,11 +13,10 @@ import { auth } from '../firebaseConfig';
 import { TeamLogo } from '../components/TeamLogo';
 import { adminFetch } from '../services/adminApi';
 
-interface AdminProps {
-    setTab: (tab: NavigationTab) => void;
-}
+interface AdminProps {}
 
-export const Admin: React.FC<AdminProps> = ({ setTab }) => {
+export const Admin: React.FC<AdminProps> = () => {
+    const navigate = useNavigate();
     const { t } = useAppContext();
     const { getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, getPayoutRequests, processPayout } = useAuth();
     const { clearData, generateData, generateAccumulators, generateBasketballData, isSystemGenerating, setIsSystemGenerating, isBasketballGenerating, setIsBasketballGenerating, cancelAnalysis, systemError, predictions } = useData();
@@ -653,7 +653,7 @@ export const Admin: React.FC<AdminProps> = ({ setTab }) => {
             {/* Header */}
             <div className="flex items-center space-x-3">
                 <button
-                    onClick={() => setTab('profile')}
+                    onClick={() => navigate('/profile')}
                     className="p-2 rounded-full hover:bg-white/10 transition-colors"
                 >
                     <ChevronLeft size={24} />

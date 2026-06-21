@@ -301,12 +301,13 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
 
 
     const currentBankroll = vaultDay ? calcBankrollEnd(vaultDay.picks, bankrollStart) : bankrollStart;
-    const pnl = currentBankroll - bankrollStart;
-    const pnlPct = ((pnl / bankrollStart) * 100);
+    const todayPnl = currentBankroll - bankrollStart;
+    const todayPnlPct = bankrollStart > 0 ? (todayPnl / bankrollStart) * 100 : 0;
 
-    // 30-Day Projection Calculation
-    // Use historical average daily ROI, clamped between 0.5% and 3% to be realistic.
-    const averageDailyRoi = currentDay > 1 ? (pnlPct / currentDay) : 1.5;
+    // 30-Day Projection: use all-time average daily ROI from original DEFAULT_BANKROLL,
+    // not today's P&L alone, which gives a near-zero result while picks are pending.
+    const allTimePnlPct = ((currentBankroll - DEFAULT_BANKROLL) / DEFAULT_BANKROLL) * 100;
+    const averageDailyRoi = currentDay > 1 ? (allTimePnlPct / currentDay) : 1.5;
     const effectiveRoi = Math.max(0.5, Math.min(3, averageDailyRoi));
     const projectedBankroll30Days = currentBankroll * Math.pow(1 + (effectiveRoi / 100), 30);
 
@@ -478,11 +479,11 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
 
                 {/* P&L */}
                 <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700">
-                    <div className={`text-sm font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
+                    <div className={`text-sm font-bold font-mono ${todayPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {todayPnl >= 0 ? '+' : ''}{todayPnlPct.toFixed(1)}%
                     </div>
                     <div className="text-[10px] text-gray-500 mt-0.5">
-                        {language === 'fr' ? 'P&L Total' : 'Total P&L'}
+                        {language === 'fr' ? "P&L Aujourd'hui" : "Today's P&L"}
                     </div>
                 </div>
 

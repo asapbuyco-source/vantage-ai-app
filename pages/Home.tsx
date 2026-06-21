@@ -17,9 +17,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { getAppSettings } from '../services/db';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 
-interface HomeProps {
-  setTab: (tab: NavigationTab) => void;
-}
+interface HomeProps {}
 
 type SortKey = 'time' | 'league';
 
@@ -73,7 +71,7 @@ const FormDots = ({ form }: { form?: string }) => {
   );
 };
 
-export const Home: React.FC<HomeProps> = ({ setTab }) => {
+export const Home: React.FC<HomeProps> = () => {
   const navigate = useNavigate();
   const { t, language, setLanguage, theme, toggleTheme, showToast } = useAppContext();
   const { user, userProfile, isAdmin } = useAuth();
@@ -263,7 +261,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         title: language === 'fr' ? `${liveCount} match${liveCount > 1 ? 's' : ''} à suivre maintenant` : `${liveCount} live match${liveCount > 1 ? 'es' : ''} to check now`,
         detail: language === 'fr' ? 'Voir les scores avant de placer ou suivre vos tickets.' : 'Check scores before placing or tracking tickets.',
         action: language === 'fr' ? 'Voir le live' : 'Open live scores',
-        onClick: () => setTab('live'),
+        onClick: () => navigate('/live'),
       };
     }
     if (!topPick) {
@@ -273,7 +271,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         title: language === 'fr' ? `Nouveaux picks à ${scheduledTime}` : `New picks at ${scheduledTimeDisplay}`,
         detail: language === 'fr' ? `Revenez dans ${countdown.h}h ${countdown.m}m.` : `Come back in ${countdown.h}h ${countdown.m}m.`,
         action: language === 'fr' ? 'Voir les scores live' : 'Check live scores',
-        onClick: () => setTab('live'),
+        onClick: () => navigate('/live'),
       };
     }
     if (!isVip) {
@@ -283,7 +281,7 @@ export const Home: React.FC<HomeProps> = ({ setTab }) => {
         title: language === 'fr' ? 'Commencez avec les picks gratuits' : 'Start with today\'s free picks',
         detail: language === 'fr' ? `${freePicksCount} picks ouverts, le reste est réservé au VIP.` : `${freePicksCount} picks unlocked, VIP reveals the full card.`,
         action: language === 'fr' ? 'Voir les picks gratuits' : 'View free picks',
-        onClick: () => setTab('free'),
+        onClick: () => navigate('/free'),
       };
     }
 return {
@@ -294,7 +292,7 @@ return {
       action: language === 'fr' ? 'Voir pourquoi' : 'See why',
       onClick: () => navigate(`/match/${topPick.id}`),
     };
-  }, [loading, liveCount, topPick, isVip, language, scheduledTime, scheduledTimeDisplay, countdown.h, countdown.m, freePicksCount, setTab]);
+  }, [loading, liveCount, topPick, isVip, language, scheduledTime, scheduledTimeDisplay, countdown.h, countdown.m, freePicksCount]);
 
   const sortLabels: Record<SortKey, string> = {
     time: language === 'fr' ? 'Heure' : 'Time',
@@ -420,7 +418,7 @@ return {
         const pred = getPredictionText(topPick);
         return (
 <button
-            onClick={() => !isVip ? setTab('vip') : navigate(`/match/${topPick.id}`)}
+            onClick={() => !isVip ? navigate('/vip') : navigate(`/match/${topPick.id}`)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-vantage-cyan/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all text-left"
           >
             <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
@@ -498,7 +496,7 @@ return {
         <motion.button
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          onClick={() => setTab('live')}
+          onClick={() => navigate('/live')}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-all text-left"
         >
           <span className="relative flex h-3 w-3 shrink-0">
@@ -798,7 +796,7 @@ return {
                                     )}
                                   </>
                                 ) : (
-                                  <div onClick={(e) => { e.stopPropagation(); setTab('vip'); }} className="flex items-center gap-1 text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded cursor-pointer hover:bg-vantage-purple/20 transition-colors">
+                                  <div onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="flex items-center gap-1 text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded cursor-pointer hover:bg-vantage-purple/20 transition-colors">
                                     <Lock size={9} />
                                     {language === 'fr' ? 'Stats Détaillées VIP' : 'Unlock Detailed Stats'}
                                   </div>
@@ -901,7 +899,7 @@ return {
         className="w-full"
       >
         <button
-          onClick={() => setTab('vip')}
+          onClick={() => navigate('/vip')}
           className="w-full relative overflow-hidden rounded-2xl py-4 px-5 flex items-center justify-between group shadow-xl shadow-vantage-purple/30"
           style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #06b6d4 100%)' }}
         >

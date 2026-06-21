@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar, Activity, Pencil, Banknote, Radio } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
@@ -39,11 +40,10 @@ function getPricingForCountry(fcfa: number, countryCode: string = 'other') {
   return { amount: fcfa, symbol: '', code: 'FCFA', isConverted: false, originalValue: fcfa };
 }
 
-interface VIPProps {
-  setTab: (tab: NavigationTab) => void;
-}
+interface VIPProps {}
 
-export const VIP: React.FC<VIPProps> = ({ setTab }) => {
+export const VIP: React.FC<VIPProps> = () => {
+  const navigate = useNavigate();
   const { t, language, showToast } = useAppContext();
   const { predictions, accumulators: dataContextAccumulators, loading, basketballPredictions, cricketPredictions } = useData();
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
@@ -1012,7 +1012,7 @@ export const VIP: React.FC<VIPProps> = ({ setTab }) => {
               {t('auth.login_subtitle') || 'Please log in or create an account to view VIP plans and predictions.'}
             </p>
             <button
-              onClick={() => setTab('profile')}
+              onClick={() => navigate('/profile')}
               className="px-6 py-3 bg-vantage-purple hover:bg-purple-600 text-white font-bold rounded-xl transition-all shadow-lg shadow-vantage-purple/20 flex items-center space-x-2"
             >
               <span>{t('auth.login_btn')}</span>

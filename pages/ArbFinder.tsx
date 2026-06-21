@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, ChevronLeft, RefreshCw, Zap, TrendingUp, AlertTriangle } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { ArbCalculator } from '../components/ArbCalculator';
@@ -9,11 +10,10 @@ import { db } from '../firebaseConfig';
 import { collection, query, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { NavigationTab } from '../types';
 
-interface ArbFinderProps {
-    setTab: (tab: NavigationTab) => void;
-}
+interface ArbFinderProps {}
 
-export const ArbFinder: React.FC<ArbFinderProps> = ({ setTab }) => {
+export const ArbFinder: React.FC<ArbFinderProps> = () => {
+    const navigate = useNavigate();
     const { t, language } = useAppContext();
     const { userProfile } = useAuth();
     
@@ -68,7 +68,7 @@ export const ArbFinder: React.FC<ArbFinderProps> = ({ setTab }) => {
                         : 'The Arbitrage (Surebet) scanner is restricted to VIP subscribers.'}
                 </p>
                 <button 
-                    onClick={() => setTab('vip')}
+                    onClick={() => navigate('/vip')}
                     className="mt-6 px-6 py-3 bg-vantage-cyan text-slate-900 font-bold rounded-full hover:bg-cyan-400 transition"
                 >
                     {language === 'fr' ? 'Devenir VIP' : 'Upgrade to VIP'}
@@ -81,7 +81,7 @@ export const ArbFinder: React.FC<ArbFinderProps> = ({ setTab }) => {
         <div className="space-y-5 pb-24">
             {/* Header */}
             <div className="flex items-center space-x-3">
-                <button onClick={() => setTab('home')} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+                <button onClick={() => navigate('/')} className="p-2 rounded-full hover:bg-white/10 transition-colors">
                     <ChevronLeft size={24} />
                 </button>
                 <div className="flex-1">

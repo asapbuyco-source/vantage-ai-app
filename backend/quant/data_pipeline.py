@@ -264,17 +264,41 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
     )
     reset_call_counts()
 
-    raw_fixtures = fetch_fixtures_by_date(date_str)
-    if not raw_fixtures:
-        print("[DataPipeline] No fixtures found for this date.", file=sys.stderr)
+    target_date = datetime.strptime(date_str, "%Y-%m-%d")
+    next_date_str = (target_date + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    try:
+        raw_fixtures = fetch_fixtures_by_date(date_str) or []
+        next_fixtures = fetch_fixtures_by_date(next_date_str) or []
+    except Exception as e:
+        if "RateLimitError" in str(type(e).__name__):
+            print(f"[DataPipeline] 🛑 FATAL: API-Football Rate Limit Reached! Cannot fetch fixtures for {date_str}.", file=sys.stderr)
+        else:
+            print(f"[DataPipeline] Error fetching fixtures: {e}", file=sys.stderr)
+        return []
+    
+    # Deduplicate in case API returns overlaps
+    seen_ids = set()
+    all_fixtures = []
+    for fix in raw_fixtures + next_fixtures:
+        fid = fix.get("fixture", {}).get("id")
+        if fid and fid not in seen_ids:
+            seen_ids.add(fid)
+            all_fixtures.append(fix)
+
+    if not all_fixtures:
+        print("[DataPipeline] No fixtures found for this date or the next.", file=sys.stderr)
         return []
 
     # ── Step 1: Filter to approved leagues & future time ──────────────
     now_utc = datetime.now(timezone.utc)
-    cutoff_utc = now_utc.replace(hour=3, minute=0, second=0) + timedelta(days=1)
+    
+    # A "betting day" runs from 00:00 Lagos Time to 06:00 Lagos Time the following day (30-hour window)
+    target_start_utc = target_date.replace(tzinfo=LAGOS_TZ).astimezone(timezone.utc)
+    target_end_utc = target_start_utc + timedelta(hours=30)
     
     approved = []
-    for fix in raw_fixtures:
+    for fix in all_fixtures:
         lid = fix.get("league", {}).get("id")
         league_info = get_league_info(lid)
         if not league_info:
@@ -290,9 +314,12 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
                 kick = datetime.fromisoformat(starting_at.replace("Z", "+00:00"))
                 if kick.tzinfo is None:
                     kick = kick.replace(tzinfo=timezone.utc)
-                if kick >= cutoff_utc:
+                
+                # Filter strictly to our extended 30-hour betting day window
+                if not (target_start_utc <= kick < target_end_utc):
                     continue
-                # If starting within 30 mins, skip to ensure odds haven't closed
+                    
+                # If starting within 30 mins from now, skip to ensure odds haven't closed
                 if kick <= (now_utc + timedelta(minutes=30)):
                     continue
             except Exception:

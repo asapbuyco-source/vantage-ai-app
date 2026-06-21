@@ -3,7 +3,7 @@ export const PLAN_CONFIG = {
   weekly: { days: 7, amount: 2000 },
   monthly: { days: 30, amount: 5000 },
   quarterly: { days: 90, amount: 12000 },
-  annual: { days: 365, amount: 40000 },
+  annual: { days: 365, amount: 35000 },
 };
 
 export function assertValidPlan(plan) {

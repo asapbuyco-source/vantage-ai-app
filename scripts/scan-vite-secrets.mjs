@@ -13,12 +13,20 @@ const allowedPrefixes = [
   'VITE_FIREBASE_VAPID_KEY',
 ];
 const sensitive = /(SECRET|TOKEN|API_KEY|USER_TOKEN|SPORTMONKS|FAPSHI|GOOGLE|OPENAI|FOOTBALL|BASKETBALL|JSONBIN)/;
-const skipDirs = new Set(['.git', 'node_modules', 'dist', 'coverage']);
+const skipDirs = new Set(['.git', 'node_modules', 'dist', 'coverage', '.pytest_cache', '__pycache__']);
 const scanExt = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.json', '.env', '.local', '.example']);
 const findings = [];
 
 function walk(dir) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    console.warn(`[SecretScanner] Cannot read directory ${dir}: ${err.message}`);
+    return;
+  }
+
+  for (const entry of entries) {
     if (skipDirs.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
@@ -27,7 +35,13 @@ function walk(dir) {
     }
     const ext = path.extname(entry.name);
     if (!scanExt.has(ext) && !entry.name.startsWith('.env')) continue;
-    const text = fs.readFileSync(full, 'utf8');
+    let text;
+    try {
+      text = fs.readFileSync(full, 'utf8');
+    } catch (err) {
+      console.warn(`[SecretScanner] Cannot read file ${full}: ${err.message}`);
+      continue;
+    }
     for (const match of text.matchAll(envRef)) {
       const name = match[1];
       if (sensitive.test(name) && !allowedPrefixes.some((prefix) => name.startsWith(prefix))) {

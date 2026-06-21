@@ -1,25 +1,34 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, Unlock, Lock, User, Sparkles, History, Radio, Briefcase, Zap } from 'lucide-react';
-import { NavigationTab } from '../types';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
 
-interface BottomNavProps {
-  activeTab: NavigationTab;
-  onTabChange: (tab: NavigationTab) => void;
-}
-
-export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
+export const BottomNav: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { t, language } = useAppContext();
   const { liveCount } = useData();
 
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path === '/') return 'home';
+    if (path === '/free') return 'free';
+    if (path === '/live') return 'live';
+    if (path === '/vip') return 'vip';
+    if (path === '/profile') return 'profile';
+    return 'home';
+  };
+
+  const activeTab = getActiveTab();
+
   const navItems = [
-    { id: 'home', icon: Home, label: t('nav.home') },
-    { id: 'free', icon: Unlock, label: t('nav.free') },
-    { id: 'live', icon: Radio, label: language === 'fr' ? 'En Direct' : 'Live', badge: liveCount || undefined },
-    { id: 'vip', icon: Lock, label: t('nav.vip') },
-    { id: 'profile', icon: User, label: t('nav.profile') },
+    { id: 'home', path: '/', icon: Home, label: t('nav.home') },
+    { id: 'free', path: '/free', icon: Unlock, label: t('nav.free') },
+    { id: 'live', path: '/live', icon: Radio, label: language === 'fr' ? 'En Direct' : 'Live', badge: liveCount || undefined },
+    { id: 'vip', path: '/vip', icon: Lock, label: t('nav.vip') },
+    { id: 'profile', path: '/profile', icon: User, label: t('nav.profile') },
   ] as const;
 
   return (
@@ -42,7 +51,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
           return (
             <button
               key={item.id}
-              onClick={() => onTabChange(item.id as NavigationTab)}
+              onClick={() => navigate(item.path)}
               className={`relative flex flex-col md:flex-row items-center justify-center md:justify-start w-full h-full md:h-14 space-y-0.5 md:space-y-0 md:space-x-4 transition-all duration-200 md:rounded-xl md:px-4 ${isActive && 'md:bg-vantage-cyan/10'
                 }`}
             >

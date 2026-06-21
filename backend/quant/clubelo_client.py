@@ -8,8 +8,6 @@ Used to seed the _elo_cache in data_pipeline.py, overriding the manual club Elo 
 import os
 import sys
 import requests
-import urllib3
-urllib3.disable_warnings()
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -33,7 +31,7 @@ def fetch_all_elos_by_date(date_str: str = None) -> dict[str, float]:
         resp = requests.get(
             f"{CLUBELO_BASE}/{date_str}",
             timeout=30,
-            verify=False,
+            verify=True,
         )
         if resp.status_code != 200:
             print(f"[ClubElo] Fetch error: {resp.status_code}", file=sys.stderr)

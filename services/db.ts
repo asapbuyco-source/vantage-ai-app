@@ -163,6 +163,39 @@ export const getDailyData = async (dateStr: string, bustCache = false): Promise<
     return null;
 };
 
+export const getVipDailyData = async (dateStr: string, bustCache = false): Promise<DailyAnalysis | null> => {
+    const todayKey = getGlobalTodayKey();
+    const CACHE_TTL = dateStr === todayKey ? 30 * 1000 : 5 * 60 * 1000;
+    const cacheKey = `vip_daily_${dateStr}`;
+
+    if (!bustCache) {
+        const cached = cacheGet<DailyAnalysis>(cacheKey);
+        if (cached) return cached;
+    } else {
+        _cache.delete(cacheKey);
+    }
+
+    try {
+        let dailyAnalysis: any = null;
+
+        const quantVipRef = doc(db, "quant_vip", dateStr);
+        const quantVipSnap = await getDoc(quantVipRef);
+        if (quantVipSnap.exists()) {
+            const data = quantVipSnap.data();
+            const rawPreds = data.predictions || [];
+            dailyAnalysis = {
+                matches: rawPreds.map((p: any) => normalizeQuantPrediction(p)),
+                accumulators: data.accumulators || null,
+            };
+            cacheSet(cacheKey, dailyAnalysis, CACHE_TTL);
+            return dailyAnalysis as DailyAnalysis;
+        }
+    } catch (e) {
+        console.warn(`[VIP] Firestore Fetch Error for quant_vip ${dateStr}:`, e);
+    }
+    return null;
+};
+
 
 export const getPredictionsForDate = async (dateStr: string): Promise<Match[] | null> => {
     const data = await getDailyData(dateStr);

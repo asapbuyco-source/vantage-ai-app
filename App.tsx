@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import { verifySelarOrder } from './services/selar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, X, Crown, RefreshCw } from 'lucide-react';
@@ -35,10 +35,8 @@ const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin }
 
 
 function AppContent() {
-  const [activeTab, setActiveTab] = useState<NavigationTab>(() => {
-    const saved = localStorage.getItem('vantage_active_tab');
-    return (saved as NavigationTab) || 'home';
-  });
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [authView, setAuthView] = useState<'landing' | 'login' | 'signup' | 'stats'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -116,25 +114,6 @@ function AppContent() {
     setShowOnboarding(false);
   };
 
-  // Persist tab changes
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('vantage_active_tab', activeTab);
-    } else {
-      // APP-1 FIX: Prevent next unauthenticated user from seeing previous user's tab (like admin)
-      localStorage.removeItem('vantage_active_tab');
-    }
-  }, [activeTab, user]);
-
-  // Listen for custom navigation events
-  useEffect(() => {
-    const handleNav = (e: CustomEvent<NavigationTab>) => {
-      setActiveTab(e.detail);
-    };
-    window.addEventListener('navigate-tab', handleNav as EventListener);
-    return () => window.removeEventListener('navigate-tab', handleNav as EventListener);
-  }, []);
-
   // Capture Referral Code from URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -181,7 +160,7 @@ function AppContent() {
             language === 'fr' ? '✅ Paiement Selar confirmé ! Bienvenue VIP 🎉' : '✅ Selar payment confirmed! Welcome VIP 🎉',
             'success'
           );
-          setActiveTab('vip');
+          navigate('/vip');
         } else if (urlParams.get('selar_ref')) {
           localStorage.removeItem('pendingSelarRef');
           localStorage.removeItem('pendingVipPlan');
@@ -212,7 +191,7 @@ function AppContent() {
             language === 'fr' ? 'Paiement réussi ! Bienvenue VIP. 🎉' : 'Payment successful! Welcome VIP. 🎉',
             'success'
           );
-          setActiveTab('vip');
+          navigate('/vip');
         } else {
           showToast(
             language === 'fr' ? 'Paiement en attente ou échoué.' : 'Payment pending or failed.',
@@ -372,7 +351,7 @@ function AppContent() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setActiveTab('vip')}
+                    onClick={() => navigate('/vip')}
                     className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
                   >
                     {language === 'fr' ? 'Renouveler' : 'Renew'}
@@ -409,7 +388,7 @@ function AppContent() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
-                    onClick={() => { setShowTrialUpsell(false); setActiveTab('vip'); }}
+                    onClick={() => { setShowTrialUpsell(false); navigate('/vip'); }}
                     className="text-[10px] font-black bg-white text-vantage-purple px-2.5 py-1 rounded-lg whitespace-nowrap"
                   >
                     {language === 'fr' ? 'Voir →' : 'Upgrade →'}
@@ -431,36 +410,26 @@ function AppContent() {
           <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 pt-6 min-h-screen pb-24 md:pb-6" style={{ paddingTop: (showRenewalBanner || showTrialUpsell) ? '4rem' : undefined }}>
             <AnimatePresence mode="wait">
               <Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center"><Loader2 className="animate-spin text-vantage-cyan mb-4" size={40} /><p className="text-gray-500 text-sm font-medium animate-pulse">Loading...</p></div>}>
-              {
-                // @ts-ignore
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0, scale: 0.98, filter: 'blur(10px)' }}
-                  animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                  exit={{ opacity: 0, scale: 1.02, filter: 'blur(10px)' }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
-                  className="h-full"
-                >
-                  <ErrorBoundary>
-                    {activeTab === 'home' && <Home setTab={setActiveTab} />}
-                    {activeTab === 'free' && <FreePicks setTab={setActiveTab} />}
-                    {activeTab === 'vip' && <VIP setTab={setActiveTab} />}
-                    {activeTab === 'guide' && <BettingGuide />}
-                    {activeTab === 'profile' && <Profile />}
-                    {activeTab === 'admin' && <Admin setTab={setActiveTab} />}
-                    {activeTab === 'concierge' && <TicketWizard setTab={setActiveTab} />}
-                    {activeTab === 'stats' && <PublicStats setTab={setActiveTab} />}
-                    {activeTab === 'results' && <Results />}
-                    {activeTab === 'arb' && <ArbFinder setTab={setActiveTab} />}
-                    {activeTab === 'live' && <LiveScores setTab={setActiveTab} />}
-                  </ErrorBoundary>
-                </motion.div>
-              }
+                <ErrorBoundary>
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/free" element={<FreePicks />} />
+                    <Route path="/vip" element={<VIP />} />
+                    <Route path="/guide" element={<BettingGuide />} />
+                    <Route path="/profile" element={<Profile />} />
+                    <Route path="/admin" element={<Admin />} />
+                    <Route path="/concierge" element={<TicketWizard />} />
+                    <Route path="/stats" element={<PublicStats />} />
+                    <Route path="/results" element={<Results />} />
+                    <Route path="/arb" element={<ArbFinder />} />
+                    <Route path="/live" element={<LiveScores />} />
+                  </Routes>
+                </ErrorBoundary>
               </Suspense>
             </AnimatePresence>
           </main>
 
-          {activeTab !== 'admin' && <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />}
+          <BottomNav />
 
           {/* Popup priority system: only one at a time */}
           <AnimatePresence>
@@ -470,7 +439,7 @@ function AppContent() {
           </AnimatePresence>
           <BetSlip />
           {/* Trial Offer Popup — only on home/free tabs, only for non-VIP */}
-          {!showOnboarding && (activeTab === 'home' || activeTab === 'free') && (
+          {!showOnboarding && (location.pathname === '/' || location.pathname === '/free') && (
             <TrialOfferPopup
               isVip={!!(userProfile?.isVip || isAdmin)}
               onClaim={() => setShowTrialPayment(true)}
@@ -491,7 +460,7 @@ function AppContent() {
                   language === 'fr' ? 'Filtres Advanced Screener' : 'Advanced Screener Filters',
                 ],
               }}
-              onSuccess={() => { setShowTrialPayment(false); setActiveTab('vip'); }}
+              onSuccess={() => { setShowTrialPayment(false); navigate('/vip'); }}
             />
           )}
           <ToastContainer />

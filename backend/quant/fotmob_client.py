@@ -12,8 +12,6 @@ Source: https://www.fotmob.com/
 import os
 import sys
 import requests
-import urllib3
-urllib3.disable_warnings()
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -28,7 +26,7 @@ def fetch_match_details(match_id: int) -> Optional[dict]:
         resp = requests.get(
             f"{FOTMOB_BASE}/matchDetails?matchId={match_id}",
             timeout=15,
-            verify=False,
+            verify=True,
         )
         if resp.status_code != 200:
             return None
@@ -46,7 +44,7 @@ def fetch_live_matches() -> list:
         resp = requests.get(
             f"{FOTMOB_BASE}/matches?date=current",
             timeout=15,
-            verify=False,
+            verify=True,
         )
         if resp.status_code != 200:
             return []
@@ -70,7 +68,7 @@ def fetch_team_matches(team_id: int, limit: int = 10) -> list:
         resp = requests.get(
             f"{FOTMOB_BASE}/teams?teamId={team_id}&limit={limit}",
             timeout=15,
-            verify=False,
+            verify=True,
         )
         if resp.status_code != 200:
             return []

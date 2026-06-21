@@ -16,6 +16,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isAdmin == true;
     }
 
+    function isVip() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isVip == true;
+    }
+
     function doesNotTouchProtectedFields() {
       let protected = ['isVip', 'vipExpiry', 'vipPlan', 'totalPaid', 'isAdmin', 'isBlocked',
         'referralEarnings', 'lifetimeEarnings', 'referralCount'];
@@ -161,6 +167,12 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if false;
     }
+
+    match /quant_vip/{dateStr} {
+      allow read: if isVip();
+      allow write: if isAdmin();
+    }
+
     match /elo_ratings/{teamId} {
       allow read: if false;
       allow write: if false;

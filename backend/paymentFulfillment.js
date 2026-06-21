@@ -50,7 +50,7 @@ export async function fulfillVipPayment({
     });
 
     if (user.referredBy) {
-      const commission = Math.floor((amount || planCfg.amount) * 0.20);
+      const commission = Math.floor((amount || planCfg.amount) * 0.40);
       if (commission > 0) {
         const referrerRef = db.collection("profiles").doc(user.referredBy);
         tx.update(referrerRef, {

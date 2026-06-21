@@ -211,64 +211,46 @@ def _grade_bet(market: str, home_goals: int, away_goals: int) -> str:
     return "void"  # Unknown market
 
 
-def _fetch_results_from_free(date_str, predictions):
+def _fetch_results_from_football_data_org(date_str: str, predictions: list) -> dict:
     """
-    Fetch match results from football-data.org for grading.
-    Tries fixture_id match first, then falls back to team name matching.
+    Fallback grading data source: football-data.org
+    Free tier, no daily cap. Matches by team name since IDs differ from API-Football.
     """
+    key = os.environ.get("FOOTBALL_DATA_KEY", "")
+    headers = {"X-Auth-Token": key} if key else {}
+    url = f"https://api.football-data.org/v4/matches"
+    params = {"dateFrom": date_str, "dateTo": date_str, "status": "FINISHED"}
     results = {}
-    if not fetch_match_result_free:
-        return results
-
-    fixture_ids_seen = set()
-    for pred in predictions:
-        fid = str(pred.get("fixture_id", ""))
-        if not fid or fid in fixture_ids_seen:
-            continue
-        fixture_ids_seen.add(fid)
-
-        result = fetch_match_result_free(fid)
-        if result:
-            results[fid] = result
-            print(f"[Grading-Free] Fixture {fid} result: {result['home_goals']}-{result['away_goals']}")
-
-    if results:
-        print(f"[Grading-Free] Fetched {len(results)} results by fixture_id")
-        return results
-
-    # Fallback: team name matching
     try:
-        from free_data_client import _fd_get
-        data = _fd_get("/matches", {"dateFrom": date_str, "dateTo": date_str, "status": "FINISHED"})
-        if not data:
+        resp = requests.get(url, headers=headers, params=params, timeout=15)
+        if resp.status_code != 200:
+            print(f"[Grading-FD] football-data.org returned {resp.status_code}", file=sys.stderr)
             return {}
-        matches = data.get("matches", [])
-    except Exception:
-        return {}
+        matches = resp.json().get("matches", [])
+        print(f"[Grading-FD] football-data.org returned {len(matches)} finished matches for {date_str}")
 
-    matched = 0
-    for pred in predictions:
-        home_pred = (pred.get("home_team") or pred.get("homeTeam") or "").lower().strip()
-        away_pred = (pred.get("away_team") or pred.get("awayTeam") or "").lower().strip()
-        if not home_pred or not away_pred:
-            continue
-
+        # Build name-indexed lookup
         for m in matches:
-            home_api = m.get("homeTeam", {}).get("name", "").lower()
-            away_api = m.get("awayTeam", {}).get("name", "").lower()
-            if (home_pred[:5] in home_api or home_api[:5] in home_pred) and \
-               (away_pred[:5] in away_api or away_api[:5] in away_pred):
-                score = m.get("score", {}).get("fullTime", {})
-                hg = score.get("home")
-                ag = score.get("away")
-                if hg is not None and ag is not None:
-                    fid = str(m.get("id", ""))
-                    results[fid] = {"home_goals": hg, "away_goals": ag, "state": "FT", "closing_odds": {}}
-                    matched += 1
-                break
-
-    print(f"[Grading-Free] Team-name matched {matched} results")
+            home_name = m.get("homeTeam", {}).get("name", "").lower().strip()
+            away_name = m.get("awayTeam", {}).get("name", "").lower().strip()
+            score = m.get("score", {}).get("fullTime", {})
+            hg, ag = score.get("home"), score.get("away")
+            if home_name and away_name and hg is not None and ag is not None:
+                # Use a synthetic key — FD IDs are different from API-Football IDs
+                key_str = f"fd_{m.get('id', '')}"
+                results[key_str] = {
+                    "home_goals": int(hg),
+                    "away_goals": int(ag),
+                    "state": "FT",
+                    "closing_odds": {},
+                    "home_name": home_name,
+                    "away_name": away_name,
+                }
+    except Exception as e:
+        print(f"[Grading-FD] football-data.org error: {e}", file=sys.stderr)
     return results
+
+
 
 
 def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
@@ -313,43 +295,69 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
     if not to_grade:
         return {"status": "skipped", "reason": "already_graded", "date": date_str}
 
-    print(f"[Grading] Fetching results + closing odds for {date_str}...")
+    target_date = datetime.strptime(date_str, "%Y-%m-%d")
+    next_date_str = (target_date + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    print(f"[Grading] Fetching results for {date_str} and {next_date_str} (extended window)...")
     results_map = {}
-    
-    # Use api_football_client for grading
+
+    # ── Step 1: Load from local grading cache (populated by morning pipeline) ──
     try:
-        from api_football_client import fetch_fixtures_by_date
-        af_fixtures = fetch_fixtures_by_date(date_str)
-        if af_fixtures:
-            for item in af_fixtures:
-                fixture = item.get("fixture", {})
-                match_id = str(fixture.get("id") or "")
-                if not match_id:
-                    continue
-                    
-                status = fixture.get("status", {}).get("short")
-                if status not in ["FT", "AET", "PEN"]:
-                    continue
-                    
-                goals = item.get("goals", {})
-                hg = goals.get("home")
-                ag = goals.get("away")
-                
-                if hg is None or ag is None:
-                    continue
-                    
-                try:
-                    results_map[match_id] = {
-                        "home_goals": int(hg),
-                        "away_goals": int(ag),
-                        "state": "Finished",
-                        "closing_odds": {}
-                    }
-                except Exception:
-                    pass
-            print(f"[Grading] Found {len(results_map)} finished fixtures from API-Football.")
+        from api_football_client import load_grading_cache
+        res1 = load_grading_cache(date_str) or {}
+        res2 = load_grading_cache(next_date_str) or {}
+        results_map = {**res1, **res2}
+        if results_map:
+            print(f"[Grading] ✅ Loaded {len(results_map)} results from grading cache.")
     except Exception as e:
-        print(f"[Grading] API-Football grading fetch failed: {e}", file=sys.stderr)
+        print(f"[Grading] Cache load error: {e}", file=sys.stderr)
+
+    # ── Step 2: Try API-Football (if cache is empty) ──────────────────────────
+    if not results_map:
+        try:
+            from api_football_client import fetch_fixtures_by_date, RateLimitError
+            af1 = fetch_fixtures_by_date(date_str) or []
+            af2 = fetch_fixtures_by_date(next_date_str) or []
+            af_fixtures = af1 + af2
+            
+            if af_fixtures:
+                for item in af_fixtures:
+                    fixture = item.get("fixture", {})
+                    match_id = str(fixture.get("id") or "")
+                    if not match_id:
+                        continue
+                    status = fixture.get("status", {}).get("short")
+                    if status not in ["FT", "AET", "PEN"]:
+                        continue
+                    goals = item.get("goals", {})
+                    hg = goals.get("home")
+                    ag = goals.get("away")
+                    if hg is None or ag is None:
+                        continue
+                    try:
+                        results_map[match_id] = {
+                            "home_goals": int(hg),
+                            "away_goals": int(ag),
+                            "state": "FT",
+                            "closing_odds": {},
+                            "home_name": item.get("teams", {}).get("home", {}).get("name", ""),
+                            "away_name": item.get("teams", {}).get("away", {}).get("name", ""),
+                        }
+                    except Exception:
+                        pass
+                print(f"[Grading] Found {len(results_map)} finished fixtures from API-Football.")
+        except Exception as e:
+            err_str = str(e)
+            if "rate limit" in err_str.lower() or "request limit" in err_str.lower():
+                print(f"[Grading] ⚠️  API-Football rate limited. Switching to football-data.org fallback.", file=sys.stderr)
+            else:
+                print(f"[Grading] API-Football fetch failed: {e}", file=sys.stderr)
+
+    # ── Step 3: Fallback to football-data.org (free, no daily cap) ───────────
+    if not results_map:
+        res1 = _fetch_results_from_football_data_org(date_str, predictions) or {}
+        res2 = _fetch_results_from_football_data_org(next_date_str, predictions) or {}
+        results_map = {**res1, **res2}
 
     graded_count = 0
     clv_sum = 0.0
@@ -395,8 +403,43 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
 
         graded_count += 1
 
-    if pending_preds:
-        print(f"[Grading] {len(pending_preds)} matches not found on sport-highlights-api or fallback. Grading unavailable for these matches.")
+    # ── Fallback: team-name match against football-data.org results ──────────
+    # Runs after the ID-based lookup. Matches predictions that weren't found by fixture_id.
+    if pending_preds and results_map:
+        # Build a name-based lookup from the results_map
+        name_lookup = {}
+        for fid, r in results_map.items():
+            home_n = r.get("home_name", "").lower().strip()
+            away_n = r.get("away_name", "").lower().strip()
+            if home_n and away_n:
+                name_lookup[(home_n, away_n)] = r
+
+        still_pending = []
+        for fid, pred in pending_preds:
+            home_pred = (pred.get("home_team") or "").lower().strip()
+            away_pred = (pred.get("away_team") or "").lower().strip()
+            matched = None
+            for (home_n, away_n), r in name_lookup.items():
+                if (home_pred[:5] in home_n or home_n[:5] in home_pred) and \
+                   (away_pred[:5] in away_n or away_n[:5] in away_pred):
+                    matched = r
+                    break
+            if matched:
+                hg = matched["home_goals"]
+                ag = matched["away_goals"]
+                market = pred.get("bet_type", "")
+                pred["status"] = _grade_bet(market, hg, ag)
+                pred["score"] = f"{hg}-{ag}"
+                pred["graded_at"] = datetime.now(timezone.utc).isoformat()
+                pred["graded_by"] = "team_name_match"
+                graded_count += 1
+                print(f"[Grading] ✅ Team-name match: {pred.get('home_team')} vs {pred.get('away_team')} -> {pred['score']}")
+            else:
+                still_pending.append((fid, pred))
+        pending_preds = still_pending
+
+    graded_count += 0  # already incremented above
+
 
     avg_clv = round(clv_sum / clv_count, 4) if clv_count > 0 else None
 

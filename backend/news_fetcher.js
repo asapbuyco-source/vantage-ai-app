@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
 
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || '96329fba36msh293dfd95c0b7196p102286jsndc9aa594e4c3';
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const RAPIDAPI_HOST = 'football-news11.p.rapidapi.com';
 
 // League IDs for football-news11
@@ -9,6 +9,12 @@ const LEAGUE_IDS = [52, 47, 54, 53, 55]; // Generic top leagues
 
 export const fetchAndStoreNews = async () => {
     console.log('[NewsFetcher] Starting daily news fetch...');
+
+    if (!RAPIDAPI_KEY) {
+        console.error('[NewsFetcher] FATAL: RAPIDAPI_KEY environment variable is not set. Cannot fetch news.');
+        return { status: 'error', error: 'RAPIDAPI_KEY not configured' };
+    }
+
     try {
         const db = admin.firestore();
         let allNews = [];

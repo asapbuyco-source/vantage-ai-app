@@ -9,9 +9,7 @@ import { useAppContext } from '../context/AppContext';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
-interface LiveScoresProps {
-  setTab?: (tab: NavigationTab) => void;
-}
+interface LiveScoresProps {}
 
 const STATE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   '1H':  { label: '1ST HALF',  color: 'text-green-400',  bg: 'bg-green-400/15 border-green-400/30' },
@@ -172,7 +170,7 @@ const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number; language: string 
   );
 };
 
-export const LiveScores: React.FC<LiveScoresProps> = ({ setTab }) => {
+export const LiveScores: React.FC<LiveScoresProps> = () => {
   const { language } = useAppContext();
   const [matches, setMatches] = useState<LiveMatch[]>([]);
   const [loading, setLoading] = useState(true);

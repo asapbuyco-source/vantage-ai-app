@@ -5,7 +5,7 @@ import { Match, AccumulatorSet, WinRateStats } from '../types';
 import {
     deleteTodaysPredictions, getGlobalTodayKey,
     saveTodaysPredictions, saveAccumulatorsForDate,
-    getDailyData, getWinRateStats, getTodaysBasketballPredictions, getTodaysCricketPredictions, saveBasketballPredictions, normalizeQuantPrediction,
+    getDailyData, getVipDailyData, getWinRateStats, getTodaysBasketballPredictions, getTodaysCricketPredictions, saveBasketballPredictions, normalizeQuantPrediction,
 } from '../services/db';
 import { db } from '../firebaseConfig';
 import { generateSmartAccumulators } from '../services/gemini';
@@ -39,7 +39,7 @@ const DEFAULT_WIN_RATES: WinRateStats = { daily: 0, weekly: 0, monthly: 0, strea
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { user, loading: authLoading, isAdmin } = useAuth();
+    const { user, loading: authLoading, isAdmin, userProfile } = useAuth();
     const [activeDate, setActiveDate] = useState<string>(getGlobalTodayKey());
     const [predictions, setPredictions] = useState<Match[]>([]);
     const [rawFixtures, setRawFixtures] = useState<Match[]>([]);
@@ -124,7 +124,11 @@ const fetchFromDB = async (bypassCache = false) => {
             if (mountedRef.current) { setLoading(true); setSystemError(null); }
 
             try {
-                const dailyData = await getDailyData(targetDate);
+                // Use VIP data source if user is VIP, otherwise use public data
+                const isVipUser = userProfile?.isVip === true || isAdmin;
+                const dailyData = isVipUser
+                    ? await getVipDailyData(targetDate)
+                    : await getDailyData(targetDate);
 
                 if (signal.aborted) return;
 
@@ -255,22 +259,28 @@ const fetchFromDB = async (bypassCache = false) => {
     // Real-time listener for today's predictions (scores + statuses)
     useEffect(() => {
         if (!user || authLoading) return;
-        
+
+        const isVipUser = userProfile?.isVip === true || isAdmin;
+        const collectionName = isVipUser ? 'quant_vip' : 'quant_predictions';
+
         const unsub = onSnapshot(
-            doc(db, 'quant_predictions', todayKey),
+            doc(db, collectionName, todayKey),
             (snap) => {
                 if (!snap.exists() || !mountedRef.current) return;
                 const data = snap.data();
                 const matches = (data.predictions || []).map(normalizeQuantPrediction);
                 if (matches.length > 0) {
                     setPredictions(matches);
+                    if (data.accumulators) {
+                        setAccumulators(data.accumulators);
+                    }
                 }
             },
             (err) => console.warn('[DataContext] Prediction listener error:', err)
         );
-        
+
         return () => unsub();
-    }, [user, authLoading, todayKey]);
+    }, [user, authLoading, todayKey, userProfile?.isVip]);
 
     return (
         <DataContext.Provider value={{

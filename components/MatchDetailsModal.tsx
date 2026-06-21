@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { X, Activity, Scale, ShieldAlert, Zap, Loader2, Trophy, Crosshair, Target, BarChart3, Newspaper, Users, CheckCircle2 } from 'lucide-react';
-import { NavigationTab, Match, MatchNews } from '../types';
+import { Match, MatchNews } from '../types';
 import { getLiveOddsFromDB, getH2HFromDB, getMatchNewsFromDB, getMatchNewsForDate, getFixtureLineupsFromDB, getMatchStatsFromDB, getMatchFactsFromDB, LineupPlayer, TeamForm, H2HRecord, MatchOdds, InjuryReport, MatchStatsData, MatchFact } from '../services/sportsData';
 import { TeamLogo } from './TeamLogo';
 import { Sparkline } from './Sparkline';
@@ -11,10 +12,10 @@ import { useAuth } from '../context/AuthContext';
 interface Props {
     match: Match | null;
     onClose: () => void;
-    setTab?: (tab: NavigationTab) => void;
 }
 
-export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) => {
+export const MatchDetailsModal: React.FC<Props> = ({ match, onClose }) => {
+    const navigate = useNavigate();
     const { language } = useAppContext();
     // useAuth MUST be called here at the component level — never inside render callbacks
     const { userProfile, isAdmin } = useAuth();
@@ -218,18 +219,16 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                                                             : 'Unlock this AI analysis, the exact success probability, and our precise prediction by becoming a VIP member.'}
                                                     </p>
 
-                                                    {setTab && (
-                                                        <button
+                                                    <button
                                                             onClick={() => {
                                                                 onClose();
-                                                                setTab('vip');
+                                                                navigate('/vip');
                                                             }}
                                                             className="mt-4 flex items-center gap-2 px-6 py-3 bg-vantage-purple hover:bg-purple-600 active:scale-95 transition-all text-white rounded-xl font-bold shadow-lg shadow-vantage-purple/20"
                                                         >
                                                             <Zap size={18} className="text-yellow-400 fill-yellow-400" />
                                                             {language === 'fr' ? 'DEVENIR ALPHA' : 'BECOME ALPHA'}
                                                         </button>
-                                                    )}
                                                 </div>
                                             );
                                         }
@@ -644,12 +643,12 @@ export const MatchDetailsModal: React.FC<Props> = ({ match, onClose, setTab }) =
                     </div>
 
                     {/* VIP CTA Footer — only show to NON-VIP users */}
-                    {setTab && !isVipUser && (
+                    {!isVipUser && (
                         <div className="p-4 border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5 shrink-0">
                             <button
                                 onClick={() => {
                                     onClose();
-                                    setTab('vip');
+                                    navigate('/vip');
                                 }}
                                 className="w-full flex items-center justify-center gap-2 py-3 bg-vantage-purple hover:bg-purple-600 text-white rounded-xl font-bold shadow-lg shadow-vantage-purple/20 transition-all active:scale-95"
                             >

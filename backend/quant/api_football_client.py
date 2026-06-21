@@ -18,6 +18,10 @@ from functools import lru_cache
 API_KEY = os.environ.get("API_FOOTBALL_KEY", "")
 BASE_URL = "https://v3.football.api-sports.io"
 
+class RateLimitError(Exception):
+    """Raised when API-Football returns a daily rate limit error."""
+    pass
+
 _session = requests.Session()
 if API_KEY:
     _session.headers.update({"x-apisports-key": API_KEY})
@@ -57,12 +61,20 @@ def _get(endpoint: str, params: dict = None, max_retries: int = 2, call_type: st
             resp = _session.get(url, params=params or {}, timeout=15)
             if resp.status_code == 200:
                 data = resp.json()
+                # Detect rate-limit error — API returns HTTP 200 with errors dict
+                if data.get("errors"):
+                    err_str = str(data["errors"])
+                    if any(kw in err_str.lower() for kw in ["limit", "request", "quota", "upgrade"]):
+                        print(f"[API-Football] ⚠️  Rate limit hit on {endpoint}: {err_str}", file=sys.stderr)
+                        raise RateLimitError(f"API-Football rate limit: {err_str}")
                 if "response" in data:
                     return data
             print(f"[API-Football] Error {resp.status_code} on {endpoint}: {resp.text[:200]}", file=sys.stderr)
+        except RateLimitError:
+            raise  # propagate immediately — no point retrying
         except Exception as e:
             print(f"[API-Football] Request exception on {endpoint}: {e}", file=sys.stderr)
-        
+
         time.sleep(1)
     return None
 
@@ -121,7 +133,57 @@ def _h2h_cache_key(home_id: int, away_id: int) -> str:
 def fetch_fixtures_by_date(date_str: str) -> list:
     """Fetch all fixtures for a given date (YYYY-MM-DD)."""
     data = _get("fixtures", {"date": date_str}, call_type="fixtures")
-    return data.get("response", []) if data else []
+    fixtures = data.get("response", []) if data else []
+    # Persist finished results to disk so grading engine can reuse without extra API calls
+    if fixtures:
+        _save_grading_cache(date_str, fixtures)
+    return fixtures
+
+def _save_grading_cache(date_str: str, fixtures: list):
+    """Write finished fixture results to a local cache file for the grading engine."""
+    results = {}
+    for item in fixtures:
+        fixture = item.get("fixture", {})
+        match_id = str(fixture.get("id") or "")
+        if not match_id:
+            continue
+        status = fixture.get("status", {}).get("short")
+        if status not in ["FT", "AET", "PEN"]:
+            continue
+        goals = item.get("goals", {})
+        hg, ag = goals.get("home"), goals.get("away")
+        if hg is None or ag is None:
+            continue
+        results[match_id] = {
+            "home_goals": int(hg),
+            "away_goals": int(ag),
+            "state": "FT",
+            "closing_odds": {},
+            "home_name": item.get("teams", {}).get("home", {}).get("name", ""),
+            "away_name": item.get("teams", {}).get("away", {}).get("name", ""),
+        }
+    if results:
+        cache_file = os.path.join(_CACHE_DIR, f"grading_results_{date_str}.json")
+        try:
+            with open(cache_file, "w") as f:
+                json.dump(results, f)
+            print(f"[API-Football] ✅ Grading cache saved: {len(results)} finished fixtures for {date_str}")
+        except Exception as e:
+            print(f"[API-Football] Grading cache write error: {e}", file=sys.stderr)
+
+def load_grading_cache(date_str: str) -> dict:
+    """Load previously cached finished fixture results for the grading engine."""
+    cache_file = os.path.join(_CACHE_DIR, f"grading_results_{date_str}.json")
+    if not os.path.exists(cache_file):
+        return {}
+    try:
+        with open(cache_file, "r") as f:
+            data = json.load(f)
+        print(f"[API-Football] ✅ Grading cache loaded: {len(data)} finished fixtures for {date_str}")
+        return data
+    except Exception as e:
+        print(f"[API-Football] Grading cache read error: {e}", file=sys.stderr)
+        return {}
 
 def fetch_live_fixtures() -> list:
     """Fetch all currently live fixtures."""

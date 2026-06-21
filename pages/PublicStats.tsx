@@ -1,17 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { BarChart3, TrendingUp, ShieldCheck, Trophy, Users, Star, ArrowUpRight, CheckCircle2, History, Loader2 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useData } from '../context/DataContext';
 import { useAppContext } from '../context/AppContext';
-import { NavigationTab } from '../types';
 import { getUserCount, getWinRateStats } from '../services/db';
 
-interface PublicStatsProps {
-    setTab?: (tab: NavigationTab) => void;
-}
+interface PublicStatsProps {}
 
-export const PublicStats: React.FC<PublicStatsProps> = ({ setTab }) => {
+export const PublicStats: React.FC<PublicStatsProps> = () => {
+    const navigate = useNavigate();
     const { winRateStats, predictions } = useData();
     const { language } = useAppContext();
     const [memberCount, setMemberCount] = useState<{ total: number; vip: number } | null>(null);
@@ -178,16 +177,14 @@ export const PublicStats: React.FC<PublicStatsProps> = ({ setTab }) => {
                 </GlassCard>
             </div>
 
-            {/* View Full Archive CTA — only if logged in (setTab provided) */}
-            {setTab && (
-                <button
-                    onClick={() => setTab('results')}
-                    className="w-full py-4 bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-transform"
-                >
-                    <History size={18} />
-                    {language === 'fr' ? 'Voir l\'Archive Complète des Résultats' : 'View Full Results Archive'}
-                </button>
-            )}
+            {/* View Full Archive CTA */}
+            <button
+                onClick={() => navigate('/results')}
+                className="w-full py-4 bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-transform"
+            >
+                <History size={18} />
+                {language === 'fr' ? 'Voir l\'Archive Complète des Résultats' : 'View Full Results Archive'}
+            </button>
         </div>
     );
 };

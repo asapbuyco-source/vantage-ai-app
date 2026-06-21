@@ -15,9 +15,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { NavigationTab, Match } from '../types';
 import { getAppSettings } from '../services/db';
 
-interface FreePicksProps {
-  setTab: (tab: NavigationTab) => void;
-}
+interface FreePicksProps {}
 
 // ── Form indicator dots ─────────────────────────────────────────────────────
 const FormDots = ({ form }: { form: string }) => {
@@ -59,7 +57,7 @@ const getCountdownToNextPicks = (scheduleTime = '19:00') => {
 
 
 
-export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
+export const FreePicks: React.FC<FreePicksProps> = () => {
   const navigate = useNavigate();
   const { t, language } = useAppContext();
   const { predictions, loading } = useData();
@@ -253,7 +251,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
                 <div className="flex flex-col">
                   <span className="text-[10px] text-gray-500 uppercase tracking-wide">{t('free.pred_label')}</span>
                   <button
-                    onClick={() => setTab('vip')}
+                    onClick={() => navigate('/vip')}
                     className="mt-1 px-3 py-1.5 bg-vantage-purple/10 hover:bg-vantage-purple/20 border border-vantage-purple/30 text-vantage-purple text-xs font-bold rounded-full transition-all flex items-center gap-1.5"
                   >
                     <Lock size={10} />
@@ -347,7 +345,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
         {/* @ts-ignore */}
         <motion.button
           whileTap={{ scale: 0.98 }}
-          onClick={() => setTab('vip')}
+          onClick={() => navigate('/vip')}
           className="w-full mx-0 px-5 py-4 flex items-center justify-between group"
           style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #06b6d4 100%)' }}
         >
@@ -401,7 +399,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
             </div>
             {!isVip && predictions.length > 0 && (
               <button
-                onClick={() => setTab('vip')}
+                onClick={() => navigate('/vip')}
                 className="shrink-0 px-3 py-2 rounded-xl bg-vantage-purple text-white text-xs font-black"
               >
                 {language === 'fr' ? 'VIP' : 'Unlock'}
@@ -425,7 +423,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
               </span>
             </div>
             {!isVip && (
-              <button onClick={() => setTab('vip')} className="flex items-center gap-1 text-[10px] font-bold text-vantage-purple hover:text-purple-400 transition-colors">
+              <button onClick={() => navigate('/vip')} className="flex items-center gap-1 text-[10px] font-bold text-vantage-purple hover:text-purple-400 transition-colors">
                 <Lock size={9} />
                 {language === 'fr' ? 'Voir tout' : 'View all'}
                 <ChevronRight size={10} />
@@ -483,7 +481,7 @@ export const FreePicks: React.FC<FreePicksProps> = ({ setTab }) => {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
-                onClick={() => setTab('vip')}
+                onClick={() => navigate('/vip')}
                 className="w-full py-4 px-5 rounded-2xl flex items-center justify-between group shadow-xl shadow-vantage-purple/20 relative overflow-hidden"
                 style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #06b6d4 100%)' }}
               >

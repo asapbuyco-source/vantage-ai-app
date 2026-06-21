@@ -3,11 +3,9 @@ import admin from 'firebase-admin';
 import {
     runBasketballPipeline,
     runCricketPipeline,
-    runLiveMomentumEngine,
     runQuantGrading,
     runQuantPerformance,
     runQuantPipeline,
-    runPlayerStatsClient,
     runLineupSyncer,
 } from './quantService.js';
 
@@ -208,29 +206,9 @@ export const initScheduler = () => {
     tasks.set('telegram', telegramTask);
     console.log('📱 Telegram broadcast scheduled at 09:00 Lagos');
 
-    // Live score updates every 2 minutes during match hours
-    const liveScoreTask = cron.schedule('*/2 * * * *', async () => {
-        console.log('[Scheduler] Running live score update...');
-        try {
-            await runLiveMomentumEngine();
-        } catch (e) {
-            console.error('[Scheduler] Live score update error:', e.message);
-        }
-    }, { timezone: 'Africa/Lagos' });
-    tasks.set('liveScore', liveScoreTask);
-    console.log('⚡ Live score updates every 2 minutes');
-
-    // Player stats analysis every 5 minutes during match hours
-    const statsTask = cron.schedule('*/5 * * * *', async () => {
-        console.log('[Scheduler] Running player stats analysis...');
-        try {
-            await runPlayerStatsClient();
-        } catch (e) {
-            console.error('[Scheduler] Player stats analysis error:', e.message);
-        }
-    }, { timezone: 'Africa/Lagos' });
-    tasks.set('stats', statsTask);
-    console.log('📈 Player stats analysis every 5 minutes');
+    // NOTE: Live momentum engine and player stats client have been disabled.
+    // They consumed ~15,000+ API-Football credits/day running every 2-5 minutes,
+    // leaving no quota for grading. Predictions and grading are the priority.
 
     // Tomorrow's fixtures at 21:00 Lagos time
     const tomorrowTask = cron.schedule('0 21 * * *', async () => {
@@ -283,9 +261,8 @@ export const initScheduler = () => {
 
 export const stopScheduler = () => {
     const allTasks = [
-        'sync', 'selar', 'liveScore', 'stats', 'tomorrow',
-        'basketball', 'cricket', 'blog', 'telegram', 'quant', 'quantGrading', 'repair',
-        'lineup', 'football', 'accumulator'
+        'football', 'basketball', 'cricket', 'quant', 'quantGrading',
+        'blog', 'telegram', 'tomorrow', 'accumulator', 'lineupSync', 'repair'
     ];
     for (const name of allTasks) {
         const task = tasks.get(name);

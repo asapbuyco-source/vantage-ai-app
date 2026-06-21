@@ -540,7 +540,46 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
     _safe_print(f"[QuantPipeline] 🎰 Generated {total_accas} named accumulators across 4 tiers.")
 
     # ── Step 11: Save to Firestore ─────────────────────────────────────────
+    # Create two payloads: public (basic data) and VIP (full analysis)
+    predictions_public = [
+        {
+            "fixture_id": p["fixture_id"],
+            "league": p["league"],
+            "league_id": p["league_id"],
+            "league_tier": p["league_tier"],
+            "home_team": p["home_team"],
+            "home_team_id": p["home_team_id"],
+            "away_team": p["away_team"],
+            "away_team_id": p["away_team_id"],
+            "home_team_logo": p["home_team_logo"],
+            "away_team_logo": p["away_team_logo"],
+            "provider_source": p["provider_source"],
+            "kickoff_utc": p["kickoff_utc"],
+            "kickoff_local": p["kickoff_local"],
+            "category": p["category"],
+            "value_rank": p["value_rank"],
+            "status": p["status"],
+            "score": p["score"],
+            "sport": p["sport"],
+            "model": p["model"],
+            "timestamp": p["timestamp"],
+        }
+        for p in predictions
+    ]
+
     doc = {
+        "date": date_str,
+        "status": "completed",
+        "predictions": predictions_public,
+        "matches_analyzed": len(matches),
+        "value_bets_found": len([p for p in predictions if p["value_rank"] in ("high", "medium")]),
+        "total_analyzed": len(predictions),
+        "generated_at": _now_iso(),
+        "generated_by": "quant_pipeline",
+    }
+
+    # VIP document with full analysis data (EV, Kelly, model probabilities, etc.)
+    vip_doc = {
         "date": date_str,
         "status": "completed",
         "predictions": predictions,
@@ -557,7 +596,9 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
         if db:
             try:
                 db.collection("quant_predictions").document(date_str).set(doc)
+                db.collection("quant_vip").document(date_str).set(vip_doc)
                 _safe_print(f"[QuantPipeline] 💾 Saved {len(predictions)} match analyses to Firestore for {date_str}")
+                _safe_print(f"[QuantPipeline] 💾 Saved VIP analyses to quant_vip/{date_str}")
                 # Update Elo ratings
                 save_dirty_ratings()
             except Exception as e:
