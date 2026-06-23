@@ -7,6 +7,7 @@ import {
     runQuantPerformance,
     runQuantPipeline,
     runLineupSyncer,
+    runArbScanner
 } from './quantService.js';
 
 const tasks = new Map();
@@ -237,6 +238,19 @@ export const initScheduler = () => {
     }, { timezone: 'Africa/Lagos' });
     tasks.set('lineupSync', lineupTask);
     console.log('📋 Lineup sync scheduled at 11:00 Lagos');
+
+    // Arb Scanner every 15 minutes
+    const arbScannerTask = cron.schedule('*/15 * * * *', async () => {
+        console.log('[Scheduler] Running 15-minute Arb Scanner...');
+        try {
+            await runArbScanner();
+            console.log('[Scheduler] Arb Scanner complete.');
+        } catch (e) {
+            console.error('[Scheduler] Arb Scanner error:', e.message);
+        }
+    });
+    tasks.set('arbScanner', arbScannerTask);
+    console.log('🔍 Arb Scanner scheduled every 15 minutes');
 
     // Repair corrupted predictions at 23:30 Lagos time
     const repairTask = cron.schedule('30 23 * * *', async () => {

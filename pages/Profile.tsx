@@ -833,16 +833,7 @@ const shareReferral = () => {
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>
-                    <button
-                        onClick={() => navigate('/arb')}
-                        className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border-b border-slate-200 dark:border-white/5"
-                    >
-                        <div className="flex items-center space-x-3 text-slate-700 dark:text-gray-300">
-                            <Zap size={20} />
-                            <span className="font-medium">{language === 'fr' ? 'Recherche d\'Arbitrage' : 'Arb Finder'}</span>
-                        </div>
-                        <ChevronRight size={18} className="text-gray-400" />
-                    </button>
+
                     <button
                         onClick={() => setShowSettings(true)}
                         className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border-b border-slate-200 dark:border-white/5"

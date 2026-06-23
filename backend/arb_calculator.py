@@ -6,6 +6,7 @@ import difflib
 import logging
 import re
 from itertools import product
+from concurrent.futures import ThreadPoolExecutor
 
 # Ensure scrapers can be imported
 sys.path.append(os.path.join(os.path.dirname(__file__), 'scrapers'))
@@ -70,12 +71,27 @@ class ArbCalculator:
         return matched_events
 
     def find_arbs(self):
-        logging.info("Fetching odds from bookmakers...")
-        sources = {
-            '1XBet': self.xbet.fetch_odds()[:50],
-            'BetPawa': self.betpawa.fetch_odds()[:50],
-        }
+        logging.info("Fetching odds from bookmakers concurrently...")
+        
+        sources = {}
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_xbet = executor.submit(self.xbet.fetch_odds)
+            # Default is "cm" for Cameroon
+            future_betpawa = executor.submit(self.betpawa.fetch_odds)
+            
+            try:
+                sources['1XBet'] = future_xbet.result()
+            except Exception as e:
+                logging.error(f"1XBet fetch failed: {e}")
+                sources['1XBet'] = []
+                
+            try:
+                sources['BetPawa'] = future_betpawa.result()
+            except Exception as e:
+                logging.error(f"BetPawa fetch failed: {e}")
+                sources['BetPawa'] = []
 
+        logging.info(f"Got {len(sources['1XBet'])} matches from 1XBet, {len(sources['BetPawa'])} from BetPawa")
         matched_events = self._build_event_map(sources)
         arbs_found = []
 
@@ -144,33 +160,39 @@ class ArbCalculator:
         logging.info("Push complete.")
 
     def run(self):
-        consecutive_errors = 0
-        MAX_ERRORS = 5
-        
-        while True:
-            try:
-                self._delete_stale_arbs()
+        try:
+            self._delete_stale_arbs()
+            
+            arbs = self.find_arbs()
+            
+            # Filter for actual profitable arbs (> 0.5% profit to cover hidden friction)
+            profitable_arbs = [a for a in arbs if a['profit_margin'] > 0.5]
+            
+            if profitable_arbs:
+                logging.info(f"FOUND {len(profitable_arbs)} PROFITABLE ARBS!")
+                for a in profitable_arbs:
+                    logging.info(f"ARB: {a['profit_margin']}% -> {a['match']}")
+                self.push_to_firestore(profitable_arbs)
+            else:
+                logging.info("No profitable arbs found in this cycle.")
                 
-                arbs = self.find_arbs()
-                if arbs:
-                    logging.info(f"FOUND {len(arbs)} ARBS!")
-                    for a in arbs:
-                        logging.info(f"ARB: {a['profit_margin']}% -> {a['match']}")
-                    self.push_to_firestore(arbs)
-                else:
-                    logging.info("No arbs found in this cycle.")
-                    
-                consecutive_errors = 0
-            except Exception as e:
-                consecutive_errors += 1
-                logging.error(f"Cycle error ({consecutive_errors}/{MAX_ERRORS}): {str(e)}")
-                if consecutive_errors >= MAX_ERRORS:
-                    logging.critical("Circuit breaker triggered — sleeping 10 minutes")
-                    time.sleep(600)
-                    consecutive_errors = 0
-                    
-            logging.info("Sleeping for 60 seconds...")
-            time.sleep(60)
+            # Log health to Firestore
+            if self.db:
+                self.db.collection('scraper_health').document('arb_scanner').set({
+                    'last_run': time.time(),
+                    'arbs_found': len(profitable_arbs),
+                    'status': 'ok'
+                })
+                
+        except Exception as e:
+            logging.error(f"Scanner error: {str(e)}")
+            if self.db:
+                self.db.collection('scraper_health').document('arb_scanner').set({
+                    'last_run': time.time(),
+                    'status': 'error',
+                    'error': str(e)
+                })
+            sys.exit(1)
 
 if __name__ == "__main__":
     engine = ArbCalculator()

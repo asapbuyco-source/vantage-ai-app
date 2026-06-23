@@ -628,3 +628,26 @@ export const runLineupSyncer = async (dateStr = null) => {
         return { status: 'error', error: e.message };
     }
 };
+
+export const runArbScanner = async () => {
+    logger.info('[QuantService] Running Arb Scanner...');
+    try {
+        const pythonBin = await resolvePythonBin();
+        return new Promise((resolve) => {
+            const py = spawn(pythonBin, ['api_football_arb_scraper.py'], {
+                cwd: path.join(__dirname, 'scrapers'),
+                env: buildPythonEnv(),
+            });
+            py.stdout.on('data', d => logger.info(`[Python|ArbScanner] ${d}`));
+            py.stderr.on('data', d => logger.warn(`[Python|ArbScanner|ERR] ${d}`));
+            py.on('close', code => {
+                if (code === 0) resolve({ status: 'success' });
+                else resolve({ status: 'error', reason: `exit code ${code}` });
+            });
+            py.on('error', err => resolve({ status: 'error', error: err.message }));
+        });
+    } catch (e) {
+        logger.error(`[QuantService] Arb Scanner failed: ${e.message}`);
+        return { status: 'error', error: e.message };
+    }
+};

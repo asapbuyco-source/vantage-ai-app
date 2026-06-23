@@ -17,6 +17,7 @@ export const BottomNav: React.FC = () => {
     if (path === '/free') return 'free';
     if (path === '/live') return 'live';
     if (path === '/vip') return 'vip';
+    if (path === '/arb') return 'arb';
     if (path === '/profile') return 'profile';
     return 'home';
   };
@@ -28,6 +29,7 @@ export const BottomNav: React.FC = () => {
     { id: 'free', path: '/free', icon: Unlock, label: t('nav.free') },
     { id: 'live', path: '/live', icon: Radio, label: language === 'fr' ? 'En Direct' : 'Live', badge: liveCount || undefined },
     { id: 'vip', path: '/vip', icon: Lock, label: t('nav.vip') },
+    { id: 'arb', path: '/arb', icon: Zap, label: 'Arbs' },
     { id: 'profile', path: '/profile', icon: User, label: t('nav.profile') },
   ] as const;
 
