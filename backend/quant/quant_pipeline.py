@@ -564,7 +564,9 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
             "model": p["model"],
             "timestamp": p["timestamp"],
             # Restored for free UI rendering (blurred on frontend for VIP items)
-            "prediction_en": p.get("prediction_en"),
+            "prediction": p.get("prediction"),
+            "prediction_en": p.get("prediction_en", p.get("prediction")),
+            "prediction_fr": p.get("prediction_fr", p.get("prediction")),
             "odds": p.get("odds"),
             "probability": p.get("probability"),
             "confidence": p.get("confidence"),

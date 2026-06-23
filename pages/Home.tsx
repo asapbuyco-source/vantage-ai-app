@@ -670,8 +670,8 @@ return {
               <AnimatePresence>
                 {groupedMatches[groupKey].slice(0, visibleCount).map((match, idx) => {
                   const cat = (CATEGORY_CONFIG as any)[match.category] || CATEGORY_CONFIG.value;
-                  const hasConfidence = match.confidence && match.confidence > 0;
-                  const hasOdds = match.odds && match.odds > 1;
+                  const hasConfidence = Boolean(match.confidence && match.confidence > 0);
+                  const hasOdds = Boolean(match.odds && match.odds > 1);
                   const hasPrediction = match.prediction_en || match.prediction;
                   const isFreeMatch = freeMatchIds.has(match.id);
                   const isUnlocked = isVip || isFreeMatch;
