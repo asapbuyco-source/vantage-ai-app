@@ -497,12 +497,7 @@ def fetch_matches(date_str: str | None = None) -> list[MatchData]:
               f"(xG: {md.expected_goals_home:.2f}-{md.expected_goals_away:.2f} [{xg_source}])")
 
     # ── Step 6: Grade past matches (Feedback Loop) ──────────────
-    try:
-        from grading_engine import process_gradable_matches
-        print("[DataPipeline] Initiating grading engine for past matches...")
-        process_gradable_matches()
-    except Exception as e:
-        print(f"[DataPipeline] Grading engine error: {e}", file=sys.stderr)
+    # Grading is handled by a separate cron job in scheduler.js (22:00 Lagos)
 
     log_api_summary(fixtures_analyzed=len(matches))
     return matches

@@ -199,9 +199,9 @@ export const initScheduler = () => {
     const telegramTask = cron.schedule('0 9 * * *', async () => {
         console.log('[Scheduler] Running Telegram broadcast...');
         await triggerTelegramBroadcast();
-        // Process any pending Telegram alerts
-        const { processPendingTelegramAlerts } = await import('./telegramService.js');
-        await processPendingTelegramAlerts();
+        // Lineup alerts disabled per user request
+        // const { processPendingTelegramAlerts } = await import('./telegramService.js');
+        // await processPendingTelegramAlerts();
     }, { timezone: 'Africa/Lagos' });
     tasks.set('telegram', telegramTask);
     console.log('📱 Telegram broadcast scheduled at 09:00 Lagos');

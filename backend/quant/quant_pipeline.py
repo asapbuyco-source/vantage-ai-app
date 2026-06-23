@@ -563,6 +563,17 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
             "sport": p["sport"],
             "model": p["model"],
             "timestamp": p["timestamp"],
+            # Restored for free UI rendering (blurred on frontend for VIP items)
+            "prediction_en": p.get("prediction_en"),
+            "odds": p.get("odds"),
+            "probability": p.get("probability"),
+            "confidence": p.get("confidence"),
+            "analysis_en": p.get("analysis_en"),
+            "analysis_fr": p.get("analysis_fr"),
+            "home_form": p.get("home_form"),
+            "away_form": p.get("away_form"),
+            "expected_goals_home": p.get("expected_goals_home"),
+            "expected_goals_away": p.get("expected_goals_away"),
         }
         for p in predictions
     ]

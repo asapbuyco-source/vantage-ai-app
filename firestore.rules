@@ -173,6 +173,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Arbitrage opportunities — VIP only, backend writes only
+    match /arbitrage_bets/{docId} {
+      allow read: if isVip();
+      allow write: if false;
+    }
+
     match /elo_ratings/{teamId} {
       allow read: if false;
       allow write: if false;

@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LegalDoc } from '../components/LegalDoc';
 import { AppGuide } from '../components/AppGuide';
 import { ensureReferralCode } from '../services/db';
+import { useNavigate } from 'react-router-dom';
 
 interface ProfileProps {
     initialMode?: 'login' | 'signup';
@@ -18,6 +19,7 @@ interface ProfileProps {
 export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
     const { t, language, setLanguage, theme, toggleTheme } = useAppContext();
     const { user, userProfile, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, error, clearError, loading: authLoading, requestPayout } = useAuth();
+    const navigate = useNavigate();
 
     const [isLoginMode, setIsLoginMode] = useState(true);
     const [isForgotMode, setIsForgotMode] = useState(false);
@@ -812,7 +814,7 @@ const shareReferral = () => {
 
                 <GlassCard className="!p-0 overflow-hidden">
                     <button
-                        onClick={() => window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'results' }))}
+                        onClick={() => navigate('/results')}
                         className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border-b border-slate-200 dark:border-white/5"
                     >
                         <div className="flex items-center space-x-3 text-slate-700 dark:text-gray-300">
@@ -822,7 +824,7 @@ const shareReferral = () => {
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>
                     <button
-                        onClick={() => window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'concierge' }))}
+                        onClick={() => navigate('/concierge')}
                         className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border-b border-slate-200 dark:border-white/5"
                     >
                         <div className="flex items-center space-x-3 text-vantage-cyan">
@@ -832,7 +834,7 @@ const shareReferral = () => {
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>
                     <button
-                        onClick={() => window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'arb' }))}
+                        onClick={() => navigate('/arb')}
                         className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border-b border-slate-200 dark:border-white/5"
                     >
                         <div className="flex items-center space-x-3 text-slate-700 dark:text-gray-300">
@@ -875,7 +877,7 @@ const shareReferral = () => {
 
                 {userProfile?.isAdmin && (
                     <GlassCard className="!p-0 overflow-hidden border-red-500/30">
-                        <a href="/?tab=admin" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('navigate-tab', { detail: 'admin' })); }} className="w-full flex items-center justify-between p-4 hover:bg-red-500/5 transition-colors">
+                        <a href="/admin" onClick={(e) => { e.preventDefault(); navigate('/admin'); }} className="w-full flex items-center justify-between p-4 hover:bg-red-500/5 transition-colors">
                             <div className="flex items-center space-x-3 text-red-500">
                                 <ShieldAlert size={20} />
                                 <span className="font-bold">{t('profile.admin_panel')}</span>
