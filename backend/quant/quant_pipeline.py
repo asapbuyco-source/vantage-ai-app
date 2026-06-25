@@ -44,7 +44,7 @@ from datetime import datetime, timezone, timedelta
 
 # ── Local imports ─────────────────────────────────────────────────────────────
 from data_pipeline import fetch_matches, MatchData, TeamStats
-from poisson_model import compute_probabilities, compute_dynamic_rho
+from poisson_model import compute_probabilities, compute_dynamic_rho, top_scorelines, compute_score_grid
 from elo_rating import load_ratings_from_firestore, match_probabilities as elo_probs, save_dirty_ratings, get_team_rating, is_derby_match, DEFAULT_ELO
 from form_model import compute_form_probabilities
 from probability_engine import compute_combined, CombinedProbabilities
@@ -511,6 +511,8 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                     }
                     for b in approved_bets[:5]
                 ],
+                # Most likely scorelines from Poisson grid (for UI display)
+                "top_scorelines": top_scorelines(compute_score_grid(mu_home, mu_away, rho), n=4),
             }
             predictions.append(pred)
 

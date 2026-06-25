@@ -17,6 +17,7 @@ import { getTomorrowFixturesFromDB } from '../services/sportsData';
 import { PortfolioOnboarding } from '../components/PortfolioOnboarding';
 import { Sparkline } from '../components/Sparkline';
 import { Screener } from '../components/Screener';
+import { MatchCardAlpha } from '../components/MatchCardAlpha';
 
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
@@ -742,142 +743,25 @@ export const VIP: React.FC<VIPProps> = () => {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     <AnimatePresence>
-                      {filteredQuantPredictions.map((match, idx) => {
-                        const ev = match.expected_value ?? 0;
-                        const kelly = match.kelly_stake ?? 0;
-                        const xgH = match.expected_goals_home ?? 0;
-                        const xgA = match.expected_goals_away ?? 0;
-                        const modelConf = match.model_confidence ?? 0;
-                        const evColor = ev >= 0.10 ? 'text-emerald-500' : ev >= 0.05 ? 'text-yellow-500' : 'text-orange-500';
-                        const category = match.category || 'value';
-                        const cfg = CAT_CONFIG[category as keyof typeof CAT_CONFIG] || CAT_CONFIG.value;
-                        
-                        // Dynamic Kelly Sizing (Abstracted to percentage to avoid conflict with Vault)
-                        
-                        // Mock Sparkline Data
-                        const sparklineData = Array.from({ length: 15 }, () => 1.5 + Math.random() * 0.5);
-
-                        return (
-                          <motion.div
-                            key={match.fixture_id ?? String(idx)}
-                            initial={{ opacity: 0, y: 16 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ delay: idx * 0.05, duration: 0.3 }}
-                          >
-                            <div className={`relative overflow-hidden rounded-2xl border bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 h-full flex flex-col ${'border-l-emerald-500'} border-slate-200 dark:border-white/10`}>
-                              {/* Clickable header row */}
-                              <button
-                                onClick={() => {
-                                  const cardId = String(match.fixture_id || idx);
-                                  setExpandedCards(prev => {
-                                    const next = new Set(prev);
-                                    if (next.has(cardId)) next.delete(cardId);
-                                    else next.add(cardId);
-                                    return next;
-                                  });
-                                }}
-                                className="w-full px-4 pt-3 pb-2 flex items-center justify-between text-left hover:bg-black/3 dark:hover:bg-white/3 transition-colors"
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest truncate max-w-[80px]">{match.league}</span>
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shrink-0">⚡ VANTAGE</span>
-                                  <span className="text-[9px] text-gray-400 flex items-center gap-0.5 shrink-0"><Clock size={9} />{match.kickoff_local || match.time}</span>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">{match.bet_type || match.prediction}</span>
-                                  <span className="text-sm font-bold font-mono text-green-500">{match.confidence ?? Math.round((match.probability ?? 0) * 100)}%</span>
-                                  <ChevronDown size={14} className={`text-gray-400 transition-transform ${expandedCards.has(String(match.fixture_id || idx)) ? 'rotate-180' : ''}`} />
-                                </div>
-                              </button>
-
-                              {/* Teams row */}
-                              <div className="flex items-center justify-between px-4 py-2">
-                                <div className="flex items-center gap-2 w-5/12 min-w-0">
-                                  <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0">
-                                    <TeamLogo src={match.home_team_logo || match.homeTeamLogo} teamName={match.home_team || match.homeTeam} className="w-6 h-6" />
-                                  </div>
-                                  <span className="text-xs font-bold text-slate-900 dark:text-white truncate">{match.home_team || match.homeTeam}</span>
-                                </div>
-                                <div className="flex flex-col items-center shrink-0">
-                                  <span className="text-[9px] font-mono text-gray-400">VS</span>
-                                  {xgH > 0 && <span className="text-[8px] font-mono text-gray-500">{xgH.toFixed(1)}-{xgA.toFixed(1)}</span>}
-                                </div>
-                                <div className="flex items-center justify-end gap-2 w-5/12 min-w-0">
-                                  <span className="text-xs font-bold text-slate-900 dark:text-white text-right truncate">{match.away_team || match.awayTeam}</span>
-                                  <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center border border-slate-200 dark:border-white/5 shrink-0">
-                                    <TeamLogo src={match.away_team_logo || match.awayTeamLogo} teamName={match.away_team || match.awayTeam} className="w-6 h-6" />
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* EV + Kelly + Odds row — always visible */}
-                              <div className="mx-4 mb-3 flex items-center gap-2 flex-wrap">
-                                <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 ${evColor}`}>
-                                  EV: +{(match.ev_pct ?? (ev * 100)).toFixed(1)}%
-                                </span>
-                                <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                  Kelly: {kelly.toFixed(1)}%
-                                </span>
-                                {Number(match.odds) > 1 && (
-                                  <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300">
-                                    {Number(match.odds).toFixed(2)}x
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Expanded details section */}
-                              <AnimatePresence>
-                                {expandedCards.has(String(match.fixture_id || idx)) && (
-                                  <motion.div
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: 'auto', opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.25 }}
-                                    className="overflow-hidden"
-                                  >
-                                    <div className="mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 space-y-3">
-                                      {/* Mock Sparkline */}
-                                      <div className="bg-black/20 rounded-lg p-2 border border-white/5 relative h-12 flex items-center">
-                                        <div className="absolute left-2 top-2 text-[8px] text-gray-500 uppercase tracking-widest font-bold z-10">Line Movement</div>
-                                        <div className="w-full h-full flex items-end">
-                                          <Sparkline data={sparklineData} width={300} height={24} color="#00E5FF" strokeWidth={1.5} className="w-full" />
-                                        </div>
-                                      </div>
-
-                                      {/* Model agreement bar */}
-                                      {modelConf > 0 && (
-                                        <div>
-                                          <div className="flex justify-between text-[8px] text-gray-400 mb-0.5">
-                                            <span>Model Agreement</span>
-                                            <span className="font-mono">{Math.round(modelConf * 100)}%</span>
-                                          </div>
-                                          <div className="h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
-                                            <motion.div
-                                              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
-                                              initial={{ width: 0 }}
-                                              animate={{ width: `${modelConf * 100}%` }}
-                                              transition={{ duration: 1, delay: 0.3 }}
-                                            />
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Copy button */}
-                                      <button
-                                        onClick={() => handleCopy(`${match.home_team || match.homeTeam} vs ${match.away_team || match.awayTeam} \u2014 ${match.bet_type || match.prediction} (${match.confidence ?? Math.round((match.probability ?? 0) * 100)}%)`, String(match.fixture_id || idx))}
-                                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 text-gray-500 hover:text-vantage-cyan transition-colors text-[10px] font-bold"
-                                      >
-                                        {copiedId === String(match.fixture_id || idx) ? <><Check size={10} /> Copied!</> : <><Copy size={10} /> Copy Signal</>}
-                                      </button>
-                                    </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          </motion.div>
-                        );
-                      })}
+                      {filteredQuantPredictions.map((match, idx) => (
+                        <MatchCardAlpha
+                          key={match.fixture_id ?? String(idx)}
+                          match={match}
+                          idx={idx}
+                          isExpanded={expandedCards.has(String(match.fixture_id || idx))}
+                          onToggle={() => {
+                            const cardId = String(match.fixture_id || idx);
+                            setExpandedCards(prev => {
+                              const next = new Set(prev);
+                              if (next.has(cardId)) next.delete(cardId);
+                              else next.add(cardId);
+                              return next;
+                            });
+                          }}
+                          onCopy={handleCopy}
+                          copiedId={copiedId}
+                        />
+                      ))}
                     </AnimatePresence>
                   </div>
                 )}

@@ -27,7 +27,7 @@ export const initiateFapshiPayment = async (
   email?: string
 ): Promise<FapshiInitResponse> => {
   const backendUrl = getBackendUrl();
-  const redirectUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
+  const redirectUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}${window.location.search}`;
 
   const response = await fetch(`${backendUrl}/api/payments/fapshi/initiate`, {
     method: 'POST',

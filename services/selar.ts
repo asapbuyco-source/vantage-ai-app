@@ -76,6 +76,27 @@ export const verifySelarOrder = async (
         const data = await response.json();
 
         if (response.status === 202) {
+            console.log('[Selar] Payment pending webhook — retrying in 2s...');
+            // Race condition: user arrived before Selar webhook fired.
+            // Retry up to 5 times (10s total) for the webhook to process.
+            for (let attempt = 0; attempt < 5; attempt++) {
+                await new Promise(r => setTimeout(r, 2000));
+                const retryResp = await fetch(`${backendUrl}/api/payments/selar/verify`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: await getFirebaseBearer(),
+                    },
+                    body: JSON.stringify({ reference }),
+                });
+                if (retryResp.status === 202) continue;
+                if (retryResp.ok) {
+                    localStorage.removeItem('pendingSelarRef');
+                    localStorage.removeItem('pendingVipPlan');
+                    return { success: true };
+                }
+                break;
+            }
             return { success: false };
         }
 
