@@ -102,6 +102,13 @@ MARKET_TO_PROB = {
     "BTTS No": "btts_no",
     # OPP-01: BTTS + Over 2.5 composite — bookmakers price this inefficiently
     "BTTS + Over 2.5": "btts_and_over25",
+    # First Half markets
+    "Over 0.5 FH Goals": "fh_over05",
+    "Over 1.5 FH Goals": "fh_over15",
+    "BTTS FH": "fh_btts",
+    "1H Home Win": "fh_home_win",
+    "1H Draw": "fh_draw",
+    "1H Away Win": "fh_away_win",
 }
 
 # Market → odds field in OddsData

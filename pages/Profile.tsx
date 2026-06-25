@@ -30,9 +30,7 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
     const [resetSent, setResetSent] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [legalPage, setLegalPage] = useState<'privacy' | 'terms' | null>(null);
-    const [showAppGuide, setShowAppGuide] = useState(false);
     const [copiedCode, setCopiedCode] = useState(false);
-    const [learnExpanded, setLearnExpanded] = useState<string | null>(null);
 
     // Payout State
     const [showPayoutModal, setShowPayoutModal] = useState(false);
@@ -206,13 +204,7 @@ const shareReferral = () => {
         );
     }
 
-    if (showAppGuide) {
-        return (
-            <div className="pb-24 relative min-h-screen">
-                <AppGuide onBack={() => setShowAppGuide(false)} />
-            </div>
-        );
-    }
+    // Removed: AppGuide + Learn Center → moved to /learn
 
     // --- UNAUTHENTICATED VIEW ---
     if (!user) {
@@ -701,111 +693,6 @@ const shareReferral = () => {
                         {(userProfile?.totalPaid || 0).toLocaleString()} <span className="text-xs text-vantage-purple/50">FCFA</span>
                     </span>
                 </GlassCard>
-            </div>
-
-            {/* ── Learn Center Accordion ── */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest ml-1 flex items-center gap-2">
-                <BookOpen size={14} />
-                {language === 'fr' ? 'Centre d\'Apprentissage' : 'Learn Center'}
-              </h3>
-              <button 
-                onClick={() => setShowAppGuide(true)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-vantage-cyan/10 rounded-xl border border-vantage-cyan/30 hover:bg-vantage-cyan/20 transition-colors mb-2"
-              >
-                <div className="flex items-center gap-3">
-                  <PlayCircle size={16} className="text-vantage-cyan" />
-                  <span className="text-xs font-bold text-vantage-cyan flex-1 text-left">
-                    {language === 'fr' ? 'Tutoriel Interactif de l\'Application' : 'How to Use App (Interactive Tutorial)'}
-                  </span>
-                </div>
-                <ArrowRight size={14} className="text-vantage-cyan" />
-              </button>
-              {[
-                {
-                  id: 'ev',
-                  icon: <TrendingUp size={16} className="text-emerald-400" />,
-                  title_en: 'What is +EV Betting?',
-                  title_fr: 'Qu\'est-ce que le pari +VE ?',
-                  content_en: 'A bet is +EV when the odds offered are better than the true probability. Example: A coin flip is 50% — fair odds are 2.00. If a bookie offers 2.10, you have +EV. Over thousands of bets, +EV compounds your edge. Vantage AI finds these gaps automatically.',
-                  content_fr: 'Un pari est +VE quand les cotes offertes sont meilleures que la vraie probabilité. Exemple : Un pile ou face est à 50% — les cotes équitables sont 2.00. Si un bookmaker offre 2.10, vous avez +VE. Sur des milliers de paris, +VE s\'accumule.',
-                },
-                {
-                  id: 'kelly',
-                  icon: <Target size={16} className="text-vantage-cyan" />,
-                  title_en: 'Kelly Criterion — Stake Sizing',
-                  title_fr: 'Kelly Criterion — Taille des enjeux',
-                  content_en: 'Kelly determines how much of your bankroll to risk based on your edge and the odds. The formula: Edge ÷ (Odds - 1). We multiply by your risk profile (0.25x, 0.5x, or 1.0x) to keep bets sustainable. Never bet more than Kelly suggests — that\'s how you survive variance.',
-                  content_fr: 'Kelly détermine combien de votre bankroll risquer selon votre avantage et les cotes. La formule : Avantage ÷ (Cotes - 1). Nous multiplions par votre profil de risque (0.25x, 0.5x, ou 1.0x) pour garder les paris durables. Ne pariez jamais plus que ce que Kelly suggère.',
-                },
-                {
-                  id: 'model',
-                  icon: <BarChart3 size={16} className="text-vantage-purple" />,
-                  title_en: 'How Vantage AI Works',
-                  title_fr: 'Comment fonctionne Vantage AI',
-                  content_en: 'Step 1: We pull live data from football & basketball leagues. Step 2: Our statistical models calculate expected goals (xG) and win probabilities for every matchup. Step 3: We compare those probabilities against bookie odds — wherever there\'s a gap, we flag it as +EV. Step 4: Signals are ranked by confidence and shown to you. No guesswork.',
-                  content_fr: 'Étape 1 : Nous collectons les données en direct des ligues de football et basketball. Étape 2 : Nos modèles statistiques calculent les buts attendus (xG) et les probabilités de victoire. Étape 3 : Nous comparons ces probabilités aux cotes des bookmakers — là où il y a un écart, nous le signalons comme +VE. Étape 4 : Les signaux sont classés par confiance et vous sont présentés.',
-                },
-                {
-                  id: 'variance',
-                  icon: <Activity size={16} className="text-amber-400" />,
-                  title_en: 'Long-Term Variance',
-                  title_fr: 'La Variance à Long Terme',
-                  content_en: 'A 60% win-rate model will lose 8-10 bets in a row — regularly. That\'s not bad luck, that\'s math. Short term looks random; long term looks like the model. The key: bet consistently, never chase losses, trust the process. Variance is the price of edge.',
-                  content_fr: 'Un modèle à 60% de victoires perdra 8-10 paris de suite — régulièrement. Ce n\'est pas la malchance, c\'est les maths. Le court terme semble aléatoire ; le long terme ressemble au modèle. La clé : pariez régulièrement, ne courez jamais après les pertes, faites confiance au processus.',
-                },
-                {
-                  id: 'videos',
-                  icon: <PlayCircle size={16} className="text-blue-400" />,
-                  title_en: 'Educational Videos',
-                  title_fr: 'Vidéos Éducatives',
-                  content_en: 'Learn more about sports analytics and betting strategy:',
-                  content_fr: 'Apprenez-en plus sur l\'analytics sportive et la stratégie de pari :',
-                  isVideo: true,
-                },
-              ].map(module => (
-                <div key={module.id}>
-                  <button
-                    onClick={() => setLearnExpanded(learnExpanded === module.id ? null : module.id)}
-                    className="w-full flex items-center gap-3 px-4 py-3 bg-slate-100 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
-                  >
-                    {module.icon}
-                    <span className="text-xs font-bold text-slate-700 dark:text-gray-200 flex-1 text-left">
-                      {language === 'fr' ? (module as any).title_fr : module.title_en}
-                    </span>
-                    <ChevronRight size={14} className={`text-gray-400 transition-transform ${learnExpanded === module.id ? 'rotate-90' : ''}`} />
-                  </button>
-                  <AnimatePresence>
-                    {learnExpanded === module.id && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="mt-1 p-3 bg-white/40 dark:bg-white/3 rounded-xl border border-slate-200 dark:border-white/5">
-                          <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
-                            {language === 'fr' ? (module as any).content_fr : module.content_en}
-                          </p>
-                          {module.isVideo && (
-                            <div className="mt-2 space-y-2">
-                              <a href="https://www.youtube.com/results?search_query=sports+betting+expected+value" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors">
-                                <ExternalLink size={12} className="text-vantage-cyan" />
-                                <span className="text-[10px] font-bold text-slate-700 dark:text-gray-300">Expected Value in Sports Betting</span>
-                              </a>
-                              <a href="https://www.youtube.com/results?search_query=kelly+criterion+betting" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors">
-                                <ExternalLink size={12} className="text-vantage-cyan" />
-                                <span className="text-[10px] font-bold text-slate-700 dark:text-gray-300">Kelly Criterion Explained</span>
-                              </a>
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
             </div>
 
             {/* Menu List */}

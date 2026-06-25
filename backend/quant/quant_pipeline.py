@@ -45,6 +45,7 @@ from datetime import datetime, timezone, timedelta
 # ── Local imports ─────────────────────────────────────────────────────────────
 from data_pipeline import fetch_matches, MatchData, TeamStats
 from poisson_model import compute_probabilities, compute_dynamic_rho, top_scorelines, compute_score_grid
+import math as _math
 from elo_rating import load_ratings_from_firestore, match_probabilities as elo_probs, save_dirty_ratings, get_team_rating, is_derby_match, DEFAULT_ELO
 from form_model import compute_form_probabilities
 from probability_engine import compute_combined, CombinedProbabilities
@@ -65,6 +66,13 @@ MAX_PREDICTIONS_PER_DAY = 100
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _corner_over_prob(total_xg: float, line: float) -> float:
+    """Poisson probability of exceeding a corner line given expected total xG."""
+    lam = max(0.5, total_xg * 3.7)
+    cdf = sum(_math.exp(-lam) * (lam ** k) / _math.factorial(k) for k in range(int(line) + 1))
+    return round(max(0.0, min(1.0, 1.0 - cdf)), 4)
 
 
 def _safe_print(text: str, file=sys.stdout):
@@ -484,6 +492,13 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 "btts_prob": round(probs.btts, 4),
                 "double_chance_1x": round(probs.double_chance_1x, 4),
                 "double_chance_x2": round(probs.double_chance_x2, 4),
+                # First Half markets
+                "fh_over05_prob": round(probs.fh_over05, 4),
+                "fh_over15_prob": round(probs.fh_over15, 4),
+                "fh_btts_prob": round(probs.fh_btts, 4),
+                "fh_home_win_prob": round(probs.fh_home_win, 4),
+                "fh_draw_prob": round(probs.fh_draw, 4),
+                "fh_away_win_prob": round(probs.fh_away_win, 4),
                 # CAL-02: All three per-market confidence scores
                 "result_confidence": round(probs.result_confidence, 4),
                 "goals_confidence": round(probs.goals_confidence, 4),
@@ -513,6 +528,10 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 ],
                 # Most likely scorelines from Poisson grid (for UI display)
                 "top_scorelines": top_scorelines(compute_score_grid(mu_home, mu_away, rho), n=4),
+                # Corner prediction (xG-correlated — r≈0.65, ~3.7 corners per expected goal)
+                "expected_corners": round((mu_home + mu_away) * 3.7, 1),
+                "over85_corners_prob": round(_corner_over_prob(mu_home + mu_away, 8.5), 4),
+                "over95_corners_prob": round(_corner_over_prob(mu_home + mu_away, 9.5), 4),
             }
             predictions.append(pred)
 
@@ -586,6 +605,12 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
             "away_form": p.get("away_form"),
             "expected_goals_home": p.get("expected_goals_home"),
             "expected_goals_away": p.get("expected_goals_away"),
+            "expected_corners": p.get("expected_corners"),
+            "over85_corners_prob": p.get("over85_corners_prob"),
+            "over95_corners_prob": p.get("over95_corners_prob"),
+            "fh_over05_prob": p.get("fh_over05_prob"),
+            "fh_over15_prob": p.get("fh_over15_prob"),
+            "fh_btts_prob": p.get("fh_btts_prob"),
         }
         for p in predictions
     ]

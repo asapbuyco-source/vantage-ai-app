@@ -16,6 +16,8 @@ import { NavigationTab, Match, Sport } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { getAppSettings } from '../services/db';
 import { PWAInstallButton } from '../components/PWAInstallButton';
+import { TicketWizard } from '../components/TicketWizard';
+import { MotionDiv } from '../components/MotionDiv';
 
 interface HomeProps {}
 
@@ -92,6 +94,8 @@ export const Home: React.FC<HomeProps> = () => {
     return () => clearInterval(timer);
   }, [scheduledTime]);
   const [visibleCount, setVisibleCount] = useState(15);
+  const [showTicket, setShowTicket] = useState(false);
+  const [ticketPicks, setTicketPicks] = useState<Array<{ id: string; home: string; away: string; pick: string; odds: number }>>([]);
   useEffect(() => {
     getAppSettings().then(s => {
       if (s.footballGenTime) setScheduledTime(s.footballGenTime);
@@ -152,6 +156,20 @@ export const Home: React.FC<HomeProps> = () => {
       ? basketballPredictions
       : cricketPredictions;
 
+  const freeMatchIds = useMemo(() => {
+    const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
+    const sorted = [...predictions].sort((a, b) => {
+      const rankDiff = (rankPriority[b.value_rank] || 0) - (rankPriority[a.value_rank] || 0);
+      if (rankDiff !== 0) return rankDiff;
+      return (b.confidence || 0) - (a.confidence || 0);
+    });
+    const topPicks = sorted.filter(m =>
+      m.value_rank === 'high' || m.value_rank === 'medium' ||
+      m.category === 'safe' || m.category === 'value'
+    );
+    return new Set(topPicks.slice(0, freePicksCount).map(m => m.id));
+  }, [predictions, freePicksCount]);
+
   const filteredMatches = useMemo(() => {
     let result = [...fixturePool];
 
@@ -200,22 +218,16 @@ export const Home: React.FC<HomeProps> = () => {
         }); 
         break;
     }
+    // Push free picks to the top for non-VIP users
+    if (!isVip && freeMatchIds.size > 0) {
+      result.sort((a, b) => {
+        const aFree = freeMatchIds.has(a.id) ? 0 : 1;
+        const bFree = freeMatchIds.has(b.id) ? 0 : 1;
+        return aFree - bFree;
+      });
+    }
     return result;
-  }, [fixturePool, searchQuery, sortKey]);
-
-  const freeMatchIds = useMemo(() => {
-    const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
-    const sorted = [...predictions].sort((a, b) => {
-      const rankDiff = (rankPriority[b.value_rank] || 0) - (rankPriority[a.value_rank] || 0);
-      if (rankDiff !== 0) return rankDiff;
-      return (b.confidence || 0) - (a.confidence || 0);
-    });
-    const topPicks = sorted.filter(m =>
-      m.value_rank === 'high' || m.value_rank === 'medium' ||
-      m.category === 'safe' || m.category === 'value'
-    );
-    return new Set(topPicks.slice(0, freePicksCount).map(m => m.id));
-  }, [predictions, freePicksCount]);
+  }, [fixturePool, searchQuery, sortKey, isVip, freeMatchIds]);
 
   const groupedMatches = useMemo(() => {
     if (sortKey !== 'league') return { 'All Matches': filteredMatches };
@@ -242,57 +254,6 @@ export const Home: React.FC<HomeProps> = () => {
     });
     return ranked.find(m => m.value_rank === 'high' || m.value_rank === 'medium') || ranked[0];
   }, [predictions]);
-
-  const commandCenter = useMemo(() => {
-    if (loading) {
-      return {
-        tone: 'cyan',
-        label: language === 'fr' ? 'Synchronisation' : 'Syncing',
-        title: language === 'fr' ? 'Chargement des signaux du jour' : "Loading today's signals",
-        detail: language === 'fr' ? 'Nous préparons votre tableau de bord.' : 'Preparing your dashboard.',
-        action: language === 'fr' ? 'Patientez' : 'Please wait',
-        onClick: undefined as undefined | (() => void),
-      };
-    }
-    if (liveCount > 0) {
-      return {
-        tone: 'red',
-        label: language === 'fr' ? 'Action en direct' : 'Live action',
-        title: language === 'fr' ? `${liveCount} match${liveCount > 1 ? 's' : ''} à suivre maintenant` : `${liveCount} live match${liveCount > 1 ? 'es' : ''} to check now`,
-        detail: language === 'fr' ? 'Voir les scores avant de placer ou suivre vos tickets.' : 'Check scores before placing or tracking tickets.',
-        action: language === 'fr' ? 'Voir le live' : 'Open live scores',
-        onClick: () => navigate('/live'),
-      };
-    }
-    if (!topPick) {
-      return {
-        tone: 'amber',
-        label: language === 'fr' ? 'Prochain cycle' : 'Next cycle',
-        title: language === 'fr' ? `Nouveaux picks à ${scheduledTime}` : `New picks at ${scheduledTimeDisplay}`,
-        detail: language === 'fr' ? `Revenez dans ${countdown.h}h ${countdown.m}m.` : `Come back in ${countdown.h}h ${countdown.m}m.`,
-        action: language === 'fr' ? 'Voir les scores live' : 'Check live scores',
-        onClick: () => navigate('/live'),
-      };
-    }
-    if (!isVip) {
-      return {
-        tone: 'purple',
-        label: language === 'fr' ? 'Meilleure prochaine action' : 'Best next action',
-        title: language === 'fr' ? 'Commencez avec les picks gratuits' : 'Start with today\'s free picks',
-        detail: language === 'fr' ? `${freePicksCount} picks ouverts, le reste est réservé au VIP.` : `${freePicksCount} picks unlocked, VIP reveals the full card.`,
-        action: language === 'fr' ? 'Voir les picks gratuits' : 'View free picks',
-        onClick: () => navigate('/free'),
-      };
-    }
-return {
-      tone: 'emerald',
-      label: language === 'fr' ? 'Meilleure prochaine action' : 'Best next action',
-      title: language === 'fr' ? 'Ouvrez votre meilleur signal' : 'Open your strongest signal',
-      detail: `${topPick.homeTeam} vs ${topPick.awayTeam} - ${getPredictionText(topPick)}`,
-      action: language === 'fr' ? 'Voir pourquoi' : 'See why',
-      onClick: () => navigate(`/match/${topPick.id}`),
-    };
-  }, [loading, liveCount, topPick, isVip, language, scheduledTime, scheduledTimeDisplay, countdown.h, countdown.m, freePicksCount]);
 
   const sortLabels: Record<SortKey, string> = {
     time: language === 'fr' ? 'Heure' : 'Time',
@@ -338,44 +299,6 @@ return {
         </div>
       </div>
 
-      {/* Daily Command Center */}
-      <button
-        disabled={!commandCenter.onClick}
-        onClick={commandCenter.onClick}
-        className={`w-full text-left rounded-2xl border p-4 transition-all shadow-sm disabled:cursor-default ${
-          commandCenter.tone === 'red'
-            ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/15'
-            : commandCenter.tone === 'purple'
-              ? 'bg-vantage-purple/10 border-vantage-purple/30 hover:bg-vantage-purple/15'
-              : commandCenter.tone === 'amber'
-                ? 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/15'
-                : commandCenter.tone === 'emerald'
-                  ? 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/15'
-                  : 'bg-vantage-cyan/10 border-vantage-cyan/30'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-            commandCenter.tone === 'red' ? 'bg-red-500/15 text-red-500' :
-            commandCenter.tone === 'purple' ? 'bg-vantage-purple/15 text-vantage-purple' :
-            commandCenter.tone === 'amber' ? 'bg-amber-500/15 text-amber-500' :
-            commandCenter.tone === 'emerald' ? 'bg-emerald-500/15 text-emerald-500' :
-            'bg-vantage-cyan/15 text-vantage-cyan'
-          }`}>
-            {commandCenter.tone === 'red' ? <Radio size={20} /> : commandCenter.tone === 'amber' ? <Clock size={20} /> : <Target size={20} />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">{commandCenter.label}</p>
-            <h2 className="text-base font-black text-slate-900 dark:text-white leading-tight mt-0.5">{commandCenter.title}</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{commandCenter.detail}</p>
-          </div>
-          <div className="shrink-0 flex items-center gap-1 text-xs font-black text-slate-900 dark:text-white">
-            <span className="hidden sm:inline">{commandCenter.action}</span>
-            <ChevronRight size={18} />
-          </div>
-        </div>
-      </button>
-
       {/* Rolling Results Ticker */}
       {predictions.some(m => m.status === 'won' || m.status === 'lost') && (
         <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5">
@@ -417,12 +340,12 @@ return {
       {topPick && (() => {
         const pred = getPredictionText(topPick);
         return (
-<button
+          <button
             onClick={() => !isVip ? navigate('/vip') : navigate(`/match/${topPick.id}`)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-vantage-cyan/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all text-left"
           >
             <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-              <Zap size={18} className="text-emerald-500 fill-emerald-500" />
+              {isVip ? <Zap size={18} className="text-emerald-500 fill-emerald-500" /> : <Lock size={18} className="text-vantage-purple" />}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">
@@ -433,8 +356,16 @@ return {
               </p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-xs font-bold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">{pred}</p>
-              <p className="text-[10px] font-bold font-mono text-emerald-500 mt-0.5">{topPick.confidence}%</p>
+              {isVip ? (
+                <>
+                  <p className="text-xs font-bold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">{pred}</p>
+                  <p className="text-[10px] font-bold font-mono text-emerald-500 mt-0.5">{topPick.confidence}%</p>
+                </>
+              ) : (
+                <p className="text-xs font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Lock size={9} /> {language === 'fr' ? 'Débloquer' : 'Unlock'}
+                </p>
+              )}
             </div>
             <ChevronRight size={16} className="text-emerald-500 shrink-0" />
           </button>
@@ -459,35 +390,6 @@ return {
           )}
         </div>
       </div>
-
-      {/* ── Hero Proposition ── */}
-      <GlassCard delay={1} className="overflow-hidden relative border-vantage-cyan/20">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-vantage-cyan/10 blur-[50px] rounded-full pointer-events-none" />
-        <div className="flex flex-col mb-2 relative z-10">
-          <div className="flex items-center gap-2 mb-2">
-             <Zap size={18} className="text-vantage-cyan" />
-             <span className="text-xs font-bold uppercase tracking-widest text-vantage-cyan">Quantitative Edge</span>
-          </div>
-          <h2 className="text-xl md:text-2xl font-black font-orbitron text-slate-900 dark:text-white leading-tight">
-            Data-Driven <br/>Sports Analytics.
-          </h2>
-        </div>
-        <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-2 mb-4 leading-relaxed relative z-10">
-          {language === 'fr' 
-            ? "Nous analysons des milliers de points de données pour trouver des paris mathématiquement rentables. Ne devinez pas, investissez dans la donnée."
-            : "We analyze thousands of data points to find mathematically profitable bets. Stop guessing, start investing in data."}
-        </p>
-        <div className="grid grid-cols-2 gap-3 relative z-10">
-          <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex flex-col justify-center">
-            <div className="text-lg font-black font-mono text-emerald-500">+EV</div>
-            <div className="text-[9px] uppercase tracking-widest text-gray-500 font-bold mt-1">Value Bets</div>
-          </div>
-          <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex flex-col justify-center">
-             <div className="text-lg font-black font-mono text-vantage-purple">Kelly</div>
-             <div className="text-[9px] uppercase tracking-widest text-gray-500 font-bold mt-1">Bankroll Sizing</div>
-          </div>
-        </div>
-      </GlassCard>
 
       {/* ─── PWA INSTALL + NOTIFICATIONS ─── */}
       <PWAInstallButton />
@@ -561,8 +463,7 @@ return {
             </button>
             <AnimatePresence>
               {showSortDropdown && (
-                // @ts-ignore
-                <motion.div
+                <MotionDiv
                   initial={{ opacity: 0, y: -8, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.95 }}
@@ -578,7 +479,7 @@ return {
                       {label}
                     </button>
                   ))}
-                </motion.div>
+                </MotionDiv>
               )}
             </AnimatePresence>
           </div>
@@ -669,206 +570,120 @@ return {
 
               <AnimatePresence>
                 {groupedMatches[groupKey].slice(0, visibleCount).map((match, idx) => {
-                  const cat = (CATEGORY_CONFIG as any)[match.category] || CATEGORY_CONFIG.value;
-                  const hasConfidence = Boolean(match.confidence && match.confidence > 0);
-                  const hasOdds = Boolean(match.odds && match.odds > 1);
-                  const hasPrediction = match.prediction_en || match.prediction;
+                  const pred = getPredictionText(match);
+                  const confidence = match.confidence || 0;
+                  const xgH = match.expected_goals_home ?? 0;
+                  const xgA = match.expected_goals_away ?? 0;
+                  const homeProb = Math.round((match.home_win_prob || 0) * 100);
+                  const drawProb = Math.round((match.draw_prob || 0) * 100);
+                  const awayProb = Math.round((match.away_win_prob || 0) * 100);
                   const isFreeMatch = freeMatchIds.has(match.id);
-                  const isUnlocked = isVip || isFreeMatch;
+                  const unlocked = isVip || isFreeMatch;
 
                   return (
-                    // @ts-ignore
                     <motion.div
                       key={match.id}
                       initial={{ opacity: 0, y: 14 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.96 }}
                       transition={{ delay: idx * 0.03 }}
+                      onClick={() => navigate(`/match/${match.id}`)}
+                      className="cursor-pointer"
                     >
-                      <button
-                        onClick={() => {
-                          navigate(`/match/${match.id}`);
-                        }}
-                        className="w-full text-left group"
-                      >
-                        <div className="relative overflow-hidden rounded-2xl border border-white/8 bg-white dark:bg-[#1a1d26] hover:border-vantage-cyan/40 hover:bg-slate-50 dark:hover:bg-[#1e2230] transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-vantage-cyan/5 group-hover:ring-1 group-hover:ring-vantage-cyan/10">
+                      <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-[#1a1d26] backdrop-blur-md shadow-sm hover:border-vantage-cyan/40 hover:shadow-md transition-all">
+                        {/* Header: league + time */}
+                        <div className="flex justify-between items-center px-4 pt-3 pb-1.5">
+                          <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest truncate max-w-[140px]">{match.league}</span>
+                          <span className="flex items-center gap-1 text-[10px] text-gray-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md"><Clock size={10} /> {match.time || match.kickoff_local}</span>
+                        </div>
 
-                          {/* Subtle gradient glow top edge */}
-                          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-vantage-cyan/20 dark:via-vantage-cyan/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                          {/* Category badge top-right */}
-                          {hasPrediction && (
-                            <div className={`absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-bold tracking-wider ${cat.bg} ${cat.border} ${cat.text}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${cat.dot}`} />
-                              {cat.label}
+                        {/* Teams */}
+                        <div className="flex items-center justify-between px-4 py-2">
+                          <div className="flex items-center gap-2 w-5/12 min-w-0">
+                            <div className="w-9 h-9 shrink-0 rounded-xl bg-slate-100 dark:bg-white/8 flex items-center justify-center border border-slate-200 dark:border-white/8 p-1">
+                              <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-full h-full" />
                             </div>
-                          )}
-
-                          <div className="px-4 py-3.5">
-                            {/* League + Time row */}
-                            <div className="flex items-center gap-2 mb-3">
-                              <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 flex items-center gap-1 truncate">
-                                <Clock size={9} className="shrink-0" />
-                                <span className="text-vantage-cyan font-bold">{match.time}</span>
-                                <span className="mx-0.5 text-gray-300 dark:text-gray-600">·</span>
-                                <span className="truncate">{match.league}</span>
-                              </span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{match.homeTeam}</p>
+                              <FormDots form={match.homeForm || match.home_form} />
                             </div>
-
-                            {/* Teams row */}
-                            <div className="flex items-center justify-between gap-3">
-                              {/* Home Team */}
-                              <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                                <div className="w-10 h-10 shrink-0 rounded-xl bg-slate-100 dark:bg-white/8 flex items-center justify-center border border-slate-200 dark:border-white/8 p-1.5">
-                                  <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-full h-full" />
-                                </div>
-                                <div className="flex flex-col min-w-0">
-                                  <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight line-clamp-1 text-left">
-                                    {match.homeTeam}
-                                  </span>
-                                  <FormDots form={match.homeForm || match.home_form} />
-                                </div>
-                              </div>
-
-                              {/* VS + xG badge / Score Badge */}
-                              <div className="shrink-0 flex flex-col items-center">
-                                {match.score && (match.status !== 'pending' || match.live_state) ? (
-                                  <div className="flex flex-col items-center gap-0.5">
-                                    <span className="text-[13px] font-black font-mono text-vantage-cyan px-2 tracking-widest bg-vantage-cyan/10 rounded border border-vantage-cyan/20">
-                                      {match.score.replace('-', ' - ')}
-                                    </span>
-                                    {match.status === 'won' && (
-                                      <span className="text-[8px] font-black text-green-500 bg-green-500/15 px-1.5 py-0.5 rounded-full border border-green-500/30 uppercase tracking-wider animate-pulse">✓ WON</span>
-                                    )}
-                                    {match.status === 'lost' && (
-                                      <span className="text-[8px] font-black text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded-full border border-red-500/30 uppercase tracking-wider">✗ LOST</span>
-                                    )}
-                                    {match.status === 'pending' && match.live_state && (
-                                      <span className="text-[8px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full border border-amber-400/20 uppercase tracking-wider">
-                                        {['FT','AET','PEN'].includes(match.live_state) ? 'FT' : `LIVE ${match.live_minute || ''}'`}
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-[11px] font-black font-orbitron text-gray-300 dark:text-gray-600 px-2">VS</span>
-                                )}
-                                
-                                {!match.score && (match.expected_goals_home > 0 || match.expected_goals_away > 0) && (
-                                  <span className="text-[9px] font-bold text-vantage-cyan mt-0.5">
-                                    {(match.expected_goals_home || 0).toFixed(1)} - {(match.expected_goals_away || 0).toFixed(1)}
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Away Team */}
-                              <div className="flex items-center gap-2.5 flex-1 min-w-0 flex-row-reverse">
-                                <div className="w-10 h-10 shrink-0 rounded-xl bg-slate-100 dark:bg-white/8 flex items-center justify-center border border-slate-200 dark:border-white/8 p-1.5">
-                                  <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-full h-full" />
-                                </div>
-                                <div className="flex flex-col items-end min-w-0">
-                                  <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight line-clamp-1 text-right">
-                                    {match.awayTeam}
-                                  </span>
-                                  <FormDots form={match.awayForm || match.away_form} />
-                                </div>
-                              </div>
+                          </div>
+                          <div className="shrink-0 flex flex-col items-center px-1">
+                            <span className="text-[10px] font-mono text-gray-400">VS</span>
+                            {xgH > 0 && <span className="text-[8px] font-mono text-vantage-cyan">{xgH.toFixed(1)}-{xgA.toFixed(1)}</span>}
+                          </div>
+                          <div className="flex items-center gap-2 w-5/12 min-w-0 flex-row-reverse">
+                            <div className="w-9 h-9 shrink-0 rounded-xl bg-slate-100 dark:bg-white/8 flex items-center justify-center border border-slate-200 dark:border-white/8 p-1">
+                              <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-full h-full" />
                             </div>
-
-                            {/* Probability mini-stats */}
-                            {(match.home_win_prob || match.over25_prob) && (
-                              <div className="mt-2 flex items-center justify-center gap-1.5 flex-wrap">
-                                {isUnlocked ? (
-                                  <>
-                                    {match.home_win_prob > 0 && (
-                                      <span className="text-[9px] font-bold font-mono text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">H {Math.round(match.home_win_prob * 100)}%</span>
-                                    )}
-                                    {match.draw_prob > 0 && (
-                                      <span className="text-[9px] font-bold font-mono text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">D {Math.round(match.draw_prob * 100)}%</span>
-                                    )}
-                                    {match.away_win_prob > 0 && (
-                                      <span className="text-[9px] font-bold font-mono text-gray-500 bg-white/5 px-1.5 py-0.5 rounded">A {Math.round(match.away_win_prob * 100)}%</span>
-                                    )}
-                                    {match.over25_prob > 0 && (
-                                      <span className="text-[9px] font-bold font-mono text-vantage-cyan/70 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>
-                                    )}
-                                    {match.btts_prob > 0 && (
-                                      <span className="text-[9px] font-bold font-mono text-amber-400/70 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>
-                                    )}
-                                  </>
-                                ) : (
-                                  <div onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="flex items-center gap-1 text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded cursor-pointer hover:bg-vantage-purple/20 transition-colors">
-                                    <Lock size={9} />
-                                    {language === 'fr' ? 'Stats Détaillées VIP' : 'Unlock Detailed Stats'}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Bottom row — confidence / CTA */}
-                            <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/5 pt-3">
-                              <div className="flex items-center gap-2">
-                                {hasConfidence && (
-                                  isUnlocked ? (
-                                    <span className="text-[10px] font-bold font-mono text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                      <BarChart3 size={9} />
-                                      {match.confidence}%
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] font-bold text-vantage-purple/60 bg-vantage-purple/5 border border-vantage-purple/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                      <Lock size={9} /> VIP
-                                    </span>
-                                  )
-                                )}
-                                {!hasConfidence && (
-                                  <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                                    <Activity size={10} /> {language === 'fr' ? 'Analyse IA' : 'AI Analysis'}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-{isUnlocked && (
-                                    <div
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleShare(match);
-                                      }}
-                                      role="button"
-                                      tabIndex={0}
-                                      className="p-1.5 rounded-lg bg-white/5 hover:bg-vantage-cyan/10 text-gray-500 hover:text-vantage-cyan transition-colors cursor-pointer"
-                                      title={language === 'fr' ? 'Partager ce pick' : 'Share this pick'}
-                                    >
-                                      <Share2 size={11} />
-                                    </div>
-                                  )}
-                                  {isUnlocked && (
-                                    <div
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const pred = getPredictionText(match);
-                                        const text = pred
-                                          ? `${match.homeTeam} vs ${match.awayTeam} \u2014 ${pred} (${match.confidence}%)`
-                                          : `${match.homeTeam} vs ${match.awayTeam}`;
-                                        handleCopy(text, match.id);
-                                      }}
-                                      role="button"
-                                      tabIndex={0}
-                                      className="p-1.5 rounded-lg bg-white/5 hover:bg-vantage-cyan/10 text-gray-500 hover:text-vantage-cyan transition-colors cursor-pointer"
-                                      title="Copy prediction"
-                                    >
-                                      {copiedId === match.id
-                                        ? <Check size={11} className="text-green-400" />
-                                        : <Copy size={11} />}
-                                    </div>
-                                  )}
-                                 <span className="text-[10px] font-bold text-gray-400 group-hover:text-vantage-cyan transition-colors flex items-center gap-1">
-                                   {language === 'fr' ? 'Détails' : 'Details'}
-                                   <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
-                                 </span>
-                               </div>
+                            <div className="min-w-0 text-right">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{match.awayTeam}</p>
+                              <div className="flex justify-end"><FormDots form={match.awayForm || match.away_form} /></div>
                             </div>
                           </div>
                         </div>
-                      </button>
+
+                        {/* Stats row */}
+                        {unlocked ? (
+                          <div className="px-4 pb-1.5 flex justify-center gap-1 flex-wrap">
+                            {homeProb > 0 && (
+                              <>
+                                <span className="text-[9px] font-mono text-slate-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded">H {homeProb}%</span>
+                                <span className="text-[9px] font-mono text-slate-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded">D {drawProb}%</span>
+                                <span className="text-[9px] font-mono text-slate-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded">A {awayProb}%</span>
+                              </>
+                            )}
+                            {match.over25_prob > 0 && <span className="text-[9px] font-mono text-vantage-cyan/80 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>}
+                            {match.btts_prob > 0 && <span className="text-[9px] font-mono text-amber-400/80 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>}
+                          </div>
+                        ) : (
+                          <div className="px-4 pb-1.5 flex justify-center">
+                            <span onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-3 py-1 rounded-full cursor-pointer hover:bg-vantage-purple/20">
+                              <Lock size={9} className="inline mr-1" />{language === 'fr' ? 'Stats VIP' : 'VIP Stats'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Prediction + confidence bar — gated for non-free, non-VIP */}
+                        {unlocked ? (
+                          <div className="mx-3 mb-3 p-2.5 rounded-xl bg-gradient-to-r from-vantage-cyan/5 to-transparent border border-vantage-cyan/15 overflow-hidden relative">
+                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-200 dark:bg-white/5">
+                              <motion.div className="h-full bg-gradient-to-r from-vantage-cyan to-emerald-400" initial={{ width: 0 }} animate={{ width: `${Math.min(confidence, 100)}%` }} transition={{ duration: 1, delay: idx * 0.05 + 0.3 }} />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex flex-col min-w-0 mr-2">
+                                <span className="text-[8px] text-gray-500 uppercase tracking-wide">{t('free.pred_label') || 'Prediction'}</span>
+                                <span className="text-[11px] font-bold text-vantage-cyan truncate">{pred || (language === 'fr' ? 'Analyse en cours' : 'Analyzing')}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {match.odds > 1 && <span className="text-[9px] font-mono text-gray-400 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded">{Number(match.odds).toFixed(2)}x</span>}
+                                <span className="text-sm font-black font-mono text-emerald-400">{confidence}%</span>
+                                {isVip && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setTicketPicks(prev => { if (prev.some(p => p.id === match.id)) return prev; return [...prev, { id: match.id, home: match.homeTeam || match.home_team || '', away: match.awayTeam || match.away_team || '', pick: pred || '', odds: Number(match.odds) || 0 }]; }); }}
+                                    className="p-1 rounded-lg bg-vantage-cyan/10 hover:bg-vantage-cyan/20 text-vantage-cyan transition-colors"
+                                    title={language === 'fr' ? 'Ajouter au ticket' : 'Add to ticket'}
+                                  >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mx-3 mb-3 p-2.5 rounded-xl bg-vantage-purple/5 border border-vantage-purple/20">
+                            <div className="flex items-center justify-between">
+                              <div className="flex flex-col">
+                                <span className="text-[8px] text-vantage-purple uppercase tracking-wide">{t('free.pred_label') || 'Prediction'}</span>
+                                <span className="text-[11px] font-bold text-vantage-purple/40">{language === 'fr' ? 'Réservé VIP' : 'VIP Only'}</span>
+                              </div>
+                              <span onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2.5 py-1 rounded-full cursor-pointer hover:bg-vantage-purple/20 flex items-center gap-1">
+                                <Lock size={9} /> {language === 'fr' ? 'Débloquer' : 'Unlock'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </motion.div>
                   );
                 })}
@@ -890,36 +705,68 @@ return {
         )}
       </div>
 
-      {/* ─── VIP CTA  ─── */}
-      {/* @ts-ignore */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="w-full"
-      >
-        <button
-          onClick={() => navigate('/vip')}
-          className="w-full relative overflow-hidden rounded-2xl py-4 px-5 flex items-center justify-between group shadow-xl shadow-vantage-purple/30"
-          style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #06b6d4 100%)' }}
-        >
-          <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="relative flex items-center gap-3">
-            <div className="p-2 bg-white/20 rounded-lg shrink-0">
-              <Zap size={18} className="text-yellow-300 fill-yellow-300" />
+      {/* Floating Action Button — Smart Ticket (VIP only) */}
+      {isVip && (
+        <>
+          {ticketPicks.length > 0 && (
+            <div className="fixed bottom-24 right-4 z-30 flex items-center gap-2">
+              <span className="text-[10px] font-black bg-emerald-500 text-white px-2 py-1 rounded-full shadow-lg">{ticketPicks.length}</span>
             </div>
-            <div className="text-left">
-              <div className="text-sm font-black text-white tracking-wide">
-                {language === 'fr' ? 'Accéder aux Prédictions IA' : 'Unlock AI Predictions'}
-              </div>
-              <div className="text-[10px] text-white/70 font-medium">
-                {language === 'fr' ? 'Analyse complète + taux de réussite' : 'Full analysis + win-rate data'}
-              </div>
-            </div>
-          </div>
-          <ArrowRight size={20} className="relative text-white shrink-0 group-hover:translate-x-1 transition-transform" />
-        </button>
-      </motion.div>
+          )}
+          <button
+            onClick={() => setShowTicket(true)}
+            className="fixed bottom-24 right-4 z-30 w-14 h-14 rounded-2xl bg-gradient-to-br from-vantage-cyan to-vantage-purple text-white shadow-xl shadow-vantage-purple/30 flex items-center justify-center active:scale-95 transition-transform hover:shadow-2xl hover:scale-105"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 5v2M15 11v2M15 17v2M5 5h14a2 2 0 012 2v3a2 2 0 000 4v3a2 2 0 01-2 2H5a2 2 0 01-2-2v-3a2 2 0 000-4V7a2 2 0 012-2z" />
+            </svg>
+          </button>
+
+          {/* Ticket Modal */}
+          <AnimatePresence>
+            {showTicket && (
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center"
+                onClick={() => setShowTicket(false)}
+              >
+                <motion.div
+                  initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white dark:bg-[#1a1d26] shadow-2xl"
+                >
+                  <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-white dark:bg-[#1a1d26] border-b border-slate-200 dark:border-white/10 rounded-t-3xl">
+                    <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                      {language === 'fr' ? 'Ticket Pro' : 'Pro Ticket'}
+                    </h2>
+                    <button onClick={() => setShowTicket(false)} className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 text-gray-500 hover:text-red-500 transition-colors">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                  <div className="p-4">
+                    {ticketPicks.length > 0 && (
+                      <div className="mb-4 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-2">{ticketPicks.length} picks added</p>
+                        <div className="space-y-1.5">
+                          {ticketPicks.map((p, i) => (
+                            <div key={i} className="flex items-center justify-between text-[10px]">
+                              <span className="font-bold text-slate-700 dark:text-gray-200 truncate mr-2">{p.home} vs {p.away}</span>
+                              <span className="font-mono text-vantage-cyan shrink-0">{p.pick} @ {p.odds.toFixed(2)}</span>
+                              <button onClick={() => setTicketPicks(prev => prev.filter((_, j) => j !== i))} className="ml-1 p-0.5 text-red-400 hover:text-red-300">✕</button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <TicketWizard />
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
+      )}
     </div>
   );
 };

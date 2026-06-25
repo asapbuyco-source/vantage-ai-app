@@ -32,6 +32,12 @@ export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx, isEx
   const dc1x = ((match.double_chance_1x ?? 0) * 100);
   const dcx2 = ((match.double_chance_x2 ?? 0) * 100);
   const over15 = (match.over15_prob ?? 0) * 100;
+  const fhOver05 = (match.fh_over05_prob ?? 0) * 100;
+  const fhOver15 = (match.fh_over15_prob ?? 0) * 100;
+  const fhBtts = (match.fh_btts_prob ?? 0) * 100;
+  const expCorners = match.expected_corners ?? 0;
+  const over85C = (match.over85_corners_prob ?? 0) * 100;
+  const over95C = (match.over95_corners_prob ?? 0) * 100;
   const evColor = ev >= 0.10 ? 'text-emerald-400' : ev >= 0.05 ? 'text-yellow-400' : 'text-orange-400';
 
   const topScorelines = (match as any).top_scorelines as [string, number][] | undefined;
@@ -169,6 +175,45 @@ export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx, isEx
                     ))}
                   </div>
                 </div>
+
+                {/* ── First Half Markets ── */}
+                <div>
+                  <span className="text-[8px] text-gray-500 uppercase tracking-wide">First Half</span>
+                  <div className="grid grid-cols-3 gap-1.5 mt-1">
+                    {[
+                      { label: 'O 0.5 FH', pct: fhOver05 },
+                      { label: 'O 1.5 FH', pct: fhOver15 },
+                      { label: 'BTTS FH', pct: fhBtts },
+                    ].map((mkt, i) => (
+                      <div key={i} className="flex flex-col items-center justify-center px-1 py-1.5 bg-white/50 dark:bg-white/5 rounded-lg">
+                        <span className="text-[8px] font-medium text-gray-500 dark:text-gray-400">{mkt.label}</span>
+                        <span className={`text-[10px] font-bold font-mono ${mkt.pct >= 60 ? 'text-emerald-400' : mkt.pct >= 40 ? 'text-yellow-400' : 'text-slate-500'}`}>
+                          {mkt.pct.toFixed(0)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── Corners ── */}
+                {expCorners > 0 && (
+                <div>
+                  <span className="text-[8px] text-gray-500 uppercase tracking-wide">Corners ~{expCorners.toFixed(1)}</span>
+                  <div className="grid grid-cols-2 gap-1.5 mt-1">
+                    {[
+                      { label: 'Over 8.5', pct: over85C },
+                      { label: 'Over 9.5', pct: over95C },
+                    ].map((mkt, i) => (
+                      <div key={i} className="flex items-center justify-between px-2 py-1 bg-white/50 dark:bg-white/5 rounded-lg">
+                        <span className="text-[8px] font-medium text-gray-500 dark:text-gray-400">{mkt.label}</span>
+                        <span className={`text-[10px] font-bold font-mono ${mkt.pct >= 60 ? 'text-emerald-400' : mkt.pct >= 40 ? 'text-yellow-400' : 'text-slate-500'}`}>
+                          {mkt.pct.toFixed(0)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                )}
 
                 {/* ── Most Likely Scorelines ── */}
                 {topScorelines && topScorelines.length > 0 && (

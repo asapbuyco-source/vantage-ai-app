@@ -10,17 +10,12 @@ import { BetSlip } from './components/BetSlip';
 import { Onboarding } from './components/Onboarding';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Home } from './pages/Home';
-import { FreePicks } from './pages/FreePicks';
 import { Profile } from './pages/Profile';
-import { BettingGuide } from './pages/BettingGuide';
-import { TicketWizard } from './components/TicketWizard';
 import { LandingPage } from './pages/LandingPage';
 import { PublicStats } from './pages/PublicStats';
-import { Results } from './pages/Results';
 import { LiveScores } from './pages/LiveScores';
 import { BlogIndex } from './pages/BlogIndex';
 import { BlogPost } from './pages/BlogPost';
-import { ArbFinder } from './pages/ArbFinder';
 import { MatchDetails } from './pages/MatchDetails';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -33,6 +28,7 @@ import { MotionDiv } from './components/MotionDiv';
 
 const VIP = lazy(() => import('./pages/VIP').then(m => ({ default: m.VIP })));
 const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
+const Learn = lazy(() => import('./pages/Learn').then(m => ({ default: m.Learn })));
 
 
 function AppContent() {
@@ -408,15 +404,16 @@ function AppContent() {
                 <ErrorBoundary>
                   <Routes>
                     <Route path="/" element={<Home />} />
-                    <Route path="/free" element={<FreePicks />} />
+                    <Route path="/free" element={<Home />} />
                     <Route path="/vip" element={<VIP />} />
-                    <Route path="/guide" element={<BettingGuide />} />
+                    <Route path="/arb" element={<VIP />} />
+                    <Route path="/learn" element={<Learn />} />
+                    <Route path="/guide" element={<Learn />} />
+                    <Route path="/concierge" element={<Learn />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/admin" element={<Admin />} />
-                    <Route path="/concierge" element={<TicketWizard />} />
-                    <Route path="/stats" element={<PublicStats />} />
-                    <Route path="/results" element={<Results />} />
-                    <Route path="/arb" element={<ArbFinder />} />
+                    <Route path="/stats" element={<Profile />} />
+                    <Route path="/results" element={<Profile />} />
                     <Route path="/live" element={<LiveScores />} />
                   </Routes>
                 </ErrorBoundary>

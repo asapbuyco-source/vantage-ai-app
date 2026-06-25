@@ -89,6 +89,17 @@ odds_fetched_at?: string;
   btts_prob?: number;
   double_chance_1x?: number;
   double_chance_x2?: number;
+  // ── First Half Market Probabilities ───────────────────────────────────────
+  fh_over05_prob?: number;
+  fh_over15_prob?: number;
+  fh_btts_prob?: number;
+  fh_home_win_prob?: number;
+  fh_draw_prob?: number;
+  fh_away_win_prob?: number;
+  // ── Corner prediction ────────────────────────────────────────────────────
+  expected_corners?: number;
+  over85_corners_prob?: number;
+  over95_corners_prob?: number;
   all_value_bets?: Array<{ market: string; prob: number; raw_prob?: number; odds: number; ev: number; calibration_tier?: string }>;
   // ── Match Analysis Platform fields (snake_case from pipeline) ────────────────
   value_rank?: 'high' | 'medium' | 'low' | 'none';

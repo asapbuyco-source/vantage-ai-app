@@ -25,7 +25,7 @@ Safety downgrades now use the appropriate per-market confidence score.
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from calibration_registry import get_calibration_factor
-from poisson_model import MarketProbabilities, compute_probabilities
+from poisson_model import MarketProbabilities, compute_probabilities, compute_fh_markets
 from elo_rating import match_probabilities as elo_match_probs
 from form_model import compute_form_probabilities, FormProbabilities
 import math
@@ -79,6 +79,13 @@ class CombinedProbabilities:
     result_confidence: float = 0.0   # Shannon entropy of 1X2 (renamed from confidence_score)
     goals_confidence: float = 0.0   # Agreement on goals total (new)
     btts_confidence: float = 0.0   # Poisson-grid coherence for BTTS (new)
+    # First Half markets
+    fh_over05: float = 0.0    # Over 0.5 FH Goals
+    fh_over15: float = 0.0    # Over 1.5 FH Goals
+    fh_btts: float = 0.0      # BTTS in First Half
+    fh_home_win: float = 0.0  # First Half Home Win
+    fh_draw: float = 0.0      # First Half Draw
+    fh_away_win: float = 0.0  # First Half Away Win
 
 
 def _normalize(p_home: float, p_draw: float, p_away: float) -> tuple[float, float, float]:
@@ -196,6 +203,7 @@ def compute_combined(
     adj_mu_home *= HOME_ADVANTAGE.get(league_tier, 1.08)
 
     poisson: MarketProbabilities = compute_probabilities(adj_mu_home, adj_mu_away, rho)
+    fh = compute_fh_markets(adj_mu_home, adj_mu_away, rho)
 
     # ── Model 2: Elo ───────────────────────────────────────────────────────
     is_intl = league_id in INTERNATIONAL_LEAGUE_IDS if league_id else False
@@ -349,6 +357,13 @@ def compute_combined(
         result_confidence=round(result_confidence, 4),
         goals_confidence=round(goals_confidence, 4),
         btts_confidence=round(btts_confidence, 4),
+        # First Half markets
+        fh_over05=round(fh["fh_over05"], 4),
+        fh_over15=round(fh["fh_over15"], 4),
+        fh_btts=round(fh["fh_btts"], 4),
+        fh_home_win=round(fh["fh_home_win"], 4),
+        fh_draw=round(fh["fh_draw"], 4),
+        fh_away_win=round(fh["fh_away_win"], 4),
     )
     return cp
 

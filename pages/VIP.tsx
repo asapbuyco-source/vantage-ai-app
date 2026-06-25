@@ -18,6 +18,7 @@ import { PortfolioOnboarding } from '../components/PortfolioOnboarding';
 import { Sparkline } from '../components/Sparkline';
 import { Screener } from '../components/Screener';
 import { MatchCardAlpha } from '../components/MatchCardAlpha';
+import { ArbFinder } from './ArbFinder';
 
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
@@ -50,7 +51,7 @@ export const VIP: React.FC<VIPProps> = () => {
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual'>('weekly');
+  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly'>('daily');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -65,7 +66,7 @@ export const VIP: React.FC<VIPProps> = () => {
     });
   }, []);
 
-  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault'>('predictions');
+  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault' | 'arbs'>('predictions');
   const [activeSport, setActiveSport] = useState<'football' | 'basketball' | 'cricket'>('football');
   const activeAltPredictions = activeSport === 'cricket' ? cricketPredictions : basketballPredictions;
   const activeAltSportLabel = activeSport === 'cricket' ? 'Cricket' : 'Basketball';
@@ -174,8 +175,8 @@ export const VIP: React.FC<VIPProps> = () => {
         price: '500',
         icon: <Zap size={20} />,
         features: ['Full +EV Signal Feed', 'Kelly Bankroll Sizing'],
-        color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
-        claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
+        color: 'border-emerald-400 bg-emerald-500/5 dark:bg-emerald-500/10 shadow-[0_0_30px_rgba(16,185,129,0.1)]',
+        claimColor: 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25',
       },
       {
         id: 'weekly',
@@ -207,19 +208,9 @@ export const VIP: React.FC<VIPProps> = () => {
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
         claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
-      {
-        id: 'annual',
-        label: t('vip.plan_yearly'),
-        badge: '👑 INSTITUTIONAL',
-        price: '40000',
-        icon: <Crown size={20} />,
-        features: ['1-Year Terminal Access', 'All Premium Tools', 'VIP WhatsApp Group', 'Direct Analyst Access'],
-        color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
-        claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
-      },
     ];
 
-  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
+  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'quarterly') => {
     setSelectedPlanId(planId);
     setShowPaymentModal(true);
   };
@@ -538,6 +529,13 @@ export const VIP: React.FC<VIPProps> = () => {
           >
             <Banknote size={16} /> <span>Vault</span>
           </button>
+
+          <button
+            onClick={() => setActiveVipTab('arbs')}
+            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'arbs' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-yellow-500' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            <Zap size={16} /> <span>Arbs</span>
+          </button>
         </div>
 
 
@@ -546,6 +544,13 @@ export const VIP: React.FC<VIPProps> = () => {
         {activeVipTab === 'vault' && (
           <div className="mb-6">
             <VaultTab quantPredictions={quantPredictions} onEditBankroll={() => setShowPortfolioEdit(true)} />
+          </div>
+        )}
+
+        {/* ── ARBS SECTION ── */}
+        {activeVipTab === 'arbs' && (
+          <div className="mb-6">
+            <ArbFinder />
           </div>
         )}
 
@@ -947,33 +952,11 @@ export const VIP: React.FC<VIPProps> = () => {
                 </div>
               </div>
             </div>
-
-            {/* Fake Content Behind Blur */}
-            <div className="relative mx-auto max-w-md rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-4 select-none">
-              <div className="absolute inset-0 z-20 backdrop-blur-sm bg-white/30 dark:bg-black/40 flex flex-col items-center justify-center">
-                <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center mb-3 shadow-xl border border-slate-200 dark:border-white/10">
-                  <Lock size={20} className="text-slate-400" />
-                </div>
-                <span className="text-xs font-bold text-slate-800 dark:text-white">Premium Data Locked</span>
-              </div>
-              {/* Fake Data Rows */}
-              <div className="space-y-3 opacity-50 blur-[2px]">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-black/20 rounded-xl border border-slate-100 dark:border-white/5">
-                    <div className="flex flex-col gap-2 w-1/2">
-                      <div className="h-2.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full" />
-                      <div className="h-2 w-2/3 bg-slate-200 dark:bg-slate-700 rounded-full" />
-                    </div>
-                    <div className="h-6 w-12 bg-emerald-500/20 rounded-md" />
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
           <div id="plans-section" className="space-y-6">
             <div className="flex flex-col gap-4">
-            {plans.filter(p => showAllPlans || ['weekly', 'monthly', 'annual'].includes(p.id)).map((plan) => {
+            {plans.filter(p => showAllPlans || ['daily', 'weekly', 'monthly'].includes(p.id)).map((plan) => {
                 const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
                 const isPopular = plan.id === 'monthly';
                 return (

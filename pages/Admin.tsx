@@ -28,6 +28,7 @@ export const Admin: React.FC<AdminProps> = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [selectPlanFor, setSelectPlanFor] = useState<string | null>(null);
 
     // Mounted Ref for Async Safety
     const isMounted = useRef(false);
@@ -305,33 +306,29 @@ export const Admin: React.FC<AdminProps> = () => {
     const handleToggleVip = async (user: UserProfile) => {
         if (processingId) return;
         
-        let selectedPlan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | undefined;
-        if (!user.isVip) {
-            const planRes = window.prompt("Enter plan duration to grant (daily, weekly, monthly, quarterly, annual):", "monthly");
-            if (!planRes) return; // cancelled
-            if (['daily', 'weekly', 'monthly', 'quarterly', 'annual'].includes(planRes.toLowerCase())) {
-                selectedPlan = planRes.toLowerCase() as 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
-            } else {
-                alert("Invalid plan. Must be daily, weekly, monthly, quarterly, or annual.");
-                return;
-            }
+        // If revoking, do it immediately. If granting, show plan dropdown.
+        if (user.isVip) {
+            setProcessingId(user.uid);
+            try {
+                await toggleUserVip(user.uid, user.isVip);
+                setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: false, vipPlan: undefined } : u));
+                setUserStats(prev => ({ ...prev, vip: prev.vip - 1, free: prev.free + 1 }));
+            } catch (e) { console.error(e); }
+            finally { setProcessingId(null); }
+        } else {
+            setSelectPlanFor(user.uid);
         }
+    };
 
+    const handleSelectPlan = async (user: UserProfile, plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
+        setSelectPlanFor(null);
         setProcessingId(user.uid);
         try {
-            await toggleUserVip(user.uid, user.isVip, selectedPlan);
-            // Optimistic update
-            setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: !u.isVip, vipPlan: user.isVip ? undefined : selectedPlan } : u));
-            setUserStats(prev => ({
-                ...prev,
-                vip: prev.vip + (user.isVip ? -1 : 1),
-                free: prev.free + (user.isVip ? 1 : -1)
-            }));
-        } catch (e) {
-            alert("Error updating user VIP status");
-        } finally {
-            if (isMounted.current) setProcessingId(null);
-        }
+            await toggleUserVip(user.uid, user.isVip, plan);
+            setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: true, vipPlan: plan } : u));
+            setUserStats(prev => ({ ...prev, vip: prev.vip + 1, free: prev.free - 1 }));
+        } catch (e) { console.error(e); }
+        finally { setProcessingId(null); }
     };
 
     const handleToggleAdmin = async (user: UserProfile) => {
@@ -1289,6 +1286,25 @@ export const Admin: React.FC<AdminProps> = () => {
                                                     <CheckCircle2 size={16} />
                                                 )}
                                             </button>
+                                            {selectPlanFor === u.uid && (
+                                                <div className="flex gap-1 flex-wrap mt-1">
+                                                    {(['daily', 'weekly', 'monthly', 'quarterly', 'annual'] as const).map(plan => (
+                                                        <button
+                                                            key={plan}
+                                                            onClick={() => handleSelectPlan(u, plan)}
+                                                            className="text-[9px] font-bold px-2 py-1 rounded-lg bg-vantage-cyan/10 text-vantage-cyan border border-vantage-cyan/20 hover:bg-vantage-cyan/20 transition-colors capitalize"
+                                                        >
+                                                            {plan}
+                                                        </button>
+                                                    ))}
+                                                    <button
+                                                        onClick={() => setSelectPlanFor(null)}
+                                                        className="text-[9px] font-bold px-2 py-1 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     </motion.div>
                                 ))

@@ -200,6 +200,60 @@ def compute_probabilities(mu_home: float, mu_away: float, rho: float | None = No
     return derive_markets(grid)
 
 
+def compute_first_half_probabilities(mu_home: float, mu_away: float, rho: float | None = None) -> MarketProbabilities:
+    """
+    Compute probabilities for First Half markets.
+    First half xG is approximately 45% of full-match xG.
+    """
+    mu_home_fh = max(0.01, mu_home * 0.45)
+    mu_away_fh = max(0.01, mu_away * 0.45)
+    fh_rho = (rho or DIXON_COLES_RHO) * 0.5 if rho else DIXON_COLES_RHO * 0.5
+    grid = compute_score_grid(mu_home_fh, mu_away_fh, fh_rho)
+    return derive_markets(grid)
+
+
+def compute_fh_markets(mu_home: float, mu_away: float, rho: float | None = None) -> dict:
+    """
+    Compute First Half specific probabilities directly from the FH score grid.
+    Returns: {fh_over05, fh_over15, fh_btts, fh_home_win, fh_draw, fh_away_win}
+    """
+    mu_home_fh = max(0.01, mu_home * 0.45)
+    mu_away_fh = max(0.01, mu_away * 0.45)
+    fh_rho = (rho or DIXON_COLES_RHO) * 0.5 if rho else DIXON_COLES_RHO * 0.5
+    grid = compute_score_grid(mu_home_fh, mu_away_fh, fh_rho)
+    
+    over05 = 0.0
+    over15 = 0.0
+    btts = 0.0
+    home_win = 0.0
+    draw = 0.0
+    away_win = 0.0
+    
+    for (h, a), prob in grid.items():
+        total = h + a
+        if total >= 1:
+            over05 += prob
+        if total >= 2:
+            over15 += prob
+        if h >= 1 and a >= 1:
+            btts += prob
+        if h > a:
+            home_win += prob
+        elif h == a:
+            draw += prob
+        else:
+            away_win += prob
+    
+    return {
+        "fh_over05": round(over05, 4),
+        "fh_over15": round(over15, 4),
+        "fh_btts": round(btts, 4),
+        "fh_home_win": round(home_win, 4),
+        "fh_draw": round(draw, 4),
+        "fh_away_win": round(away_win, 4),
+    }
+
+
 # ── Utility ────────────────────────────────────────────────────────────────────
 def top_scorelines(grid: dict[tuple[int, int], float], n: int = 5) -> list[tuple[str, float]]:
     """Return the N most probable scorelines."""
