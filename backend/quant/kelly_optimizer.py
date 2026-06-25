@@ -13,10 +13,10 @@ A fractional Kelly (25%) is used to be conservative.
 Default stake is capped at 3% of bankroll, with stricter caps for fragile markets.
 """
 
-KELLY_FRACTION = 0.25
-MAX_STAKE_PCT = 0.03
-FRAGILE_MARKET_MAX_STAKE_PCT = 0.015
-WATCH_MARKET_MAX_STAKE_PCT = 0.02
+KELLY_FRACTION = 0.125  # Reduced from 0.25 to 1/8th Kelly
+MAX_STAKE_PCT = 0.02    # Capped at 2% instead of 3%
+FRAGILE_MARKET_MAX_STAKE_PCT = 0.01
+WATCH_MARKET_MAX_STAKE_PCT = 0.015
 MIN_STAKE_PCT = 0.005
 
 

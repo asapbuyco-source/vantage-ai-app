@@ -88,9 +88,10 @@ def _get_firestore():
                             sa_json = val.split("\n")[0]
 
             if sa_json:
-                # Need strict replacement because env files sometimes escape newlines
-                clean_json = sa_json.replace("\\n", "\n")
-                cred = credentials.Certificate(json.loads(clean_json))
+                sa_dict = json.loads(sa_json)
+                if "private_key" in sa_dict:
+                    sa_dict["private_key"] = sa_dict["private_key"].replace('\\n', '\n')
+                cred = credentials.Certificate(sa_dict)
             else:
                 cred = credentials.ApplicationDefault()
             firebase_admin.initialize_app(cred)

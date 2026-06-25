@@ -1,7 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import { verifySelarOrder } from './services/selar';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { Loader2, X, Crown, RefreshCw } from 'lucide-react';
 import { NavigationTab } from './types';
 import { BottomNav } from './components/BottomNav';
@@ -29,6 +29,7 @@ import { enableFirestorePersistence } from './firebaseConfig';
 import { TrialOfferPopup } from './components/TrialOfferPopup';
 import { WEEKLY_REGULAR_PRICE, WEEKLY_TRIAL_PRICE } from './src/constants/pricing';
 import { PaymentModal } from './components/PaymentModal';
+import { MotionDiv } from './components/MotionDiv';
 
 const VIP = lazy(() => import('./pages/VIP').then(m => ({ default: m.VIP })));
 const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
@@ -201,8 +202,7 @@ function AppContent() {
       }
     };
     checkPayments();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user]);
+  }, [authLoading, user, verifyTransaction, showToast, language, navigate]);
 
   // Auth loading spinner
   if (authLoading) {
@@ -232,17 +232,15 @@ function AppContent() {
             <main className="relative z-10 container mx-auto max-w-md md:max-w-6xl px-4 pt-6 min-h-screen">
               <AnimatePresence mode="wait">
                 {authView === 'landing' ? (
-                  // @ts-ignore
-                  <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
+                  <MotionDiv key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
                     <LandingPage
                       onGetStarted={() => setAuthView('signup')}
                       onLogin={() => setAuthView('login')}
                       onShowStats={() => setAuthView('stats')}
                     />
-                  </motion.div>
+                  </MotionDiv>
                 ) : authView === 'stats' ? (
-                  // @ts-ignore
-                  <motion.div key="stats" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
+                  <MotionDiv key="stats" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
                     <div className="flex flex-col min-h-screen">
                       <div className="flex items-center gap-2 py-4 mb-2">
                         <button onClick={() => setAuthView('landing')} className="p-2 bg-white/5 rounded-lg text-gray-500 hover:text-vantage-cyan transition-colors">
@@ -260,14 +258,13 @@ function AppContent() {
                         </button>
                       </div>
                     </div>
-                  </motion.div>
+                  </MotionDiv>
                 ) : (
-                  // @ts-ignore
-                  <motion.div key="auth" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
+                  <MotionDiv key="auth" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
                     <div className="max-w-md mx-auto">
                       <Profile initialMode={authView === 'login' ? 'login' : 'signup'} onBack={() => setAuthView('landing')} />
                     </div>
-                  </motion.div>
+                  </MotionDiv>
                 )}
               </AnimatePresence>
             </main>
@@ -300,8 +297,7 @@ function AppContent() {
           {/* ── New Version Update Banner ───────────────────────────── */}
           <AnimatePresence>
             {showUpdateBanner && (
-              // @ts-ignore
-              <motion.div
+              <MotionDiv
                 initial={{ y: -60, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: -60, opacity: 0 }}
@@ -326,15 +322,14 @@ function AppContent() {
                     <X size={16} />
                   </button>
                 </div>
-              </motion.div>
+              </MotionDiv>
             )}
           </AnimatePresence>
 
           {/* VIP Renewal Reminder Banner */}
           <AnimatePresence>
             {showRenewalBanner && (
-              // @ts-ignore
-              <motion.div
+              <MotionDiv
                 initial={{ y: -60, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: -60, opacity: 0 }}
@@ -366,13 +361,13 @@ function AppContent() {
                     <X size={16} />
                   </button>
                 </div>
-              </motion.div>
+              </MotionDiv>
             )}
           </AnimatePresence>
 
           <AnimatePresence>
             {showTrialUpsell && !showRenewalBanner && (
-              <motion.div
+              <MotionDiv
                 initial={{ opacity: 0, y: -40 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -40 }}
@@ -403,7 +398,7 @@ function AppContent() {
                     <X size={14} />
                   </button>
                 </div>
-              </motion.div>
+              </MotionDiv>
             )}
           </AnimatePresence>
 

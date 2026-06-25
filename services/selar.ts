@@ -94,7 +94,4 @@ export const verifySelarOrder = async (
     }
 };
 
-export const verifySelarTransaction = async (_reference: string): Promise<boolean> => {
-    console.warn('[Selar] verifySelarTransaction is deprecated.');
-    return false;
-};
+

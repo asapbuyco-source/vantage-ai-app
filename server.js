@@ -200,33 +200,6 @@ app.use(cors({
 }));
 
 // ══════════════════════════════════════════════════════════════════════
-// SPORTMONKS API PROXY (DEPRECATED)
-// This proxy is deprecated. API-Football is now the primary data source.
-// Sportmonks token is now optional (deprecated).
-// ══════════════════════════════════════════════════════════════════════
-const SPORTMONKS_API_TOKEN = process.env.SPORTMONKS_API_TOKEN;
-
-if (SPORTMONKS_API_TOKEN) {
-    logger.warn("[API] SPORTMONKS_API_TOKEN is set but Sportmonks is deprecated. Use API_FOOTBALL_KEY instead.");
-}
-
-// 100 requests per 15 minutes per IP for Sportmonks (rate limit preserved but returns 410 Gone)
-const sportmonksLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    standardHeaders: 'draft-7',
-    legacyHeaders: false,
-    message: { error: 'Too many requests, please try again after 15 minutes' }
-});
-
-app.use('/api/sportmonks', sportmonksLimiter, (req, res) => {
-    res.status(410).json({
-        error: 'Gone',
-        message: 'Sportmonks API proxy has been deprecated. All data is now served via API-Football through the /api/football/* endpoints or directly from Firestore.'
-    });
-});
-
-// ══════════════════════════════════════════════════════════════════════
 // RAW BODY CAPTURE (for webhook signature verification)
 // Captures raw bytes before JSON parsing so HMAC can be verified
 // ══════════════════════════════════════════════════════════════════════
@@ -368,16 +341,6 @@ app.get('/api/admin/token', async (req, res) => {
     }
 });
 
-// ⛔ AI Football prediction endpoint is DISABLED — system now uses the Quant Engine.
-// To re-enable: restore the original handler below.
-app.post('/api/admin/generate-football', adminAuth, async (req, res) => {
-    res.status(410).json({
-        error: 'DISABLED',
-        message: 'AI football predictions are disabled. The Quant Engine (statistical models) is now the sole prediction source.',
-        alternative: 'POST /api/admin/trigger-quant'
-    });
-});
-
 // 🏀 Basketball Quant Pipeline endpoint — Quant Engine primary, OpenAI/Gemini fallback
 app.post('/api/admin/generate-basketball', adminAuth, async (req, res) => {
     try {
@@ -401,15 +364,6 @@ app.post('/api/admin/generate-cricket', adminAuth, async (req, res) => {
         Sentry.captureException(e);
         res.status(500).json({ error: 'Cricket pipeline failed', details: e.message });
     }
-});
-
-// ⛔ AI Grading endpoint is DISABLED — quant grading replaces it.
-app.post('/api/admin/grade-yesterday', adminAuth, async (req, res) => {
-    res.status(410).json({
-        error: 'DISABLED',
-        message: 'AI grading is disabled. Use the Quant Grading endpoint instead.',
-        alternative: 'POST /api/admin/grade-quant'
-    });
 });
 
 app.post('/api/admin/generate-blog', adminAuth, async (req, res) => {
@@ -557,14 +511,6 @@ app.post('/api/admin/test-openai', adminAuth, async (req, res) => {
 });
 
 
-// ── Static Data Seed Trigger ─────────────────────────────────────────────────
-app.post('/api/admin/seed-static', adminAuth, async (req, res) => {
-    res.status(410).json({
-        status: 'deprecated',
-        message: 'Sportmonks static seeding has been removed. API-Football is now the primary data source.',
-    });
-});
-
 // ══════════════════════════════════════════════════════════════════════
 // OPENAI API PROXY
 // Keeps OPENAI_API_KEY server-side only. Same pattern as Gemini proxy.
@@ -671,16 +617,6 @@ function parseSelarWebhookBody(req) {
     }
     return req.body || {};
 }
-
-// POST /api/fapshi/initiate — retired legacy payment initiation
-app.post('/api/fapshi/initiate', fapshiLimiter, async (req, res) => {
-    return res.status(410).json({ error: 'Legacy Fapshi initiation endpoint is retired. Use /api/payments/fapshi/initiate.' });
-});
-
-// GET /api/fapshi/status/:transId — retired legacy payment status check
-app.get('/api/fapshi/status/:transId', fapshiLimiter, async (req, res) => {
-    return res.status(410).json({ error: 'Legacy Fapshi status endpoint is retired. Use /api/payments/fapshi/verify.' });
-});
 
 // ══════════════════════════════════════════════════════════════════════
 // SERVER-SIDE PAYMENT FULFILLMENT

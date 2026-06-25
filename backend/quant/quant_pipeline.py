@@ -26,6 +26,12 @@ Usage:
 import os
 import sys
 
+# Force UTF-8 output to prevent emoji/unicode errors on Windows terminals
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
+if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
+    sys.stderr = open(sys.stderr.fileno(), mode='w', encoding='utf-8', buffering=1)
+
 # Auto-configure gRPC SSL certificate bundle path for Windows/Local environments
 try:
     import certifi
@@ -119,6 +125,8 @@ def _init_firebase():
             if service_account_raw:
                 import json as _json
                 sa = _json.loads(service_account_raw)
+                if "private_key" in sa:
+                    sa["private_key"] = sa["private_key"].replace('\\n', '\n')
                 cred = credentials.Certificate(sa)
             else:
                 cred = credentials.ApplicationDefault()

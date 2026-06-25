@@ -307,6 +307,9 @@ def evaluate_all_markets(
         if market_odds <= 1.05:
             continue
 
+        if market_odds <= 1.05:
+            continue
+
         # Use devigged market probability (preferred) falling back to raw implied
         mkt_prob = market_devig.get(market, implied_prob(market_odds))
         ev = compute_ev(model_prob, market_odds)
@@ -324,13 +327,20 @@ def evaluate_all_markets(
         if line_disagrees and is_value:
             is_value = ev >= MIN_EV * 1.5  # Require 50% more EV to override sharp signal
 
+        # STEP 2: Market Filtering (Drop 1X2)
+        if market in ["Home Win", "Away Win", "Draw"]:
+            continue  # Temporarily disabled due to -40% ROI in backtest
+
+        # STEP 1: Cap EV at 10% to prevent wild overconfidence
+        capped_ev = min(ev, 0.10)
+
         results.append(ValueBet(
             market=market,
             bet_label=market,
             model_prob=round(model_prob, 4),
             market_prob=round(mkt_prob, 4),
             odds=round(market_odds, 2),
-            expected_value=round(ev, 4),
+            expected_value=round(capped_ev, 4),
             inefficiency=round(inefficiency, 4),
             is_value=is_value,
             raw_model_prob=round(raw_model_prob, 4),

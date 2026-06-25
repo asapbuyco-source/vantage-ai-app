@@ -239,6 +239,13 @@ export const runQuantPipeline = async (dateStr = null, dryRun = false) => {
         let predictions = [];
         if (!dryRun) {
             try {
+                // Lazy-init Firebase Admin if not already initialized (e.g. when run standalone)
+                if (!admin.apps.length) {
+                    const saCred = process.env.FIREBASE_SERVICE_ACCOUNT;
+                    if (saCred) {
+                        admin.initializeApp({ credential: admin.credential.cert(JSON.parse(saCred)) });
+                    }
+                }
                 const db = admin.firestore();
                 const effectiveDate = dateStr || getLagosDateKey();
                 const doc = await db.collection('quant_predictions').doc(effectiveDate).get();
@@ -549,60 +556,6 @@ function getLagosDateKey() {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
 }
 
-// ── Startup probe: resolve Python binary at module load time ──────────────────
-// Runs when server.js imports quantService.js — logs success/failure
-// immediately at container boot instead of waiting for the 19:00 cron job.
-resolvePythonBin().then(bin => {
-    logger.info(`[QuantService] 🐍 Python probe complete. Active binary: ${bin}`);
-}).catch(err => {
-    logger.error(`[QuantService] 💀 Python probe FAILED at startup: ${err.message}`);
-});
-
-
-export const runLiveMomentumEngine = async () => {
-    logger.info('[QuantService] Running live momentum engine...');
-    try {
-        const pythonBin = await resolvePythonBin();
-        return new Promise((resolve, reject) => {
-            const py = spawn(pythonBin, ['live_momentum_engine.py'], {
-                cwd: path.join(__dirname, 'quant'),
-                env: buildPythonEnv(),
-            });
-            py.stdout.on('data', d => logger.info(`[Python|LiveMom] ${d}`));
-            py.stderr.on('data', d => logger.warn(`[Python|LiveMom|ERR] ${d}`));
-            py.on('close', code => {
-                if (code === 0) resolve({ status: 'success' });
-                else resolve({ status: 'error', reason: `exit code ${code}` });
-            });
-        });
-    } catch (e) {
-        logger.error(`[QuantService] Live momentum failed: ${e.message}`);
-        return { status: 'error', error: e.message };
-    }
-};
-
-export const runPlayerStatsClient = async () => {
-    logger.info('[QuantService] Running player stats client...');
-    try {
-        const pythonBin = await resolvePythonBin();
-        return new Promise((resolve) => {
-            const py = spawn(pythonBin, ['player_stats_client.py'], {
-                cwd: path.join(__dirname, 'quant'),
-                env: buildPythonEnv(),
-            });
-            py.stdout.on('data', d => logger.info(`[Python|PlayerStats] ${d}`));
-            py.stderr.on('data', d => logger.warn(`[Python|PlayerStats|ERR] ${d}`));
-            py.on('close', code => {
-                if (code === 0) resolve({ status: 'success' });
-                else resolve({ status: 'error', reason: `exit code ${code}` });
-            });
-            py.on('error', err => resolve({ status: 'error', error: err.message }));
-        });
-    } catch (e) {
-        logger.error(`[QuantService] Player stats failed: ${e.message}`);
-        return { status: 'error', error: e.message };
-    }
-};
 
 export const runLineupSyncer = async (dateStr = null) => {
     logger.info('[QuantService] Running lineup syncer...');

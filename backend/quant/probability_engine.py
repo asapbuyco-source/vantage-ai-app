@@ -256,11 +256,13 @@ def compute_combined(
     raw_over15 = poisson.over15
     raw_btts   = poisson.btts
 
-    # Apply calibration discounts
-    over25 = _calibrate(raw_over25, "over25")
-    over35 = _calibrate(raw_over35, "over35")
-    over15 = _calibrate(raw_over15, "over15")
-    btts   = _calibrate(raw_btts,   "btts")
+    # Apply calibration discounts — removed from probability_engine (was double-applied with ev_engine).
+    # Calibration is now exclusively handled by ev_engine.calibrate_market_probability().
+    # See PREDICTION_ENGINE_IMPLEMENTATION_PLAN.md FIX-1 for details.
+    over25 = raw_over25
+    over35 = raw_over35
+    over15 = raw_over15
+    btts   = raw_btts
 
     under25 = 1.0 - over25
     under35 = 1.0 - over35

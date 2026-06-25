@@ -95,6 +95,11 @@ export const normalizeQuantPrediction = (p: any): any => {
         // Analysis line expected in some card renderers
         analysis_en: p.analysis_en ?? `EV: +${p.ev_pct ?? 0}% | Model: Quant Engine`,
         analysis_fr: p.analysis_fr ?? `VE: +${p.ev_pct ?? 0}% | Modèle: Quant Engine`,
+        // Grading defaults (match camelCase path behavior)
+        status: p.status ?? 'pending',
+        score: p.score ?? '',
+        graded_at: p.graded_at ?? '',
+        graded_by: p.graded_by ?? '',
     };
 };
 

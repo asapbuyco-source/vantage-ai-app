@@ -18,31 +18,31 @@ Version history:
 
 from datetime import datetime, timezone
 
-CALIBRATION_VERSION = "2026-06-15-v1"
-CALIBRATION_LAST_UPDATED = datetime(2026, 6, 15, tzinfo=timezone.utc).isoformat()
+CALIBRATION_VERSION = "2026-06-25-v2"
+CALIBRATION_LAST_UPDATED = datetime(2026, 6, 25, tzinfo=timezone.utc).isoformat()
 
 MARKET_FACTORS = {
     # key: (avg_predicted, avg_actual, discount_factor, sample_size, last_updated)
-    # ── Goals markets (from probability_engine.py MARKET_CALIBRATION) ──────────
-    "over25":  (0.92, 0.82, 0.89, 120, "2026-06-15"),
-    "under25": (0.08, 0.18, 1.00, 120, "2026-06-15"),
-    "over15":  (0.85, 0.80, 0.94, 200, "2026-06-15"),
-    "under15": (0.15, 0.43, 1.00, 200, "2026-06-15"),
-    "over35":  (0.75, 0.64, 0.86,  90, "2026-06-15"),
-    "under35": (0.25, 0.36, 1.00,  90, "2026-06-15"),
-    "btts":    (0.55, 0.55, 0.95, 150, "2026-06-15"),
-    "btts_no": (0.45, 0.42, 0.93, 150, "2026-06-15"),
-    # ── Result markets ─────────────────────────────────────────────────────────
-    "home_win": (0.65, 0.65, 0.95, 300, "2026-06-15"),
-    "away_win": (0.65, 0.44, 0.80, 300, "2026-06-15"),  # conservative — model was 44% actual
-    "draw":     (0.22, 0.22, 0.90, 300, "2026-06-15"),
-    # ── Derived/composite markets (from ev_engine.py MARKET_PROBABILITY_HAIRCUTS) ─
-    "AH Away +0.5":       (0.55, 0.50, 0.90,  50, "2026-06-15"),
-    "Double Chance (X2)": (0.60, 0.55, 0.92,  50, "2026-06-15"),
-    "Draw No Bet (Away)": (0.50, 0.45, 0.90,  50, "2026-06-15"),
+    # ── Goals markets (updated from 30-day backtest — see prediction_strategy_audit.md) ──
+    "over25":  (0.88, 0.82, 0.82, 130, "2026-06-25"),  # v1: 0.89 → reduced after double-cal fix uncovered overconfidence
+    "under25": (0.12, 0.18, 1.00, 130, "2026-06-25"),
+    "over15":  (0.84, 0.72, 0.86, 210, "2026-06-25"),  # v1: 0.94 → 72.1% hit rate in backtest, was far too generous
+    "under15": (0.16, 0.28, 1.00, 210, "2026-06-25"),
+    "over35":  (0.75, 0.50, 0.72,  95, "2026-06-25"),  # v1: 0.86 → insufficient sample, conservative downgrade
+    "under35": (0.38, 0.50, 0.85,  95, "2026-06-25"),  # v1: 1.00 → 37.5% hit rate (was predicting ~55%), needs big cut
+    "btts":    (0.57, 0.50, 0.87, 160, "2026-06-25"),  # v1: 0.95 → 50.0% hit rate, was too generous
+    "btts_no": (0.43, 0.50, 0.90, 160, "2026-06-25"),  # v1: 0.93 → mild adjustment
+    # ── Result markets (updated from backtest — catastrophic -43% ROI, suppressed from bets) ──
+    "home_win": (0.60, 0.21, 0.37, 314, "2026-06-25"),  # v1: 0.95 → 21.4% hit rate! Severe overconfidence exposed.
+    "away_win": (0.50, 0.14, 0.27, 314, "2026-06-25"),  # v1: 0.80 → 13.6% hit rate! Model cannot predict winners.
+    "draw":     (0.22, 0.22, 0.90, 314, "2026-06-25"),  # v1: 0.90 → no change (draw model is reasonably calibrated)
+    # ── Derived/composite markets ────────────────────────────────────────────────
+    "AH Away +0.5":       (0.55, 0.50, 0.90,  50, "2026-06-25"),
+    "Double Chance (X2)": (0.60, 0.55, 0.92,  50, "2026-06-25"),
+    "Draw No Bet (Away)": (0.50, 0.45, 0.90,  50, "2026-06-25"),
 }
 
-FRAGILE_MARKETS = {"away_win", "draw", "btts_no", "over35"}
+FRAGILE_MARKETS = {"home_win", "away_win", "draw", "btts_no", "over35", "under35"}
 
 
 def get_calibration_factor(market_key: str, default: float = 0.95) -> float:

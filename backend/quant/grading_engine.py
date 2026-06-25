@@ -10,6 +10,12 @@ Fetches final results from Sportmonks and updates each prediction with:
 import os
 import sys
 
+# Force UTF-8 output to prevent emoji/unicode errors on Windows terminals
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
+if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
+    sys.stderr = open(sys.stderr.fileno(), mode='w', encoding='utf-8', buffering=1)
+
 # Auto-configure gRPC SSL certificate bundle path for Windows/Local environments
 try:
     import certifi
@@ -268,7 +274,10 @@ def grade_predictions(date_str: str, force_regrade: bool = False) -> dict:
             sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
             if sa_json:
                 import json
-                cred = credentials.Certificate(json.loads(sa_json))
+                sa_dict = json.loads(sa_json)
+                if "private_key" in sa_dict:
+                    sa_dict["private_key"] = sa_dict["private_key"].replace('\\n', '\n')
+                cred = credentials.Certificate(sa_dict)
             else:
                 # Fallback: try Application Default Credentials
                 cred = credentials.ApplicationDefault()

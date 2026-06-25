@@ -20,9 +20,20 @@ from ev_engine import ValueBet
 # ── Filter thresholds ──────────────────────────────────────────────────────────
 MIN_PROBABILITY = 0.40     # Lowered from 0.55 — let EV/inefficiency filters guard quality
 MIN_EV = 0.05              # Minimum expected value (5%)
+MAX_EV = 0.15              # Defense-in-depth: reject wildly overconfident EV estimates (>15%)
 MAX_ODDS = 3.50            # Reject high-risk outliers
 MIN_ODDS = 1.40            # P4: Raised from 1.30 — 9 picks below 1.40 had avg 18.9% EV
 MIN_INEFFICIENCY = 0.04    # Model must differ from market by at least 4%
+
+# League volatility tiers — less predictable leagues get stricter thresholds
+# Derived from backtesting: tier 4+ leagues have 2-3x higher variance in outcomes
+LEAGUE_VOLATILITY_MODIFIER = {
+    1: 1.0,    # Elite leagues (EPL, La Liga, UCL) — baseline
+    2: 1.0,    # Strong leagues (Ligue 1, Eredivisie)
+    3: 1.15,   # Secondary (MLS, Brasileirão, Süper Lig) — 15% stricter
+    4: 1.30,   # Lower tier (League 1/2, Serie B) — 30% stricter
+    5: 1.50,   # Emerging/African leagues — 50% stricter
+}
 
 
 @dataclass
@@ -34,18 +45,22 @@ class FilterResult:
 def apply_filters(bet: ValueBet, league_tier: int = 1) -> FilterResult:
     """
     Run all risk filters on a single ValueBet, with thresholds
-    adjusting based on the league tier (safety first).
+    adjusting based on the league tier (safety first) and league volatility.
     """
+    # ── League volatility modifier ──────────────────────────────────────────
+    vol_mult = LEAGUE_VOLATILITY_MODIFIER.get(league_tier, 1.0)
+
     # ── Tier-based dynamic thresholds ──────────────────────────────────────────
-    t_min_prob = MIN_PROBABILITY
-    t_min_ev = MIN_EV
+    t_min_prob = MIN_PROBABILITY * vol_mult
+    t_min_ev = MIN_EV * vol_mult
+    t_max_ev = MAX_EV / vol_mult  # Stricter cap for volatile leagues
 
     if league_tier == 3:
-        t_min_prob = 0.45  # 45% floor for Tier 3
-        t_min_ev = 0.06    # 6% edge for Tier 3
+        t_min_prob = max(t_min_prob, 0.45)
+        t_min_ev = max(t_min_ev, 0.06)
     elif league_tier >= 4:
-        t_min_prob = 0.50  # 50% floor for Tier 4 (high noise)
-        t_min_ev = 0.08    # 8% edge for Tier 4
+        t_min_prob = max(t_min_prob, 0.50)
+        t_min_ev = max(t_min_ev, 0.08)
 
     # ── Logic ──────────────────────────────────────────────────────────────────
     if bet.odds < MIN_ODDS:
@@ -59,6 +74,9 @@ def apply_filters(bet: ValueBet, league_tier: int = 1) -> FilterResult:
 
     if bet.expected_value < t_min_ev:
         return FilterResult(False, f"EV too low for Tier {league_tier} ({bet.expected_value:.1%} < {t_min_ev:.0%})")
+
+    if bet.expected_value > t_max_ev:
+        return FilterResult(False, f"EV suspiciously high ({bet.expected_value:.1%} > {t_max_ev:.0%}) — likely mispricing or model error")
 
     if bet.inefficiency < MIN_INEFFICIENCY:
         return FilterResult(False, f"Market inefficiency too small ({bet.inefficiency:.1%} < {MIN_INEFFICIENCY:.0%})")
@@ -134,12 +152,13 @@ def filter_bets(bets: list[ValueBet], league_tier: int = 1) -> list[ValueBet]:
 
     # P3: Market ROI bonus — boost high-ROI markets slightly so they get into top 7
     # when they're close to the cutoff. Derived from 30-day backtest.
+    # Home/Away Win removed — 1X2 markets suppressed due to -43% ROI.
     MARKET_BONUS = {
         "Under 1.5 Goals": 1.18,   # 73% ROI — most profitable market, significantly under-allocated
-        "Under 3.5 Goals": 1.10,  # 41% ROI but small sample
-        "Home Win": 1.08,          # 112% ROI (small sample — use sparingly)
-        "Away Win": 1.05,          # 32% ROI — more volatile but positive
-        "Over 2.5 Goals": 1.02,   # baseline — already dominant (40% of picks)
+        "Under 3.5 Goals": 1.10,   # 41% ROI but small sample
+        "Over 1.5 Goals": 1.08,    # 72.1% hit rate, near-breakeven (-2.2% ROI) — high reliability
+        "BTTS": 1.05,              # 50% hit rate, +2.2% ROI — consistent edge
+        "Over 2.5 Goals": 1.02,    # baseline — already dominant (40% of picks)
         "BTTS No": 1.02,           # 25% ROI but reliable, small boost
     }
 

@@ -10,25 +10,40 @@ def get_db():
     import firebase_admin
     from firebase_admin import credentials, firestore
     if not firebase_admin._apps:
-        cred_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'vantage-ai-firebase-adminsdk.json')
-        if os.path.exists(cred_path):
-            cred = credentials.Certificate(cred_path)
-            firebase_admin.initialize_app(cred)
+        import json
+        sa_raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+        if sa_raw:
+            try:
+                sa = json.loads(sa_raw)
+                if "private_key" in sa:
+                    sa["private_key"] = sa["private_key"].replace('\\n', '\n')
+                cred = credentials.Certificate(sa)
+                firebase_admin.initialize_app(cred)
+            except Exception as e:
+                logging.error(f"Error parsing FIREBASE_SERVICE_ACCOUNT: {e}")
+                return None
         else:
-            logging.error(f"Could not find Firebase credentials at {cred_path}")
-            return None
+            cred_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'vantage-ai-firebase-adminsdk.json')
+            if os.path.exists(cred_path):
+                cred = credentials.Certificate(cred_path)
+                firebase_admin.initialize_app(cred)
+            else:
+                logging.error(f"Could not find Firebase credentials at {cred_path}")
+                return None
     return firestore.client()
 
 class APIFootballArbScanner:
     def __init__(self):
-        self.db = get_db()
-        from dotenv import load_dotenv
-        # Ensure we can load env var either from root or backend
-        if os.path.exists('.env.local'):
-            load_dotenv('.env.local')
-        elif os.path.exists('../.env.local'):
-            load_dotenv('../.env.local')
+        try:
+            from dotenv import load_dotenv
+            if os.path.exists('.env.local'):
+                load_dotenv('.env.local')
+            elif os.path.exists('../.env.local'):
+                load_dotenv('../.env.local')
+        except ImportError:
+            pass
             
+        self.db = get_db()
         self.api_key = os.getenv("API_FOOTBALL_KEY")
         self.headers = {
             "x-apisports-key": self.api_key
