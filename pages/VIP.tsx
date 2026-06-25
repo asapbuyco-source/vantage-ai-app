@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar, Activity, Pencil, Banknote, Radio } from 'lucide-react';
@@ -13,6 +14,7 @@ import { AccumulatorModal } from '../components/AccumulatorModal';
 import { VaultTab } from '../components/VaultTab';
 import { getAppSettings, getGlobalTodayKey, getInternalSettings } from '../services/db';
 import { normalizeQuantPrediction } from '../services/db';
+import { ResponsibleGambling } from '../components/ResponsibleGambling';
 import { getTomorrowFixturesFromDB } from '../services/sportsData';
 import { PortfolioOnboarding } from '../components/PortfolioOnboarding';
 import { Sparkline } from '../components/Sparkline';
@@ -1032,12 +1034,18 @@ export const VIP: React.FC<VIPProps> = () => {
             <div className="pt-6 border-t border-slate-200 dark:border-white/10 flex flex-col items-center space-y-4">
               <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
                 <ShieldCheck size={14} className="text-emerald-500" />
-                Secure Checkout via <span className="text-slate-900 dark:text-white font-bold">Fapshi</span> & <span className="text-slate-900 dark:text-white font-bold">Selar</span>
+                {Capacitor.isNativePlatform()
+                  ? <>Secure Checkout via <span className="text-slate-900 dark:text-white font-bold">Google Play</span></>
+                  : <>Secure Checkout via <span className="text-slate-900 dark:text-white font-bold">Fapshi</span> &amp; <span className="text-slate-900 dark:text-white font-bold">Selar</span></>
+                }
               </div>
               
-              {/* Payment Methods (Modernized) */}
+              {/* Payment Methods */}
               <div className="flex items-center justify-center gap-2">
-                {['MTN Mobile Money', 'Orange Money', 'Card'].map(method => (
+                {(Capacitor.isNativePlatform()
+                  ? ['Google Play', 'Credit Card', 'Carrier Billing']
+                  : ['MTN Mobile Money', 'Orange Money', 'Card']
+                ).map(method => (
                   <div key={method} className="px-2.5 py-1 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                     {method}
                   </div>
@@ -1057,6 +1065,11 @@ export const VIP: React.FC<VIPProps> = () => {
           </div>
         </>
       )}
+
+      {/* Responsible Gambling — required for Play Store compliance */}
+      <div className="px-4 pb-6">
+        <ResponsibleGambling compact />
+      </div>
 
       <PaymentModal
         isOpen={showPaymentModal}

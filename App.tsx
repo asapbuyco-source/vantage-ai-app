@@ -1,5 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { verifySelarOrder } from './services/selar';
 import { AnimatePresence } from 'framer-motion';
 import { Loader2, X, Crown, RefreshCw } from 'lucide-react';
@@ -42,6 +43,7 @@ function AppContent() {
     if (mode === 'signup') return 'signup';
     if (mode === 'login') return 'login';
     if (mode === 'stats') return 'stats';
+    if (Capacitor.isNativePlatform()) return 'login';
     return 'landing';
   });
 
@@ -53,6 +55,20 @@ function AppContent() {
 
   // Listen for SW_UPDATED message from the new service worker
   useEffect(() => {
+    const setupRevenueCat = async () => {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const { Purchases, LOG_LEVEL } = await import('@revenuecat/purchases-capacitor');
+          await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+          // TODO: Replace with your actual RevenueCat Google Play API Key
+          await Purchases.configure({ apiKey: 'goog_PLACEHOLDER_KEY_HERE' });
+        } catch (e) {
+          console.error("RevenueCat Init Error", e);
+        }
+      }
+    };
+    setupRevenueCat();
+
     if (!('serviceWorker' in navigator)) return;
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type === 'SW_UPDATED') {

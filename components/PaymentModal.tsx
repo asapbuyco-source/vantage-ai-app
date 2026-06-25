@@ -6,6 +6,8 @@ import { initiateFapshiPayment } from '../services/fapshi';
 import { initiateSelarPayment } from '../services/selar';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { Capacitor } from '@capacitor/core';
+import { Purchases } from '@revenuecat/purchases-capacitor';
 
 const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string }> = {
   'ng': { symbol: '₦', rate: 2.45, label: 'NGN' },
@@ -43,6 +45,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
   const [paymentFailed, setPaymentFailed] = useState(false);
 
   const userEmail = user?.email || '';
+  const isNative = Capacitor.isNativePlatform();
 
   React.useEffect(() => {
     if (isOpen && userProfile) {
@@ -81,16 +84,42 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     } catch(err) { console.error('Pixel error', err); }
 
     try {
+      if (isNative) {
+        // --- NATIVE GOOGLE PLAY PAYMENT VIA REVENUECAT ---
+        // Note: You must configure offerings in RevenueCat dashboard matching plan.id
+        const offerings = await Purchases.getOfferings();
+        if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
+            // Placeholder matching logic: try to find a package that matches 'weekly' or 'monthly'
+            const pkgToBuy = offerings.current.availablePackages.find(p => p.identifier.toLowerCase().includes(plan.id.toLowerCase())) || offerings.current.availablePackages[0];
+            
+            if (pkgToBuy) {
+                const purchaseResult = await Purchases.purchasePackage({ aPackage: pkgToBuy });
+                // Placeholder entitlement name: 'vip_access'
+                if (typeof purchaseResult.customerInfo.entitlements.active['vip_access'] !== "undefined") {
+                    showToast(language === 'fr' ? "Achat réussi ! Bienvenue VIP 🎉" : "Purchase Successful! Welcome VIP 🎉", "success");
+                    if (onSuccess) onSuccess();
+                    onClose();
+                }
+            } else {
+                 showToast("Plan not found in Google Play. Check configuration.", "error");
+            }
+        } else {
+             // Fallback for when API keys are placeholder or empty
+             showToast("Google Play Billing not fully configured yet. (Placeholder mode)", "error");
+             setPaymentFailed(true);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // --- WEB PAYMENTS (FAPSHI / SELAR) ---
       if (gateway === 'fapshi') {
         const { link, transId } = await initiateFapshiPayment(plan.id, user.email || undefined);
-        // CRITICAL: Fapshi does NOT append transId to the redirectUrl automatically.
-        // We must store it in localStorage so App.tsx can retrieve it on return.
         if (transId) {
           localStorage.setItem('pendingFapshiTransId', transId);
         }
         window.location.href = link;
       } else {
-        // For Selar, verify the user has an email before proceeding
         if (!user.email) {
           showToast(
             language === 'fr'
@@ -109,8 +138,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
         window.location.href = checkout_url;
       }
     } catch (e: any) {
-      showToast(e.message || "Payment initiation failed", "error");
-      setPaymentFailed(true);
+      if (!e.userCancelled) {
+          showToast(e.message || "Payment initiation failed", "error");
+          setPaymentFailed(true);
+      }
       setLoading(false);
     }
   };
@@ -162,29 +193,31 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
               </div>
 
               {/* Gateway Selection */}
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                <button
-                  onClick={() => setGateway('fapshi')}
-                  className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${gateway === 'fapshi' ? 'border-vantage-purple bg-vantage-purple/10 text-vantage-purple' : 'border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400'}`}
-                >
-                  <Smartphone size={20} />
-                  <span className="text-xs font-bold">Cameroon (MoMo)</span>
-                </button>
-                <button
-                  onClick={() => setGateway('selar')}
-                  className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${gateway === 'selar' ? 'border-vantage-cyan bg-vantage-cyan/10 text-vantage-cyan' : 'border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400'}`}
-                >
-                  <Globe size={20} />
-                  <span className="text-xs font-bold">Global (Selar)</span>
-                </button>
-              </div>
+              {!isNative && (
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <button
+                    onClick={() => setGateway('fapshi')}
+                    className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${gateway === 'fapshi' ? 'border-vantage-purple bg-vantage-purple/10 text-vantage-purple' : 'border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400'}`}
+                  >
+                    <Smartphone size={20} />
+                    <span className="text-xs font-bold">Cameroon (MoMo)</span>
+                  </button>
+                  <button
+                    onClick={() => setGateway('selar')}
+                    className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${gateway === 'selar' ? 'border-vantage-cyan bg-vantage-cyan/10 text-vantage-cyan' : 'border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400'}`}
+                  >
+                    <Globe size={20} />
+                    <span className="text-xs font-bold">Global (Selar)</span>
+                  </button>
+                </div>
+              )}
 
               {/* ── Selar Email Warning ─────────────────────────────────────────────
                   Critical: if the user pays in Selar with a different email than
                   their Vantage account, the server cannot match the payment to
                   their account and VIP will not be granted automatically.
               */}
-              {gateway === 'selar' && userEmail && (
+              {!isNative && gateway === 'selar' && userEmail && (
                 <motion.div
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -211,7 +244,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                 </motion.div>
               )}
 
-              {gateway === 'selar' && !userEmail && (
+              {!isNative && gateway === 'selar' && !userEmail && (
                 <motion.div
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -231,15 +264,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
 
               <button
                 onClick={handlePayment}
-                disabled={loading || (gateway === 'selar' && !userEmail)}
+                disabled={loading || (!isNative && gateway === 'selar' && !userEmail)}
                 className="w-full py-4 bg-vantage-purple hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition-all shadow-lg shadow-vantage-purple/30 flex items-center justify-center space-x-2"
               >
                 {loading ? (
                   <Loader2 className="animate-spin" size={20} />
                 ) : (
                   <>
-                    <span>{language === 'fr' ? 'Payer Maintenant' : 'Pay Now'}</span>
-                    <ArrowRight size={20} />
+                    {isNative && <img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/Google_Play_Arrow_logo.svg" alt="Google Play" className="w-5 h-5 grayscale contrast-200 invert opacity-80" />}
+                    <span>{isNative ? (language === 'fr' ? 'Payer avec Google Play' : 'Pay with Google Play') : (language === 'fr' ? 'Payer Maintenant' : 'Pay Now')}</span>
+                    {!isNative && <ArrowRight size={20} />}
                   </>
                 )}
               </button>

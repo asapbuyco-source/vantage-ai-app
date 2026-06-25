@@ -209,7 +209,10 @@ const shareReferral = () => {
     // --- UNAUTHENTICATED VIEW ---
     if (!user) {
         return (
-            <div className="min-h-[80vh] flex flex-col justify-center items-center relative px-2">
+            <div className="min-h-[90vh] flex flex-col justify-center items-center relative px-4 w-full overflow-hidden">
+                {/* Premium Background Orbs */}
+                <div className="absolute top-[10%] left-[-20%] w-80 h-80 bg-vantage-cyan/20 rounded-full mix-blend-screen filter blur-[80px] opacity-60 animate-pulse"></div>
+                <div className="absolute bottom-[10%] right-[-20%] w-80 h-80 bg-vantage-purple/20 rounded-full mix-blend-screen filter blur-[80px] opacity-60 animate-pulse" style={{ animationDelay: '1.5s' }}></div>
                 <AnimatePresence>
                     {error && (
                         // @ts-ignore
@@ -256,19 +259,21 @@ const shareReferral = () => {
                             </button>
                         )}
 
-                        <div className="text-center space-y-2 mb-8 mt-4">
-                            <div className="w-20 h-20 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-cyan-200 dark:border-cyan-500/20 shadow-[0_0_30px_rgba(34,211,238,0.2)] dark:bg-vantage-cyan/10 dark:border-vantage-cyan/20">
-                                <User size={40} className="text-cyan-600 dark:text-vantage-cyan" />
+                        <div className="text-center space-y-3 mb-10 mt-6 relative z-10">
+                            <div className="w-24 h-24 bg-gradient-to-br from-vantage-cyan to-vantage-purple rounded-[2rem] p-0.5 mx-auto shadow-2xl shadow-vantage-cyan/20 rotate-3 hover:rotate-0 transition-transform duration-500">
+                                <div className="w-full h-full bg-slate-50 dark:bg-slate-900 rounded-[2rem] flex items-center justify-center">
+                                    <User size={40} className="text-slate-900 dark:text-white" />
+                                </div>
                             </div>
-                            <h1 className="text-3xl font-bold font-orbitron text-slate-900 dark:text-white">
-                                VANTAGE<span className="text-vantage-cyan">ID</span>
+                            <h1 className="text-4xl font-black font-orbitron tracking-tight text-slate-900 dark:text-white drop-shadow-sm">
+                                VANTAGE<span className="text-transparent bg-clip-text bg-gradient-to-r from-vantage-cyan to-vantage-purple">ID</span>
                             </h1>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
                                 {isForgotMode ? t('auth.reset_subtitle') : (isLoginMode ? t('auth.login_subtitle') : t('auth.signup_subtitle'))}
                             </p>
                         </div>
 
-                        <GlassCard className="space-y-6 !p-6">
+                        <GlassCard className="relative z-10 w-full space-y-6 !p-8 shadow-2xl border-white/20 backdrop-blur-2xl bg-white/40 dark:bg-black/40">
                             {resetSent ? (
                                 <div className="text-center py-6">
                                     <div className="w-12 h-12 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -292,7 +297,7 @@ const shareReferral = () => {
                                                 placeholder={t('auth.email_placeholder')}
                                                 value={email}
                                                 onChange={(e) => setEmail(e.target.value)}
-                                                className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-vantage-cyan/50 focus:border-vantage-cyan/50 text-slate-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 transition-all outline-none text-sm"
+                                                className="w-full pl-11 pr-4 py-3.5 bg-white/60 dark:bg-black/50 border border-slate-200/50 dark:border-white/10 rounded-2xl focus:ring-2 focus:ring-vantage-cyan focus:border-transparent text-slate-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all outline-none text-sm shadow-inner"
                                                 required
                                             />
                                         </div>
@@ -309,7 +314,7 @@ const shareReferral = () => {
                                                     placeholder={t('auth.password_placeholder')}
                                                     value={password}
                                                     onChange={(e) => setPassword(e.target.value)}
-                                                    className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-vantage-cyan/50 focus:border-vantage-cyan/50 text-slate-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 transition-all outline-none text-sm"
+                                                    className="w-full pl-11 pr-4 py-3.5 bg-white/60 dark:bg-black/50 border border-slate-200/50 dark:border-white/10 rounded-2xl focus:ring-2 focus:ring-vantage-cyan focus:border-transparent text-slate-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all outline-none text-sm shadow-inner"
                                                     required={!isForgotMode}
                                                     minLength={6}
                                                 />
@@ -326,7 +331,7 @@ const shareReferral = () => {
                                                         placeholder={t('auth.promo_placeholder')}
                                                         value={referralCodeInput}
                                                         onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
-                                                        className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-vantage-cyan/50 focus:border-vantage-cyan/50 text-slate-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 transition-all outline-none text-sm uppercase"
+                                                        className="w-full pl-11 pr-4 py-3.5 bg-white/60 dark:bg-black/50 border border-slate-200/50 dark:border-white/10 rounded-2xl focus:ring-2 focus:ring-vantage-purple focus:border-transparent text-slate-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all outline-none text-sm uppercase shadow-inner"
                                                         maxLength={8}
                                                     />
                                                 </div>
@@ -345,7 +350,7 @@ const shareReferral = () => {
                                     <button
                                         type="submit"
                                         disabled={isSubmitting}
-                                        className="w-full py-3 bg-vantage-cyan hover:bg-cyan-400 text-slate-900 font-bold rounded-xl shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.5)] transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="w-full py-4 bg-gradient-to-r from-vantage-cyan to-vantage-purple hover:from-cyan-400 hover:to-purple-500 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <span>{isForgotMode ? t('auth.reset_btn') : (isLoginMode ? t('auth.login_btn') : t('auth.signup_btn'))}</span>
                                         {!isSubmitting && <ArrowRight size={18} />}
@@ -374,7 +379,7 @@ const shareReferral = () => {
                                     <button
                                         onClick={handleGoogleAuth}
                                         disabled={isSubmitting}
-                                        className="w-full py-3 bg-white dark:bg-white text-slate-900 font-bold rounded-xl border border-slate-200 hover:bg-slate-50 transition-all flex items-center justify-center space-x-3 disabled:opacity-50"
+                                        className="w-full py-3.5 bg-white dark:bg-white text-slate-900 font-bold rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:bg-slate-50 transition-all flex items-center justify-center space-x-3 disabled:opacity-50"
                                     >
                                         <svg className="w-5 h-5" viewBox="0 0 24 24">
                                             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />

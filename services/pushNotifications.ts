@@ -14,43 +14,73 @@
 import { getMessaging, getToken, onMessage, MessagePayload } from 'firebase/messaging';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
+import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 
 const VAPID_KEY = import.meta.env?.VITE_FIREBASE_VAPID_KEY;
 
 /** Request push permission and save the FCM token to the user's Firestore profile. */
 export const requestPushPermission = async (uid: string): Promise<boolean> => {
     try {
-        if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-            console.warn('[FCM] Push notifications not supported in this browser.');
-            return false;
-        }
+        if (Capacitor.isNativePlatform()) {
+            let permStatus = await PushNotifications.checkPermissions();
+            if (permStatus.receive === 'prompt') {
+                permStatus = await PushNotifications.requestPermissions();
+            }
+            if (permStatus.receive !== 'granted') {
+                console.log('[Native Push] Notification permission denied.');
+                return false;
+            }
 
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-            console.log('[FCM] Notification permission denied.');
-            return false;
-        }
-
-        if (!VAPID_KEY) {
-            console.warn('[FCM] VITE_FIREBASE_VAPID_KEY not set. Push notifications disabled.');
-            return false;
-        }
-
-        const messaging = getMessaging();
-        const token = await getToken(messaging, { vapidKey: VAPID_KEY });
-
-        if (token) {
-            // Save token to Firestore profile so admin/Cloud Functions can target this device
-            await setDoc(doc(db, 'profiles', uid), {
-                fcmToken: token,
-                fcmUpdatedAt: new Date().toISOString(),
-            }, { merge: true });
-
-            console.log('[FCM] ✅ Push token saved for user:', uid);
+            await PushNotifications.register();
+            
+            // Note: In a real app, you would add this listener only once. 
+            // For simplicity here, we add it during request and save the token.
+            PushNotifications.addListener('registration', async (token) => {
+                await setDoc(doc(db, 'profiles', uid), {
+                    fcmToken: token.value,
+                    fcmUpdatedAt: new Date().toISOString(),
+                }, { merge: true });
+                console.log('[Native Push] ✅ Push token saved for user:', uid);
+            });
+            
+            PushNotifications.addListener('registrationError', (error: any) => {
+                console.error('[Native Push] Error on registration:', error);
+            });
             return true;
         } else {
-            console.warn('[FCM] No token received. Check VAPID key and service worker.');
-            return false;
+            if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                console.warn('[FCM] Push notifications not supported in this browser.');
+                return false;
+            }
+
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                console.log('[FCM] Notification permission denied.');
+                return false;
+            }
+
+            if (!VAPID_KEY) {
+                console.warn('[FCM] VITE_FIREBASE_VAPID_KEY not set. Push notifications disabled.');
+                return false;
+            }
+
+            const messaging = getMessaging();
+            const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+
+            if (token) {
+                // Save token to Firestore profile so admin/Cloud Functions can target this device
+                await setDoc(doc(db, 'profiles', uid), {
+                    fcmToken: token,
+                    fcmUpdatedAt: new Date().toISOString(),
+                }, { merge: true });
+
+                console.log('[FCM] ✅ Push token saved for user:', uid);
+                return true;
+            } else {
+                console.warn('[FCM] No token received. Check VAPID key and service worker.');
+                return false;
+            }
         }
     } catch (e) {
         console.error('[FCM] Error requesting push permission:', e);
