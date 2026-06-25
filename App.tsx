@@ -13,6 +13,7 @@ import { Home } from './pages/Home';
 import { Profile } from './pages/Profile';
 import { LandingPage } from './pages/LandingPage';
 import { PublicStats } from './pages/PublicStats';
+import { Results } from './pages/Results';
 import { LiveScores } from './pages/LiveScores';
 import { BlogIndex } from './pages/BlogIndex';
 import { BlogPost } from './pages/BlogPost';
@@ -412,8 +413,8 @@ function AppContent() {
                     <Route path="/concierge" element={<Learn />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/admin" element={<Admin />} />
-                    <Route path="/stats" element={<Profile />} />
-                    <Route path="/results" element={<Profile />} />
+                    <Route path="/stats" element={<PublicStats />} />
+                    <Route path="/results" element={<Results />} />
                     <Route path="/live" element={<LiveScores />} />
                   </Routes>
                 </ErrorBoundary>
