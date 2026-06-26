@@ -3,7 +3,7 @@ workflows:
     name: Vantage AI — Android Release Build
     max_build_duration: 60
     environment:
-      node: 20.11.0
+      node: 22.14.0
       vars:
         PACKAGE_NAME: "com.vantageai.app"
       android_signing:
@@ -22,6 +22,7 @@ workflows:
           echo "VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID" >> .env.local
           echo "VITE_ADMIN_EMAIL=$VITE_ADMIN_EMAIL" >> .env.local
           echo "VITE_BACKEND_URL=$VITE_BACKEND_URL" >> .env.local
+          echo "VITE_REVENUECAT_GOOGLE_API_KEY=$VITE_REVENUECAT_GOOGLE_API_KEY" >> .env.local
 
       - name: Place google-services.json
         script: |
