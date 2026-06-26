@@ -828,6 +828,75 @@ app.post('/api/payments/selar/webhook', async (req, res) => {
     }
 });
 
+// RevenueCat Webhook — handles Google Play / App Store purchase events
+const REVENUECAT_WEBHOOK_SECRET = process.env.REVENUECAT_WEBHOOK_SECRET || '';
+
+app.post('/api/payments/revenuecat/webhook', express.json({ limit: '1mb' }), async (req, res) => {
+    try {
+        if (REVENUECAT_WEBHOOK_SECRET) {
+            const authHeader = req.headers['authorization'] || '';
+            if (!authHeader || authHeader !== `Bearer ${REVENUECAT_WEBHOOK_SECRET}`) {
+                return res.status(401).json({ error: 'Unauthorized' });
+            }
+        }
+
+        const event = req.body?.event;
+        if (!event) return res.status(400).json({ error: 'Missing event' });
+
+        const validEvents = ['INITIAL_PURCHASE', 'RENEWAL', 'NON_RENEWING_PURCHASE'];
+        if (!validEvents.includes(event.type)) {
+            return res.status(200).json({ ignored: true, reason: `Event type ${event.type} not processed` });
+        }
+
+        const appUserId = event.app_user_id;
+        const productId = event.product_id || '';
+        if (!appUserId || !productId) {
+            return res.status(400).json({ error: 'Missing app_user_id or product_id' });
+        }
+
+        const plan = productId.includes('annual') ? 'annual'
+            : productId.includes('quarterly') ? 'quarterly'
+            : productId.includes('monthly') ? 'monthly'
+            : productId.includes('weekly') ? 'weekly'
+            : productId.includes('daily') ? 'daily'
+            : null;
+
+        if (!plan) {
+            logger.warn({ productId }, '[RevenueCat] Unknown product ID');
+            return res.status(200).json({ ignored: true, reason: 'Unknown product' });
+        }
+
+        const db = admin.firestore();
+        const userQuery = await db.collection('profiles')
+            .where('revenuecatId', '==', appUserId)
+            .limit(1)
+            .get();
+
+        if (userQuery.empty) {
+            logger.warn({ appUserId, productId }, '[RevenueCat] No user found for RevenueCat ID');
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const userDoc = userQuery.docs[0];
+        const txId = `rc_${event.id || Date.now()}`;
+
+        await fulfillVipPayment({
+            uid: userDoc.id,
+            provider: 'revenuecat',
+            transactionId: txId,
+            plan,
+            amount: 0,
+            raw: req.body,
+        });
+
+        logger.info({ uid: userDoc.id, plan, productId }, '[RevenueCat] VIP fulfilled via webhook');
+        res.json({ ok: true });
+    } catch (e) {
+        logger.error({ error: e }, '[RevenueCat] Webhook error');
+        res.status(500).json({ error: 'Webhook processing failed' });
+    }
+});
+
 // ══════════════════════════════════════════════════════════════════════
 // PUSH NOTIFICATIONS
 // ══════════════════════════════════════════════════════════════════════

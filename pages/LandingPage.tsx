@@ -349,7 +349,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin,
                 </div>
                 {/* Daily Pass Option */}
                 <div className="mt-6 text-center">
-                    <p className="text-sm text-gray-500">Just want to try it out? <button onClick={onLogin} className="text-vantage-cyan font-bold hover:underline">Get a 24-Hour Pass for 500 FCFA</button> inside the app.</p>
+                    <p className="text-sm text-gray-500">Just want to try it out? <button onClick={onLogin} className="text-vantage-cyan font-bold hover:underline">Get a 24-Hour Pass for $4.99</button> inside the app.</p>
                 </div>
             </div>
 

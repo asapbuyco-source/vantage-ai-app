@@ -332,8 +332,8 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
           <div className="p-3 rounded-xl bg-white/5 border border-white/5">
             <p className="text-[10px] text-gray-500 mb-1">
               {language === 'fr'
-                ? `Voir ce que l'IA a choisi — accès dès 1000 FCFA/semaine`
-                : `See what the model picked — 7-day access from 1000 FCFA`}
+                ? `Voir ce que l'IA a choisi — acces des $6.99/semaine`
+                : `See what the model picked — 7-day access from $6.99`}
             </p>
             <div className="text-[10px] text-vantage-purple font-bold mt-1">
               {language === 'fr' ? `${totalAnalyzed} matchs analysés` : `${totalAnalyzed} matches analyzed today`}
@@ -358,7 +358,7 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
                 {language === 'fr' ? `Débloquer les ${hiddenCount} analyses` : `Unlock all ${hiddenCount} analyses`}
               </div>
               <div className="text-[10px] text-white/70">
-                {language === 'fr' ? 'Dès 2000 FCFA/semaine • Actif instantanément' : 'From 2000 FCFA/week • Active instantly'}
+                {language === 'fr' ? 'Des $14.99/semaine • Actif instantanement' : 'From $14.99/week • Active instantly'}
               </div>
             </div>
           </div>

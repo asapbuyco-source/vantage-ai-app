@@ -58,10 +58,15 @@ function AppContent() {
     const setupRevenueCat = async () => {
       if (Capacitor.isNativePlatform()) {
         try {
+          const apiKey = import.meta.env.VITE_REVENUECAT_GOOGLE_API_KEY;
+          if (!apiKey || apiKey.includes('PLACEHOLDER') || apiKey.includes('your_')) {
+            console.warn('RevenueCat not configured: VITE_REVENUECAT_GOOGLE_API_KEY is missing or placeholder');
+            return;
+          }
           const { Purchases, LOG_LEVEL } = await import('@revenuecat/purchases-capacitor');
           await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-          // TODO: Replace with your actual RevenueCat Google Play API Key
-          await Purchases.configure({ apiKey: 'goog_PLACEHOLDER_KEY_HERE' });
+          await Purchases.configure({ apiKey });
+          console.log('RevenueCat initialized successfully');
         } catch (e) {
           console.error("RevenueCat Init Error", e);
         }

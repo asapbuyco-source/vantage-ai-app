@@ -166,7 +166,7 @@ const shareReferral = () => {
 
         if (!payoutPhone) return;
         if (isNaN(amountNum) || amountNum < 1000) {
-            alert(language === 'fr' ? "Le montant minimum est de 1000 FCFA" : "Minimum amount is 1000 FCFA");
+            alert(language === 'fr' ? "Le montant minimum est de 1000 XAF" : "Minimum amount is 1000 XAF");
             return;
         }
         if (amountNum > balance) {
@@ -646,7 +646,7 @@ const shareReferral = () => {
                                     <div>
                                         <input
                                             type="number"
-                                            placeholder={language === 'fr' ? 'Montant (min 1000 FCFA)' : 'Amount (min 1000 FCFA)'}
+                                            placeholder={language === 'fr' ? 'Montant (min 1000 XAF)' : 'Amount (min 1000 XAF)'}
                                             value={payoutAmount}
                                             onChange={(e) => setPayoutAmount(e.target.value)}
                                             min={1000}
@@ -657,7 +657,7 @@ const shareReferral = () => {
                                     </div>
                                     <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-lg text-sm flex justify-between">
                                         <span className="text-gray-500">{t('profile.earnings')}:</span>
-                                        <span className="font-bold text-vantage-purple">{userProfile?.referralEarnings} FCFA</span>
+                                        <span className="font-bold text-vantage-purple">${userProfile?.referralEarnings}</span>
                                     </div>
                                     <button
                                         type="submit"
@@ -695,7 +695,7 @@ const shareReferral = () => {
                         <span className="text-xs uppercase tracking-wide">{t('profile.total_paid')}</span>
                     </div>
                     <span className="text-xl font-bold font-orbitron text-vantage-purple">
-                        {(userProfile?.totalPaid || 0).toLocaleString()} <span className="text-xs text-vantage-purple/50">FCFA</span>
+                        {(userProfile?.totalPaid || 0).toLocaleString()} <span className="text-xs text-vantage-purple/50">$</span>
                     </span>
                 </GlassCard>
             </div>

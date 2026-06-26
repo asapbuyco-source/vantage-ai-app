@@ -1,9 +1,10 @@
 export const PLAN_CONFIG = {
-  daily: { days: 1, amount: 500 },
-  weekly: { days: 7, amount: 2000 },
-  monthly: { days: 30, amount: 5000 },
-  quarterly: { days: 90, amount: 12000 },
-  annual: { days: 365, amount: 35000 },
+  daily: { days: 1, amount: 4.99 },
+  weekly_trial: { days: 7, amount: 6.99 },
+  weekly: { days: 7, amount: 14.99 },
+  monthly: { days: 30, amount: 24.99 },
+  quarterly: { days: 90, amount: 59.99 },
+  annual: { days: 365, amount: 99.99 },
 };
 
 export function assertValidPlan(plan) {

@@ -17,6 +17,7 @@ interface ImportMetaEnv {
   readonly VITE_SELAR_ANNUAL_LINK?: string
   readonly VITE_FIREBASE_VAPID_KEY?: string
   readonly VITE_ADMIN_EMAIL?: string
+  readonly VITE_REVENUECAT_GOOGLE_API_KEY?: string
 }
 
 interface ImportMeta {

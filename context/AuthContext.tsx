@@ -302,7 +302,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const requestPayout = async (amount: number, phoneNumber: string) => {
         if (!user || !userProfile) return;
-        if (amount < 1000) throw new Error("Minimum payout is 1000 FCFA");
+        if (amount < 1000) throw new Error("Minimum payout is 1000 XAF");
 
         try {
             const userRef = doc(db, "profiles", user.uid);

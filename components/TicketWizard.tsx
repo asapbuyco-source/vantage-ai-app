@@ -258,7 +258,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                                         onChange={(e) => setStake(e.target.value)}
                                         className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl py-3 px-4 font-mono font-bold text-lg text-vantage-purple focus:outline-none focus:ring-2 focus:ring-vantage-purple/50"
                                     />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">FCFA</span>
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">$</span>
                                 </div>
                             </div>
 
@@ -273,7 +273,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                                         onChange={(e) => setGoal(e.target.value)}
                                         className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl py-3 px-4 font-mono font-bold text-lg text-vantage-cyan focus:outline-none focus:ring-2 focus:ring-vantage-cyan/50"
                                     />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">FCFA</span>
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">$</span>
                                 </div>
                             </div>
 
@@ -284,9 +284,9 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                                         {language === 'fr'
                                           ? `L'IA analysera les cotes disponibles pour atteindre votre objectif de `
                                           : `AI will analyze available odds to reach your goal of `}
-                                        <span className="text-vantage-purple font-bold font-mono">{goal} FCFA</span>
+                                        <span className="text-vantage-purple font-bold font-mono">{goal} $</span>
                                         {language === 'fr' ? ' avec une mise de ' : ' with a stake of '}
-                                        <span className="text-vantage-purple font-bold font-mono">{stake} FCFA</span>.
+                                        <span className="text-vantage-purple font-bold font-mono">{stake} $</span>.
                                     </p>
                                 </div>
                             </div>
@@ -450,7 +450,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                                     <div className="p-4 bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
                                         <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-500 italic">
-                                                {language === 'fr' ? 'Mise recommandée:' : 'Recommended stake:'} <span className="font-mono">{stake}</span> FCFA
+                                                {language === 'fr' ? 'Mise recommandee:' : 'Recommended stake:'} <span className="font-mono">{stake}</span> $
                                             </span>
                                             <div className="flex items-center gap-1 text-vantage-purple">
                                                 <Sparkles size={12} />

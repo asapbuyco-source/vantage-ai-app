@@ -72,8 +72,8 @@ const slides = [
         badge: 'Premium Access',
         title_en: 'Unlock VIP\nPredictions',
         title_fr: 'Déverrouillez les\nPronostics VIP',
-        desc_en: 'VIP members get Smart Accumulators, full match analysis, high-confidence picks (85%+), and real-time updates — starting from just 500 FCFA.',
-        desc_fr: 'Les membres VIP ont accès aux Accumulateurs Intelligents, à l\'analyse complète et aux pronostics haute confiance (85%+) dès 500 FCFA.',
+        desc_en: 'VIP members get Smart Accumulators, full match analysis, high-confidence picks (85%+), and real-time updates — starting from just $4.99.',
+        desc_fr: 'Les membres VIP ont accès aux Accumulateurs Intelligents, à l\'analyse complète et aux pronostics haute confiance (85%+) dès $4.99.',
     },
     {
         id: 'referral',
@@ -104,9 +104,9 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const isCountrySlide = current.id === 'country';
 
     const countries = [
-        { code: 'cm', label_en: 'Cameroon (FCFA)', label_fr: 'Cameroun (FCFA)', flag: '🇨🇲' },
-        { code: 'ci', label_en: 'Ivory Coast (FCFA)', label_fr: 'Côte d\'Ivoire (FCFA)', flag: '🇨🇮' },
-        { code: 'sn', label_en: 'Senegal (FCFA)', label_fr: 'Sénégal (FCFA)', flag: '🇸🇳' },
+        { code: 'cm', label_en: 'Cameroon', label_fr: 'Cameroun', flag: '🇨🇲' },
+        { code: 'ci', label_en: 'Ivory Coast', label_fr: 'Côte d\'Ivoire', flag: '🇨🇮' },
+        { code: 'sn', label_en: 'Senegal', label_fr: 'Sénégal', flag: '🇸🇳' },
         { code: 'ng', label_en: 'Nigeria (NGN)', label_fr: 'Nigéria (NGN)', flag: '🇳🇬' },
         { code: 'ke', label_en: 'Kenya (KES)', label_fr: 'Kenya (KES)', flag: '🇰🇪' },
         { code: 'gh', label_en: 'Ghana (GHS)', label_fr: 'Ghana (GHS)', flag: '🇬🇭' },

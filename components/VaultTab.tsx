@@ -611,10 +611,10 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                                 </div>
                                 {pick.stakeAmount > 0 && (
                                     <div className="mt-1.5 text-[10px] text-gray-500 font-mono flex items-center gap-2">
-                                        <span>Stake: {pick.stakeAmount.toLocaleString()} FCFA</span>
+                                        <span>Stake: ${pick.stakeAmount.toLocaleString()}</span>
                                         {pick.profit !== null && (
                                             <span className={pick.profit >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                                                {pick.profit >= 0 ? '+' : ''}{pick.profit.toLocaleString()} FCFA
+                                                {pick.profit >= 0 ? '+' : ''}{pick.profit.toLocaleString()} $
                                             </span>
                                         )}
                                     </div>
@@ -657,7 +657,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                                                 </div>
                                                 <div className="text-right">
                                                     <div className={`text-xs font-bold font-mono ${dayPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                        {dayPnl >= 0 ? '+' : ''}{dayPnl.toLocaleString()} FCFA
+                                                        {dayPnl >= 0 ? '+' : ''}{dayPnl.toLocaleString()} $
                                                     </div>
                                                     <div className={`text-[10px] font-mono ${dayPnl >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
                                                         {dayPnl >= 0 ? '+' : ''}{dayPnlPct.toFixed(1)}%

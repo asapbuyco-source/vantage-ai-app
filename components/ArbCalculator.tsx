@@ -53,7 +53,7 @@ export const ArbCalculator: React.FC<ArbCalculatorProps> = ({ arb, onClose }) =>
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Total Investment (FCFA)</label>
+                        <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Total Investment ($)</label>
                         <input 
                             type="number" 
                             value={totalStake}

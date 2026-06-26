@@ -195,10 +195,10 @@ export const TrialOfferPopup: React.FC<TrialOfferPopupProps> = ({ onClaim, isVip
                   </h3>
                   <div className="flex items-baseline gap-2">
                     <span className="font-mono text-xs text-slate-400 line-through">
-                      {WEEKLY_REGULAR_PRICE.toLocaleString()} FCFA
+                      ${WEEKLY_REGULAR_PRICE} USD
                     </span>
                     <span className="font-mono text-xl font-black text-[#00E5FF]">
-                      {WEEKLY_TRIAL_PRICE.toLocaleString()} FCFA
+                      ${WEEKLY_TRIAL_PRICE} USD
                     </span>
                     <span className="text-[9px] font-extrabold text-[#00E5FF]/70 tracking-widest uppercase px-1.5 py-0.5 rounded border border-vantage-cyan/25 bg-vantage-cyan/5">
                       7-DAY ALPHA

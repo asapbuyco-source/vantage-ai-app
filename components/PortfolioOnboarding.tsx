@@ -75,7 +75,7 @@ export const PortfolioOnboarding: React.FC<PortfolioOnboardingProps> = ({
                         {/* Bankroll Input */}
                         <div>
                             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                                {language === 'fr' ? 'Capital Initial (FCFA)' : 'Starting Bankroll (FCFA)'}
+                                {language === 'fr' ? 'Capital Initial ($)' : 'Starting Bankroll ($)'}
                             </label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">

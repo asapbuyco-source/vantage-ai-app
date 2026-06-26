@@ -25,23 +25,16 @@ import { ArbFinder } from './ArbFinder';
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
-// ── Currency detection helper ──────────────────────────────────────
-const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string }> = {
-  'ng': { symbol: '₦', rate: 2.45, label: 'NGN' },
-  'ke': { symbol: 'KSh', rate: 0.23, label: 'KES' },
-  'gh': { symbol: 'GH₵', rate: 0.02, label: 'GHS' },
-  'za': { symbol: 'R', rate: 0.029, label: 'ZAR' },
-  'us': { symbol: '$', rate: 0.00167, label: 'USD' },
-  'gb': { symbol: '£', rate: 0.00132, label: 'GBP' },
+// Currency symbol lookup for display — Google Play handles actual per-country pricing
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  'us': '$', 'gb': '£', 'eu': '€', 'ng': '₦', 'ke': 'KSh',
+  'gh': 'GH₵', 'za': 'R', 'in': '₹', 'ca': 'C$', 'au': 'A$',
 };
 
-function getPricingForCountry(fcfa: number, countryCode: string = 'other') {
-  if (CURRENCY_MAP[countryCode]) {
-    const cur = CURRENCY_MAP[countryCode];
-    const converted = Math.round(fcfa * cur.rate);
-    return { amount: converted, symbol: cur.symbol, code: cur.label, isConverted: true, originalValue: fcfa };
-  }
-  return { amount: fcfa, symbol: '', code: 'FCFA', isConverted: false, originalValue: fcfa };
+function getPricingForCountry(amount: number, countryCode: string = 'us') {
+  const symbol = CURRENCY_SYMBOLS[countryCode] || '$';
+  const display = parseFloat(amount.toFixed(2));
+  return { amount: display, symbol, code: 'USD', isConverted: false, originalValue: amount };
 }
 
 interface VIPProps {}
@@ -53,7 +46,7 @@ export const VIP: React.FC<VIPProps> = () => {
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly'>('daily');
+  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual'>('daily');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -174,7 +167,7 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'daily',
         label: t('vip.plan_daily') || 'Daily Access',
         badge: '⚡ 24-HOUR PASS',
-        price: '500',
+        price: '4.99',
         icon: <Zap size={20} />,
         features: ['Full +EV Signal Feed', 'Kelly Bankroll Sizing'],
         color: 'border-emerald-400 bg-emerald-500/5 dark:bg-emerald-500/10 shadow-[0_0_30px_rgba(16,185,129,0.1)]',
@@ -184,7 +177,7 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'weekly',
         label: t('vip.plan_weekly'),
         badge: '📊 7-DAY ACCESS',
-        price: '2000',
+        price: '14.99',
         icon: <Activity size={20} />,
         features: ['Full +EV Signal Feed', 'Kelly Bankroll Sizing', 'Alpha Screener Access'],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
@@ -194,7 +187,7 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'monthly',
         label: t('vip.plan_monthly'),
         badge: '🔥 MOST POPULAR',
-        price: '5000',
+        price: '24.99',
         icon: <Star size={20} />,
         features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group'],
         color: 'border-vantage-cyan bg-vantage-cyan/5 dark:bg-vantage-cyan/10 shadow-[0_0_40px_rgba(34,211,238,0.1)]',
@@ -204,15 +197,25 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'quarterly',
         label: t('vip.plan_quarterly'),
         badge: '💎 BEST VALUE',
-        price: '12000',
+        price: '59.99',
         icon: <ShieldCheck size={20} />,
         features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support'],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
         claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
+      {
+        id: 'annual',
+        label: t('vip.plan_annual') || 'Annual Elite',
+        badge: '🏆 MAX SAVINGS',
+        price: '99.99',
+        icon: <Crown size={20} />,
+        features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support', 'Monthly 1-on-1 Review'],
+        color: 'border-vantage-purple bg-vantage-purple/5 dark:bg-vantage-purple/10 shadow-[0_0_40px_rgba(168,85,247,0.1)]',
+        claimColor: 'bg-vantage-purple hover:bg-purple-500 text-white shadow-lg shadow-vantage-purple/25',
+      },
     ];
 
-  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'quarterly') => {
+  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
     setSelectedPlanId(planId);
     setShowPaymentModal(true);
   };
@@ -958,7 +961,7 @@ export const VIP: React.FC<VIPProps> = () => {
 
           <div id="plans-section" className="space-y-6">
             <div className="flex flex-col gap-4">
-            {plans.filter(p => showAllPlans || ['daily', 'weekly', 'monthly'].includes(p.id)).map((plan) => {
+            {plans.filter(p => showAllPlans || ['daily', 'weekly', 'monthly', 'quarterly'].includes(p.id)).map((plan) => {
                 const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
                 const isPopular = plan.id === 'monthly';
                 return (
@@ -1003,10 +1006,10 @@ export const VIP: React.FC<VIPProps> = () => {
                       {/* Pricing */}
                       <div className="flex flex-col items-end">
                         <span className="text-lg md:text-xl font-black font-mono text-slate-900 dark:text-white">
-                          {pricing.symbol}{pricing.amount.toLocaleString()}
+                          {pricing.symbol}{pricing.amount}
                         </span>
                         <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                          {pricing.code === 'FCFA' ? 'FCFA' : pricing.code}
+                          {pricing.code}
                         </span>
                         
                         <div className={`mt-4 px-4 py-2 rounded-xl font-bold text-xs transition-all ${plan.claimColor}`}>

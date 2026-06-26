@@ -49,7 +49,7 @@ export const Learn: React.FC = () => {
     {
       q: language === 'fr' ? "Qu'est-ce que l'EV (Expected Value) ?" : 'What is EV (Expected Value)?',
       a: language === 'fr'
-        ? "L'EV mesure votre avantage mathématique. Un EV de +10% signifie que pour chaque 100 FCFA misés, vous gagnez en moyenne 10 FCFA de profit sur le long terme."
+        ? "L'EV mesure votre avantage mathematique. Un EV de +10% signifie que pour chaque $100 mises, vous gagnez en moyenne $10 de profit sur le long terme."
         : 'EV measures your mathematical edge. An EV of +10% means for every 100 units staked, you expect 10 units profit long-term.',
     },
     {

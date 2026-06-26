@@ -9,20 +9,13 @@ import { useAuth } from '../context/AuthContext';
 import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
-const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string }> = {
-  'ng': { symbol: '₦', rate: 2.45, label: 'NGN' },
-  'ke': { symbol: 'KSh', rate: 0.23, label: 'KES' },
-  'gh': { symbol: 'GH₵', rate: 0.02, label: 'GHS' },
-  'za': { symbol: 'R', rate: 0.029, label: 'ZAR' }
-};
-
-function getPricingForCountry(fcfa: number, countryCode: string = 'other') {
-  if (CURRENCY_MAP[countryCode]) {
-    const cur = CURRENCY_MAP[countryCode];
-    const converted = Math.round(fcfa * cur.rate);
-    return { amount: converted, symbol: cur.symbol, code: cur.label };
-  }
-  return { amount: fcfa, symbol: '', code: 'FCFA' };
+function getPricingForCountry(amount: number, countryCode: string = 'us') {
+  const CURRENCY_SYMBOLS: Record<string, string> = {
+    'us': '$', 'gb': '£', 'eu': '€', 'ng': '₦', 'ke': 'KSh',
+    'gh': 'GH₵', 'za': 'R', 'in': '₹', 'ca': 'C$', 'au': 'A$',
+  };
+  const symbol = CURRENCY_SYMBOLS[countryCode] || '$';
+  return { amount: parseFloat(amount.toFixed(2)), symbol, code: 'USD' };
 }
 
 interface PaymentModalProps {
@@ -65,7 +58,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     setPaymentFailed(false);
   }, [isOpen, plan]);
 
-  const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
+  const pricing = getPricingForCountry(Number(plan.price), userProfile?.country?.toLowerCase() || 'us');
 
   const handlePayment = async () => {
     if (!user) {
@@ -79,34 +72,71 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
 
     try {
         if (typeof window !== 'undefined' && (window as any).fbq) {
-            (window as any).fbq('track', 'InitiateCheckout', { currency: 'XAF', value: parseInt(plan.price) });
+            (window as any).fbq('track', 'InitiateCheckout', { currency: 'USD', value: parseFloat(plan.price) });
         }
     } catch(err) { console.error('Pixel error', err); }
 
     try {
       if (isNative) {
-        // --- NATIVE GOOGLE PLAY PAYMENT VIA REVENUECAT ---
-        // Note: You must configure offerings in RevenueCat dashboard matching plan.id
-        const offerings = await Purchases.getOfferings();
-        if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
-            // Placeholder matching logic: try to find a package that matches 'weekly' or 'monthly'
-            const pkgToBuy = offerings.current.availablePackages.find(p => p.identifier.toLowerCase().includes(plan.id.toLowerCase())) || offerings.current.availablePackages[0];
-            
-            if (pkgToBuy) {
-                const purchaseResult = await Purchases.purchasePackage({ aPackage: pkgToBuy });
-                // Placeholder entitlement name: 'vip_access'
-                if (typeof purchaseResult.customerInfo.entitlements.active['vip_access'] !== "undefined") {
-                    showToast(language === 'fr' ? "Achat réussi ! Bienvenue VIP 🎉" : "Purchase Successful! Welcome VIP 🎉", "success");
-                    if (onSuccess) onSuccess();
-                    onClose();
-                }
-            } else {
-                 showToast("Plan not found in Google Play. Check configuration.", "error");
+        // NATIVE GOOGLE PLAY PAYMENT VIA REVENUECAT
+        try {
+          const offerings = await Purchases.getOfferings();
+          if (offerings.current && offerings.current.availablePackages.length > 0) {
+            const planPkgMap: Record<string, string> = {
+              daily: 'daily',
+              weekly: 'weekly',
+              monthly: 'monthly',
+              quarterly: 'quarterly',
+              annual: 'annual',
+            };
+            const targetId = planPkgMap[plan.id] || plan.id;
+            const pkgToBuy = offerings.current.availablePackages.find(
+              p => p.identifier === targetId || p.identifier.includes(plan.id)
+            ) || offerings.current.availablePackages[0];
+
+            const purchaseResult = await Purchases.purchasePackage({ aPackage: pkgToBuy });
+            const isVip = purchaseResult.customerInfo.entitlements.active['vip_access'];
+            if (isVip) {
+              showToast(
+                language === 'fr' ? 'Achat reussi ! Bienvenue VIP' : 'Purchase Successful! Welcome VIP',
+                'success'
+              );
+              if (onSuccess) onSuccess();
+              onClose();
+              return;
             }
-        } else {
-             // Fallback for when API keys are placeholder or empty
-             showToast("Google Play Billing not fully configured yet. (Placeholder mode)", "error");
-             setPaymentFailed(true);
+            showToast(
+              language === 'fr'
+                ? 'Paiement traite. Si VIP non active, contactez le support.'
+                : 'Payment processed. If VIP not active within 2 min, contact support.',
+              'info'
+            );
+            if (onSuccess) onSuccess();
+            onClose();
+          } else {
+            showToast(
+              language === 'fr'
+                ? 'Google Play pas encore configure. Utilisez Selar sur le site web.'
+                : 'Google Play billing not configured yet. Please use the web app with Selar.',
+              'error'
+            );
+            setPaymentFailed(true);
+          }
+        } catch (e: any) {
+          if (e?.userCancelled) {
+            showToast(
+              language === 'fr' ? 'Paiement annule.' : 'Payment cancelled.',
+              'info'
+            );
+          } else {
+            showToast(
+              language === 'fr'
+                ? 'Erreur Play Store. Reessayez ou utilisez le site web.'
+                : 'Play Store error. Try again or use the web app.',
+              'error'
+            );
+            setPaymentFailed(true);
+          }
         }
         setLoading(false);
         return;
@@ -294,7 +324,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                       {language === 'fr' ? 'Réessayer' : 'Try Again'}
                     </button>
                     <a
-                      href={`https://wa.me/237688203629?text=${encodeURIComponent(`Hi, I need help with my payment for Vantage AI. Amount: ${plan?.price || 'unknown'} FCFA`)}`}
+                      href={`https://wa.me/237688203629?text=${encodeURIComponent(`Hi, I need help with my payment for Vantage AI. Amount: $${plan?.price || 'unknown'}`)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 py-2 bg-green-500 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1"
