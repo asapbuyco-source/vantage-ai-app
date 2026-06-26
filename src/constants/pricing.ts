@@ -8,5 +8,5 @@ export const WEEKLY_REGULAR_PRICE = 14.99;
 export const MONTHLY_PRICE = 24.99;
 export const QUARTERLY_PRICE = 59.99;
 export const ANNUAL_PRICE = 99.99;
-export const MIN_PAYOUT_FCFA = 1000;
+export const MIN_PAYOUT = 10;
 export const REFERRAL_COMMISSION_PERCENT = 40;

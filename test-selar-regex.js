@@ -11,10 +11,10 @@ You just made a sale!🚀
 Summary:
 Elite Quarterly Access copy x 1
 
-CFA 18000
+$18000
  
-Subtotal	CFA 0
-Total	CFA 0
+Subtotal	$0
+Total	$0
  
 Customer information
 
