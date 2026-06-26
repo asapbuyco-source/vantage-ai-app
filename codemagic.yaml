@@ -1,0 +1,55 @@
+workflows:
+  android-release:
+    name: Vantage AI — Android Release Build
+    max_build_duration: 60
+    environment:
+      node: 20.11.0
+      vars:
+        PACKAGE_NAME: "com.vantageai.app"
+      android_signing:
+        - vantage_keystore
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+
+      - name: Set environment variables
+        script: |
+          echo "VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY" >> .env.local
+          echo "VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN" >> .env.local
+          echo "VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID" >> .env.local
+          echo "VITE_FIREBASE_STORAGE_BUCKET=$VITE_FIREBASE_STORAGE_BUCKET" >> .env.local
+          echo "VITE_FIREBASE_MESSAGING_SENDER_ID=$VITE_FIREBASE_MESSAGING_SENDER_ID" >> .env.local
+          echo "VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID" >> .env.local
+          echo "VITE_ADMIN_EMAIL=$VITE_ADMIN_EMAIL" >> .env.local
+          echo "VITE_BACKEND_URL=$VITE_BACKEND_URL" >> .env.local
+
+      - name: Place google-services.json
+        script: |
+          echo $GOOGLE_SERVICES_JSON > android/app/google-services.json
+
+      - name: Build web assets
+        script: npm run build
+
+      - name: Sync Capacitor
+        script: npx cap sync android
+
+      - name: Set Android SDK location
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+
+      - name: Build Android release AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+
+    artifacts:
+      - android/app/build/outputs/bundle/release/*.aab
+      - android/app/build/outputs/apk/release/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - abrackly@gmail.com
+        notify:
+          success: true
+          failure: true
