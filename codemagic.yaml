@@ -25,9 +25,7 @@ workflows:
           echo "VITE_BACKEND_URL=$VITE_BACKEND_URL" >> .env.local
           echo "VITE_REVENUECAT_GOOGLE_API_KEY=$VITE_REVENUECAT_GOOGLE_API_KEY" >> .env.local
 
-      - name: Place google-services.json
-        script: |
-          echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+
 
       - name: Build web assets
         script: npm run build
