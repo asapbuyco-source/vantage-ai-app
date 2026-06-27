@@ -25,6 +25,15 @@ workflows:
           echo "VITE_BACKEND_URL=$VITE_BACKEND_URL" >> .env.local
           echo "VITE_REVENUECAT_GOOGLE_API_KEY=$VITE_REVENUECAT_GOOGLE_API_KEY" >> .env.local
 
+      - name: Set up keystore properties
+        script: |
+          cat >> android/keystore.properties <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          EOF
+
 
 
       - name: Build web assets
