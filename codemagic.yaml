@@ -27,7 +27,7 @@ workflows:
 
       - name: Place google-services.json
         script: |
-          echo $GOOGLE_SERVICES_JSON > android/app/google-services.json
+          echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
 
       - name: Build web assets
         script: npm run build
