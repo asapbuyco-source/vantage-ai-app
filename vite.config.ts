@@ -30,7 +30,7 @@ export default defineConfig({
     react(),
     swVersionPlugin(),
   ],
-  base: '/',
+  base: './',
   define: {
     'process.env': {}, // Polyfill for libraries that expect process.env
   },
