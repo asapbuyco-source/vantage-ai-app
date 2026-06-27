@@ -4,6 +4,7 @@ workflows:
     max_build_duration: 60
     environment:
       node: 22.14.0
+      java: 21
       vars:
         PACKAGE_NAME: "com.vantageai.app"
       android_signing:
