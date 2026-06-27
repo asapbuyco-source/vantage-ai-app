@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
+import { HashRouter as BrowserRouter, Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { verifySelarOrder } from './services/selar';
 import { AnimatePresence } from 'framer-motion';
