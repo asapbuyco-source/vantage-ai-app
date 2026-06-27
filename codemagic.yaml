@@ -46,11 +46,12 @@ workflows:
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 
-      - name: Build Android release AAB
+      - name: Build Android release AAB and APK
         script: |
           cd android
           chmod +x gradlew
           ./gradlew bundleRelease
+          ./gradlew assembleRelease
 
     artifacts:
       - android/app/build/outputs/bundle/release/*.aab
