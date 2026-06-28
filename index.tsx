@@ -4,11 +4,25 @@ import ReactDOM from 'react-dom/client';
 import './src/index.css';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { StatusBar, Style } from '@capacitor/status-bar';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
+
+const initNativeConfig = async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await StatusBar.setStyle({ style: Style.Dark });
+      await StatusBar.setBackgroundColor({ color: '#0f172a' }); // matches Tailwind slate-900 / vantage-bg
+    } catch (e) {
+      console.warn("StatusBar config failed:", e);
+    }
+  }
+};
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
@@ -18,6 +32,14 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// Hide splash screen after React has mounted and painted
+if (Capacitor.isNativePlatform()) {
+  setTimeout(() => {
+    SplashScreen.hide().catch(console.warn);
+  }, 100);
+}
+initNativeConfig();
 
 const registerServiceWorker = () => {
   if (!('serviceWorker' in navigator)) return;

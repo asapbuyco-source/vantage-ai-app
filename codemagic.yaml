@@ -3,6 +3,8 @@ workflows:
     name: Vantage AI — Android Release Build
     max_build_duration: 60
     environment:
+      groups:
+        - a
       node: 22.14.0
       java: 21
       vars:
@@ -15,6 +17,10 @@ workflows:
 
       - name: Set environment variables
         script: |
+          if [ -z "$VITE_FIREBASE_API_KEY" ] || [ "$VITE_FIREBASE_API_KEY" == "your_firebase_api_key" ]; then
+            echo "CRITICAL ERROR: VITE_FIREBASE_API_KEY is not set in CodeMagic Environment Variables!"
+            exit 1
+          fi
           echo "VITE_TARGET=android" >> .env.local
           echo "VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY" >> .env.local
           echo "VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN" >> .env.local

@@ -15,6 +15,10 @@ const firebaseConfig = {
 
 // Initialize Firebase
 // Check if app is already initialized to avoid hot-reload errors
+if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('your_')) {
+  console.error("🚨 CRITICAL: Firebase API Key is missing or invalid! The app will fail to load database and auth services. Please check your .env file or CI environment variables.");
+}
+
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Services
