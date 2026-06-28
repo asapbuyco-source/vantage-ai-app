@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PLAN_CONFIG, assertValidPlan, getVipExpiry, inferPlanFromAmount } from '../backend/paymentPlans.js';
+import { PLAN_CONFIG, PLAN_AMOUNT_XAF, assertValidPlan, getVipExpiry, inferPlanFromAmount, inferPlanFromAmountXAF } from '../backend/paymentPlans.js';
 
 describe('Payment Plans', () => {
   describe('PLAN_CONFIG', () => {
@@ -11,12 +11,12 @@ describe('Payment Plans', () => {
       expect(PLAN_CONFIG).toHaveProperty('annual');
     });
 
-    it('has correct amounts', () => {
-      expect(PLAN_CONFIG.daily.amount).toBe(500);
-      expect(PLAN_CONFIG.weekly.amount).toBe(2000);
-      expect(PLAN_CONFIG.monthly.amount).toBe(5000);
-      expect(PLAN_CONFIG.quarterly.amount).toBe(12000);
-      expect(PLAN_CONFIG.annual.amount).toBe(35000);
+    it('has correct USD amounts', () => {
+      expect(PLAN_CONFIG.daily.amount).toBe(4.99);
+      expect(PLAN_CONFIG.weekly.amount).toBe(14.99);
+      expect(PLAN_CONFIG.monthly.amount).toBe(24.99);
+      expect(PLAN_CONFIG.quarterly.amount).toBe(59.99);
+      expect(PLAN_CONFIG.annual.amount).toBe(99.99);
     });
 
     it('has correct durations in days', () => {
@@ -28,20 +28,30 @@ describe('Payment Plans', () => {
     });
   });
 
+  describe('PLAN_AMOUNT_XAF', () => {
+    it('has XAF amounts for all plans', () => {
+      expect(PLAN_AMOUNT_XAF.daily).toBe(500);
+      expect(PLAN_AMOUNT_XAF.weekly).toBe(2000);
+      expect(PLAN_AMOUNT_XAF.monthly).toBe(5000);
+      expect(PLAN_AMOUNT_XAF.quarterly).toBe(12000);
+      expect(PLAN_AMOUNT_XAF.annual).toBe(35000);
+    });
+  });
+
   describe('assertValidPlan', () => {
     it('returns config for valid plan', () => {
       const result = assertValidPlan('weekly');
-      expect(result).toEqual({ days: 7, amount: 2000 });
+      expect(result).toEqual({ days: 7, amount: 14.99 });
     });
 
     it('returns config for daily plan', () => {
       const result = assertValidPlan('daily');
-      expect(result).toEqual({ days: 1, amount: 500 });
+      expect(result).toEqual({ days: 1, amount: 4.99 });
     });
 
     it('returns config for annual plan', () => {
       const result = assertValidPlan('annual');
-      expect(result).toEqual({ days: 365, amount: 35000 });
+      expect(result).toEqual({ days: 365, amount: 99.99 });
     });
 
     it('throws for invalid plan', () => {
@@ -78,36 +88,61 @@ describe('Payment Plans', () => {
     });
   });
 
-  describe('inferPlanFromAmount', () => {
-    it('returns annual for >= 35000', () => {
-      expect(inferPlanFromAmount(35000)).toBe('annual');
-      expect(inferPlanFromAmount(50000)).toBe('annual');
+  describe('inferPlanFromAmount (USD)', () => {
+    it('returns annual for >= 99.99', () => {
+      expect(inferPlanFromAmount(100)).toBe('annual');
+      expect(inferPlanFromAmount(99.99)).toBe('annual');
     });
 
-    it('returns quarterly for >= 12000 and < 35000', () => {
-      expect(inferPlanFromAmount(12000)).toBe('quarterly');
-      expect(inferPlanFromAmount(20000)).toBe('quarterly');
+    it('returns quarterly for >= 59.99 and < 99.99', () => {
+      expect(inferPlanFromAmount(60)).toBe('quarterly');
     });
 
-    it('returns monthly for >= 5000 and < 12000', () => {
-      expect(inferPlanFromAmount(5000)).toBe('monthly');
-      expect(inferPlanFromAmount(10000)).toBe('monthly');
+    it('returns monthly for >= 24.99 and < 59.99', () => {
+      expect(inferPlanFromAmount(25)).toBe('monthly');
     });
 
-    it('returns weekly for >= 2000 and < 5000', () => {
-      expect(inferPlanFromAmount(2000)).toBe('weekly');
-      expect(inferPlanFromAmount(3000)).toBe('weekly');
+    it('returns weekly for >= 14.99 and < 24.99', () => {
+      expect(inferPlanFromAmount(15)).toBe('weekly');
     });
 
-    it('returns daily for >= 500 and < 2000', () => {
-      expect(inferPlanFromAmount(500)).toBe('daily');
-      expect(inferPlanFromAmount(1000)).toBe('daily');
+    it('returns daily for >= 4.99 and < 14.99', () => {
+      expect(inferPlanFromAmount(5)).toBe('daily');
     });
 
     it('returns null for amounts below minimum', () => {
       expect(inferPlanFromAmount(0)).toBeNull();
-      expect(inferPlanFromAmount(100)).toBeNull();
-      expect(inferPlanFromAmount(499)).toBeNull();
+      expect(inferPlanFromAmount(1)).toBeNull();
+      expect(inferPlanFromAmount(4.98)).toBeNull();
+    });
+  });
+
+  describe('inferPlanFromAmountXAF (Cameroon MoMo)', () => {
+    it('returns annual for >= 35000 XAF', () => {
+      expect(inferPlanFromAmountXAF(35000)).toBe('annual');
+      expect(inferPlanFromAmountXAF(50000)).toBe('annual');
+    });
+
+    it('returns quarterly for >= 12000 and < 35000', () => {
+      expect(inferPlanFromAmountXAF(12000)).toBe('quarterly');
+      expect(inferPlanFromAmountXAF(20000)).toBe('quarterly');
+    });
+
+    it('returns monthly for >= 5000 and < 12000', () => {
+      expect(inferPlanFromAmountXAF(5000)).toBe('monthly');
+    });
+
+    it('returns weekly for >= 2000 and < 5000', () => {
+      expect(inferPlanFromAmountXAF(2000)).toBe('weekly');
+    });
+
+    it('returns daily for >= 500 and < 2000', () => {
+      expect(inferPlanFromAmountXAF(500)).toBe('daily');
+    });
+
+    it('returns null for amounts below minimum', () => {
+      expect(inferPlanFromAmountXAF(0)).toBeNull();
+      expect(inferPlanFromAmountXAF(499)).toBeNull();
     });
   });
 });

@@ -7,6 +7,17 @@ export const PLAN_CONFIG = {
   annual: { days: 365, amount: 99.99 },
 };
 
+// XAF-equivalent amounts for Cameroon MoMo (Fapshi) payment verification.
+// These are approximate conversions; update as exchange rates change.
+export const PLAN_AMOUNT_XAF = {
+  daily: 500,
+  weekly_trial: 700,
+  weekly: 2000,
+  monthly: 5000,
+  quarterly: 12000,
+  annual: 35000,
+};
+
 export function assertValidPlan(plan) {
   if (!PLAN_CONFIG[plan]) {
     const err = new Error("Invalid plan");
@@ -29,5 +40,14 @@ export function inferPlanFromAmount(amount) {
   if (amount >= PLAN_CONFIG.monthly.amount) return "monthly";
   if (amount >= PLAN_CONFIG.weekly.amount) return "weekly";
   if (amount >= PLAN_CONFIG.daily.amount) return "daily";
+  return null;
+}
+
+export function inferPlanFromAmountXAF(amount) {
+  if (amount >= PLAN_AMOUNT_XAF.annual) return "annual";
+  if (amount >= PLAN_AMOUNT_XAF.quarterly) return "quarterly";
+  if (amount >= PLAN_AMOUNT_XAF.monthly) return "monthly";
+  if (amount >= PLAN_AMOUNT_XAF.weekly) return "weekly";
+  if (amount >= PLAN_AMOUNT_XAF.daily) return "daily";
   return null;
 }

@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore, initializeFirestore, persistentLocalCache } from "firebase/firestore";
 
 // Configuration using Vite Environment Variables with provided fallbacks
 const firebaseConfig = {
@@ -19,21 +19,24 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Services
 export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const enableFirestorePersistence = (() => {
-  let enabled = false;
-  return async () => {
-    if (enabled) return;
-    try {
-      await enableIndexedDbPersistence(db);
-      enabled = true;
-    } catch (err: any) {
-      if (err.code === 'failed-precondition') console.warn('Firestore persistence: multiple tabs open');
-      else if (err.code === 'unimplemented') console.warn('Firestore persistence: browser not supported');
-    }
-  };
-})();
 
-// Log successful initialization (Safe for production, only shows first few chars or length)
+// Modern persistent cache — single-tab (no tab manager needed for native Capacitor WebView)
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(app, {
+    localCache: persistentLocalCache()
+  });
+} catch (e) {
+  // Already initialized (e.g., hot module replacement)
+  firestoreDb = getFirestore(app);
+}
+export const db = firestoreDb;
+
+export const enableFirestorePersistence = async () => {
+  // Persistence is now automatically handled by initializeFirestore's persistentLocalCache.
+  // This no-op preserves compatibility with any existing code that calls it.
+};
+
+// Log successful initialization
 const apiKeyStatus = firebaseConfig.apiKey ? `Loaded (${firebaseConfig.apiKey.length} chars)` : "MISSING";
 console.log(`Firebase initialized. Project: ${firebaseConfig.projectId}, API Key: ${apiKeyStatus}`);

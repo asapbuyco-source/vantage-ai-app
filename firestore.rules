@@ -111,7 +111,7 @@ service cloud.firestore {
           "userId", "userEmail", "amount", "phoneNumber", "status", "date", "paymentMethod"
         ]);
       allow get: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
-      allow list: if isAdmin();
+      allow list: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
@@ -122,10 +122,7 @@ service cloud.firestore {
 
     match /selar_pending/{refId} {
       allow read: if signedIn() && resource.data.uid == request.auth.uid;
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.used == false
-        && request.resource.data.plan in ["daily", "weekly", "monthly", "quarterly", "annual"];
+      allow create: if false; // backend-only via Firebase Admin SDK
       allow update: if false;
       allow delete: if false;
     }
@@ -155,7 +152,7 @@ service cloud.firestore {
     }
 
     match /quant_vip/{dateStr} {
-      allow read: if isVip();
+      allow read: if isVip() || isAdmin();
       allow write: if isAdmin();
     }
 

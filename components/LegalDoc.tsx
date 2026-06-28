@@ -86,7 +86,7 @@ export const LegalDoc: React.FC<LegalDocProps> = ({ type, onBack }) => {
                     <p>We collect the following information when you use our app:</p>
                     <ul>
                         <li><strong>Account Information:</strong> Email address, display name, and profile photo (via Google Auth or Email).</li>
-                        <li><strong>Payment Data:</strong> Transaction history for VIP subscriptions (amount, date, transaction ID). We do NOT store your banking or credit card details; these are handled by our secure payment partners (Fapshi).</li>
+                        <li><strong>Payment Data:</strong> Transaction history for VIP subscriptions (amount, date, transaction ID). We do NOT store your banking or credit card details; these are handled by Google Play and RevenueCat.</li>
                         <li><strong>Usage Data:</strong> Interactions with the app to improve our AI predictions.</li>
                     </ul>
 
@@ -105,7 +105,7 @@ export const LegalDoc: React.FC<LegalDocProps> = ({ type, onBack }) => {
                     <h3>4. Data Sharing</h3>
                     <p>We never sell your personal data. Data may only be shared with:</p>
                     <ul>
-                        <li><strong>Service Providers:</strong> Hosting (Google Cloud), Authentication (Firebase), Payment (Fapshi).</li>
+                        <li><strong>Service Providers:</strong> Hosting (Google Cloud), Authentication (Firebase), Payment (Google Play, RevenueCat).</li>
                         <li><strong>Legal Obligations:</strong> If required by law.</li>
                     </ul>
 
@@ -133,7 +133,7 @@ export const LegalDoc: React.FC<LegalDocProps> = ({ type, onBack }) => {
 
                     <h3>3. Abonnements VIP</h3>
                     <ul>
-                        <li>L'accès VIP est activé après confirmation du paiement via Mobile Money.</li>
+                        <li>L'accès VIP est activé après confirmation du paiement via Google Play.</li>
                         <li>Les abonnements (Journalier, Hebdomadaire, Mensuel) ne sont <strong>pas remboursables</strong> une fois le service (prédictions) consommé.</li>
                         <li>En cas d'échec technique avéré, veuillez contacter le support pour une résolution.</li>
                     </ul>
@@ -160,7 +160,7 @@ export const LegalDoc: React.FC<LegalDocProps> = ({ type, onBack }) => {
 
                     <h3>3. VIP Subscriptions</h3>
                     <ul>
-                        <li>VIP access is activated after confirmation of payment via Mobile Money.</li>
+                        <li>VIP access is activated after confirmation of payment via Google Play.</li>
                         <li>Subscriptions (Daily, Weekly, Monthly) are <strong>non-refundable</strong> once the service (predictions) has been consumed.</li>
                         <li>In case of a proven technical failure, please contact support for resolution.</li>
                     </ul>

@@ -1037,18 +1037,12 @@ export const VIP: React.FC<VIPProps> = () => {
             <div className="pt-6 border-t border-slate-200 dark:border-white/10 flex flex-col items-center space-y-4">
               <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
                 <ShieldCheck size={14} className="text-emerald-500" />
-                {Capacitor.isNativePlatform()
-                  ? <>Secure Checkout via <span className="text-slate-900 dark:text-white font-bold">Google Play</span></>
-                  : <>Secure Checkout via <span className="text-slate-900 dark:text-white font-bold">Fapshi</span> &amp; <span className="text-slate-900 dark:text-white font-bold">Selar</span></>
-                }
+                <>Secure Checkout via <span className="text-slate-900 dark:text-white font-bold">Google Play</span></>
               </div>
               
               {/* Payment Methods */}
               <div className="flex items-center justify-center gap-2">
-                {(Capacitor.isNativePlatform()
-                  ? ['Google Play', 'Credit Card', 'Carrier Billing']
-                  : ['MTN Mobile Money', 'Orange Money', 'Card']
-                ).map(method => (
+                {['Google Play', 'Credit Card', 'Carrier Billing'].map(method => (
                   <div key={method} className="px-2.5 py-1 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
                     {method}
                   </div>
