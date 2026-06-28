@@ -39,7 +39,7 @@ export const BottomNav: React.FC = () => {
         </h1>
       </div>
 
-      <div className="relative flex justify-around items-center h-[72px] pb-safe pb-2 px-2 md:flex-col md:h-auto md:justify-start md:items-stretch md:space-y-2 md:px-4 md:pt-4 md:flex-1">
+      <div className="relative flex justify-around items-center h-[72px] px-2 md:flex-col md:h-auto md:justify-start md:items-stretch md:space-y-2 md:px-4 md:pt-4 md:flex-1" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}>
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           const Icon = item.icon;

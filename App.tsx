@@ -185,7 +185,7 @@ function AppContent() {
           <Suspense fallback={null}>{BlogPost && <BlogPost />}</Suspense>
         } />
         <Route path="*" element={
-          <div className="min-h-screen overflow-x-hidden selection:bg-vantage-cyan/30 font-sans">
+          <div className="min-h-screen bg-vantage-bg text-white font-sans overflow-x-hidden selection:bg-vantage-cyan/30" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
               <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 blur-[100px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-cyan/5' : 'bg-blue-200/40'}`} />
             </div>

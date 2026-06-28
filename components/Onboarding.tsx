@@ -88,7 +88,7 @@ const slides = [
     },
 ];
 
-const firstRunSlideIds = new Set(['welcome', 'country', 'ev_explained', 'long_game', 'vip']);
+const firstRunSlideIds = new Set(['welcome', 'ev_explained', 'long_game', 'vip']);
 
 export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const { language, showToast } = useAppContext();

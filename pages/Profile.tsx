@@ -165,8 +165,8 @@ const shareReferral = () => {
         const balance = userProfile?.referralEarnings || 0;
 
         if (!payoutPhone) return;
-        if (isNaN(amountNum) || amountNum < 1000) {
-            alert(language === 'fr' ? "Le montant minimum est de 1000 XAF" : "Minimum amount is 1000 XAF");
+        if (isNaN(amountNum) || amountNum < 5) {
+            alert(language === 'fr' ? "Le montant minimum est de 5$" : "Minimum amount is $5");
             return;
         }
         if (amountNum > balance) {
@@ -601,7 +601,7 @@ const shareReferral = () => {
                 {/* Payout Button */}
                 <button
                     onClick={() => setShowPayoutModal(true)}
-                    disabled={(userProfile?.referralEarnings || 0) < 1000}
+                    disabled={(userProfile?.referralEarnings || 0) < 5}
                     className="w-full py-2.5 bg-vantage-purple/10 hover:bg-vantage-purple/20 text-vantage-purple border border-vantage-purple/30 font-bold rounded-lg transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <Wallet size={16} />
@@ -646,10 +646,10 @@ const shareReferral = () => {
                                     <div>
                                         <input
                                             type="number"
-                                            placeholder={language === 'fr' ? 'Montant (min 1000 XAF)' : 'Amount (min 1000 XAF)'}
+                                            placeholder={language === 'fr' ? 'Montant (min 5$)' : 'Amount (min $5)'}
                                             value={payoutAmount}
                                             onChange={(e) => setPayoutAmount(e.target.value)}
-                                            min={1000}
+                                            min={5}
                                             max={userProfile?.referralEarnings || 0}
                                             className="w-full p-3 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-vantage-purple outline-none"
                                             required
