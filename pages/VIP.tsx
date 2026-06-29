@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar, Activity, Pencil, Banknote, Radio } from 'lucide-react';
+import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, Calendar, Activity, Pencil, Banknote, Radio, LayoutGrid, Radar } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
@@ -20,10 +20,11 @@ import { PortfolioOnboarding } from '../components/PortfolioOnboarding';
 import { Sparkline } from '../components/Sparkline';
 import { Screener } from '../components/Screener';
 import { MatchCardAlpha } from '../components/MatchCardAlpha';
-import { ArbFinder } from './ArbFinder';
 
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
+
+const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
 
 // Currency symbol lookup for display — Google Play handles actual per-country pricing
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -61,7 +62,9 @@ export const VIP: React.FC<VIPProps> = () => {
     });
   }, []);
 
-  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault' | 'arbs'>('predictions');
+  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault' | 'value_radar'>('predictions');
+  const [hasSeenPicksSection, setHasSeenPicksSection] = useState(false);
+  const [showPicksHighlight, setShowPicksHighlight] = useState(false);
   const [activeSport, setActiveSport] = useState<'football' | 'basketball' | 'cricket'>('football');
   const activeAltPredictions = activeSport === 'cricket' ? cricketPredictions : basketballPredictions;
   const activeAltSportLabel = activeSport === 'cricket' ? 'Cricket' : 'Basketball';
@@ -84,6 +87,23 @@ export const VIP: React.FC<VIPProps> = () => {
   // to avoid a Temporal Dead Zone (TDZ) ReferenceError crash.
   const isUnlocked = (userProfile?.isVip === true) || isAdmin;
 
+  // Sort predictions by rank priority (same logic as before but now uses DataContext data)
+  const quantPredictions = useMemo(() => {
+    const sorted = [...predictions].map(normalizeQuantPrediction) as Match[];
+    const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
+    sorted.sort((a, b) => (rankPriority[b.value_rank ?? ''] || 0) - (rankPriority[a.value_rank ?? ''] || 0));
+    return sorted;
+  }, [predictions]);
+
+  useEffect(() => {
+    if (activeVipTab === 'predictions' && !hasSeenPicksSection && quantPredictions.length > 0) {
+      setQuantExpanded(true);
+      setHasSeenPicksSection(true);
+      setShowPicksHighlight(true);
+      setTimeout(() => setShowPicksHighlight(false), 2500);
+    }
+  }, [activeVipTab, hasSeenPicksSection, quantPredictions.length]);
+
   // ── Quant Model State ──────────────────────────────────────────────────────
   // Use DataContext predictions to avoid duplicate Firestore reads.
   // DataContext already streams quant_predictions via onSnapshot.
@@ -95,13 +115,10 @@ export const VIP: React.FC<VIPProps> = () => {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [showPortfolioEdit, setShowPortfolioEdit] = useState(false);
   const [showAllPlans, setShowAllPlans] = useState(false);
-  // Sort predictions by rank priority (same logic as before but now uses DataContext data)
-  const quantPredictions = useMemo(() => {
-    const sorted = [...predictions].map(normalizeQuantPrediction) as Match[];
-    const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
-    sorted.sort((a, b) => (rankPriority[b.value_rank ?? ''] || 0) - (rankPriority[a.value_rank ?? ''] || 0));
-    return sorted;
-  }, [predictions]);
+  const [leagueRadar, setLeagueRadar] = useState<any>(null);
+  const [accaCopilot, setAccaCopilot] = useState<any>(null);
+  const [dailyTip, setDailyTip] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Load accumulators from DataContext accumulators or fallback to Firestore
   useEffect(() => {
@@ -118,6 +135,34 @@ export const VIP: React.FC<VIPProps> = () => {
       }
     }).catch(() => {}).finally(() => setQuantLoading(false));
   }, [isUnlocked]);
+
+  // Fetch AI-powered features when predictions are loaded
+  useEffect(() => {
+    if (!isUnlocked || quantPredictions.length === 0) return;
+
+    const fetchAIFeatures = async () => {
+      setAiLoading(true);
+      try {
+        const response = await fetch(`${backendUrl}/api/ai/features`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ predictions: quantPredictions })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setLeagueRadar(data.leagueRadar);
+          setAccaCopilot(data.accaCopilot);
+          setDailyTip(data.dailyTip);
+        }
+      } catch (e) {
+        console.warn('AI features fetch failed:', e);
+      } finally {
+        setAiLoading(false);
+      }
+    };
+
+    fetchAIFeatures();
+  }, [isUnlocked, quantPredictions.length, backendUrl]);
 
   const BET_TYPE_FILTERS = ['All', 'Home Win', 'Away Win', 'Over 2.5 Goals', 'BTTS', 'Double Chance (1X)', 'Double Chance (X2)'];
   const BET_TYPE_LABELS: Record<string, string> = {
@@ -536,10 +581,10 @@ export const VIP: React.FC<VIPProps> = () => {
           </button>
 
           <button
-            onClick={() => setActiveVipTab('arbs')}
-            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'arbs' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-yellow-500' : 'text-gray-500 hover:text-gray-300'}`}
+            onClick={() => setActiveVipTab('value_radar')}
+            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'value_radar' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-yellow-500' : 'text-gray-500 hover:text-gray-300'}`}
           >
-            <Zap size={16} /> <span>Arbs</span>
+            <TrendingUp size={16} /> <span>Value Radar</span>
           </button>
         </div>
 
@@ -553,16 +598,71 @@ export const VIP: React.FC<VIPProps> = () => {
         )}
 
         {/* ── ARBS SECTION ── */}
-        {activeVipTab === 'arbs' && (
+        {activeVipTab === 'value_radar' && (
           <div className="mb-6">
-            <ArbFinder />
+            {/* Value Radar: EV-sorted picks with >= 6% EV and 5% inefficiency */}
+            <div className="mb-4">
+              <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-yellow-500">
+                <TrendingUp size={16} />
+                <span>Value Radar</span>
+                <span className="text-[9px] font-normal text-gray-500 ml-1">EV ≥ 6% | Inefficiency ≥ 5%</span>
+              </h3>
+            </div>
+            {(() => {
+              const valuePicks = quantPredictions
+                .filter(p => (p.ev_pct || 0) >= 6 && (p.inefficiency || 0) >= 0.05)
+                .sort((a, b) => ((b.ev_pct || 0) - (a.ev_pct || 0)));
+              if (valuePicks.length === 0) {
+                return (
+                  <div className="text-center py-10 rounded-2xl border-2 border-dashed border-yellow-500/20 bg-yellow-500/5">
+                    <TrendingUp size={28} className="mx-auto mb-2 text-yellow-500/40" />
+                    <p className="text-sm font-medium text-gray-500">No high-EV picks today</p>
+                    <p className="text-xs text-gray-400 mt-1">The model found no picks meeting the value threshold</p>
+                  </div>
+                );
+              }
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {valuePicks.map((pick, idx) => (
+                    <motion.div
+                      key={pick.fixture_id ?? String(idx)}
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: idx * 0.05 }}
+                    >
+                      <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 border-l-yellow-500 flex flex-col p-4">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase truncate max-w-[60%]">{pick.league}</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-500 border border-green-500/30">
+                            EV {pick.ev_pct?.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">{pick.homeTeam}</span>
+                          <span className="text-[10px] font-mono text-gray-400 mx-2">vs</span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate text-right">{pick.awayTeam}</span>
+                        </div>
+                        <div className="p-2 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-yellow-500">{pick.prediction}</span>
+                            <span className="text-lg font-bold font-mono text-green-500">{pick.confidence}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
 
 
         {/* ── VANTAGE MODEL PICKS SECTION ──────────────────────────────────────── */}
         {activeVipTab === 'predictions' && (
-        <div className="mb-6 animate-in slide-in-from-left duration-300">
+        <div className={`mb-6 animate-in slide-in-from-left duration-300 ${showPicksHighlight ? 'ring-2 ring-cyan-400 ring-opacity-50 rounded-2xl' : ''}`}>
+          {/* Sticky Header */}
+          <div className={`${quantExpanded ? 'sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm -mx-2 px-2 py-2 rounded-xl' : ''}`}>
           {/* Header */}
           <button
             onClick={() => setQuantExpanded(v => !v)}
@@ -572,12 +672,22 @@ export const VIP: React.FC<VIPProps> = () => {
               <BarChart2 size={16} className="text-emerald-500" />
               <span>Model Picks</span>
               <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 ml-1">VANTAGE AI</span>
+              {!quantExpanded && quantPredictions.length > 0 && (
+                <motion.span
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 0.6, repeat: Infinity }}
+                  className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-cyan-500 text-white ml-1"
+                >
+                  NEW
+                </motion.span>
+              )}
               {quantPredictions.length > 0 && (
                 <span className="text-[10px] font-normal text-gray-500">{quantPredictions.length} bets</span>
               )}
             </h3>
             {quantExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
           </button>
+          </div>
 
           <AnimatePresence>
             {quantExpanded && (
@@ -616,6 +726,56 @@ export const VIP: React.FC<VIPProps> = () => {
                     🏏 Cricket
                   </button>
                 </div>
+
+                {/* ── AI Quick Stats (Football only) ── */}
+                {activeSport === 'football' && (dailyTip || leagueRadar || accaCopilot) && (
+                  <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-none">
+                    {dailyTip && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="shrink-0 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 min-w-[200px]"
+                      >
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <Sparkles size={10} className="text-amber-500" />
+                          <span className="text-[9px] font-bold text-amber-500">TIP</span>
+                        </div>
+                        <p className="text-[10px] font-medium text-gray-700 dark:text-gray-200 truncate">{dailyTip.tip}</p>
+                      </motion.div>
+                    )}
+                    {leagueRadar && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="shrink-0 px-3 py-2 rounded-xl bg-vantage-cyan/10 border border-vantage-cyan/20 min-w-[160px]"
+                      >
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <Radar size={10} className="text-vantage-cyan" />
+                          <span className="text-[9px] font-bold text-vantage-cyan">RADAR</span>
+                        </div>
+                        <p className="text-[10px] text-gray-600 dark:text-gray-300">Top: {leagueRadar.leagues?.[0]?.name || 'N/A'} {leagueRadar.leagues?.[0]?.avgEv}% EV</p>
+                      </motion.div>
+                    )}
+                    {accaCopilot && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="shrink-0 px-3 py-2 rounded-xl bg-purple-500/10 border border-purple-500/20 min-w-[140px]"
+                      >
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <Layers size={10} className="text-purple-500" />
+                          <span className="text-[9px] font-bold text-purple-500">ACCA</span>
+                        </div>
+                        <p className="text-[10px] text-gray-600 dark:text-gray-300">Tap cards ↓</p>
+                      </motion.div>
+                    )}
+                    {aiLoading && (
+                      <div className="shrink-0 flex items-center gap-1.5 px-3 py-2">
+                        <Loader2 size={12} className="animate-spin text-vantage-cyan" />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* ── Basketball Feed ── */}
                 {activeSport !== 'football' && (
@@ -684,6 +844,46 @@ export const VIP: React.FC<VIPProps> = () => {
                     </div>
                   )
                 )}
+
+                {/* ── Inline Accumulator Tier Cards ── */}
+                    {activeSport === 'football' && !quantLoading && Object.keys(quantAccumulators).length > 0 && (
+                      <div className="mb-4 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+                        <h4 className="text-xs font-bold uppercase tracking-widest flex items-center gap-2 mb-3 text-slate-700 dark:text-gray-300">
+                          <LayoutGrid size={14} className="text-vantage-purple" />
+                          {language === 'fr' ? "Accumulateurs du Jour" : "Today's Accumulators"}
+                        </h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {[
+                            { key: 'baseline', icon: '🛡️', label: language === 'fr' ? 'Base' : 'Baseline', color: 'emerald' },
+                            { key: 'alpha_edge', icon: '⚡', label: language === 'fr' ? 'Alpha Edge' : 'Alpha Edge', color: 'cyan' },
+                            { key: 'syndicate', icon: '🎯', label: language === 'fr' ? 'Syndicat' : 'Syndicate', color: 'yellow' },
+                            { key: 'variance', icon: '🚀', label: language === 'fr' ? 'Variance' : 'Variance', color: 'purple' },
+                          ].map(tier => {
+                            const tierData = quantAccumulators[tier.key];
+                            if (!tierData || tierData.length === 0) return null;
+                            const first = tierData[0];
+                            const colorMap: Record<string, string> = {
+                              emerald: 'border-emerald-500/30 bg-emerald-500/5 text-emerald-500',
+                              cyan: 'border-cyan-500/30 bg-cyan-500/5 text-cyan-500',
+                              yellow: 'border-yellow-500/30 bg-yellow-500/5 text-yellow-500',
+                              purple: 'border-vantage-purple/30 bg-vantage-purple/5 text-vantage-purple',
+                            };
+                            return (
+                              <button
+                                key={tier.key}
+                                onClick={() => openAccumulator(tier.key)}
+                                className={`p-2 rounded-lg border flex flex-col items-center gap-1 hover:scale-105 transition-transform ${colorMap[tier.color]}`}
+                              >
+                                <span className="text-lg">{tier.icon}</span>
+                                <span className="text-[10px] font-bold">{tier.label}</span>
+                                <span className="text-xs font-mono font-bold">{first.combined_odds?.toFixed(2) || '—'}x</span>
+                                <span className="text-[9px] opacity-70">{tierData.length} slips</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                 {/* ── Football Feed ── */}
                 {activeSport === 'football' && (
@@ -781,6 +981,31 @@ export const VIP: React.FC<VIPProps> = () => {
             )}
           </AnimatePresence>
         </div>
+        )}
+
+        {/* ── Floating Accumulator Button ── */}
+        {activeVipTab === 'predictions' && Object.keys(quantAccumulators).length > 0 && (
+          <motion.button
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => openAccumulator('baseline')}
+            className="fixed bottom-24 right-4 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-vantage-purple text-white shadow-lg shadow-vantage-purple/40 animate-pulse"
+            style={{
+              boxShadow: '0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.3)',
+            }}
+          >
+            <LayoutGrid size={20} />
+            <span className="text-sm font-bold">Accumulators</span>
+            <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold">
+              {(() => {
+                let total = 0;
+                Object.values(quantAccumulators).forEach((arr: any[]) => { total += (arr as any[]).length; });
+                return `${total} slips`;
+              })()}
+            </span>
+          </motion.button>
         )}
 
         {/* ── TODAY / TOMORROW DATE TOGGLE ── */}
