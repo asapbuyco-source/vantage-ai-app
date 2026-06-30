@@ -451,7 +451,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                     {onEditBankroll && (
                         <button 
                             onClick={onEditBankroll}
-                            className="absolute top-2 right-2 p-1 rounded hover:bg-slate-700 text-gray-500 hover:text-white transition-colors"
+                            className="absolute top-2 right-2 p-1 rounded hover:bg-slate-700 text-gray-500 hover:text-white transition-colors z-10"
                             title="Edit Bankroll"
                         >
                             <Pencil size={10} />
