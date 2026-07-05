@@ -229,9 +229,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                 </div>
               )}
 
-              <div className="mt-4 flex items-center justify-center space-x-2 text-[10px] text-gray-500">
-                <ShieldCheck size={12} className="text-green-500" />
-                <span>Google Play secure billing</span>
+              <div className="mt-4 flex flex-col items-center justify-center space-y-2 text-[10px] text-gray-500">
+                <div className="flex items-center space-x-2">
+                  <ShieldCheck size={12} className="text-green-500" />
+                  <span>Google Play secure billing</span>
+                </div>
+                <div className="flex space-x-3">
+                  <a href="https://vantage-ai.com/privacy" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Privacy Policy</a>
+                  <a href="https://vantage-ai.com/terms" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Terms of Service</a>
+                </div>
               </div>
             </GlassCard>
           </motion.div>
