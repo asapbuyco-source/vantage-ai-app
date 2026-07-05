@@ -27,21 +27,24 @@ const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
 
 // â”€â”€ Currency detection helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string }> = {
-  'ng': { symbol: 'â‚¦', rate: 2.45, label: 'NGN' },
-  'ke': { symbol: 'KSh', rate: 0.23, label: 'KES' },
-  'gh': { symbol: 'GHâ‚µ', rate: 0.02, label: 'GHS' },
-  'za': { symbol: 'R', rate: 0.029, label: 'ZAR' },
-  'us': { symbol: '$', rate: 0.00167, label: 'USD' },
-  'gb': { symbol: 'Â£', rate: 0.00132, label: 'GBP' },
+  'ng': { symbol: '₦', rate: 1500, label: 'NGN' },
+  'ke': { symbol: 'KSh', rate: 130, label: 'KES' },
+  'gh': { symbol: 'GH₵', rate: 15, label: 'GHS' },
+  'za': { symbol: 'R', rate: 19, label: 'ZAR' },
+  'cm': { symbol: 'FCFA', rate: 600, label: 'XAF' },
+  'ci': { symbol: 'FCFA', rate: 600, label: 'XOF' },
+  'sn': { symbol: 'FCFA', rate: 600, label: 'XOF' },
+  'gb': { symbol: '£', rate: 0.79, label: 'GBP' },
+  'eu': { symbol: '€', rate: 0.92, label: 'EUR' },
 };
 
-function getPricingForCountry(fcfa: number, countryCode: string = 'other') {
+function getPricingForCountry(baseUsd: number, countryCode: string = 'other') {
   if (CURRENCY_MAP[countryCode]) {
     const cur = CURRENCY_MAP[countryCode];
-    const converted = Math.round(fcfa * cur.rate);
-    return { amount: converted, symbol: cur.symbol, code: cur.label, isConverted: true, originalValue: fcfa };
+    const converted = Math.round(baseUsd * cur.rate);
+    return { amount: converted, symbol: cur.symbol, code: cur.label, isConverted: true, originalValue: baseUsd };
   }
-  return { amount: fcfa, symbol: '', code: 'FCFA', isConverted: false, originalValue: fcfa };
+  return { amount: baseUsd, symbol: '$', code: 'USD', isConverted: false, originalValue: baseUsd };
 }
 
 interface VIPProps {}
@@ -217,8 +220,8 @@ export const VIP: React.FC<VIPProps> = () => {
       {
         id: 'daily',
         label: t('vip.plan_daily') || 'Daily Access',
-        badge: 'âš¡ 24-HOUR PASS',
-        price: '500',
+        badge: '⚡ 24-HOUR PASS',
+        price: '4.99',
         icon: <Zap size={20} />,
         features: ['Full +EV Signal Feed', 'Kelly Bankroll Sizing'],
         color: 'border-emerald-400 bg-emerald-500/5 dark:bg-emerald-500/10 shadow-[0_0_30px_rgba(16,185,129,0.1)]',
@@ -227,8 +230,8 @@ export const VIP: React.FC<VIPProps> = () => {
       {
         id: 'weekly',
         label: t('vip.plan_weekly'),
-        badge: 'ðŸ“Š 7-DAY ACCESS',
-        price: '2000',
+        badge: '📊 7-DAY ACCESS',
+        price: '14.99',
         icon: <Activity size={20} />,
         features: ['Full +EV Signal Feed', 'Kelly Bankroll Sizing', 'Alpha Screener Access'],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
@@ -237,8 +240,8 @@ export const VIP: React.FC<VIPProps> = () => {
       {
         id: 'monthly',
         label: t('vip.plan_monthly'),
-        badge: 'ðŸ”¥ MOST POPULAR',
-        price: '5000',
+        badge: '🔥 MOST POPULAR',
+        price: '24.99',
         icon: <Star size={20} />,
         features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group'],
         color: 'border-vantage-cyan bg-vantage-cyan/5 dark:bg-vantage-cyan/10 shadow-[0_0_40px_rgba(34,211,238,0.1)]',
@@ -247,8 +250,8 @@ export const VIP: React.FC<VIPProps> = () => {
       {
         id: 'quarterly',
         label: t('vip.plan_quarterly'),
-        badge: 'ðŸ’Ž BEST VALUE',
-        price: '12000',
+        badge: '💎 BEST VALUE',
+        price: '59.99',
         icon: <ShieldCheck size={20} />,
         features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support'],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
