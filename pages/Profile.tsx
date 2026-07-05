@@ -385,13 +385,19 @@ const shareReferral = () => {
                                         </svg>
                                         <span>Google</span>
                                     </button>
-
-                                    <div className="text-center">
-                                        <button onClick={() => { setIsLoginMode(!isLoginMode); clearError(); }} className="text-xs text-slate-500 dark:text-gray-400 hover:text-vantage-cyan transition-colors">
-                                            {isLoginMode ? t('auth.no_account') : t('auth.has_account')}
-                                        </button>
-                                    </div>
                                 </>
+                            )}
+
+                            {!isForgotMode && !resetSent && (
+                                <div className="text-center pt-2">
+                                    <button onClick={() => { setIsLoginMode(!isLoginMode); clearError(); }} className="text-sm font-medium text-slate-600 dark:text-gray-400 hover:text-vantage-cyan transition-colors">
+                                        {isLoginMode ? (
+                                            <>New to Vantage? <span className="font-bold text-vantage-cyan">Create an account</span></>
+                                        ) : (
+                                            <>Already have an account? <span className="font-bold text-vantage-cyan">Sign in</span></>
+                                        )}
+                                    </button>
+                                </div>
                             )}
                         </GlassCard>
                     </motion.div>
