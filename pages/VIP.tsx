@@ -56,7 +56,7 @@ export const VIP: React.FC<VIPProps> = () => {
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<'weekly' | 'monthly' | 'quarterly'>('monthly');
+  const [selectedPlanId, setSelectedPlanId] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('monthly');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -247,9 +247,19 @@ export const VIP: React.FC<VIPProps> = () => {
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
         claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
+      {
+        id: 'annual',
+        label: t('vip.plan_annual') || 'Annual Access',
+        badge: '👑 ULTIMATE',
+        price: '99.99',
+        icon: <Crown size={20} />,
+        features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support', 'Monthly 1-on-1 Review'],
+        color: 'border-vantage-purple bg-vantage-purple/5 dark:bg-vantage-purple/10 shadow-[0_0_40px_rgba(168,85,247,0.1)]',
+        claimColor: 'bg-vantage-purple hover:bg-purple-500 text-white shadow-lg shadow-vantage-purple/25',
+      },
     ];
 
-  const handlePlanClick = (planId: 'weekly' | 'monthly' | 'quarterly') => {
+  const handlePlanClick = (planId: 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
     setSelectedPlanId(planId);
     setShowPaymentModal(true);
   };
