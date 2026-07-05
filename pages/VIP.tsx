@@ -18,6 +18,7 @@ import { PortfolioOnboarding } from '../components/PortfolioOnboarding';
 import { Sparkline } from '../components/Sparkline';
 import { Screener } from '../components/Screener';
 import { MatchCardAlpha } from '../components/MatchCardAlpha';
+import { ResponsibleGambling } from '../components/ResponsibleGambling';
 
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
@@ -525,7 +526,7 @@ export const VIP: React.FC<VIPProps> = () => {
               {expiryDate && !isAdmin && (
                 <div className="text-right">
                   <p className="text-[10px] text-gray-500 uppercase tracking-wide">Expires</p>
-                  <p className="text-xs font-bold font-orbitron text-white">
+                  <p className="text-xs font-bold font-orbitron text-slate-900 dark:text-white">
                     {expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </p>
                 </div>

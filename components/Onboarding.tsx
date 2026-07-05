@@ -14,10 +14,10 @@ const slides = [
         icon: Zap,
         color: 'text-vantage-cyan',
         bg: 'from-vantage-cyan/20 via-vantage-purple/10 to-transparent',
-        badge: 'Africa #1 AI Platform',
+        badge: '#1 AI Sports Platform',
         title_en: 'Welcome to\nVantage AI',
         title_fr: 'Bienvenue sur\nVantage AI',
-        desc_en: 'The most advanced sports prediction platform in Africa. Powered by Vantage AI — live data, real analysis, real results.',
+        desc_en: 'The most advanced sports prediction platform. Powered by Vantage AI — live data, real analysis, real edge.',
         desc_fr: 'La plateforme de pronostics sportifs la plus avancée d\'Afrique. Propulsée par Vantage AI — données en direct, vraie analyse.',
     },
     {
