@@ -56,7 +56,7 @@ export const VIP: React.FC<VIPProps> = () => {
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly'>('daily');
+  const [selectedPlanId, setSelectedPlanId] = useState<'weekly' | 'monthly' | 'quarterly'>('monthly');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -208,7 +208,7 @@ export const VIP: React.FC<VIPProps> = () => {
   const isFirstTime = userProfile && (!userProfile.totalPaid || userProfile.totalPaid === 0);
 
   const plans: Array<{
-    id: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
+    id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
     label: string;
     badge: string | null;
     price: string;
@@ -217,16 +217,6 @@ export const VIP: React.FC<VIPProps> = () => {
     color: string;
     claimColor: string;
   }> = [
-      {
-        id: 'daily',
-        label: t('vip.plan_daily') || 'Daily Access',
-        badge: '⚡ 24-HOUR PASS',
-        price: '4.99',
-        icon: <Zap size={20} />,
-        features: ['Full +EV Signal Feed', 'Kelly Bankroll Sizing'],
-        color: 'border-emerald-400 bg-emerald-500/5 dark:bg-emerald-500/10 shadow-[0_0_30px_rgba(16,185,129,0.1)]',
-        claimColor: 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25',
-      },
       {
         id: 'weekly',
         label: t('vip.plan_weekly'),
@@ -259,7 +249,7 @@ export const VIP: React.FC<VIPProps> = () => {
       },
     ];
 
-  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'quarterly') => {
+  const handlePlanClick = (planId: 'weekly' | 'monthly' | 'quarterly') => {
     setSelectedPlanId(planId);
     setShowPaymentModal(true);
   };
