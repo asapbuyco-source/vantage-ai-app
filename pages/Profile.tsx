@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, CreditCard, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, Coins, Wallet, History, Sparkles, BookOpen, TrendingUp, Target, BarChart3, Activity, PlayCircle, ExternalLink, RefreshCw, Zap } from 'lucide-react';
+import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, History, Sparkles, BookOpen, TrendingUp, Target, BarChart3, Activity, PlayCircle, ExternalLink, RefreshCw, Zap } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,7 @@ interface ProfileProps {
 
 export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
     const { t, language, setLanguage, theme, toggleTheme } = useAppContext();
-    const { user, userProfile, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, error, clearError, loading: authLoading, requestPayout } = useAuth();
+    const { user, userProfile, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, error, clearError, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
     const [isLoginMode, setIsLoginMode] = useState(true);
@@ -33,11 +33,8 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
     const [legalPage, setLegalPage] = useState<'privacy' | 'terms' | null>(null);
     const [copiedCode, setCopiedCode] = useState(false);
 
-    // Payout State
-    const [showPayoutModal, setShowPayoutModal] = useState(false);
-    const [payoutPhone, setPayoutPhone] = useState('');
-    const [payoutAmount, setPayoutAmount] = useState('');
-    const [payoutLoading, setPayoutLoading] = useState(false);
+    // Referral days tooltip state
+    const [showDaysInfo, setShowDaysInfo] = useState(false);
 
 
     // Sync initial mode prop with internal state & Check for Saved Referral
@@ -160,33 +157,10 @@ const shareReferral = () => {
         window.location.reload();
     };
 
-    const handleRequestPayout = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const amountNum = parseInt(payoutAmount);
-        const balance = userProfile?.referralEarnings || 0;
-
-        if (!payoutPhone) return;
-        if (isNaN(amountNum) || amountNum < 1000) {
-            alert(language === 'fr' ? "Le montant minimum est de 1000 FCFA" : "Minimum amount is 1000 FCFA");
-            return;
-        }
-        if (amountNum > balance) {
-            alert(language === 'fr' ? "Solde insuffisant" : "Insufficient balance");
-            return;
-        }
-
-        setPayoutLoading(true);
-        try {
-            await requestPayout(amountNum, payoutPhone);
-            alert(t('profile.payout_success'));
-            setShowPayoutModal(false);
-            setPayoutAmount('');
-        } catch (e: any) {
-            alert(e.message);
-        } finally {
-            setPayoutLoading(false);
-        }
-    };
+    // Each referral = 1 free VIP day
+    const referralDaysEarned = userProfile?.referralEarnings
+        ? Math.floor(userProfile.referralEarnings / 1000)
+        : (userProfile?.referralCount || 0);
 
     if (authLoading) {
         return (
@@ -588,95 +562,37 @@ const shareReferral = () => {
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center">
-                        <span className="text-[10px] text-gray-500 uppercase">{t('profile.earnings')}</span>
+                        <span className="text-[10px] text-gray-500 uppercase">{language === 'fr' ? 'Jours Gagnés' : 'Days Earned'}</span>
                         <div className="flex items-center gap-1 text-vantage-purple">
-                            <Coins size={14} />
-                            <span className="text-xl font-bold">{userProfile?.referralEarnings || 0}</span>
+                            <Zap size={14} />
+                            <span className="text-xl font-bold">{referralDaysEarned}</span>
                         </div>
+                        <span className="text-[9px] text-gray-400 mt-0.5">{language === 'fr' ? 'jours VIP gratuits' : 'free VIP days'}</span>
                     </div>
                     <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center">
-                        <span className="text-[10px] text-gray-500 uppercase">{t('profile.lifetime_earnings')}</span>
-                        <span className="text-xl font-bold text-slate-900 dark:text-white">{userProfile?.lifetimeEarnings || 0}</span>
+                        <span className="text-[10px] text-gray-500 uppercase">{language === 'fr' ? 'Parrainages' : 'Referrals'}</span>
+                        <span className="text-xl font-bold text-slate-900 dark:text-white">{userProfile?.referralCount || 0}</span>
+                        <span className="text-[9px] text-gray-400 mt-0.5">{language === 'fr' ? 'amis invités' : 'friends invited'}</span>
                     </div>
                 </div>
 
-                {/* Payout Button */}
-                <button
-                    onClick={() => setShowPayoutModal(true)}
-                    disabled={(userProfile?.referralEarnings || 0) < 1000}
-                    className="w-full py-2.5 bg-vantage-purple/10 hover:bg-vantage-purple/20 text-vantage-purple border border-vantage-purple/30 font-bold rounded-lg transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <Wallet size={16} />
-                    <span>{t('profile.request_payout')}</span>
-                </button>
+                {/* How it works banner */}
+                <div className="w-full bg-vantage-purple/10 border border-vantage-purple/20 rounded-xl p-3 flex items-start gap-3">
+                    <Sparkles size={18} className="text-vantage-purple mt-0.5 shrink-0" />
+                    <div>
+                        <p className="text-xs font-bold text-vantage-purple mb-0.5">
+                            {language === 'fr' ? 'Comment ça marche ?' : 'How it works'}
+                        </p>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                            {language === 'fr'
+                                ? 'Chaque ami qui s\'inscrit avec ton code reçoit 1 jour VIP gratuit — et toi aussi ! Les jours sont crédités automatiquement.'
+                                : 'Every friend who signs up with your code gets 1 free VIP day — and so do you! Days are credited automatically.'}
+                        </p>
+                    </div>
+                </div>
             </GlassCard>
 
-            {/* Payout Modal */}
-            <AnimatePresence>
-                {showPayoutModal && (
-                    <>
-                        {
-                            // @ts-ignore
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                onClick={() => setShowPayoutModal(false)}
-                                className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-                            />
-                        }
-                        {
-                            // @ts-ignore
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xs bg-white dark:bg-vantage-bg border border-slate-200 dark:border-white/10 rounded-2xl p-6 shadow-2xl z-50"
-                            >
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">{t('profile.payout_modal_title')}</h3>
-                                <form onSubmit={handleRequestPayout} className="space-y-4">
-                                    <div>
-                                        <input
-                                            type="text"
-                                            placeholder={t('profile.payout_phone_placeholder')}
-                                            value={payoutPhone}
-                                            onChange={(e) => setPayoutPhone(e.target.value)}
-                                            className="w-full p-3 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-vantage-purple outline-none"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <input
-                                            type="number"
-                                            placeholder={language === 'fr' ? 'Montant (min 1000 FCFA)' : 'Amount (min 1000 FCFA)'}
-                                            value={payoutAmount}
-                                            onChange={(e) => setPayoutAmount(e.target.value)}
-                                            min={1000}
-                                            max={userProfile?.referralEarnings || 0}
-                                            className="w-full p-3 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-vantage-purple outline-none"
-                                            required
-                                        />
-                                    </div>
-                                    <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-lg text-sm flex justify-between">
-                                        <span className="text-gray-500">{t('profile.earnings')}:</span>
-                                        <span className="font-bold text-vantage-purple">{userProfile?.referralEarnings} FCFA</span>
-                                    </div>
-                                    <button
-                                        type="submit"
-                                        disabled={payoutLoading}
-                                        className="w-full py-3 bg-vantage-purple hover:bg-purple-600 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
-                                    >
-                                        {payoutLoading ? "Processing..." : t('profile.payout_submit')}
-                                    </button>
-                                </form>
-                                <button onClick={() => setShowPayoutModal(false)} className="absolute top-4 right-4 p-1 text-gray-500">
-                                    <X size={20} />
-                                </button>
-                            </motion.div>
-                        }
-                    </>
-                )}
-            </AnimatePresence>
+
 
             {/* Stats Row */}
             <div className="grid grid-cols-2 gap-3">
@@ -693,11 +609,11 @@ const shareReferral = () => {
                 </GlassCard>
                 <GlassCard className="p-4 flex flex-col justify-between">
                     <div className="flex items-center space-x-2 text-gray-500 mb-2">
-                        <CreditCard size={16} />
-                        <span className="text-xs uppercase tracking-wide">{t('profile.total_paid')}</span>
+                        <Zap size={16} />
+                        <span className="text-xs uppercase tracking-wide">{language === 'fr' ? 'Jours VIP Bonus' : 'Bonus VIP Days'}</span>
                     </div>
                     <span className="text-xl font-bold font-orbitron text-vantage-purple">
-                        {(userProfile?.totalPaid || 0).toLocaleString()} <span className="text-xs text-vantage-purple/50">FCFA</span>
+                        {referralDaysEarned} <span className="text-xs text-vantage-purple/50">{language === 'fr' ? 'jours' : 'days'}</span>
                     </span>
                 </GlassCard>
             </div>
