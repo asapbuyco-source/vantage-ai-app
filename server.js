@@ -834,28 +834,65 @@ app.post('/api/payments/selar/webhook', async (req, res) => {
 
 // RevenueCat Webhook — handles Google Play / App Store purchase events
 const REVENUECAT_WEBHOOK_SECRET = process.env.REVENUECAT_WEBHOOK_SECRET || '';
+if (!REVENUECAT_WEBHOOK_SECRET) {
+    logger.warn('[RevenueCat] REVENUECAT_WEBHOOK_SECRET is not set. Webhook endpoint is disabled and will return 503.');
+}
 
 app.post('/api/payments/revenuecat/webhook', express.json({ limit: '1mb' }), async (req, res) => {
     try {
-        if (REVENUECAT_WEBHOOK_SECRET) {
-            const authHeader = req.headers['authorization'] || '';
-            if (!authHeader || authHeader !== `Bearer ${REVENUECAT_WEBHOOK_SECRET}`) {
-                return res.status(401).json({ error: 'Unauthorized' });
-            }
+        // Hard block if secret is not configured
+        if (!REVENUECAT_WEBHOOK_SECRET) {
+            return res.status(503).json({ error: 'Webhook not configured on this server.' });
+        }
+
+        // Authenticate the incoming request
+        const authHeader = req.headers['authorization'] || '';
+        if (!authHeader || authHeader !== `Bearer ${REVENUECAT_WEBHOOK_SECRET}`) {
+            return res.status(401).json({ error: 'Unauthorized' });
         }
 
         const event = req.body?.event;
         if (!event) return res.status(400).json({ error: 'Missing event' });
 
-        const validEvents = ['INITIAL_PURCHASE', 'RENEWAL', 'NON_RENEWING_PURCHASE'];
-        if (!validEvents.includes(event.type)) {
+        const appUserId = event.app_user_id;
+        const productId = event.product_id || '';
+        if (!appUserId) {
+            return res.status(400).json({ error: 'Missing app_user_id' });
+        }
+
+        // ── Cancellation / Expiration — revoke VIP ──────────────────────
+        const revokeEvents = ['CANCELLATION', 'EXPIRATION', 'BILLING_ISSUE', 'SUBSCRIBER_ALIAS'];
+        if (revokeEvents.includes(event.type)) {
+            const db = admin.firestore();
+            const userQuery = await db.collection('profiles')
+                .where('revenuecatId', '==', appUserId)
+                .limit(1)
+                .get();
+
+            if (!userQuery.empty) {
+                const userDoc = userQuery.docs[0];
+                await db.collection('profiles').doc(userDoc.id).update({
+                    isVip: false,
+                    vipExpiry: null,
+                    vipPlan: null,
+                    vipRevokedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    vipRevokedReason: event.type,
+                });
+                logger.info({ uid: userDoc.id, eventType: event.type }, '[RevenueCat] VIP revoked via webhook');
+            } else {
+                logger.warn({ appUserId, eventType: event.type }, '[RevenueCat] No user found to revoke VIP');
+            }
+            return res.json({ ok: true, action: 'revoked' });
+        }
+
+        // ── Purchase / Renewal — grant VIP ──────────────────────────────
+        const grantEvents = ['INITIAL_PURCHASE', 'RENEWAL', 'NON_RENEWING_PURCHASE', 'UNCANCELLATION'];
+        if (!grantEvents.includes(event.type)) {
             return res.status(200).json({ ignored: true, reason: `Event type ${event.type} not processed` });
         }
 
-        const appUserId = event.app_user_id;
-        const productId = event.product_id || '';
-        if (!appUserId || !productId) {
-            return res.status(400).json({ error: 'Missing app_user_id or product_id' });
+        if (!productId) {
+            return res.status(400).json({ error: 'Missing product_id for grant event' });
         }
 
         const plan = productId.includes('annual') ? 'annual'
@@ -894,7 +931,7 @@ app.post('/api/payments/revenuecat/webhook', express.json({ limit: '1mb' }), asy
         });
 
         logger.info({ uid: userDoc.id, plan, productId }, '[RevenueCat] VIP fulfilled via webhook');
-        res.json({ ok: true });
+        res.json({ ok: true, action: 'granted' });
     } catch (e) {
         logger.error({ error: e }, '[RevenueCat] Webhook error');
         res.status(500).json({ error: 'Webhook processing failed' });

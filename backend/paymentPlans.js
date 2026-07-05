@@ -1,6 +1,5 @@
 export const PLAN_CONFIG = {
   daily: { days: 1, amount: 4.99 },
-  weekly_trial: { days: 7, amount: 6.99 },
   weekly: { days: 7, amount: 14.99 },
   monthly: { days: 30, amount: 24.99 },
   quarterly: { days: 90, amount: 59.99 },
@@ -11,7 +10,6 @@ export const PLAN_CONFIG = {
 // These are approximate conversions; update as exchange rates change.
 export const PLAN_AMOUNT_XAF = {
   daily: 500,
-  weekly_trial: 700,
   weekly: 2000,
   monthly: 5000,
   quarterly: 12000,

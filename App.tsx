@@ -34,11 +34,7 @@ const BlogIndex = !IS_NATIVE
 const BlogPost = !IS_NATIVE
   ? lazy(() => import('./pages/BlogPost').then(m => ({ default: m.BlogPost })))
   : null;
-const TrialOfferPopup = !IS_NATIVE
-  ? lazy(() => import('./components/TrialOfferPopup').then(m => ({ default: m.TrialOfferPopup })))
-  : null;
 const WEEKLY_REGULAR_PRICE = '14.99';
-const WEEKLY_TRIAL_PRICE = '6.99';
 
 // ── Shared lazy imports (used on both platforms) ─────────────────────────
 const VIP = lazy(() => import('./pages/VIP').then(m => ({ default: m.VIP })));
@@ -76,11 +72,9 @@ function AppContent() {
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
   }, []);
 
-  // VIP renewal / trial upsell
+  // VIP renewal
   const [showRenewalBanner, setShowRenewalBanner] = useState(false);
-  const [showTrialUpsell, setShowTrialUpsell] = useState(false);
   const [renewalDaysLeft, setRenewalDaysLeft] = useState(0);
-  const [showTrialPayment, setShowTrialPayment] = useState(false);
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
 
   const { theme, language, showToast } = useAppContext();
@@ -94,6 +88,10 @@ function AppContent() {
         const apiKey = import.meta.env.VITE_REVENUECAT_GOOGLE_API_KEY;
         if (!apiKey || apiKey.includes('PLACEHOLDER') || apiKey.includes('your_')) return;
         const { Purchases } = await import('@revenuecat/purchases-capacitor');
+        
+        // Initialize RevenueCat SDK
+        await Purchases.configure({ apiKey });
+
         await Purchases.logIn({ appUserID: user.uid });
         console.log('RevenueCat linked to Firebase UID:', user.uid);
       } catch (e) {
@@ -126,14 +124,6 @@ function AppContent() {
       setShowRenewalBanner(false);
     }
 
-    // Trial upsell — web only (mobile uses RevenueCat)
-    if (IS_NATIVE) return;
-    const trialDismissed = localStorage.getItem('vantage_trial_upsell_dismissed');
-    if (userProfile?.vipPlan === 'weekly' && daysLeft <= 2 && daysLeft >= 0 && trialDismissed !== userProfile.vipExpiry) {
-      setShowTrialUpsell(true);
-    } else {
-      setShowTrialUpsell(false);
-    }
   }, [userProfile]);
 
   const handleOnboardingComplete = () => {
@@ -293,32 +283,7 @@ function AppContent() {
             )}
           </AnimatePresence>
 
-          {/* Trial upsell banner — web only */}
-          {!IS_NATIVE && <AnimatePresence>
-            {showTrialUpsell && !showRenewalBanner && (
-              <MotionDiv
-                initial={{ opacity: 0, y: -40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -40 }}
-                className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-vantage-purple via-indigo-600 to-vantage-cyan text-white shadow-xl"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <Crown size={14} className="text-yellow-300 fill-yellow-300 shrink-0" />
-                  <span className="text-[11px] font-bold truncate">
-                    {language === 'fr'
-                      ? `Essai se termine dans ${renewalDaysLeft}j — Passer à l'annuel, économisez 60%`
-                      : `Trial ends in ${renewalDaysLeft}d — Switch to Annual, save 60%`}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={() => { setShowTrialUpsell(false); navigate('/vip'); }} className="text-[10px] font-black bg-white text-vantage-purple px-2.5 py-1 rounded-lg whitespace-nowrap">
-                    {language === 'fr' ? 'Voir →' : 'Upgrade →'}
-                  </button>
-                  <button onClick={() => { localStorage.setItem('vantage_trial_upsell_dismissed', userProfile?.vipExpiry || ''); setShowTrialUpsell(false); }} className="p-1 hover:bg-white/20 rounded transition-colors"><X size={14} /></button>
-                </div>
-              </MotionDiv>
-            )}
-          </AnimatePresence>}
-
-          <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 pt-6 min-h-screen pb-24 md:pb-6" style={{ paddingTop: (showRenewalBanner || showTrialUpsell) ? '4rem' : undefined }}>
+          <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 pt-6 min-h-screen pb-24 md:pb-6" style={{ paddingTop: showRenewalBanner ? '4rem' : undefined }}>
             <AnimatePresence mode="wait">
               <Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center"><Loader2 className="animate-spin text-vantage-cyan mb-4" size={40} /><p className="text-gray-500 text-sm font-medium animate-pulse">Loading...</p></div>}>
                 <ErrorBoundary>
@@ -348,31 +313,7 @@ function AppContent() {
           </AnimatePresence>
           <BetSlip />
 
-          {/* Trial offer popup — web only */}
-          {!IS_NATIVE && !showOnboarding && (location.pathname === '/' || location.pathname === '/free') && (
-            <Suspense fallback={null}>
-              {TrialOfferPopup && <TrialOfferPopup isVip={!!(userProfile?.isVip || isAdmin)} onClaim={() => setShowTrialPayment(true)} />}
-            </Suspense>
-          )}
-
-          {showTrialPayment && (
-            <PaymentModal
-              isOpen={showTrialPayment}
-              onClose={() => setShowTrialPayment(false)}
-              plan={{
-                id: 'weekly',
-                label: language === 'fr' ? 'Pass Alpha 7 Jours' : '7-Day Alpha Pass',
-                price: String(WEEKLY_TRIAL_PRICE),
-                features: [
-                  language === 'fr' ? 'Signaux +EV Premium' : 'Premium +EV Signals',
-                  language === 'fr' ? 'Gestion Kelly' : 'Kelly Staking',
-                  language === 'fr' ? 'Suivi CLV' : 'CLV Tracker',
-                  language === 'fr' ? 'Filtres Avancés' : 'Advanced Filters',
-                ],
-              }}
-              onSuccess={() => { setShowTrialPayment(false); navigate('/vip'); }}
-            />
-          )}
+          {/* Trial components removed */}
           <ToastContainer />
         </div>
       } />

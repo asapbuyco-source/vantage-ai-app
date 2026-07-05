@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Loader2, MessageCircle, ShieldCheck, X } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
-import { Purchases } from '@revenuecat/purchases-capacitor';
 import { GlassCard } from './GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -82,6 +81,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     }
 
     try {
+      // Dynamically import RevenueCat only when needed on native
+      const { Purchases } = await import('@revenuecat/purchases-capacitor');
       const offerings = await Purchases.getOfferings();
       const packages = offerings.current?.availablePackages || [];
       if (packages.length === 0) {

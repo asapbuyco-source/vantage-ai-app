@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 60
     environment:
       groups:
-        - a
+        - vantage
       node: 22.14.0
       java: 21
       vars:

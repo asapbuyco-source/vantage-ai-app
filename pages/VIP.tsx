@@ -47,7 +47,8 @@ export const VIP: React.FC<VIPProps> = () => {
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual'>('daily');
+  const isNative = Capacitor.isNativePlatform();
+  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual'>(isNative ? 'weekly' : 'daily');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -198,7 +199,7 @@ export const VIP: React.FC<VIPProps> = () => {
 
   const isFirstTime = userProfile && (!userProfile.totalPaid || userProfile.totalPaid === 0);
 
-  const plans: Array<{
+  const basePlans: Array<{
     id: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
     label: string;
     badge: string | null;
@@ -259,6 +260,8 @@ export const VIP: React.FC<VIPProps> = () => {
         claimColor: 'bg-vantage-purple hover:bg-purple-500 text-white shadow-lg shadow-vantage-purple/25',
       },
     ];
+
+  const plans = isNative ? basePlans.filter(p => p.id !== 'daily') : basePlans;
 
   const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
     setSelectedPlanId(planId);

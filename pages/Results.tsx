@@ -55,18 +55,18 @@ export const Results: React.FC = () => {
                 if (!snap.exists()) return;
                 const data = snap.data();
                 const allMatches = (data.predictions || []).map(normalizeQuantPrediction);
-                // Only show graded matches on the Results page (won/lost/void)
-                const matches = allMatches.filter(m => m.status === 'won' || m.status === 'lost' || m.status === 'void');
-                if (matches.length === 0) return;
+                // Show all predictions including pending so admins can grade them
+                if (allMatches.length === 0) return;
+                const graded = allMatches.filter((m: any) => m.status === 'won' || m.status === 'lost' || m.status === 'void');
 
                 setHistory(prev => {
                     const existing = prev.filter(d => d.date !== todayKey);
                     const todayEntry = {
                         date: todayKey,
-                        matches,
-                        wonCount: matches.filter(m => m.status === 'won').length,
-                        lostCount: matches.filter(m => m.status === 'lost').length,
-                        totalGraded: matches.length,
+                        matches: allMatches, // all predictions including pending
+                        wonCount: graded.filter((m: any) => m.status === 'won').length,
+                        lostCount: graded.filter((m: any) => m.status === 'lost').length,
+                        totalGraded: graded.length,
                     };
                     return [todayEntry, ...existing];
                 });
