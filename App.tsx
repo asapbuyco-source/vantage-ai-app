@@ -1,6 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { HashRouter as BrowserRouter, Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
 import { AnimatePresence } from 'framer-motion';
 import { Loader2, X, Crown, RefreshCw } from 'lucide-react';
 import { NavigationTab } from './types';
@@ -61,6 +62,25 @@ function AppContent() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => { enableFirestorePersistence(); }, []);
+
+  // ── Set status bar style + inject real height as CSS var (native only) ────
+  useEffect(() => {
+    if (!IS_NATIVE) return;
+    const initStatusBar = async () => {
+      try {
+        await StatusBar.setStyle({ style: Style.Dark });
+        await StatusBar.setBackgroundColor({ color: '#0f172a' });
+        // Read the real status bar height and expose it as a CSS variable
+        const info = await StatusBar.getInfo();
+        const height = (info as any).statusBarHeight ?? 28;
+        document.documentElement.style.setProperty('--status-bar-height', `${height}px`);
+      } catch (e) {
+        // Fallback: use a safe default
+        document.documentElement.style.setProperty('--status-bar-height', '28px');
+      }
+    };
+    initStatusBar();
+  }, []);
 
   // Service worker update listener (web-only)
   useEffect(() => {
@@ -158,8 +178,8 @@ function AppContent() {
   if (!user) {
     if (IS_NATIVE) {
       return (
-        <div className="min-h-screen overflow-x-hidden font-sans">
-          <main className="container mx-auto max-w-md px-4 pt-6 min-h-screen">
+        <div className="min-h-screen overflow-x-hidden font-sans bg-vantage-bg">
+          <main className="container mx-auto max-w-md px-4 pt-10 min-h-screen">
             <Profile initialMode="login" onBack={() => {}} />
           </main>
         </div>
@@ -175,7 +195,7 @@ function AppContent() {
           <Suspense fallback={null}>{BlogPost && <BlogPost />}</Suspense>
         } />
         <Route path="*" element={
-          <div className="min-h-screen bg-vantage-bg text-white font-sans overflow-x-hidden selection:bg-vantage-cyan/30" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="min-h-screen bg-vantage-bg text-white font-sans overflow-x-hidden selection:bg-vantage-cyan/30">
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
               <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 blur-[100px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-cyan/5' : 'bg-blue-200/40'}`} />
             </div>
@@ -231,7 +251,7 @@ function AppContent() {
       <Route path="/match/:id" element={<MatchDetails />} />
 
       <Route path="*" element={
-        <div className="min-h-screen overflow-x-hidden selection:bg-vantage-cyan/30 font-sans transition-colors duration-300 md:flex">
+        <div className={`min-h-screen overflow-x-hidden selection:bg-vantage-cyan/30 font-sans transition-colors duration-300 md:flex bg-vantage-bg ${IS_NATIVE ? 'pt-[var(--status-bar-height,28px)]' : ''}`}>
           <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
             <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 blur-[120px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-cyan/5' : 'bg-blue-200/40'}`} />
             <div className={`absolute bottom-0 right-0 w-96 h-96 blur-[120px] rounded-full mix-blend-screen transition-colors duration-500 ${theme === 'dark' ? 'bg-vantage-purple/5' : 'bg-purple-200/40'}`} />
@@ -283,7 +303,7 @@ function AppContent() {
             )}
           </AnimatePresence>
 
-          <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 pt-6 min-h-screen pb-24 md:pb-6" style={{ paddingTop: showRenewalBanner ? '4rem' : undefined }}>
+          <main className="relative z-10 w-full mx-auto max-w-md md:max-w-7xl md:ml-64 px-4 min-h-screen pb-24 md:pb-6" style={{ paddingTop: showRenewalBanner ? '4rem' : IS_NATIVE ? '1rem' : '1.5rem' }}>
             <AnimatePresence mode="wait">
               <Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center"><Loader2 className="animate-spin text-vantage-cyan mb-4" size={40} /><p className="text-gray-500 text-sm font-medium animate-pulse">Loading...</p></div>}>
                 <ErrorBoundary>
