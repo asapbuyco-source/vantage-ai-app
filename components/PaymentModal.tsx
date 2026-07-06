@@ -26,6 +26,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [paymentFailed, setPaymentFailed] = useState(false);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   const isNative = Capacitor.isNativePlatform();
   const apiKey = import.meta.env.VITE_REVENUECAT_GOOGLE_API_KEY || '';
@@ -35,6 +36,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     if (!isOpen) return;
     setLoading(false);
     setPaymentFailed(false);
+    setErrorDetail(null);
   }, [isOpen, plan.id]);
 
   const handlePayment = async () => {
@@ -118,7 +120,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
       if (e?.userCancelled) {
         showToast(language === 'fr' ? 'Paiement annule.' : 'Payment cancelled.', 'info');
       } else {
-        console.error('[Payments] Google Play purchase failed:', e);
+        // Build a human-readable error string from RevenueCat error object
+        const code = e?.code ?? e?.underlyingErrorMessage ?? '';
+        const msg = e?.message ?? e?.localizedDescription ?? JSON.stringify(e);
+        const detail = `Code: ${code} | ${msg}`;
+        console.error('[Payments] Google Play purchase failed:', detail, e);
+        setErrorDetail(detail);
         showToast(
           language === 'fr'
             ? 'Erreur Google Play. Reessayez ou contactez le support.'
@@ -218,6 +225,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                   <p className="mb-2 text-sm font-bold text-red-500">
                     {language === 'fr' ? 'Paiement non termine.' : 'Payment not completed.'}
                   </p>
+                  {errorDetail && (
+                    <p className="mb-2 text-[10px] break-all text-red-400 font-mono bg-red-500/10 rounded p-2">
+                      {errorDetail}
+                    </p>
+                  )}
                   <a
                     href={SUPPORT_URL}
                     target="_blank"
