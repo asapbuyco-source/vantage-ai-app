@@ -14,10 +14,11 @@ This removes the bookmaker's overround before comparing to model probability,
 preventing the system from overstating its edge by 5-8%.
 """
 
+import os
 import math
 from dataclasses import dataclass
 from typing import Optional
-from calibration_registry import get_calibration_factor, get_calibration_tier, FRAGILE_MARKETS, CALIBRATION_VERSION
+from calibration_registry import get_calibration_factor, get_calibration_tier, FRAGILE_MARKETS, CALIBRATION_VERSION, get_dynamic_calibration_factor
 from probability_engine import CombinedProbabilities
 from data_pipeline import OddsData
 
@@ -25,6 +26,13 @@ from data_pipeline import OddsData
 # ── Constants ─────────────────────────────────────────────────────────────────
 MIN_EV = 0.05           # 5% minimum expected value
 MIN_INEFFICIENCY = 0.06  # Default 6% model vs market gap (used for goals/BTTS)
+
+# BetPawa / local bookmaker margin adjustment.
+# Bet365 (what API-Football returns) typically has 2-4% margin.
+# BetPawa and other African bookmakers have 5-8% margin.
+# Set BOOKMAKER_MARGIN env var to 0.06 for BetPawa (6% discount).
+# EV calculation: (prob * (odds * (1 - margin))) - 1
+BOOKMAKER_MARGIN = float(os.environ.get("BOOKMAKER_MARGIN", "0.0"))
 
 # Market-aware inefficiency: bookmakers price 1X2 very tightly (1-2% margin),
 # so requiring 6%+ gap blocks almost all 1X2 bets. Lower threshold for result markets.
@@ -59,10 +67,15 @@ def _market_to_key(market: str) -> str:
     return _MARKET_KEY_MAP.get(market, market.lower().replace(" ", "_").replace("-", "_"))
 
 
-def calibrate_market_probability(raw_prob: float, market: str) -> tuple[float, float, str]:
+def calibrate_market_probability(
+    raw_prob: float,
+    market: str,
+    league_id: int | None = None,
+    month: int | None = None,
+) -> tuple[float, float, str]:
     """Return calibrated probability, factor, and trust tier for auditability."""
     key = _market_to_key(market)
-    factor = get_calibration_factor(key, 0.97)
+    factor = get_dynamic_calibration_factor(key, 0.97, league_id, month)
     calibrated = max(0.01, min(0.99, raw_prob * factor))
     tier = get_calibration_tier(key)
     return calibrated, factor, tier
@@ -109,6 +122,14 @@ MARKET_TO_PROB = {
     "1H Home Win": "fh_home_win",
     "1H Draw": "fh_draw",
     "1H Away Win": "fh_away_win",
+    # Over/Under 0.5 & 4.5 Goals (extreme goal lines)
+    "Over 0.5 Goals": "over05",
+    "Under 0.5 Goals": "under05",
+    "Over 4.5 Goals": "over45",
+    "Under 4.5 Goals": "under45",
+    # Corner markets
+    "Over 8.5 Corners": "over85_corners",
+    "Over 9.5 Corners": "over95_corners",
 }
 
 # Market → odds field in OddsData
@@ -134,6 +155,16 @@ MARKET_TO_ODDS_FIELD = {
     "BTTS No": "btts_no_odds",
     # OPP-01: BTTS + Over 2.5 composite odds field (computed in data_pipeline)
     "BTTS + Over 2.5": "btts_and_over25_odds",
+    # First Half odds
+    "Over 0.5 FH Goals": "fh_over05_odds",
+    "Over 1.5 FH Goals": "fh_over15_odds",
+    "BTTS FH": "fh_btts_odds",
+    "1H Home Win": "fh_home_odds",
+    "1H Draw": "fh_draw_odds",
+    "1H Away Win": "fh_away_odds",
+    # Corner odds
+    "Over 8.5 Corners": "corners_over85_odds",
+    "Over 9.5 Corners": "corners_over95_odds",
 }
 
 
@@ -251,11 +282,19 @@ def compute_line_movement(odds: 'OddsData') -> dict:
 def evaluate_all_markets(
     probs: 'CombinedProbabilities',
     odds: 'OddsData',
+    league_id: int | None = None,
+    month: int | None = None,
 ) -> list[ValueBet]:
     """
     Evaluate all available markets and return all ValueBet objects.
     Uses devigged implied probabilities for market comparison.
     Skips DC/DNB markets unless dedicated odds are available.
+
+    Args:
+        probs: CombinedProbabilities from the model
+        odds: OddsData with current bookmaker odds
+        league_id: Optional league ID for league-aware calibration
+        month: Optional month (1-12) for season-phase calibration
     """
     results: list[ValueBet] = []
 
@@ -307,7 +346,7 @@ def evaluate_all_markets(
         raw_model_prob = getattr(probs, prob_attr, None)
         if raw_model_prob is None:
             continue
-        model_prob, calibration_factor, calibration_tier = calibrate_market_probability(raw_model_prob, market)
+        model_prob, calibration_factor, calibration_tier = calibrate_market_probability(raw_model_prob, market, league_id, month)
 
         odds_attr = MARKET_TO_ODDS_FIELD.get(market, "")
         market_odds = getattr(odds, odds_attr, 0.0) if odds_attr else 0.0
@@ -319,7 +358,10 @@ def evaluate_all_markets(
 
         # Use devigged market probability (preferred) falling back to raw implied
         mkt_prob = market_devig.get(market, implied_prob(market_odds))
-        ev = compute_ev(model_prob, market_odds)
+        
+        # Apply bookmaker margin adjustment (BetPawa ~6% below Bet365)
+        adjusted_odds = market_odds * (1.0 - BOOKMAKER_MARGIN)
+        ev = compute_ev(model_prob, adjusted_odds)
         inefficiency = model_prob - mkt_prob
 
         # Line movement bonus/penalty (Upgrade #3)
@@ -334,9 +376,9 @@ def evaluate_all_markets(
         if line_disagrees and is_value:
             is_value = ev >= MIN_EV * 1.5  # Require 50% more EV to override sharp signal
 
-        # STEP 2: Market Filtering (Drop 1X2)
-        if market in ["Home Win", "Away Win", "Draw"]:
-            continue  # Temporarily disabled due to -40% ROI in backtest
+        # STEP 2: Market Filtering (Drop underperforming markets)
+        if market in ["Home Win", "Away Win", "Draw", "Double Chance (X2)"]:
+            continue  # Disabled: 1X2 = -40% ROI, DC X2 = 38% win rate
 
         # STEP 1: Cap EV at 10% to prevent wild overconfidence
         capped_ev = min(ev, 0.10)
@@ -346,7 +388,7 @@ def evaluate_all_markets(
             bet_label=market,
             model_prob=round(model_prob, 4),
             market_prob=round(mkt_prob, 4),
-            odds=round(market_odds, 2),
+            odds=round(adjusted_odds, 2),
             expected_value=round(capped_ev, 4),
             inefficiency=round(inefficiency, 4),
             is_value=is_value,

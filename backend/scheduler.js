@@ -1,6 +1,8 @@
 import cron from 'node-cron';
 import admin from 'firebase-admin';
 import pino from 'pino';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import {
     runBasketballPipeline,
     runCricketPipeline,
@@ -10,6 +12,11 @@ import {
     runLineupSyncer,
     runArbScanner
 } from './quantService.js';
+import { sendTipOfTheDayPush, generateDailyTipFromPredictions } from './pushService.js';
+
+// ESM-compatible __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const logger = pino({
     level: process.env.LOG_LEVEL || 'info',
@@ -168,6 +175,34 @@ export const triggerTelegramBroadcast = async () => {
     }
 };
 
+export const triggerTipOfTheDay = async () => {
+    logger.info('[Scheduler] Triggering Tip of the Day push...');
+    try {
+        const db = admin.firestore();
+        const todayKey = new Date().toISOString().split('T')[0];
+        
+        const snap = await db.collection('quant_predictions').doc(todayKey).get();
+        if (!snap.exists || !snap.data().predictions) {
+            logger.warn('[Scheduler] No predictions found for today');
+            return { status: 'error', error: 'No predictions found' };
+        }
+
+        const predictions = snap.data().predictions;
+        const tipData = await generateDailyTipFromPredictions(predictions);
+        
+        if (!tipData) {
+            return { status: 'error', error: 'Failed to generate tip' };
+        }
+
+        const result = await sendTipOfTheDayPush(tipData);
+        logger.info('[Scheduler] Tip of the Day push complete.', result);
+        return { status: 'success', ...result };
+    } catch (e) {
+        logger.error({ error: e }, '[Scheduler] Tip of the Day push error');
+        return { status: 'error', error: e.message };
+    }
+};
+
 export const triggerQuantPipeline = async (dateStr = null, dryRun = false) => {
     logger.info('[Scheduler] Triggering quant pipeline...');
     try {
@@ -242,16 +277,9 @@ export const initScheduler = () => {
     tasks.set('cricket', cricketTask);
     logger.info('🏏 Cricket prediction scheduled at 08:00 Lagos');
 
-    // Quant pipeline at 07:45 Lagos time
-    const quantTask = cron.schedule('45 7 * * *',
-        withLock('quant_pipeline', 60, async () => {
-            logger.info('[Scheduler] Running quant pipeline...');
-            await triggerQuantPipeline();
-        }),
-        { timezone: 'Africa/Lagos' }
-    );
-    tasks.set('quant', quantTask);
-    logger.info('📊 Quant pipeline scheduled at 07:45 Lagos');
+    // Quant pipeline at 07:45 Lagos time — REMOVED (duplicate of 07:00 football generation)
+    // Both triggerFootballGeneration() and triggerQuantPipeline() call runQuantPipeline()
+    // with the same logic. Running twice wastes ~150 API-Football credits daily.
 
     // Quant grading at 22:00 Lagos time
     const quantGradingTask = cron.schedule('0 22 * * *',
@@ -286,11 +314,166 @@ export const initScheduler = () => {
     tasks.set('telegram', telegramTask);
     logger.info('📱 Telegram broadcast scheduled at 09:00 Lagos');
 
+    // Tip of the Day push at 08:00 Lagos time (after quant pipeline completes)
+    const tipTask = cron.schedule('0 8 * * *',
+        withLock('tip_of_day_push', 15, async () => {
+            logger.info('[Scheduler] Sending Tip of the Day push...');
+            await triggerTipOfTheDay();
+        }),
+        { timezone: 'Africa/Lagos' }
+    );
+    tasks.set('tipOfDay', tipTask);
+    logger.info('💡 Tip of the Day push scheduled at 08:00 Lagos');
+
     // NOTE: Live momentum engine and player stats client have been disabled.
     // They consumed ~15,000+ API-Football credits/day running every 2-5 minutes,
     // leaving no quota for grading. Predictions and grading are the priority.
+    //
+    // REPLACED WITH: Lightweight live_score_writer.py (1 API call every 2 min = ~480/day).
+    // Previously 15,000+ credits/day → now ~480 credits/day. Safe within 7,500 quota.
 
-    // Tomorrow's fixtures at 21:00 Lagos time
+    // Live score writer every 2 minutes (lightweight, 1 API call per run)
+    if (process.env.API_FOOTBALL_KEY) {
+        const liveScoreTask = cron.schedule('*/2 * * * *',
+            withLock('live_scores', 1, async () => {
+                try {
+                    const { spawn } = await import('child_process');
+                    const { default: path } = await import('path');
+                    const script = path.join(__dirname, 'quant', 'live_score_writer.py');
+                    const python = process.env.PYTHON_BIN || 'python3';
+
+                    const child = spawn(python, [script], {
+                        cwd: path.join(__dirname, 'quant'),
+                        env: { ...process.env },
+                        timeout: 30000,
+                    });
+
+                    let stdout = '';
+                    let stderr = '';
+                    child.stdout.on('data', d => stdout += d);
+                    child.stderr.on('data', d => stderr += d);
+
+                    child.on('close', code => {
+                        if (code !== 0) {
+                            logger.warn({ stderr }, '[LiveScores] Non-zero exit');
+                        }
+                    });
+                } catch (e) {
+                    logger.warn({ error: e.message }, '[LiveScores] Spawn error');
+                }
+            }),
+            { timezone: 'Africa/Lagos' }
+        );
+        tasks.set('liveScores', liveScoreTask);
+        logger.info('⚽ Live scores scheduled every 2 minutes (~480 API calls/day)');
+    }
+
+    // Unified vault at 08:15 Lagos (after all sports pipelines complete)
+    const unifiedVaultTask = cron.schedule('15 8 * * *',
+        withLock('unified_vault', 10, async () => {
+            try {
+                const { spawn } = await import('child_process');
+                const { default: path } = await import('path');
+                const script = path.join(__dirname, 'quant', 'unified_vault.py');
+                const python = process.env.PYTHON_BIN || 'python3';
+
+                const child = spawn(python, [script], {
+                    cwd: path.join(__dirname, 'quant'),
+                    env: { ...process.env },
+                    timeout: 30000,
+                });
+
+                let stdout = '';
+                let stderr = '';
+                child.stdout.on('data', d => stdout += d);
+                child.stderr.on('data', d => stderr += d);
+
+                child.on('close', code => {
+                    if (code !== 0) {
+                        logger.warn({ stderr }, '[Scheduler] Unified vault non-zero exit');
+                    } else {
+                        logger.info({ stdout: stdout.trim() }, '[Scheduler] Unified vault built');
+                    }
+                });
+            } catch (e) {
+                logger.error({ error: e }, '[Scheduler] Unified vault error');
+            }
+        }),
+        { timezone: 'Africa/Lagos' }
+    );
+    tasks.set('unifiedVault', unifiedVaultTask);
+    logger.info('🏦 Unified vault (all sports) scheduled at 08:15 Lagos');
+
+    // Live in-play EV every 5 minutes
+    if (process.env.API_FOOTBALL_KEY) {
+        const liveEvTask = cron.schedule('*/5 * * * *',
+            withLock('live_ev', 4, async () => {
+                try {
+                    const { spawn } = await import('child_process');
+                    const { default: path } = await import('path');
+                    const script = path.join(__dirname, 'quant', 'live_ev_engine.py');
+                    const python = process.env.PYTHON_BIN || 'python3';
+
+                    const child = spawn(python, [script], {
+                        cwd: path.join(__dirname, 'quant'),
+                        env: { ...process.env },
+                        timeout: 30000,
+                    });
+
+                    let stdout = '';
+                    child.stdout.on('data', d => stdout += d);
+                    child.stderr.on('data', d => { /* silent */ });
+
+                    child.on('close', code => {
+                        try {
+                            const result = JSON.parse(stdout.trim() || '{}');
+                            if (result.live_bets > 0) {
+                                logger.info({ result }, `[LiveEV] ${result.live_bets} in-play bets found`);
+                            }
+                        } catch {}
+                    });
+                } catch (e) {
+                    logger.warn({ error: e.message }, '[LiveEV] Spawn error');
+                }
+            }),
+            { timezone: 'Africa/Lagos' }
+        );
+        tasks.set('liveEv', liveEvTask);
+        logger.info('🎯 Live in-play EV scheduled every 5 minutes');
+    }
+
+    // Historical data collection at 03:00 Lagos (low traffic, once daily)
+    if (process.env.API_FOOTBALL_KEY) {
+        const historicalTask = cron.schedule('0 3 * * *',
+            withLock('historical_data', 120, async () => {
+                try {
+                    const { spawn } = await import('child_process');
+                    const { default: path } = await import('path');
+                    const script = path.join(__dirname, 'quant', 'historical_data_pipeline.py');
+                    const python = process.env.PYTHON_BIN || 'python3';
+
+                    const child = spawn(python, [script, '--days', '7'], {
+                        cwd: path.join(__dirname, 'quant'),
+                        env: { ...process.env },
+                        timeout: 120000,
+                    });
+
+                    let stdout = '';
+                    child.stdout.on('data', d => stdout += d);
+                    child.stderr.on('data', d => { /* silent */ });
+
+                    child.on('close', code => {
+                        logger.info({ exitCode: code }, '[Historical] Data collection complete');
+                    });
+                } catch (e) {
+                    logger.warn({ error: e.message }, '[Historical] Spawn error');
+                }
+            }),
+            { timezone: 'Africa/Lagos' }
+        );
+        tasks.set('historicalData', historicalTask);
+        logger.info('📚 Historical data collection at 03:00 Lagos (7 days per run)');
+    }
     const tomorrowTask = cron.schedule('0 21 * * *',
         withLock('tomorrow_fixtures', 60, async () => {
             logger.info('[Scheduler] Running tomorrow fixtures job...');
@@ -317,19 +500,21 @@ export const initScheduler = () => {
     logger.info('📋 Lineup sync scheduled at 11:00 Lagos');
 
     // Arb Scanner every 15 minutes (short TTL since it runs frequently)
-    const arbScannerTask = cron.schedule('*/15 * * * *',
-        withLock('arb_scanner', 14, async () => {
-            logger.info('[Scheduler] Running 15-minute Arb Scanner...');
-            try {
-                await runArbScanner();
-                logger.info('[Scheduler] Arb Scanner complete.');
-            } catch (e) {
-                logger.error({ error: e }, '[Scheduler] Arb Scanner error');
-            }
-        })
-    );
-    tasks.set('arbScanner', arbScannerTask);
-    logger.info('🔍 Arb Scanner scheduled every 15 minutes');
+    // DISABLED: The arb scanner has never found a prediction for the West African bookmaker market.
+    // Keeping the code on disk for future rebuild with custom scraper.
+    // const arbScannerTask = cron.schedule('*/15 * * * *',
+    //     withLock('arb_scanner', 14, async () => {
+    //         logger.info('[Scheduler] Running 15-minute Arb Scanner...');
+    //         try {
+    //             await runArbScanner();
+    //             logger.info('[Scheduler] Arb Scanner complete.');
+    //         } catch (e) {
+    //             logger.error({ error: e }, '[Scheduler] Arb Scanner error');
+    //         }
+    //     })
+    // );
+    // tasks.set('arbScanner', arbScannerTask);
+    // logger.info('🔍 Arb Scanner scheduled every 15 minutes');
 
     // Repair corrupted predictions at 23:30 Lagos time
     const repairTask = cron.schedule('30 23 * * *',

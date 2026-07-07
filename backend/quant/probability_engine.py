@@ -41,7 +41,25 @@ INTERNATIONAL_LEAGUE_IDS = {294, 3016, 3015, 3014, 3013, 3012, 3011, 3010, 3009,
 W_POISSON = 0.60  # Poisson score model (primary — strongest for goals markets)
 W_ELO     = 0.25  # Elo ratings (secondary — good for match outcomes)
 W_FORM    = 0.10  # Form model (10% — recency-weighted team performance)
-W_H2H     = 0.05  # FIX-3: Enabled H2H contribution (was 0.00)
+
+
+def get_adaptive_h2h_weight(h2h_total: int, is_derby: bool, h2h_home_wins: int = 0, h2h_away_wins: int = 0, h2h_draws: int = 0) -> float:
+    """
+    Adaptive H2H weighting based on match type and data quality.
+    Replaces the fixed W_H2H = 0.05 constant.
+
+    - Derby matches with rich H2H history: 12% (H2H is highly predictive)
+    - Many H2H meetings (8+): 8% (more data = more weight)
+    - Standard 3+ meetings: 5% baseline
+    - Insufficient data (<3): 5% (fallback)
+    """
+    if h2h_total < 3:
+        return 0.05  # baseline — insufficient data
+    if is_derby and h2h_total >= 5:
+        return 0.12  # derby with good history — H2H is highly predictive
+    if h2h_total >= 8:
+        return 0.08  # lots of H2H data — increase weight slightly
+    return 0.05  # default
 
 
 def _calibrate(raw: float, market_key: str, default: float = 0.92) -> float:
@@ -86,6 +104,18 @@ class CombinedProbabilities:
     fh_home_win: float = 0.0  # First Half Home Win
     fh_draw: float = 0.0      # First Half Draw
     fh_away_win: float = 0.0  # First Half Away Win
+    # Over/Under 0.5 & 4.5 Goals (extreme goal lines)
+    over05: float = 0.0
+    under05: float = 0.0
+    over45: float = 0.0
+    under45: float = 0.0
+    # Corner markets (derived in quant_pipeline, stored here for EV engine)
+    over85_corners: float = 0.0
+    over95_corners: float = 0.0
+    # HT/FT compound markets (Phase 4.3)
+    hthome_fthome: float = 0.0
+    htdraw_fthome: float = 0.0
+    hthome_ftdraw: float = 0.0
 
 
 def _normalize(p_home: float, p_draw: float, p_away: float) -> tuple[float, float, float]:
@@ -113,6 +143,7 @@ def compute_combined(
     weights_override: dict | None = None,
     league_tier: int = 2,
     league_id: int | None = None,
+    is_derby: bool = False,
 ) -> CombinedProbabilities:
     """
     Combine Poisson + Elo + Form + H2H into final probabilities.
@@ -138,22 +169,28 @@ def compute_combined(
         rho: Dixon-Coles rho for score correlation
         weights_override: dict of model weights (poisson, elo, form, h2h)
         league_tier: League tier (1=elite, 5=lower) for home advantage multiplier
+        is_derby: Whether this is a derby/rivalry match (increases H2H weight)
 
     Returns:
         CombinedProbabilities with all markets filled.
     """
-    
-    # Apply weights override if provided
+
+    # Apply weights override if provided (H2H is handled separately via adaptive weighting)
     w_poisson = weights_override.get('poisson', W_POISSON) if weights_override else W_POISSON
     w_elo = weights_override.get('elo', W_ELO) if weights_override else W_ELO
     w_form = weights_override.get('form', W_FORM) if weights_override else W_FORM
-    w_h2h = weights_override.get('h2h', W_H2H) if weights_override else W_H2H
+    # Note: w_h2h is set via get_adaptive_h2h_weight() above, not from weights_override
 
     W_SM = 0.10
     # FIX-1: SM (Sportmonks prediction) integration is disabled until data_pipeline
     # populates sm_pred_home_win/sm_pred_draw/sm_pred_away_win on MatchData.
     # Default to disabled. When wired, pass sm_probs dict to compute_combined.
     has_sm = False
+
+    # Compute H2H weight up front so it's available for normalization below.
+    # Must be set before the weight normalization block that references it.
+    h2h_total = h2h_home_wins + h2h_away_wins + h2h_draws
+    w_h2h = get_adaptive_h2h_weight(h2h_total, is_derby, h2h_home_wins, h2h_away_wins, h2h_draws)
 
     # FIX #4: Normalize base weights BEFORE applying SM scale.
     # Previously, normalization happened AFTER scale, which restored original
@@ -229,7 +266,6 @@ def compute_combined(
     )
 
     # ── Model 4: H2H (Fix #5) ─────────────────────────────────────────────
-    h2h_total = h2h_home_wins + h2h_away_wins + h2h_draws
     if h2h_total >= 3:  # Only use H2H signal if sufficient samples
         h2h_p_home = h2h_home_wins / h2h_total
         h2h_p_draw = h2h_draws / h2h_total
@@ -294,6 +330,65 @@ def compute_combined(
     under35 = 1.0 - over35
     over15  = max(over15,  over25)
     under15 = 1.0 - over15
+
+    # Phase 2.4: Over/Under 0.5 & 4.5 Goals (extreme goal lines)
+    over05 = 1.0 - poisson.under05  # P(≥1 goal)
+    under05 = poisson.under05       # P(0 goals)
+    over45 = 1.0 - poisson.under45  # P(≥5 goals)
+    under45 = poisson.under45       # P(≤4 goals)
+
+    # Phase 4.3: HT/FT compound probabilities
+    # Uses first-half Poisson + conditional second-half Poisson (simplified: halves are ~independent)
+    mu_home_2h = adj_mu_home * 0.50
+    mu_away_2h = adj_mu_away * 0.50
+
+    def _poisson_grid_2h(mu_h: float, mu_a: float) -> dict:
+        grid = {}
+        for h in range(8):
+            for a in range(8):
+                ph = (mu_h ** h) * math.exp(-mu_h) / math.factorial(h)
+                pa = (mu_a ** a) * math.exp(-mu_a) / math.factorial(a)
+                grid[(h, a)] = ph * pa
+        return grid
+
+    fh_grid = _poisson_grid_2h(adj_mu_home * 0.50, adj_mu_away * 0.50)
+    sh_grid = _poisson_grid_2h(mu_home_2h, mu_away_2h)
+
+    # Aggregate HT/FT probabilities
+    ht_home_lead = 0.0
+    ht_draw = 0.0
+    ht_away_lead = 0.0
+    for (h, a), p in fh_grid.items():
+        if h > a: ht_home_lead += p
+        elif h == a: ht_draw += p
+        else: ht_away_lead += p
+
+    # Conditional: P(home wins full time | HT state) ~ P(home outscored in 2H)
+    def _ft_outcome_2h(state_lead: str) -> tuple:
+        w, d, l = 0.0, 0.0, 0.0
+        for (h, a), p in sh_grid.items():
+            if state_lead == "home":
+                if h >= a: w += p  # home maintains or extends lead
+                elif h + 1 == a and a - h <= 1: d += p
+                else: l += p
+            elif state_lead == "draw":
+                if h > a: w += p
+                elif h == a: d += p
+                else: l += p
+            else:  # away
+                if a >= h: l += p  # away maintains
+                elif a + 1 == h and h - a <= 1: d += p
+                else: w += p
+        total = w + d + l
+        return (w/total, d/total, l/total) if total > 0 else (0, 0, 0)
+
+    hw2h, hd2h, hl2h = _ft_outcome_2h("home")
+    dw2h, dd2h, dl2h = _ft_outcome_2h("draw")
+    aw2h, ad2h, al2h = _ft_outcome_2h("away")
+
+    hthome_fthome = ht_home_lead * hw2h
+    htdraw_fthome = ht_draw * dw2h
+    hthome_ftdraw = ht_home_lead * hd2h
 
     # ── Compound markets ───────────────────────────────────────────────────
     dc_1x = p_home + p_draw
@@ -364,6 +459,15 @@ def compute_combined(
         fh_home_win=round(fh["fh_home_win"], 4),
         fh_draw=round(fh["fh_draw"], 4),
         fh_away_win=round(fh["fh_away_win"], 4),
+        # Over/Under 0.5 & 4.5 Goals
+        over05=round(over05, 4),
+        under05=round(under05, 4),
+        over45=round(over45, 4),
+        under45=round(under45, 4),
+        # HT/FT compounds
+        hthome_fthome=round(hthome_fthome, 4),
+        htdraw_fthome=round(htdraw_fthome, 4),
+        hthome_ftdraw=round(hthome_ftdraw, 4),
     )
     return cp
 

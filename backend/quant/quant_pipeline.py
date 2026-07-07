@@ -59,6 +59,7 @@ from risk_filters import (
 )
 from kelly_optimizer import kelly_stake_pct, market_max_stake_pct
 from accumulator_engine import generate_accumulators, accumulator_to_dict
+from risk_filters import check_btts_blanking_risk
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 MAX_PREDICTIONS_PER_DAY = 100
@@ -70,7 +71,7 @@ def _now_iso() -> str:
 
 def _corner_over_prob(total_xg: float, line: float) -> float:
     """Poisson probability of exceeding a corner line given expected total xG."""
-    lam = max(0.5, total_xg * 3.7)
+    lam = max(0.5, total_xg * 1.2)
     cdf = sum(_math.exp(-lam) * (lam ** k) / _math.factorial(k) for k in range(int(line) + 1))
     return round(max(0.0, min(1.0, 1.0 - cdf)), 4)
 
@@ -279,11 +280,13 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 rho=rho,
                 weights_override=weights_override,
                 league_tier=match.league_tier if hasattr(match, 'league_tier') else 2,
+                is_derby=is_derby,
             )
 
 
             # ── Evaluate ALL markets for this match (FIX: was undefined) ────
-            all_value_bets = evaluate_all_markets(probs, match.odds)
+            current_month = datetime.now().month
+            all_value_bets = evaluate_all_markets(probs, match.odds, match.league_id, current_month)
 
             # ── Apply risk filters to find approved value bets ──────────────
             approved_bets = filter_bets(all_value_bets, match.league_tier)
@@ -400,6 +403,24 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 and match.league_tier < 5  # tier-5 / unknown leagues are analysis-only
             )
 
+            # Phase 1.5: Promote Over 1.5 Goals — boost vault priority
+            vault_priority_boost = best_bet is not None and "over 1.5" in best_bet.market.lower()
+
+            # Phase 1.3: BTTS blanking filter — check if either team has low scoring rate
+            btts_blanking = False
+            btts_blanking_reason = ""
+            if best_bet and "btts" in best_bet.market.lower() and "no" not in best_bet.market.lower():
+                btts_blanking, btts_blanking_reason = check_btts_blanking_risk({
+                    "bet_type": best_bet.market,
+                    "home_team": match.home_team,
+                    "away_team": match.away_team,
+                    "home_avg_scored": home_stats.avg_scored if home_stats else 0,
+                    "away_avg_scored": away_stats.avg_scored if away_stats else 0,
+                })
+                if btts_blanking:
+                    vault_eligible = False
+                    _safe_print(f"[QuantPipeline]   ⚠️ {btts_blanking_reason}")
+
             # ── Kelly stake (ISSUE-01 fixed) ────────────────────────────────
             if best_bet and vault_eligible:
                 # Kelly already applies kelly_fraction=0.25 internally in kelly_stake_pct().
@@ -452,6 +473,9 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 "odds_age_minutes": round(odds_age_min, 1) if odds_age_min is not None else None,
                 "odds_fresh": odds_fresh,
                 "vault_eligible": vault_eligible,
+                "vault_priority_boost": vault_priority_boost,
+                "btts_blanking_risk": btts_blanking,
+                "btts_blanking_reason": btts_blanking_reason,
                 "max_stake_pct": round(
                     market_max_stake_pct(best_bet.market, best_bet.calibration_tier) * 100,
                     2,
@@ -492,6 +516,11 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 "btts_prob": round(probs.btts, 4),
                 "double_chance_1x": round(probs.double_chance_1x, 4),
                 "double_chance_x2": round(probs.double_chance_x2, 4),
+                # Over/Under 0.5 & 4.5 Goals
+                "over05_prob": round(probs.over05, 4),
+                "under05_prob": round(probs.under05, 4),
+                "over45_prob": round(probs.over45, 4),
+                "under45_prob": round(probs.under45, 4),
                 # First Half markets
                 "fh_over05_prob": round(probs.fh_over05, 4),
                 "fh_over15_prob": round(probs.fh_over15, 4),
@@ -528,8 +557,14 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                 ],
                 # Most likely scorelines from Poisson grid (for UI display)
                 "top_scorelines": top_scorelines(compute_score_grid(mu_home, mu_away, rho), n=4),
-                # Corner prediction (xG-correlated — r≈0.65, ~3.7 corners per expected goal)
-                "expected_corners": round((mu_home + mu_away) * 3.7, 1),
+                # Phase 1.6: Hedge Over 1.5 saver for high-confidence Over 2.5 picks
+                "hedge_suggestion": {
+                    "market": "Over 1.5 Goals",
+                    "probability": round(probs.over15, 4),
+                    "reason": "Insurance: if Over 2.5 fails by 1 goal, Over 1.5 still wins"
+                } if (best_bet and "over 2.5" in best_bet.market.lower() and probs.over15 > 0.85) else None,
+                # Corner prediction (xG-correlated — r≈0.65, ~1.2 corners per expected goal, calibrated from 14-day audit)
+                "expected_corners": round((mu_home + mu_away) * 1.2, 1),
                 "over85_corners_prob": round(_corner_over_prob(mu_home + mu_away, 8.5), 4),
                 "over95_corners_prob": round(_corner_over_prob(mu_home + mu_away, 9.5), 4),
             }
@@ -546,6 +581,8 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
                     "odds": best_bet.odds,
                     "model_prob": best_bet.model_prob,
                     "expected_value": best_bet.expected_value,
+                    "kickoff_utc": match.kickoff_utc,
+                    "kickoff_local": match.kickoff_local,
                 })
 
             emoji = {"high": "🟢", "medium": "🟡", "low": "⚪", "none": "⚫"}.get(value_rank, "⚫")
@@ -592,7 +629,6 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
             "sport": p["sport"],
             "model": p["model"],
             "timestamp": p["timestamp"],
-            # Restored for free UI rendering (blurred on frontend for VIP items)
             "prediction": p.get("prediction"),
             "prediction_en": p.get("prediction_en", p.get("prediction")),
             "prediction_fr": p.get("prediction_fr", p.get("prediction")),
@@ -611,6 +647,30 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
             "fh_over05_prob": p.get("fh_over05_prob"),
             "fh_over15_prob": p.get("fh_over15_prob"),
             "fh_btts_prob": p.get("fh_btts_prob"),
+            # Probability fields for analysis display
+            "home_win_prob": p.get("home_win_prob"),
+            "draw_prob": p.get("draw_prob"),
+            "away_win_prob": p.get("away_win_prob"),
+            "over25_prob": p.get("over25_prob"),
+            "over15_prob": p.get("over15_prob"),
+            "btts_prob": p.get("btts_prob"),
+            "double_chance_1x": p.get("double_chance_1x"),
+            "double_chance_x2": p.get("double_chance_x2"),
+            "top_scorelines": p.get("top_scorelines"),
+            "fh_home_win_prob": p.get("fh_home_win_prob"),
+            "fh_draw_prob": p.get("fh_draw_prob"),
+            "fh_away_win_prob": p.get("fh_away_win_prob"),
+            # Vault / EV fields
+            "ev_pct": p.get("ev_pct"),
+            "expected_value": p.get("expected_value"),
+            "kelly_stake": p.get("kelly_stake"),
+            "inefficiency": p.get("inefficiency"),
+            "data_quality": p.get("data_quality"),
+            "odds_fresh": p.get("odds_fresh"),
+            "vault_eligible": p.get("vault_eligible"),
+            "calibration_tier": p.get("calibration_tier"),
+            "calibrated_probability": p.get("calibrated_probability"),
+            "bet_type": p.get("bet_type"),
         }
         for p in predictions
     ]
@@ -644,9 +704,12 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
         if db:
             try:
                 db.collection("quant_predictions").document(date_str).set(doc)
-                db.collection("quant_vip").document(date_str).set(vip_doc)
                 _safe_print(f"[QuantPipeline] 💾 Saved {len(predictions)} match analyses to Firestore for {date_str}")
-                _safe_print(f"[QuantPipeline] 💾 Saved VIP analyses to quant_vip/{date_str}")
+                try:
+                    db.collection("quant_vip").document(date_str).set(vip_doc)
+                    _safe_print(f"[QuantPipeline] 💾 Saved VIP analyses to quant_vip/{date_str}")
+                except Exception as ve:
+                    _safe_print(f"[QuantPipeline]   ⚠️  VIP save failed (non-fatal): {ve}", file=sys.stderr)
                 # Update Elo ratings
                 save_dirty_ratings()
             except Exception as e:
