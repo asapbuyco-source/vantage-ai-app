@@ -94,26 +94,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
       const pkgToBuy =
         packages.find((pkg) => pkg.identifier === plan.id || pkg.identifier.includes(plan.id)) || packages[0];
 
-      const purchaseResult = await Purchases.purchasePackage({ aPackage: pkgToBuy });
-      const hasVip = Boolean(purchaseResult.customerInfo.entitlements.active.vip_access);
-
-      if (hasVip) {
-        localStorage.removeItem('pendingVipPlan');
-        showToast(
-          language === 'fr' ? 'Achat reussi. Bienvenue VIP.' : 'Purchase successful. Welcome VIP.',
-          'success'
-        );
-        onSuccess?.();
-        onClose();
-        return;
-      }
+      await Purchases.purchasePackage({ aPackage: pkgToBuy });
 
       showToast(
         language === 'fr'
-          ? 'Achat traite. VIP sera active par webhook sous peu.'
-          : 'Purchase processed. VIP will activate by webhook shortly.',
+          ? 'Achat traite. VIP sera active sous peu.'
+          : 'Purchase processed. VIP will activate shortly.',
         'info'
       );
+      localStorage.removeItem('pendingVipPlan');
       onSuccess?.();
       onClose();
     } catch (e: any) {

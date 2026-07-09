@@ -163,10 +163,7 @@ export const Home: React.FC<HomeProps> = () => {
       if (rankDiff !== 0) return rankDiff;
       return (b.confidence || 0) - (a.confidence || 0);
     });
-    const topPicks = sorted.filter(m =>
-      m.value_rank === 'high' || m.value_rank === 'medium' ||
-      m.category === 'safe' || m.category === 'value'
-    );
+    const topPicks = sorted.filter(m => m.category === 'safe');
     return new Set(topPicks.slice(0, freePicksCount).map(m => m.id));
   }, [predictions, freePicksCount]);
 
@@ -391,27 +388,31 @@ export const Home: React.FC<HomeProps> = () => {
         </div>
       </div>
 
-      {/* ─── LIVE MATCHES ─── */}
-      <motion.button
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        onClick={() => navigate('/live')}
-        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-all text-left"
-      >
-        <span className="relative flex h-3 w-3 shrink-0">
-          {liveCount > 0 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />}
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-        </span>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-red-500">
-            {liveCount > 0 ? `🔴 ${liveCount} ` : ''}{language === 'fr' ? `Match${liveCount > 1 ? 's' : ''} en Direct` : `Live Match${liveCount > 1 ? 'es' : ''} Now`}
-          </p>
-          <p className="text-[10px] text-red-400/70">
-            {language === 'fr' ? 'Voir les scores en temps réel →' : 'View live scores →'}
-          </p>
-        </div>
-        <Radio size={18} className="shrink-0 text-red-500" />
-      </motion.button>
+      {/* ─── PWA INSTALL + NOTIFICATIONS ─── */}
+      <PWAInstallButton />
+
+      {liveCount > 0 && (
+        <motion.button
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => navigate('/live')}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-all text-left"
+        >
+          <span className="relative flex h-3 w-3 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-red-500">
+              🔴 {liveCount} {language === 'fr' ? `Match${liveCount > 1 ? 's' : ''} en Direct` : `Live Match${liveCount > 1 ? 'es' : ''} Now`}
+            </p>
+            <p className="text-[10px] text-red-400/70">
+              {language === 'fr' ? 'Voir les scores en temps réel →' : 'View live scores →'}
+            </p>
+          </div>
+          <Radio size={18} className="shrink-0 text-red-500" />
+        </motion.button>
+      )}
 
       {/* ─── SORT & FILTER TOOLBAR ─── */}
       <div className="space-y-3 sticky top-[72px] z-20 bg-vantage-lightBg dark:bg-vantage-bg backdrop-blur-md py-2 -mx-2 px-2">
