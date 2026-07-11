@@ -21,6 +21,7 @@ const CYCLE: Record<string, MatchStatus> = { won: 'lost', lost: 'pending', pendi
 export const Results: React.FC = () => {
     const { language, showToast } = useAppContext();
     const { isAdmin } = useAuth();
+    const isVip = useAuth().userProfile?.isVip || false;
 
     const [history, setHistory] = useState<DayResult[]>([]);
     const [loading, setLoading] = useState(true);
@@ -55,18 +56,18 @@ export const Results: React.FC = () => {
                 if (!snap.exists()) return;
                 const data = snap.data();
                 const allMatches = (data.predictions || []).map(normalizeQuantPrediction);
-                // Show all predictions including pending so admins can grade them
-                if (allMatches.length === 0) return;
-                const graded = allMatches.filter((m: any) => m.status === 'won' || m.status === 'lost' || m.status === 'void');
+                // Show all matches on the Results page
+                const matches = allMatches;
+                if (matches.length === 0) return;
 
                 setHistory(prev => {
                     const existing = prev.filter(d => d.date !== todayKey);
                     const todayEntry = {
                         date: todayKey,
-                        matches: allMatches, // all predictions including pending
-                        wonCount: graded.filter((m: any) => m.status === 'won').length,
-                        lostCount: graded.filter((m: any) => m.status === 'lost').length,
-                        totalGraded: graded.length,
+                        matches,
+                        wonCount: matches.filter(m => m.status === 'won').length,
+                        lostCount: matches.filter(m => m.status === 'lost').length,
+                        totalGraded: matches.filter(m => m.status === 'won' || m.status === 'lost' || m.status === 'void').length,
                     };
                     return [todayEntry, ...existing];
                 });
@@ -411,7 +412,9 @@ export const Results: React.FC = () => {
                                                                 <span className="font-bold text-slate-900 dark:text-white truncate text-xs">
                                                                     {match.homeTeam || match.home_team} vs {match.awayTeam || match.away_team}
                                                                 </span>
-                                                                <span className="text-[10px] text-gray-500 truncate">{match.league} · {pred}</span>
+                                                                <span className="text-[10px] text-gray-500 truncate">
+                                                    {match.league} · {(isAdmin || isVip) ? pred : (language === 'fr' ? 'Réservé VIP' : 'VIP Only')}
+                                                </span>
                                                             </div>
                                                         </div>
                                                         <div className="flex flex-col items-end shrink-0 ml-2">

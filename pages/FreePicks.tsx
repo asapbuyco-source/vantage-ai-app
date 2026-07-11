@@ -89,7 +89,34 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
     setTimeout(() => setCopiedId(null), 1500);
   };
 
+  const getHighestProbPick = (match: any): { market: string; prob: number } => {
+    const markets = [
+      { name: 'Over 0.5 Goals', prob: match.over05_prob ?? 0 },
+      { name: 'Over 1.5 Goals', prob: match.over15_prob ?? 0 },
+      { name: 'Over 2.5 Goals', prob: match.over25_prob ?? 0 },
+      { name: 'Over 3.5 Goals', prob: match.over35_prob ?? 0 },
+      { name: 'Over 4.5 Goals', prob: match.over45_prob ?? 0 },
+      { name: 'Under 1.5 Goals', prob: match.under15_prob ?? 0 },
+      { name: 'Under 2.5 Goals', prob: match.under25_prob ?? 0 },
+      { name: 'Under 3.5 Goals', prob: match.under35_prob ?? 0 },
+      { name: 'Under 4.5 Goals', prob: match.under45_prob ?? 0 },
+      { name: 'BTTS', prob: match.btts_prob ?? 0 },
+      { name: 'Home Win', prob: match.home_win_prob ?? 0 },
+      { name: 'Draw', prob: match.draw_prob ?? 0 },
+      { name: 'Away Win', prob: match.away_win_prob ?? 0 },
+      { name: 'DC 1X', prob: match.double_chance_1x ?? 0 },
+      { name: 'DC X2', prob: match.double_chance_x2 ?? 0 },
+      { name: 'DC 12', prob: match.double_chance_12 ?? 0 },
+      { name: '1H Over 0.5', prob: match.fh_over05_prob ?? 0 },
+      { name: '1H Over 1.5', prob: match.fh_over15_prob ?? 0 },
+      { name: '1H BTTS', prob: match.fh_btts_prob ?? 0 },
+    ];
+    return markets.reduce((best, m) => m.prob > best.prob ? m : best, { market: '', prob: 0 });
+  };
+
   const getPredictionText = (match: any) => {
+    const highest = getHighestProbPick(match);
+    if (highest.market) return highest.market;
     if (language === 'fr') return match.prediction_fr || match.prediction;
     return match.prediction_en || match.prediction;
   };
@@ -140,7 +167,9 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
     const homeWinProb = Math.round((match.home_win_prob || 0) * 100);
     const drawProb = Math.round((match.draw_prob || 0) * 100);
     const awayWinProb = Math.round((match.away_win_prob || 0) * 100);
-    const confidence = match.confidence || 0;
+    const confidence = getHighestProbPick(match).prob > 0
+      ? Math.round(getHighestProbPick(match).prob * 100)
+      : (match.confidence || 0);
 
     return (
       <motion.div

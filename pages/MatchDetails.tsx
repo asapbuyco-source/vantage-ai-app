@@ -21,7 +21,9 @@ export const MatchDetails: React.FC = () => {
 
     const [match, setMatch] = useState<Match | null>(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'prediction' | 'overview' | 'stats' | 'h2h' | 'lineup'>('prediction');
+    const [activeTab, setActiveTab] = useState<'prediction' | 'overview' | 'stats' | 'h2h' | 'lineup' | 'picks'>('prediction');
+    const [allMatchPicks, setAllMatchPicks] = useState<Match[]>([]);
+    const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
     const [odds, setOdds] = useState<MatchOdds | null>(null);
     const [realH2H, setRealH2H] = useState<H2HRecord | null>(null);
@@ -35,24 +37,32 @@ export const MatchDetails: React.FC = () => {
         const foundMatch = [...predictions, ...rawFixtures].find(m => m.id === id);
         if (foundMatch) {
             setMatch(foundMatch);
+            // Find all predictions for the same fixture
+            const fixtureId = foundMatch.fixture_id || foundMatch.fixtureId;
+            const sameFixturePicks = predictions.filter(p =>
+                (p.fixture_id === fixtureId || p.fixtureId === fixtureId) && p.id !== foundMatch.id
+            );
+            setAllMatchPicks(sameFixturePicks);
         }
         setLoading(false);
     }, [id, predictions, rawFixtures]);
 
+    // Lazy load details only when tab changes (not on initial render)
     useEffect(() => {
         if (!match) return;
 
+        // Only load details if user navigates to a tab that needs them
+        const detailsTabs = ['overview', 'stats', 'h2h', 'lineup'];
+        if (!detailsTabs.includes(activeTab)) {
+            return;
+        }
+
         let isMounted = true;
-        setLoading(true);
-        setActiveTab('prediction');
-        setRealH2H(null);
-        setLineup(null);
-        setMatchStats(null);
-        setMatchFacts([]);
+        setIsLoadingDetails(true);
 
         const fetchDetails = async () => {
             try {
-                const fixtureId = Number(match.fixtureId || match.id) || 0;
+                const fixtureId = Number(match.fixtureId || match.fixture_id || match.id) || 0;
 
                 const [od, h2hData, lineupData, statsData, factsData] = await Promise.all([
                     fixtureId ? getLiveOddsFromDB(fixtureId) : null,
@@ -68,20 +78,16 @@ export const MatchDetails: React.FC = () => {
                     setLineup(lineupData);
                     setMatchStats(statsData);
                     setMatchFacts(factsData || []);
-                    setLoading(false);
+                    setIsLoadingDetails(false);
                 }
             } catch (e) {
                 console.error("Error fetching match details:", e);
-                if (isMounted) setLoading(false);
+                if (isMounted) setIsLoadingDetails(false);
             }
         };
 
-        fetchDetails();
-
-        return () => {
-            isMounted = false;
-        };
-    }, [match]);
+fetchDetails();
+    }, [id, predictions, rawFixtures, activeTab]);
 
     const handleBack = () => {
         if (window.history.length > 1) {
@@ -208,6 +214,7 @@ export const MatchDetails: React.FC = () => {
             <div className="flex px-4 pt-4 overflow-x-auto no-scrollbar border-b border-slate-200 dark:border-white/5 gap-2">
                 {[
                     { id: 'prediction', icon: Zap, label: language === 'fr' ? 'Prédiction' : 'Prediction' },
+                    { id: 'picks', icon: BarChart3, label: language === 'fr' ? 'Autres Paris' : 'More Picks' },
                     { id: 'overview', icon: Activity, label: language === 'fr' ? 'Aperçu' : 'Overview' },
                     { id: 'stats', icon: BarChart3, label: 'Stats' },
                     { id: 'h2h', icon: Target, label: 'H2H' },
@@ -224,6 +231,9 @@ export const MatchDetails: React.FC = () => {
                     >
                         <tab.icon size={16} />
                         {tab.label}
+                        {tab.id === 'picks' && allMatchPicks.length > 0 && (
+                            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-vantage-cyan/20 text-vantage-cyan text-[10px] font-bold">{allMatchPicks.length}</span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -350,10 +360,144 @@ export const MatchDetails: React.FC = () => {
                             </>
                         )}
 
+                        {/* PICKS TAB - Market probabilities (VIP only) */}
+                        {activeTab === 'picks' && (
+                            <>
+                                {!isVipUser ? (
+                                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center space-y-4">
+                                        <div className="w-16 h-16 bg-vantage-purple/10 rounded-full flex items-center justify-center">
+                                            <Crown size={28} className="text-vantage-purple" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
+                                                {language === 'fr' ? 'Contenu VIP' : 'VIP Content'}
+                                            </h3>
+                                            <p className="text-sm text-gray-500 max-w-[240px]">
+                                                {language === 'fr' ? 'Passez à Vantage Premium pour voir les probabilités détaillées de chaque marché.' : 'Upgrade to Vantage Premium to see detailed market-by-market probabilities.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : match && (
+                            <div className="space-y-4">
+                                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
+                                    {language === 'fr' ? 'Probabilités par Marché' : 'Market Probabilities'}
+                                </h3>
+
+                                {/* 1X2 Probability Bars */}
+                                <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Match Result (1X2)</span>
+                                    {(() => {
+                                        const markets = [
+                                            { label: 'Home Win', prob: (match.home_win_prob || 0) * 100 },
+                                            { label: 'Draw', prob: (match.draw_prob || 0) * 100 },
+                                            { label: 'Away Win', prob: (match.away_win_prob || 0) * 100 },
+                                        ];
+                                        const highest = Math.max(...markets.map(m => m.prob));
+                                        return markets.map(r => (
+                                            <div key={r.label} className="flex items-center gap-2">
+                                                <span className="text-[10px] text-gray-400 w-16">
+                                                    {r.label}
+                                                    {r.prob === highest && r.prob > 0 && (
+                                                        <span className="text-[7px] text-emerald-400 ml-0.5 font-bold">TOP</span>
+                                                    )}
+                                                </span>
+                                                <div className="flex-1 h-2 rounded-full bg-white/10">
+                                                    <div className={`h-2 rounded-full ${r.prob === highest ? 'bg-emerald-500' : 'bg-vantage-cyan'}`} style={{ width: `${Math.min(r.prob, 100)}%` }} />
+                                                </div>
+                                                <span className="text-[10px] font-mono text-white w-10 text-right">{r.prob.toFixed(0)}%</span>
+                                            </div>
+                                        ));
+                                    })()}
+                                </div>
+
+                                {/* Goals Over/Under */}
+                                <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Goals Over/Under</span>
+                                    {(() => {
+                                        const markets = [
+                                            { label: 'Over 1.5', prob: (match.over15_prob || 0) * 100 },
+                                            { label: 'Over 2.5', prob: (match.over25_prob || 0) * 100 },
+                                            { label: 'Over 3.5', prob: (match.over35_prob || 0) * 100 },
+                                            { label: 'Under 2.5', prob: (match.under25_prob || 0) * 100 },
+                                            { label: 'Under 3.5', prob: (match.under35_prob || 0) * 100 },
+                                        ].filter(r => r.prob > 0);
+                                        const highest = Math.max(...markets.map(m => m.prob));
+                                        return markets.map(r => (
+                                            <div key={r.label} className="flex items-center gap-2">
+                                                <span className="text-[10px] text-gray-400 w-16">
+                                                    {r.label}
+                                                    {r.prob === highest && r.prob > 0 && (
+                                                        <span className="text-[7px] text-emerald-400 ml-0.5 font-bold">TOP</span>
+                                                    )}
+                                                </span>
+                                                <div className="flex-1 h-2 rounded-full bg-white/10">
+                                                    <div className={`h-2 rounded-full ${r.prob === highest ? 'bg-emerald-500' : r.prob >= 70 ? 'bg-vantage-cyan' : 'bg-amber-500'}`} style={{ width: `${Math.min(r.prob, 100)}%` }} />
+                                                </div>
+                                                <span className="text-[10px] font-mono text-white w-10 text-right">{r.prob.toFixed(0)}%</span>
+                                            </div>
+                                        ));
+                                    })()}
+                                </div>
+
+                                {/* BTTS */}
+                                {(match.btts_prob || 0) > 0 && (
+                                <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Both Teams to Score</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-gray-400 w-16">BTTS Yes</span>
+                                        <div className="flex-1 h-2 rounded-full bg-white/10">
+                                            <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${Math.min((match.btts_prob || 0) * 100, 100)}%` }} />
+                                        </div>
+                                        <span className="text-[10px] font-mono text-white w-10 text-right">{((match.btts_prob || 0) * 100).toFixed(0)}%</span>
+                                    </div>
+                                </div>
+                                )}
+
+                                {/* First Half */}
+                                {(match.fh_over05_prob || match.fh_over15_prob) > 0 && (
+                                <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">First Half</span>
+                                    {[
+                                        { label: 'FH Over 0.5', prob: (match.fh_over05_prob || 0) * 100 },
+                                        { label: 'FH Over 1.5', prob: (match.fh_over15_prob || 0) * 100 },
+                                    ].filter(r => r.prob > 0).map(r => (
+                                        <div key={r.label} className="flex items-center gap-2">
+                                            <span className="text-[10px] text-gray-400 w-20">{r.label}</span>
+                                            <div className="flex-1 h-2 rounded-full bg-white/10">
+                                                <div className={`h-2 rounded-full ${r.prob >= 70 ? 'bg-emerald-500' : 'bg-vantage-cyan'}`} style={{ width: `${Math.min(r.prob, 100)}%` }} />
+                                            </div>
+                                            <span className="text-[10px] font-mono text-white w-10 text-right">{r.prob.toFixed(0)}%</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                )}
+
+                                {/* Top Scorelines */}
+                                {match.top_scorelines && match.top_scorelines.length > 0 && (
+                                <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Most Likely Scorelines</span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {match.top_scorelines.slice(0, 4).map((sl: any, i: number) => (
+                                            <span key={i} className="text-[10px] font-mono bg-white/10 px-2 py-1 rounded text-gray-300">
+                                                {sl.scoreline || sl} ({(sl.prob ? (sl.prob * 100).toFixed(1) : '—')}%)
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                                )}
+                            </div>
+                            )}
+                            </>
+                        )}
+
                         {/* OVERVIEW TAB */}
                         {activeTab === 'overview' && (
                             <>
-                                {(match.homeForm || match.awayForm) && (
+                                {isLoadingDetails ? (
+                                    <div className="flex items-center justify-center py-10">
+                                        <Loader2 className="animate-spin text-vantage-cyan" size={24} />
+                                    </div>
+                                ) : (
                                     <div className="space-y-4">
                                         <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
                                             <Activity size={12} /> {language === 'fr' ? 'État de Forme (5 Derniers)' : 'Form Guide (Last 5)'}

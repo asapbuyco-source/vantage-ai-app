@@ -15,13 +15,13 @@ import { useData } from '../context/DataContext';
 import { NavigationTab, Match, Sport } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { getAppSettings } from '../services/db';
-import { PWAInstallButton } from '../components/PWAInstallButton';
 import { TicketWizard } from '../components/TicketWizard';
 import { MotionDiv } from '../components/MotionDiv';
+import { getTopProbPicks, getPrimaryPredictionText, getPrimaryPredictionProb } from '../utils';
 
 interface HomeProps {}
 
-type SortKey = 'time' | 'league';
+type SortKey = 'probability' | 'time' | 'league';
 
 const CATEGORY_CONFIG = {
   safe: { label: 'SAFE', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30', text: 'text-emerald-400', dot: 'bg-emerald-400' },
@@ -113,7 +113,7 @@ export const Home: React.FC<HomeProps> = () => {
 
   // ─── Filters ─────────────────────────────────────────────────────────────
   const [activeSport, setActiveSport] = useState<Sport>('football');
-  const [sortKey, setSortKey] = useState<SortKey>('league');
+  const [sortKey, setSortKey] = useState<SortKey>('probability');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -129,7 +129,7 @@ export const Home: React.FC<HomeProps> = () => {
   };
 
   const handleShare = async (match: Match) => {
-    const pred = getPredictionText(match);
+    const pred = getPrimaryPredictionText(match, language);
     const text = `🎯 ${match.homeTeam} vs ${match.awayTeam}\n⚡ Pick: ${pred}${match.odds && match.odds > 1 ? ` @ ${Number(match.odds).toFixed(2)}` : ''}\n📊 Confidence: ${match.confidence || 0}%\n\n📱 Vantage AI — Data-driven picks`;
     try {
       if (navigator.share) {
@@ -139,11 +139,6 @@ export const Home: React.FC<HomeProps> = () => {
         showToast(language === 'fr' ? 'Pick copié !' : 'Pick copied!', 'success');
       }
     } catch (e) { /* user cancelled */ }
-  };
-
-  const getPredictionText = (match: Match) => {
-    if (language === 'fr') return match.prediction_fr || match.prediction || '';
-    return match.prediction_en || match.prediction || '';
   };
 
   const [showSortDropdown, setShowSortDropdown] = useState(false);
@@ -157,11 +152,10 @@ export const Home: React.FC<HomeProps> = () => {
       : cricketPredictions;
 
   const freeMatchIds = useMemo(() => {
-    const rankPriority: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1 };
     const sorted = [...predictions].sort((a, b) => {
-      const rankDiff = (rankPriority[b.value_rank] || 0) - (rankPriority[a.value_rank] || 0);
-      if (rankDiff !== 0) return rankDiff;
-      return (b.confidence || 0) - (a.confidence || 0);
+      const probA = getPrimaryPredictionProb(a);
+      const probB = getPrimaryPredictionProb(b);
+      return probB - probA;
     });
     const topPicks = sorted.filter(m => m.category === 'safe');
     return new Set(topPicks.slice(0, freePicksCount).map(m => m.id));
@@ -179,9 +173,12 @@ export const Home: React.FC<HomeProps> = () => {
     }
 
     if (isToday) {
-      // Don't filter out started matches — show them with live scores.
-      // Only filter out if status is explicitly 'void' (cancelled).
       result = result.filter(match => match.status !== 'void');
+    }
+
+    // Non-VIP users: only see 'safe' category bets (value bets are vault-only)
+    if (!isVip) {
+      result = result.filter(match => match.category === 'safe');
     }
 
     if (searchQuery.trim()) {
@@ -195,6 +192,14 @@ export const Home: React.FC<HomeProps> = () => {
     const categoryPriority: Record<string, number> = { safe: 4, value: 3, risky: 2, lean: 1 };
 
     switch (sortKey) {
+      case 'probability':
+        result.sort((a, b) => {
+          const probA = getPrimaryPredictionProb(a);
+          const probB = getPrimaryPredictionProb(b);
+          if (probA !== probB) return probB - probA;
+          return (categoryPriority[b.category] || 0) - (categoryPriority[a.category] || 0);
+        });
+        break;
       case 'time': 
         result.sort((a, b) => {
           const timeCompare = a.time.localeCompare(b.time);
@@ -245,14 +250,15 @@ export const Home: React.FC<HomeProps> = () => {
 
   const topPick = useMemo(() => {
     const ranked = [...predictions].sort((a, b) => {
-      const rankPri = { high: 4, medium: 3, low: 2, none: 1 };
-      return (rankPri[b.value_rank as keyof typeof rankPri] || 0) - (rankPri[a.value_rank as keyof typeof rankPri] || 0) ||
-        ((b.confidence || 0) - (a.confidence || 0));
+      const probA = getPrimaryPredictionProb(a);
+      const probB = getPrimaryPredictionProb(b);
+      return probB - probA;
     });
-    return ranked.find(m => m.value_rank === 'high' || m.value_rank === 'medium') || ranked[0];
+    return ranked[0];
   }, [predictions]);
 
   const sortLabels: Record<SortKey, string> = {
+    probability: language === 'fr' ? 'Probabilité' : 'Probability',
     time: language === 'fr' ? 'Heure' : 'Time',
     league: language === 'fr' ? 'Ligue' : 'League',
   };
@@ -335,7 +341,7 @@ export const Home: React.FC<HomeProps> = () => {
 
       {/* ── Zone A: Top Pick Hero ── */}
       {topPick && (() => {
-        const pred = getPredictionText(topPick);
+        const pred = getPrimaryPredictionText(topPick, language);
         return (
           <button
             onClick={() => !isVip ? navigate('/vip') : navigate(`/match/${topPick.id}`)}
@@ -346,7 +352,7 @@ export const Home: React.FC<HomeProps> = () => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">
-                {language === 'fr' ? "Meilleur Pick du Jour" : "Today's Top Pick"}
+                {language === 'fr' ? "Pick Haute Probabilité" : "Highest Probability Pick"}
               </p>
               <p className="text-sm font-bold text-slate-900 dark:text-white truncate mt-0.5">
                 {topPick.homeTeam} vs {topPick.awayTeam}
@@ -356,7 +362,7 @@ export const Home: React.FC<HomeProps> = () => {
               {isVip ? (
                 <>
                   <p className="text-xs font-bold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">{pred}</p>
-                  <p className="text-[10px] font-bold font-mono text-emerald-500 mt-0.5">{topPick.confidence}%</p>
+                  <p className="text-[10px] font-bold font-mono text-emerald-500 mt-0.5">{getPrimaryPredictionProb(topPick)}%</p>
                 </>
               ) : (
                 <p className="text-xs font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -387,9 +393,6 @@ export const Home: React.FC<HomeProps> = () => {
           )}
         </div>
       </div>
-
-      {/* ─── PWA INSTALL + NOTIFICATIONS ─── */}
-      <PWAInstallButton />
 
       {liveCount > 0 && (
         <motion.button
@@ -567,8 +570,8 @@ export const Home: React.FC<HomeProps> = () => {
 
               <AnimatePresence>
                 {groupedMatches[groupKey].slice(0, visibleCount).map((match, idx) => {
-                  const pred = getPredictionText(match);
-                  const confidence = match.confidence || 0;
+                  const pred = getPrimaryPredictionText(match, language);
+                  const confidence = getPrimaryPredictionProb(match);
                   const xgH = match.expected_goals_home ?? 0;
                   const xgA = match.expected_goals_away ?? 0;
                   const homeProb = Math.round((match.home_win_prob || 0) * 100);
