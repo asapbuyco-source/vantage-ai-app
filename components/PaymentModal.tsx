@@ -245,8 +245,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                   <span>Google Play secure billing</span>
                 </div>
                 <div className="flex space-x-3">
-                  <a href="https://vantage-ai.com/privacy" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Privacy Policy</a>
-                  <a href="https://vantage-ai.com/terms" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Terms of Service</a>
+                  <a href="https://vantageai.online/privacy" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Privacy Policy</a>
+                  <a href="https://vantageai.online/terms" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Terms of Service</a>
                 </div>
               </div>
             </GlassCard>
