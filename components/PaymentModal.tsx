@@ -85,6 +85,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     try {
       // Dynamically import RevenueCat only when needed on native
       const { Purchases } = await import('@revenuecat/purchases-capacitor');
+      
+      const configStatus = await Purchases.isConfigured();
+      if (!configStatus.isConfigured) {
+        await Purchases.configure({ apiKey });
+        if (user?.uid) {
+          await Purchases.logIn({ appUserID: user.uid });
+        }
+      }
+
       const offerings = await Purchases.getOfferings();
       const packages = offerings.current?.availablePackages || [];
       if (packages.length === 0) {
