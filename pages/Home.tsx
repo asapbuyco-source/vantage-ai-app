@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon,
   Trophy, AlertTriangle, Hourglass, Search, SlidersHorizontal, ChevronDown,
-  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Radio, Copy, Check, Share2, Target
+  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Copy, Check, Share2, Target
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { CircularProgress } from '../components/CircularProgress';
@@ -17,7 +17,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { getAppSettings } from '../services/db';
 import { TicketWizard } from '../components/TicketWizard';
 import { MotionDiv } from '../components/MotionDiv';
-import { getTopProbPicks, getPrimaryPredictionText, getPrimaryPredictionProb } from '../utils';
+import { getTopProbPicks, getPrimaryPredictionText, getPrimaryPredictionProb, getTopPickText } from '../utils';
 
 interface HomeProps {}
 
@@ -79,7 +79,7 @@ export const Home: React.FC<HomeProps> = () => {
   const { user, userProfile, isAdmin } = useAuth();
   const {
     activeDate, predictions, rawFixtures, basketballPredictions, cricketPredictions,
-    winRateStats, loading, isSystemGenerating, systemError, liveCount
+    winRateStats, loading, isSystemGenerating, systemError
   } = useData();
 
   const isVip = userProfile?.isVip || isAdmin;
@@ -174,11 +174,6 @@ export const Home: React.FC<HomeProps> = () => {
 
     if (isToday) {
       result = result.filter(match => match.status !== 'void');
-    }
-
-    // Non-VIP users: only see 'safe' category bets (value bets are vault-only)
-    if (!isVip) {
-      result = result.filter(match => match.category === 'safe');
     }
 
     if (searchQuery.trim()) {
@@ -341,7 +336,7 @@ export const Home: React.FC<HomeProps> = () => {
 
       {/* ── Zone A: Top Pick Hero ── */}
       {topPick && (() => {
-        const pred = getPrimaryPredictionText(topPick, language);
+        const pred = getTopPickText(topPick);
         return (
           <button
             onClick={() => !isVip ? navigate('/vip') : navigate(`/match/${topPick.id}`)}
@@ -393,29 +388,6 @@ export const Home: React.FC<HomeProps> = () => {
           )}
         </div>
       </div>
-
-      {liveCount > 0 && (
-        <motion.button
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={() => navigate('/live')}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-all text-left"
-        >
-          <span className="relative flex h-3 w-3 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-red-500">
-              🔴 {liveCount} {language === 'fr' ? `Match${liveCount > 1 ? 's' : ''} en Direct` : `Live Match${liveCount > 1 ? 'es' : ''} Now`}
-            </p>
-            <p className="text-[10px] text-red-400/70">
-              {language === 'fr' ? 'Voir les scores en temps réel →' : 'View live scores →'}
-            </p>
-          </div>
-          <Radio size={18} className="shrink-0 text-red-500" />
-        </motion.button>
-      )}
 
       {/* ─── SORT & FILTER TOOLBAR ─── */}
       <div className="space-y-3 sticky top-[72px] z-20 bg-vantage-lightBg dark:bg-vantage-bg backdrop-blur-md py-2 -mx-2 px-2">
@@ -560,7 +532,7 @@ export const Home: React.FC<HomeProps> = () => {
           Object.keys(groupedMatches).map(groupKey => (
             <div key={groupKey} className="space-y-3">
               {groupKey !== 'All Matches' && (
-                <div className="sticky top-0 z-10 py-2 bg-gradient-to-b from-vantage-lightBg/95 to-vantage-lightBg/50 dark:from-vantage-bg/95 dark:to-vantage-bg/50 backdrop-blur-md">
+                <div className="sticky top-[72px] z-10 py-2 bg-gradient-to-b from-vantage-lightBg/95 to-vantage-lightBg/50 dark:from-vantage-bg/95 dark:to-vantage-bg/50 backdrop-blur-md">
                   <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-slate-200/50 dark:bg-white/10 border border-slate-300 dark:border-white/10">
                     <Trophy size={12} className="text-vantage-purple" />
                     <span className="text-[10px] font-bold text-slate-800 dark:text-white uppercase tracking-wider">{groupKey}</span>
@@ -644,30 +616,35 @@ export const Home: React.FC<HomeProps> = () => {
                           </div>
                         )}
 
-                        {/* Prediction + confidence bar — gated for non-free, non-VIP */}
+                        {/* Prediction — show each pick with its percentage */}
                         {unlocked ? (
-                          <div className="mx-3 mb-3 p-2.5 rounded-xl bg-gradient-to-r from-vantage-cyan/5 to-transparent border border-vantage-cyan/15 overflow-hidden relative">
-                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-200 dark:bg-white/5">
-                              <motion.div className="h-full bg-gradient-to-r from-vantage-cyan to-emerald-400" initial={{ width: 0 }} animate={{ width: `${Math.min(confidence, 100)}%` }} transition={{ duration: 1, delay: idx * 0.05 + 0.3 }} />
+                          <div className="mx-3 mb-3 p-2.5 rounded-xl bg-gradient-to-r from-vantage-cyan/5 to-transparent border border-vantage-cyan/15 overflow-hidden">
+                            <span className="text-[8px] text-gray-500 uppercase tracking-wide block mb-1.5">{t('free.pred_label') || 'Prediction'}</span>
+                            <div className="space-y-1">
+                              {getTopProbPicks(match).map((p, pi) => (
+                                <div key={pi} className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] font-bold text-vantage-cyan truncate">{p.name}</span>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <div className="w-12 h-1 rounded-full bg-slate-200 dark:bg-white/10">
+                                      <motion.div className="h-full rounded-full bg-gradient-to-r from-vantage-cyan to-emerald-400" initial={{ width: 0 }} animate={{ width: `${Math.round(p.prob * 100)}%` }} transition={{ duration: 1, delay: idx * 0.05 + 0.3 }} style={{ width: `${Math.round(p.prob * 100)}%` }} />
+                                    </div>
+                                    <span className="text-[10px] font-bold font-mono text-emerald-400 w-8 text-right">{Math.round(p.prob * 100)}%</span>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                            <div className="flex items-center justify-between">
-                              <div className="flex flex-col min-w-0 mr-2">
-                                <span className="text-[8px] text-gray-500 uppercase tracking-wide">{t('free.pred_label') || 'Prediction'}</span>
-                                <span className="text-[11px] font-bold text-vantage-cyan truncate">{pred || (language === 'fr' ? 'Analyse en cours' : 'Analyzing')}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                {match.odds > 1 && <span className="text-[9px] font-mono text-gray-400 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded">{Number(match.odds).toFixed(2)}x</span>}
-                                <span className="text-sm font-black font-mono text-emerald-400">{confidence}%</span>
-                                {isVip && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setTicketPicks(prev => { if (prev.some(p => p.id === match.id)) return prev; return [...prev, { id: match.id, home: match.homeTeam || match.home_team || '', away: match.awayTeam || match.away_team || '', pick: pred || '', odds: Number(match.odds) || 0 }]; }); }}
-                                    className="p-1 rounded-lg bg-vantage-cyan/10 hover:bg-vantage-cyan/20 text-vantage-cyan transition-colors"
-                                    title={language === 'fr' ? 'Ajouter au ticket' : 'Add to ticket'}
-                                  >
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                  </button>
-                                )}
-                              </div>
+                            <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-vantage-cyan/10">
+                              {match.odds > 1 && <span className="text-[9px] font-mono text-gray-400">{Number(match.odds).toFixed(2)}x</span>}
+                              <span className="text-[9px] font-mono text-gray-400">{confidence}% match</span>
+                              {isVip && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setTicketPicks(prev => { if (prev.some(p => p.id === match.id)) return prev; return [...prev, { id: match.id, home: match.homeTeam || match.home_team || '', away: match.awayTeam || match.away_team || '', pick: pred || '', odds: Number(match.odds) || 0 }]; }); }}
+                                  className="p-1 rounded-lg bg-vantage-cyan/10 hover:bg-vantage-cyan/20 text-vantage-cyan transition-colors"
+                                  title={language === 'fr' ? 'Ajouter au ticket' : 'Add to ticket'}
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                </button>
+                              )}
                             </div>
                           </div>
                         ) : (
@@ -683,6 +660,11 @@ export const Home: React.FC<HomeProps> = () => {
                             </div>
                           </div>
                         )}
+                        <div className="px-3 pb-2 flex justify-center">
+                          <span className="text-[8px] text-gray-400 flex items-center gap-1">
+                            <ChevronRight size={10} /> {language === 'fr' ? 'Voir les détails' : 'Tap to view'}
+                          </span>
+                        </div>
                       </div>
                     </motion.div>
                   );

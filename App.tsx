@@ -1,6 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { HashRouter as BrowserRouter, Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { AnimatePresence } from 'framer-motion';
 import { Loader2, X, Crown, RefreshCw } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
@@ -12,7 +13,6 @@ import { Home } from './pages/Home';
 import { Profile } from './pages/Profile';
 import { PublicStats } from './pages/PublicStats';
 import { Results } from './pages/Results';
-import { LiveScores } from './pages/LiveScores';
 import { MatchDetails } from './pages/MatchDetails';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -237,7 +237,6 @@ function AppContent() {
                     {!IS_NATIVE && Admin && <Route path="/admin" element={<Admin />} />}
                     <Route path="/stats" element={<PublicStats />} />
                     <Route path="/results" element={<Results />} />
-                    <Route path="/live" element={<LiveScores />} />
                   </Routes>
                 </ErrorBoundary>
               </Suspense>

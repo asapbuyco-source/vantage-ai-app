@@ -575,8 +575,16 @@ def run_pipeline(date_str: str | None = None, dry_run: bool = False, weights_ove
             }
             predictions.append(pred)
 
-            # ── Add to accumulator pool ONLY if it has real value ───────────
-            if best_bet and vault_eligible:
+            # ── Add to accumulator pool — separate eligibility from vault ───
+            acca_eligible = bool(
+                best_bet
+                and best_bet.odds > 1.0
+                and odds_fresh
+                and category in ("safe", "value")
+                and value_rank in ("high", "medium")
+                and match.league_tier < 5
+            )
+            if best_bet and acca_eligible:
                 bet_pool.append({
                     "fixture_id": match.fixture_id,
                     "league": match.league,
