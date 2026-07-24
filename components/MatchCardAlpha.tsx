@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Clock, Copy, Check, BrainCircuit } from 'lucide-react';
 import { Match } from '../types';
 import { TeamLogo } from './TeamLogo';
-import { getTopProbPicks } from '../utils';
+import { getTopProbPicks, getSmartBadges } from '../utils';
+import { DeepAnalysisModal } from './DeepAnalysisModal';
 
 interface MatchCardAlphaProps {
   match: Match;
@@ -21,6 +22,7 @@ const barGradient = (pct: number, isDark: boolean) => {
 };
 
 export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx, isExpanded, onToggle, onCopy, copiedId }) => {
+  const ev = match.expected_value ?? 0;
   const kelly = match.kelly_stake ?? 0;
   const xgH = match.expected_goals_home ?? 0;
   const xgA = match.expected_goals_away ?? 0;
@@ -38,6 +40,7 @@ export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx, isEx
   const expCorners = match.expected_corners ?? 0;
   const over85C = (match.over85_corners_prob ?? 0) * 100;
   const over95C = (match.over95_corners_prob ?? 0) * 100;
+  const evColor = ev >= 0.10 ? 'text-emerald-400' : ev >= 0.05 ? 'text-yellow-400' : 'text-orange-400';
 
   const topScorelines = match.top_scorelines;
   const topScore = topScorelines?.[0];
@@ -45,6 +48,8 @@ export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx, isEx
   const topPicks = getTopProbPicks(match);
   const displayPickName = topPicks.length > 0 ? topPicks.map(p => p.name).join(' / ') : (match.bet_type || match.prediction);
   const displayPickProb = topPicks.length > 0 ? Math.round(topPicks[0].prob * 100) : (match.confidence ?? Math.round((match.probability ?? 0) * 100));
+
+  const [showDeepAnalysis, setShowDeepAnalysis] = useState(false);
 
   return (
     <motion.div
@@ -69,7 +74,7 @@ export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx, isEx
               className={`flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold transition-all ${
                 isExpanded
                   ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                  : 'bg-slate-100 dark:bg-white/10 text-gray-500 hover:bg-emerald-500/20 hover:text-emerald-600'
+                  : 'bg-emerald-500 text-white animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]'
               }`}
             >
               {isExpanded ? 'Hide' : 'Analysis'}
@@ -98,8 +103,8 @@ export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx, isEx
           </div>
         </div>
 
-        {/* ── Top Prediction (always visible, clickable to expand) ── */}
-        <div
+        {/* ── Top Prediction (always visible, highlighted) ── */}
+        <div 
           onClick={onToggle}
           className="mx-3 mb-2 p-2.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/10 transition-colors"
         >
@@ -115,16 +120,47 @@ export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx, isEx
             </div>
           </div>
           <div className="flex items-center justify-between mt-1.5">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 flex-wrap">
               {Number(match.odds) > 1 && (
                 <span className="text-[9px] font-mono text-gray-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded">{Number(match.odds).toFixed(2)}x</span>
               )}
               {kelly > 0 && (
-                <span className="text-[9px] font-mono text-blue-400 bg-blue-500/5 px-1.5 py-0.5 rounded">Kelly {kelly.toFixed(1)}%</span>
+                <span className="flex items-center gap-1">
+                  <span className="text-[9px] font-mono text-blue-400 bg-blue-500/5 px-1.5 py-0.5 rounded">Kelly {kelly.toFixed(1)}%</span>
+                  <div className="w-8 h-1.5 rounded-full bg-white/10">
+                    <div className="h-full rounded-full bg-gradient-to-r from-blue-400 to-emerald-400" style={{ width: `${Math.min(kelly * 10, 100)}%` }} />
+                  </div>
+                </span>
               )}
               {match.vault_eligible && (
                 <span className="text-[9px] font-bold text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded">Vault</span>
               )}
+            </div>
+            {(() => {
+              const badges = getSmartBadges(match);
+              if (badges.length === 0) return null;
+              return (
+                <div className="flex items-center gap-1 flex-wrap mt-1">
+                  {badges.slice(0, 3).map((b, i) => (
+                    <span
+                      key={i}
+                      onClick={(e) => { e.stopPropagation(); setShowDeepAnalysis(true); }}
+                      className={`text-[9px] font-bold ${b.color} px-1.5 py-0.5 rounded flex items-center gap-0.5 cursor-pointer hover:brightness-125 transition-all`}
+                      title={b.reason}
+                    >
+                      {b.icon} {b.text}
+                    </span>
+                  ))}
+                  <span
+                    onClick={(e) => { e.stopPropagation(); setShowDeepAnalysis(true); }}
+                    className="text-[9px] font-bold text-gray-500 hover:text-vantage-cyan px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                  >
+                    + Analysis
+                  </span>
+                </div>
+              );
+            })()}
             </div>
             <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-500 opacity-80 shrink-0">
               <span>{isExpanded ? 'Hide' : 'View More'}</span>
@@ -274,6 +310,7 @@ export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx, isEx
           )}
         </AnimatePresence>
       </div>
+      <DeepAnalysisModal match={match} isOpen={showDeepAnalysis} onClose={() => setShowDeepAnalysis(false)} />
     </motion.div>
   );
 };
