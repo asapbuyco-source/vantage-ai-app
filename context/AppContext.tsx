@@ -29,9 +29,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = localStorage.getItem('vantage_language');
     if (saved === 'en' || saved === 'fr') return saved as Language;
-    const browserLang = navigator.language || navigator.languages?.[0];
-    if (browserLang && browserLang.toLowerCase().startsWith('en')) return 'en';
-    return 'en';
+    const browserLang = (navigator.language || navigator.languages?.[0] || '').toLowerCase();
+    if (browserLang.startsWith('fr')) return 'fr';
+    return 'en';  // Default to English for global audience
   });
 
   // ─── Theme (persisted) ────────────────────────────────────────────────────
