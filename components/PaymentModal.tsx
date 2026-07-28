@@ -189,8 +189,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                     <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
                     <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-200">
                       {language === 'fr'
-                        ? "Google Play Billing nest pas encore configure."
-                        : 'Google Play Billing is not configured yet.'}
+                        ? "Pour respecter Google Play, les paiements externes ont ete retires. Ouvrez l'application Android pour acheter via Google Play."
+                        : 'External payments have been removed for Google Play compliance. Open the Android app to buy through Google Play.'}
                     </p>
                   </div>
                 </div>
@@ -212,7 +212,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
               <button
                 onClick={handlePayment}
                 disabled={loading}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-4 font-bold text-white shadow-lg shadow-emerald-500/30 transition-all hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-vantage-purple py-4 font-bold text-white shadow-lg shadow-vantage-purple/30 transition-all hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? <Loader2 className="animate-spin" size={20} /> : <ShieldCheck size={19} />}
                 <span>{language === 'fr' ? 'Payer avec Google Play' : 'Pay with Google Play'}</span>
@@ -245,8 +245,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                   <span>Google Play secure billing</span>
                 </div>
                 <div className="flex space-x-3">
-                  <a href="https://vantage-ai.com/privacy" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Privacy Policy</a>
-                  <a href="https://vantage-ai.com/terms" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Terms of Service</a>
+                  <a href="https://vantageai.online/privacy" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Privacy Policy</a>
+                  <a href="https://vantageai.online/terms" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Terms of Service</a>
                 </div>
               </div>
             </GlassCard>

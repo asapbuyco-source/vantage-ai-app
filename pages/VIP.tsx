@@ -20,12 +20,33 @@ import { getTopProbPicks } from '../utils';
 import { Screener } from '../components/Screener';
 import { MatchCardAlpha } from '../components/MatchCardAlpha';
 import { ResponsibleGambling } from '../components/ResponsibleGambling';
-import { Capacitor } from '@capacitor/core';
 
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
+
+// ── Currency detection helper ──â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string }> = {
+  'ng': { symbol: '₦', rate: 1500, label: 'NGN' },
+  'ke': { symbol: 'KSh', rate: 130, label: 'KES' },
+  'gh': { symbol: 'GH₵', rate: 15, label: 'GHS' },
+  'za': { symbol: 'R', rate: 19, label: 'ZAR' },
+  'cm': { symbol: 'FCFA', rate: 600, label: 'XAF' },
+  'ci': { symbol: 'FCFA', rate: 600, label: 'XOF' },
+  'sn': { symbol: 'FCFA', rate: 600, label: 'XOF' },
+  'gb': { symbol: '£', rate: 0.79, label: 'GBP' },
+  'eu': { symbol: '€', rate: 0.92, label: 'EUR' },
+};
+
+function getPricingForCountry(baseUsd: number, countryCode: string = 'other') {
+  if (CURRENCY_MAP[countryCode]) {
+    const cur = CURRENCY_MAP[countryCode];
+    const converted = Math.round(baseUsd * cur.rate);
+    return { amount: converted, symbol: cur.symbol, code: cur.label, isConverted: true, originalValue: baseUsd };
+  }
+  return { amount: baseUsd, symbol: '$', code: 'USD', isConverted: false, originalValue: baseUsd };
+}
 
 interface VIPProps {}
 
@@ -44,31 +65,11 @@ export const VIP: React.FC<VIPProps> = () => {
   const [isAccuOpen, setIsAccuOpen] = useState(false);
   const [accuTier, setAccuTier] = useState<string>('baseline');
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState<string | null>(null);
-  const [localizedPrices, setLocalizedPrices] = useState<Record<string, string>>({});
 
   useEffect(() => {
     getInternalSettings().then(s => {
       if (s.whatsappGroupUrl) setWhatsappGroupUrl(s.whatsappGroupUrl);
     });
-  }, []);
-
-  // Fetch localized prices from RevenueCat (Google Play actual prices)
-  useEffect(() => {
-    if (typeof Capacitor === 'undefined' || !Capacitor.isNativePlatform()) return;
-    const fetchPrices = async () => {
-      try {
-        const { Purchases } = await import('@revenuecat/purchases-capacitor');
-        const offerings = await Purchases.getOfferings();
-        const packages = offerings.current?.availablePackages || [];
-        const map: Record<string, string> = {};
-        for (const pkg of packages) {
-          const id = pkg.identifier; // weekly, monthly, quarterly, annual
-          map[id] = pkg.product.priceString; // localized price like "$7.99" or "₦3,500"
-        }
-        setLocalizedPrices(map);
-      } catch (_) { /* fall back to hardcoded USD */ }
-    };
-    fetchPrices();
   }, []);
 
   const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault' | 'accumulators'>('predictions');
@@ -221,9 +222,9 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'weekly',
         label: t('vip.plan_weekly'),
         badge: '📊 7-DAY ACCESS',
-        price: localizedPrices['weekly'] || '$3.99',
+        price: '14.99',
         icon: <Activity size={20} />,
-        features: [t('vip.feat_signal_feed'), t('vip.feat_kelly'), t('vip.feat_screener')],
+        features: ['Full +EV Signal Feed', 'Kelly Bankroll Sizing', 'Alpha Screener Access'],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
         claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
@@ -231,9 +232,9 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'monthly',
         label: t('vip.plan_monthly'),
         badge: '🔥 MOST POPULAR',
-        price: localizedPrices['monthly'] || '$9.99',
+        price: '24.99',
         icon: <Star size={20} />,
-        features: [t('vip.feat_signal_feed'), t('vip.feat_screener'), t('vip.feat_whatsapp')],
+        features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group'],
         color: 'border-vantage-cyan bg-vantage-cyan/5 dark:bg-vantage-cyan/10 shadow-[0_0_40px_rgba(34,211,238,0.1)]',
         claimColor: 'bg-vantage-cyan hover:bg-cyan-400 text-slate-900 shadow-lg shadow-vantage-cyan/25',
       },
@@ -241,9 +242,9 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'quarterly',
         label: t('vip.plan_quarterly'),
         badge: '💎 BEST VALUE',
-        price: localizedPrices['quarterly'] || '$19.99',
+        price: '59.99',
         icon: <ShieldCheck size={20} />,
-        features: [t('vip.feat_signal_feed'), t('vip.feat_screener'), t('vip.feat_whatsapp'), t('vip.feat_priority')],
+        features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support'],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
         claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
@@ -251,15 +252,15 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'annual',
         label: t('vip.plan_annual') || 'Annual Access',
         badge: '👑 ULTIMATE',
-        price: localizedPrices['annual'] || '$49.99',
+        price: '99.99',
         icon: <Crown size={20} />,
-        features: [t('vip.feat_signal_feed'), t('vip.feat_screener'), t('vip.feat_whatsapp'), t('vip.feat_priority'), t('vip.feat_review')],
+        features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support', 'Monthly 1-on-1 Review'],
         color: 'border-vantage-purple bg-vantage-purple/5 dark:bg-vantage-purple/10 shadow-[0_0_40px_rgba(168,85,247,0.1)]',
         claimColor: 'bg-vantage-purple hover:bg-purple-500 text-white shadow-lg shadow-vantage-purple/25',
       },
     ];
 
-  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
+  const handlePlanClick = (planId: 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
     setSelectedPlanId(planId);
     setShowPaymentModal(true);
   };
@@ -1094,13 +1095,13 @@ export const VIP: React.FC<VIPProps> = () => {
           {/* PREMIUM HERO TEASER */}
           <div className="relative mb-8 text-center pt-4">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-vantage-cyan/10 border border-vantage-cyan/20 text-vantage-cyan text-[10px] font-bold uppercase tracking-widest mb-4">
-              <Activity size={12} /> {t('vip.institutional_grade')}
+              <Activity size={12} /> Institutional Grade Analytics
             </div>
             <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 leading-tight">
-              {t('vip.unlock_alpha')} <span className="text-vantage-cyan">{t('vip.alpha_terminal')}</span>
+              Unlock the <span className="text-vantage-cyan">Alpha Terminal</span>
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-6">
-              {t('vip.stop_guessing')}
+              Stop guessing. Get access to our quantitative models, live CLV tracking, and +EV betting signals.
             </p>
 
             <div className="relative mx-auto mb-6 max-w-md overflow-hidden rounded-2xl border border-vantage-cyan/20 bg-slate-950 text-left shadow-2xl shadow-vantage-cyan/10">
@@ -1116,11 +1117,11 @@ export const VIP: React.FC<VIPProps> = () => {
               <div className="relative z-10 p-5">
                 <div className="mb-10 inline-flex items-center gap-2 rounded-full border border-vantage-cyan/30 bg-vantage-cyan/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-vantage-cyan">
                   <Radio size={11} />
-                  {t('vip.matchday_terminal')}
+                  Matchday Terminal
                 </div>
                 <div className="max-w-[13rem]">
                   <p className="text-xl font-black leading-tight text-white">
-                    {t('vip.matchday_desc')}
+                    Full card, model edge, and staking plan in one view.
                   </p>
                   <div className="mt-4 grid grid-cols-3 gap-2">
                     {['+EV', 'CLV', 'Kelly'].map(label => (
@@ -1137,6 +1138,7 @@ export const VIP: React.FC<VIPProps> = () => {
           <div id="plans-section" className="space-y-6">
             <div className="flex flex-col gap-4">
             {plans.filter(p => showAllPlans || ['daily', 'weekly', 'monthly', 'quarterly'].includes(p.id)).map((plan) => {
+                const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
                 const isPopular = plan.id === 'monthly';
                 return (
                   <motion.button
@@ -1180,10 +1182,10 @@ export const VIP: React.FC<VIPProps> = () => {
                       {/* Pricing */}
                       <div className="flex flex-col items-end">
                         <span className="text-lg md:text-xl font-black font-mono text-slate-900 dark:text-white">
-                          {plan.price}
+                          {pricing.symbol}{pricing.amount}
                         </span>
                         <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                          USD
+                          {pricing.code}
                         </span>
                         
                         <div className={`mt-4 px-4 py-2 rounded-xl font-bold text-xs transition-all ${plan.claimColor}`}>
@@ -1207,17 +1209,20 @@ export const VIP: React.FC<VIPProps> = () => {
               }
             </button>
 
-            {/* Google Play Trust Signals */}
+            {/* Premium Trust Signals */}
             <div className="pt-6 border-t border-slate-200 dark:border-white/10 flex flex-col items-center space-y-4">
               <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
                 <ShieldCheck size={14} className="text-emerald-500" />
-                <>Secure payment via <span className="text-slate-900 dark:text-white font-bold">Google Play</span></>
+                <>Secure Checkout via <span className="text-slate-900 dark:text-white font-bold">Google Play</span></>
               </div>
               
+              {/* Payment Methods */}
               <div className="flex items-center justify-center gap-2">
-                <div className="px-2.5 py-1 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
-                  Google Play Billing
-                </div>
+                {['Google Play', 'Credit Card', 'Carrier Billing'].map(method => (
+                  <div key={method} className="px-2.5 py-1 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
+                    {method}
+                  </div>
+                ))}
               </div>
 
               {/* Manual Verification Button */}
