@@ -20,33 +20,12 @@ import { getTopProbPicks } from '../utils';
 import { Screener } from '../components/Screener';
 import { MatchCardAlpha } from '../components/MatchCardAlpha';
 import { ResponsibleGambling } from '../components/ResponsibleGambling';
+import { Capacitor } from '@capacitor/core';
 
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
-
-// ── Currency detection helper ──â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const CURRENCY_MAP: Record<string, { symbol: string; rate: number; label: string }> = {
-  'ng': { symbol: '₦', rate: 1500, label: 'NGN' },
-  'ke': { symbol: 'KSh', rate: 130, label: 'KES' },
-  'gh': { symbol: 'GH₵', rate: 15, label: 'GHS' },
-  'za': { symbol: 'R', rate: 19, label: 'ZAR' },
-  'cm': { symbol: 'FCFA', rate: 600, label: 'XAF' },
-  'ci': { symbol: 'FCFA', rate: 600, label: 'XOF' },
-  'sn': { symbol: 'FCFA', rate: 600, label: 'XOF' },
-  'gb': { symbol: '£', rate: 0.79, label: 'GBP' },
-  'eu': { symbol: '€', rate: 0.92, label: 'EUR' },
-};
-
-function getPricingForCountry(baseUsd: number, countryCode: string = 'other') {
-  if (CURRENCY_MAP[countryCode]) {
-    const cur = CURRENCY_MAP[countryCode];
-    const converted = Math.round(baseUsd * cur.rate);
-    return { amount: converted, symbol: cur.symbol, code: cur.label, isConverted: true, originalValue: baseUsd };
-  }
-  return { amount: baseUsd, symbol: '$', code: 'USD', isConverted: false, originalValue: baseUsd };
-}
 
 interface VIPProps {}
 
@@ -60,6 +39,21 @@ export const VIP: React.FC<VIPProps> = () => {
   const [selectedPlanId, setSelectedPlanId] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('monthly');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [localizedPrices, setLocalizedPrices] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    (async () => {
+      try {
+        const { Purchases } = await import('@revenuecat/purchases-capacitor');
+        const offerings = await Purchases.getOfferings();
+        const packages = offerings.current?.availablePackages || [];
+        const map: Record<string, string> = {};
+        for (const pkg of packages) map[pkg.identifier] = pkg.product.priceString;
+        setLocalizedPrices(map);
+      } catch (_) {}
+    })();
+  }, []);
 
   // Accumulator Modal State
   const [isAccuOpen, setIsAccuOpen] = useState(false);
@@ -73,8 +67,6 @@ export const VIP: React.FC<VIPProps> = () => {
   }, []);
 
   const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault' | 'accumulators'>('predictions');
-  const [hasSeenPicksSection, setHasSeenPicksSection] = useState(false);
-  const [showPicksHighlight, setShowPicksHighlight] = useState(false);
   const [activeSport, setActiveSport] = useState<'football' | 'basketball' | 'cricket'>('football');
   const activeAltPredictions = activeSport === 'cricket' ? cricketPredictions : basketballPredictions;
   const activeAltSportLabel = activeSport === 'cricket' ? 'Cricket' : 'Basketball';
@@ -104,7 +96,7 @@ export const VIP: React.FC<VIPProps> = () => {
   const [quantLoading, setQuantLoading] = useState(false);
   const [quantBetFilter, setQuantBetFilter] = useState<string>('All');
   const [quantLeagueFilter, setQuantLeagueFilter] = useState<string>('All');
-  const [quantExpanded, setQuantExpanded] = useState(true);
+  
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [showPortfolioEdit, setShowPortfolioEdit] = useState(false);
   const [showAllPlans, setShowAllPlans] = useState(false);
@@ -120,15 +112,6 @@ export const VIP: React.FC<VIPProps> = () => {
     return sorted;
   }, [predictions]);
 
-  // Auto-expand Model Picks on first visit to predictions tab
-  useEffect(() => {
-    if (activeVipTab === 'predictions' && !hasSeenPicksSection && quantPredictions.length > 0) {
-      setQuantExpanded(true);
-      setHasSeenPicksSection(true);
-      setShowPicksHighlight(true);
-      setTimeout(() => setShowPicksHighlight(false), 2500);
-    }
-  }, [activeVipTab, hasSeenPicksSection, quantPredictions.length]);
 
   // Load accumulators from DataContext accumulators or fallback to Firestore
   useEffect(() => {
@@ -222,9 +205,9 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'weekly',
         label: t('vip.plan_weekly'),
         badge: '📊 7-DAY ACCESS',
-        price: '14.99',
+        price: localizedPrices['weekly'] || '$3.99',
         icon: <Activity size={20} />,
-        features: ['Full +EV Signal Feed', 'Kelly Bankroll Sizing', 'Alpha Screener Access'],
+        features: [t('vip.feat_signal_feed'), t('vip.feat_kelly'), t('vip.feat_screener')],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
         claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
@@ -232,9 +215,9 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'monthly',
         label: t('vip.plan_monthly'),
         badge: '🔥 MOST POPULAR',
-        price: '24.99',
+        price: localizedPrices['monthly'] || '$9.99',
         icon: <Star size={20} />,
-        features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group'],
+        features: [t('vip.feat_signal_feed'), t('vip.feat_screener'), t('vip.feat_whatsapp')],
         color: 'border-vantage-cyan bg-vantage-cyan/5 dark:bg-vantage-cyan/10 shadow-[0_0_40px_rgba(34,211,238,0.1)]',
         claimColor: 'bg-vantage-cyan hover:bg-cyan-400 text-slate-900 shadow-lg shadow-vantage-cyan/25',
       },
@@ -242,9 +225,9 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'quarterly',
         label: t('vip.plan_quarterly'),
         badge: '💎 BEST VALUE',
-        price: '59.99',
+        price: localizedPrices['quarterly'] || '$19.99',
         icon: <ShieldCheck size={20} />,
-        features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support'],
+        features: [t('vip.feat_signal_feed'), t('vip.feat_screener'), t('vip.feat_whatsapp'), t('vip.feat_priority')],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
         claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
       },
@@ -252,9 +235,9 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'annual',
         label: t('vip.plan_annual') || 'Annual Access',
         badge: '👑 ULTIMATE',
-        price: '99.99',
+        price: localizedPrices['annual'] || '$49.99',
         icon: <Crown size={20} />,
-        features: ['Full +EV Signal Feed', 'Alpha Screener Access', 'VIP WhatsApp Group', 'Priority Support', 'Monthly 1-on-1 Review'],
+        features: [t('vip.feat_signal_feed'), t('vip.feat_screener'), t('vip.feat_whatsapp'), t('vip.feat_priority'), t('vip.feat_review')],
         color: 'border-vantage-purple bg-vantage-purple/5 dark:bg-vantage-purple/10 shadow-[0_0_40px_rgba(168,85,247,0.1)]',
         claimColor: 'bg-vantage-purple hover:bg-purple-500 text-white shadow-lg shadow-vantage-purple/25',
       },
@@ -676,38 +659,17 @@ export const VIP: React.FC<VIPProps> = () => {
 
         {/* â”€â”€ VANTAGE MODEL PICKS SECTION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {activeVipTab === 'predictions' && (
-        <div className={`mb-6 animate-in slide-in-from-left duration-300 ${showPicksHighlight ? 'ring-2 ring-cyan-400 ring-opacity-50 rounded-2xl' : ''}`}>
-          {/* Sticky Header */}
-          <div className={`${quantExpanded ? 'sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm -mx-2 px-2 py-2 rounded-xl' : ''}`}>
-          {/* Header */}
-          <button
-            onClick={() => setQuantExpanded(v => !v)}
-            className="w-full flex items-center justify-between mb-3"
-          >
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300">
               <BarChart2 size={16} className="text-emerald-500" />
               <span>Model Picks</span>
               <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 ml-1">VANTAGE AI</span>
-              {!quantExpanded && quantPredictions.length > 0 && (
-                <motion.span
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 0.6, repeat: Infinity }}
-                  className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-cyan-500 text-white ml-1"
-                >
-                  NEW
-                </motion.span>
-              )}
               {quantPredictions.length > 0 && (
-                <span className="text-[10px] font-normal text-gray-500">{quantPredictions.length} bets</span>
+                <span className="text-[10px] font-normal text-gray-500">{quantPredictions.length} picks</span>
               )}
             </h3>
-            {quantExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-          </button>
           </div>
-
-          <AnimatePresence>
-            {quantExpanded && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
 
                 {/* â”€â”€ Sport Toggle â”€â”€ */}
                 <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 mb-4">
@@ -866,51 +828,50 @@ export const VIP: React.FC<VIPProps> = () => {
                   <>
                     {!quantLoading && quantPredictions.length > 0 && (
                       <>
-                        <div className="flex gap-1.5 flex-wrap mb-2">
-                          {['All', 'Straight Win', 'Over/Under', 'BTTS', 'Double Chance'].map(tab => (
-                            <button
-                              key={tab}
-                              onClick={() => setQuantBetFilter(tab)}
-                              className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${quantBetFilter === tab
-                                ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/30'
-                                : 'bg-slate-100 dark:bg-white/5 text-gray-500 border-slate-200 dark:border-white/10 hover:border-emerald-500/50'
-                                }`}
-                            >{tab}</button>
-                          ))}
-                        </div>
-
-                        {/* League filter - scrollable horizontal chip row */}
-                        {availableLeagues.length > 1 && (
-                          <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
-                            {availableLeagues.map(league => (
-                              <button
-                                key={league}
-                                onClick={() => setQuantLeagueFilter(league)}
-                                className={`px-3 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap shrink-0 transition-all ${
-                                  quantLeagueFilter === league
-                                    ? 'bg-vantage-cyan text-slate-900 border-vantage-cyan shadow-sm shadow-vantage-cyan/30'
-                                    : 'bg-slate-100 dark:bg-white/5 text-gray-500 border-slate-200 dark:border-white/10 hover:border-vantage-cyan/50'
-                                }`}
-                              >
-                                {league === 'All' ? '🌍 All Leagues' : league}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {(quantBetFilter !== 'All' || quantLeagueFilter !== 'All') && (
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-[10px] text-gray-500">
-                              Showing <span className="font-bold text-vantage-cyan">{filteredQuantPredictions.length}</span> of {quantPredictions.length} picks
-                            </p>
-                            <button
-                              onClick={() => { setQuantBetFilter('All'); setQuantLeagueFilter('All'); }}
-                              className="text-[10px] font-bold text-gray-400 hover:text-vantage-cyan transition-colors underline"
+                        {/* Filter Bar */}
+                        <div className="flex items-center gap-2 mb-3 flex-wrap">
+                          <div className="relative">
+                            <select
+                              value={quantBetFilter}
+                              onChange={e => setQuantBetFilter(e.target.value)}
+                              className="appearance-none bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 pr-7 text-[10px] font-bold text-gray-600 dark:text-gray-300 focus:outline-none focus:border-emerald-500 cursor-pointer"
                             >
-                              Clear filters
-                            </button>
+                              <option value="All">Bet Type: All</option>
+                              <option value="Straight Win">Straight Win</option>
+                              <option value="Over/Under">Over/Under</option>
+                              <option value="BTTS">BTTS</option>
+                              <option value="Double Chance">Double Chance</option>
+                            </select>
+                            <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                           </div>
-                        )}
+                          {availableLeagues.length > 1 && (
+                            <div className="relative">
+                              <select
+                                value={quantLeagueFilter}
+                                onChange={e => setQuantLeagueFilter(e.target.value)}
+                                className="appearance-none bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 pr-7 text-[10px] font-bold text-gray-600 dark:text-gray-300 focus:outline-none focus:border-vantage-cyan cursor-pointer max-w-[200px] truncate"
+                              >
+                                {availableLeagues.map(league => (
+                                  <option key={league} value={league}>{league === 'All' ? 'League: All' : league}</option>
+                                ))}
+                              </select>
+                              <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            </div>
+                          )}
+                          {(quantBetFilter !== 'All' || quantLeagueFilter !== 'All') && (
+                            <>
+                              <span className="text-[10px] text-gray-500 ml-1">
+                                <span className="font-bold text-vantage-cyan">{filteredQuantPredictions.length}</span>/<span className="text-gray-400">{quantPredictions.length}</span>
+                              </span>
+                              <button
+                                onClick={() => { setQuantBetFilter('All'); setQuantLeagueFilter('All'); }}
+                                className="text-[10px] font-bold text-gray-400 hover:text-vantage-cyan transition-colors underline ml-1"
+                              >
+                                Clear
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </>
                     )}
 
@@ -953,9 +914,6 @@ export const VIP: React.FC<VIPProps> = () => {
                 )}
                 </>
               )}
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
         )}
 
@@ -1095,13 +1053,13 @@ export const VIP: React.FC<VIPProps> = () => {
           {/* PREMIUM HERO TEASER */}
           <div className="relative mb-8 text-center pt-4">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-vantage-cyan/10 border border-vantage-cyan/20 text-vantage-cyan text-[10px] font-bold uppercase tracking-widest mb-4">
-              <Activity size={12} /> Institutional Grade Analytics
+              <Activity size={12} /> {t('vip.institutional_grade')}
             </div>
             <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 leading-tight">
-              Unlock the <span className="text-vantage-cyan">Alpha Terminal</span>
+              {t('vip.unlock_alpha')} <span className="text-vantage-cyan">{t('vip.alpha_terminal')}</span>
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-6">
-              Stop guessing. Get access to our quantitative models, live CLV tracking, and +EV betting signals.
+              {t('vip.stop_guessing')}
             </p>
 
             <div className="relative mx-auto mb-6 max-w-md overflow-hidden rounded-2xl border border-vantage-cyan/20 bg-slate-950 text-left shadow-2xl shadow-vantage-cyan/10">
@@ -1117,11 +1075,11 @@ export const VIP: React.FC<VIPProps> = () => {
               <div className="relative z-10 p-5">
                 <div className="mb-10 inline-flex items-center gap-2 rounded-full border border-vantage-cyan/30 bg-vantage-cyan/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-vantage-cyan">
                   <Radio size={11} />
-                  Matchday Terminal
+                  {t('vip.matchday_terminal')}
                 </div>
                 <div className="max-w-[13rem]">
                   <p className="text-xl font-black leading-tight text-white">
-                    Full card, model edge, and staking plan in one view.
+                    {t('vip.matchday_desc')}
                   </p>
                   <div className="mt-4 grid grid-cols-3 gap-2">
                     {['+EV', 'CLV', 'Kelly'].map(label => (
@@ -1137,8 +1095,7 @@ export const VIP: React.FC<VIPProps> = () => {
 
           <div id="plans-section" className="space-y-6">
             <div className="flex flex-col gap-4">
-            {plans.filter(p => showAllPlans || ['daily', 'weekly', 'monthly', 'quarterly'].includes(p.id)).map((plan) => {
-                const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'other');
+            {plans.filter(p => showAllPlans || ['weekly', 'monthly', 'quarterly'].includes(p.id)).map((plan) => {
                 const isPopular = plan.id === 'monthly';
                 return (
                   <motion.button
@@ -1182,10 +1139,10 @@ export const VIP: React.FC<VIPProps> = () => {
                       {/* Pricing */}
                       <div className="flex flex-col items-end">
                         <span className="text-lg md:text-xl font-black font-mono text-slate-900 dark:text-white">
-                          {pricing.symbol}{pricing.amount}
+                          {plan.price}
                         </span>
                         <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                          {pricing.code}
+                          USD
                         </span>
                         
                         <div className={`mt-4 px-4 py-2 rounded-xl font-bold text-xs transition-all ${plan.claimColor}`}>
@@ -1209,20 +1166,16 @@ export const VIP: React.FC<VIPProps> = () => {
               }
             </button>
 
-            {/* Premium Trust Signals */}
+            {/* Google Play Trust Signals */}
             <div className="pt-6 border-t border-slate-200 dark:border-white/10 flex flex-col items-center space-y-4">
               <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
                 <ShieldCheck size={14} className="text-emerald-500" />
-                <>Secure Checkout via <span className="text-slate-900 dark:text-white font-bold">Google Play</span></>
+                <>Secure payment via <span className="text-slate-900 dark:text-white font-bold">Google Play</span></>
               </div>
-              
-              {/* Payment Methods */}
               <div className="flex items-center justify-center gap-2">
-                {['Google Play', 'Credit Card', 'Carrier Billing'].map(method => (
-                  <div key={method} className="px-2.5 py-1 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
-                    {method}
-                  </div>
-                ))}
+                <div className="px-2.5 py-1 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
+                  Google Play Billing
+                </div>
               </div>
 
               {/* Manual Verification Button */}

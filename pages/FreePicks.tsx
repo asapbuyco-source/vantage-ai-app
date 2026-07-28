@@ -95,13 +95,14 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
     // Sort by highest probability pick first (probability-first site)
     const sorted = [...predictions].sort((a, b) => getPrimaryPredictionProb(b) - getPrimaryPredictionProb(a));
 
-    // Top-tier picks: safe category only (value bets go to vault)
+    // Top-tier picks: safe category first, fall back to value if none
     const topPicks = sorted.filter(m => m.category === 'safe');
+    const freeablePicks = topPicks.length > 0 ? topPicks : sorted.filter(m => m.category === 'value');
 
     // Hook: dynamic free picks based on admin setting
-    const hook = topPicks.slice(0, freePicksCount);
+    const hook = freeablePicks.slice(0, freePicksCount);
     // VIP Teasers: next up to 8 picks (blurred)
-    const teasers = topPicks.slice(freePicksCount, freePicksCount + 8);
+    const teasers = freeablePicks.slice(freePicksCount, freePicksCount + 8);
     // Data cards: everything else
     const teaseIds = new Set([...hook, ...teasers].map(m => m.id));
     const data = sorted.filter(m => !teaseIds.has(m.id));
@@ -321,8 +322,8 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
           <div className="p-3 rounded-xl bg-white/5 border border-white/5">
             <p className="text-[10px] text-gray-500 mb-1">
               {language === 'fr'
-                ? `Voir ce que l'IA a choisi — accès dès 1000 FCFA/semaine`
-                : `See what the model picked — 7-day access from 1000 FCFA`}
+                ? `Voir ce que l'IA a choisi — accès dès 2000 FCFA/semaine`
+                : `See what the model picked — 7-day access from 2000 FCFA`}
             </p>
             <div className="text-[10px] text-vantage-purple font-bold mt-1">
               {language === 'fr' ? `${totalAnalyzed} matchs analysés` : `${totalAnalyzed} matches analyzed today`}

@@ -15,7 +15,7 @@ import OpenAI from 'openai';
 import sanitizeHtml from 'sanitize-html';
 import jwt from 'jsonwebtoken';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
-import { initScheduler, stopScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerCricketGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance, repairCorruptedPredictions } from './backend/scheduler.js';
+import { initScheduler, stopScheduler, triggerFootballGeneration, triggerBasketballGeneration, triggerCricketGeneration, triggerGrading, triggerBlogGen, triggerAccumulatorGeneration, triggerTelegramBroadcast, triggerQuantPipeline, triggerQuantGrading, triggerQuantPerformance, repairCorruptedPredictions, triggerTipOfTheDay } from './backend/scheduler.js';
 import { sendTelegramTestMessage } from './backend/telegramService.js';
 import { requireFirebaseUser } from './backend/authMiddleware.js';
 import { assertValidPlan, inferPlanFromAmount } from './backend/paymentPlans.js';
@@ -31,6 +31,19 @@ dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 // SENTRY & STRUCTURED LOGGING SETUP
 // ══════════════════════════════════════════════════════════════════════
 
+// Initialize Pino structured logger
+const logger = pino({
+    level: process.env.LOG_LEVEL || 'info',
+    transport: process.env.NODE_ENV === 'development'
+        ? { target: 'pino-pretty', options: { colorize: true } }
+        : undefined,
+    serializers: {
+        error: pino.stdSerializers.err,
+        req: pino.stdSerializers.req,
+        res: pino.stdSerializers.res,
+    }
+});
+
 // Initialize Sentry for error tracking (if SENTRY_DSN is provided)
 const SENTRY_DSN = process.env.SENTRY_DSN;
 if (SENTRY_DSN) {
@@ -45,23 +58,10 @@ if (SENTRY_DSN) {
             Sentry.onUnhandledRejectionIntegration(),
         ],
     });
-    console.log('✅ Sentry initialized for error tracking');
+    logger.info('Sentry initialized for error tracking');
 } else {
-    console.warn('⚠️  SENTRY_DSN not set — error tracking disabled');
+    logger.warn('SENTRY_DSN not set — error tracking disabled');
 }
-
-// Initialize Pino structured logger
-const logger = pino({
-    level: process.env.LOG_LEVEL || 'info',
-    transport: process.env.NODE_ENV === 'development'
-        ? { target: 'pino-pretty', options: { colorize: true } }
-        : undefined,
-    serializers: {
-        error: pino.stdSerializers.err,
-        req: pino.stdSerializers.req,
-        res: pino.stdSerializers.res,
-    }
-});
 
 // Log startup
 logger.info({ env: process.env.NODE_ENV }, '[Server] Starting Vantage AI backend');
@@ -73,7 +73,6 @@ const PORT = process.env.PORT || 8080;
 try {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-        // Fix escaped newlines in .env files (prevents "DECODER routines::unsupported" error)
         if (serviceAccount.private_key) {
             serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
         }
@@ -117,6 +116,17 @@ try {
 // This resolves the ERR_ERL_UNEXPECTED_X_FORWARDED_FOR error.
 app.set('trust proxy', 1);
 
+// ── Public privacy policy for Play Store compliance ────────────────────────
+app.get('/privacy', (req, res) => {
+    const lang = (req.query.lang || 'en').startsWith('fr') ? 'fr' : 'en';
+    const lastUpdated = new Date().toISOString().split('T')[0];
+    const title = lang === 'fr' ? 'Politique de Confidentialité — Vantage AI' : 'Privacy Policy — Vantage AI';
+    const content = lang === 'fr'
+        ? `<h1>Politique de Confidentialité</h1><p><strong>Dernière mise à jour :</strong> ${lastUpdated}</p><p>Chez <strong>Vantage AI</strong>, nous accordons une importance capitale à la confidentialité de vos données.</p><h2>1. Collecte des Données</h2><p>Nous collectons : adresse email, nom d'affichage (via Google Auth ou Email), historique des transactions VIP, données d'utilisation.</p><h2>2. Utilisation</h2><p>Fournir les services, gérer les abonnements, améliorer l'algorithme.</p><h2>3. Sécurité</h2><p>Chiffrement SSL, authentification Firebase sécurisée.</p><h2>4. Partage</h2><p>Nous ne vendons jamais vos données. Partagées uniquement avec Google Cloud (Firebase), Google Play (RevenueCat) pour les abonnements.</p><h2>5. Vos Droits</h2><p>Accès, rectification, suppression. Contact via la section Profil de l'application.</p><p>Contact : <a href="mailto:support@vantageai.online">support@vantageai.online</a></p>`
+        : `<h1>Privacy Policy</h1><p><strong>Last Updated:</strong> ${lastUpdated}</p><p>At <strong>Vantage AI</strong>, we prioritize your data privacy.</p><h2>1. Data Collection</h2><p>We collect: email address, display name (via Google Auth or Email), VIP transaction history, usage data.</p><h2>2. Usage</h2><p>To provide services, manage subscriptions, improve our algorithm.</p><h2>3. Security</h2><p>SSL encryption, secure Firebase authentication.</p><h2>4. Data Sharing</h2><p>We never sell your data. Shared only with Google Cloud (Firebase), Google Play (RevenueCat) for subscriptions.</p><h2>5. Your Rights</h2><p>Access, correction, deletion. Contact us via the Profile section in the app.</p><p>Contact: <a href="mailto:support@vantageai.online">support@vantageai.online</a></p>`;
+    res.send(`<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><style>body{font-family:system-ui,sans-serif;max-width:800px;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#1e293b;background:#f8fafc}h1{color:#0f172a}h2{color:#334155;margin-top:2rem}a{color:#0891b2}</style></head><body>${content}</body></html>`);
+});
+
 // ── Sentry Middleware ─────────────────────────────────────────────────────────
 // Basic health check endpoint for Render/Railway (Needs to be above CORS so it isn't blocked by missing origin)
 app.get('/health', (req, res) => {
@@ -149,7 +159,7 @@ app.get('/health/python', (req, res) => {
         }
         
         if (!pythonBinary) {
-            console.warn('[Health] Python binary not found');
+            logger.warn('[Health] Python binary not found');
             return res.status(503).json({
                 status: 'degraded',
                 python: 'unavailable',
@@ -178,11 +188,17 @@ app.get('/health/python', (req, res) => {
 // Enable CORS
 // During local dev, allow localhost:5173.
 // In production, allow the Netlify frontend URL.
+// Also allow Capacitor native app origins (Android + iOS).
 const allowedOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'https://vantageaiafrica.netlify.app',
     'https://vantageai.online',
+    // Capacitor native app origins
+    'capacitor://localhost',
+    'ionic://localhost',
+    'http://localhost',
+    'https://localhost',
     process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, "") : null
 ].filter(Boolean); // Remove undefined values
 
@@ -267,6 +283,136 @@ app.post('/api/gemini/generate', adminAuth, geminiLimiter, async (req, res) => {
             details: error.message,
             status: status
         });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// AI FEATURES ENDPOINT (League Radar, Acca Copilot, Daily Tip)
+// ══════════════════════════════════════════════════════════════════════
+
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL = 'llama-3.1-8b-instant';
+
+async function callGroq(messages, temperature = 0.15, maxTokens = 150) {
+    if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
+    const response = await fetch(GROQ_URL, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: GROQ_MODEL, messages, temperature, max_tokens: maxTokens })
+    });
+    if (!response.ok) throw new Error(`Groq error: ${response.status}`);
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content?.trim() || '';
+}
+
+async function generateLeagueRadar(predictions) {
+    if (!predictions || predictions.length === 0) return null;
+    try {
+        const leagueStats = {};
+        for (const pred of predictions) {
+            const league = pred.league || 'Unknown';
+            if (!leagueStats[league]) leagueStats[league] = { name: league, picks: [], totalEv: 0, highValueCount: 0 };
+            leagueStats[league].picks.push(pred);
+            leagueStats[league].totalEv += (pred.expected_value || 0) * 100;
+            if ((pred.expected_value || 0) >= 0.06) leagueStats[league].highValueCount++;
+        }
+        const sortedLeagues = Object.values(leagueStats)
+            .map(l => ({ ...l, avgEv: l.totalEv / l.picks.length }))
+            .sort((a, b) => b.avgEv - a.avgEv)
+            .slice(0, 5);
+        const leagueSummary = sortedLeagues.map(l => ({ name: l.name, picks: l.picks.length, avgEv: l.avgEv.toFixed(1), highValue: l.highValueCount }));
+        const prompt = `You are a betting analyst. Based on this data, give a 3-sentence summary of the best leagues for betting today:\n\n${JSON.stringify(leagueSummary, null, 2)}\n\nFocus on: Which leagues have the most value? What's the best strategy today? Keep it concise and actionable. Max 60 words.`;
+        const insight = await callGroq([{ role: 'user', content: prompt }], 0.2, 100);
+        return { leagues: leagueSummary, insight, generatedAt: new Date().toISOString() };
+    } catch (e) {
+        logger.error(`[AI] League Radar failed: ${e.message}`);
+        return null;
+    }
+}
+
+async function generateAccaCopilot(predictions) {
+    if (!predictions || predictions.length === 0) return null;
+    try {
+        const vaultPicks = predictions.filter(p => p.vault_eligible && p.odds > 0)
+            .sort((a, b) => (b.expected_value || 0) - (a.expected_value || 0)).slice(0, 10);
+        if (vaultPicks.length < 2) return null;
+        const picksSummary = vaultPicks.map(p => ({ match: `${p.home_team} vs ${p.away_team}`, pick: p.bet_type, odds: p.odds, ev: ((p.expected_value || 0) * 100).toFixed(1) }));
+        const prompt = `You are an accumulator betting expert. From these picks, suggest 2 accumulator combinations:\n\n${JSON.stringify(picksSummary, null, 2)}\n\nRules:\n- Each acca should have 2-4 legs\n- Combined odds should be reasonable (2.0 - 10.0)\n- Mix different leagues if possible\n- Explain why this combo works\n\nOutput format:\n**[Acca 1]**\nLeg 1: Team A - Pick @ Odds\nCombined Odds: X.XX\n\nBe concise. Total response under 100 words.`;
+        const suggestions = await callGroq([{ role: 'user', content: prompt }], 0.2, 200);
+        return { suggestions, picks: picksSummary, generatedAt: new Date().toISOString() };
+    } catch (e) {
+        logger.error(`[AI] Acca Copilot failed: ${e.message}`);
+        return null;
+    }
+}
+
+async function generateDailyTip(predictions) {
+    if (!predictions || predictions.length === 0) return null;
+    try {
+        const bestPick = predictions.filter(p => p.vault_eligible && p.odds > 0)
+            .sort((a, b) => (b.expected_value || 0) - (a.expected_value || 0))[0];
+        if (!bestPick) return null;
+        const prompt = `As a betting expert, give a ONE sentence tip for today focusing on this top pick:\n\nMatch: ${bestPick.home_team} vs ${bestPick.away_team} (${bestPick.league})\nPick: ${bestPick.bet_type} @ ${bestPick.odds}\nEV: ${((bestPick.expected_value || 0) * 100).toFixed(1)}%\n\nMake it punchy and actionable. Max 20 words. Example: "Back Over 2.5 at Anfield - Liverpool's home games average 3.2 goals."`;
+        const tip = await callGroq([{ role: 'user', content: prompt }], 0.3, 50);
+        return { tip, match: `${bestPick.home_team} vs ${bestPick.away_team}`, pick: bestPick.bet_type, odds: bestPick.odds, ev: ((bestPick.expected_value || 0) * 100).toFixed(1), generatedAt: new Date().toISOString() };
+    } catch (e) {
+        logger.error(`[AI] Daily Tip failed: ${e.message}`);
+        return null;
+    }
+}
+
+app.post('/api/ai/features', async (req, res) => {
+    try {
+        const { predictions } = req.body;
+        const [leagueRadar, accaCopilot, dailyTip] = await Promise.all([
+            generateLeagueRadar(predictions),
+            generateAccaCopilot(predictions),
+            generateDailyTip(predictions)
+        ]);
+        res.json({ leagueRadar, accaCopilot, dailyTip });
+    } catch (error) {
+        logger.error({ error }, 'AI features error');
+        res.status(500).json({ error: 'Failed to generate AI features' });
+    }
+});
+
+app.post('/api/ai/ticket-explanation', async (req, res) => {
+    try {
+        const { ticket, stake, legCount } = req.body;
+        if (!ticket || ticket.length === 0) {
+            return res.status(400).json({ error: 'No ticket provided' });
+        }
+
+        const totalOdds = ticket.reduce((acc, m) => acc * (m.odds || 1), 1);
+        const combinedEv = ticket.reduce((acc, m) => acc + ((m.expected_value || 0) * 100), 0);
+
+        const leagues = [...new Set(ticket.map(m => m.league || 'Unknown'))];
+        const picks = ticket.map((m, i) => `Leg ${i + 1}: ${m.home_team || m.homeTeam} vs ${m.away_team || m.awayTeam} - ${m.bet_type || m.prediction} @ ${m.odds?.toFixed(2)} (EV: ${((m.expected_value || 0) * 100).toFixed(1)}%)`).join('\n');
+
+        const prompt = `You are an accumulator betting expert explaining a smart ticket to a user.
+
+Ticket Details:
+Stake: ${stake} FCFA
+Legs: ${legCount} selections
+Combined Odds: ${totalOdds.toFixed(2)}
+Combined EV: ${combinedEv.toFixed(1)}%
+Leagues: ${leagues.join(', ')}
+
+${picks}
+
+Write a 2-3 sentence explanation of WHY this ticket was selected:
+- Why these picks work together
+- What makes it a good combination
+- Any risk factors
+
+Be encouraging but realistic. Keep it under 60 words. Max 50 words.`;
+
+        const explanation = await callGroq([{ role: 'user', content: prompt }], 0.2, 80);
+        res.json({ explanation, totalOdds: totalOdds.toFixed(2), combinedEv: combinedEv.toFixed(1) });
+    } catch (error) {
+        logger.error({ error }, 'Ticket explanation error');
+        res.status(500).json({ error: 'Failed to generate ticket explanation' });
     }
 });
 
@@ -415,6 +561,18 @@ app.post('/api/admin/telegram-test', adminAuth, async (req, res) => {
         logger.error({ error: e }, '[API] Telegram test error');
         Sentry.captureException(e);
         res.status(500).json({ error: 'Telegram test failed', details: e.message });
+    }
+});
+
+app.post('/api/admin/tip-of-day', adminAuth, async (req, res) => {
+    try {
+        logger.info('[API] Manual Tip of the Day Triggered via Admin');
+        const result = await triggerTipOfTheDay();
+        res.json(result);
+    } catch (e) {
+        logger.error({ error: e }, '[API] Tip of the Day error');
+        Sentry.captureException(e);
+        res.status(500).json({ error: 'Tip of the Day failed', details: e.message });
     }
 });
 
@@ -832,20 +990,17 @@ app.post('/api/payments/selar/webhook', async (req, res) => {
     }
 });
 
-// RevenueCat Webhook — handles Google Play / App Store purchase events
-const REVENUECAT_WEBHOOK_SECRET = process.env.REVENUECAT_WEBHOOK_SECRET || '';
-if (!REVENUECAT_WEBHOOK_SECRET) {
-    logger.warn('[RevenueCat] REVENUECAT_WEBHOOK_SECRET is not set. Webhook endpoint is disabled and will return 503.');
-}
+// ══════════════════════════════════════════════════════════════════════
+// REVENUECAT WEBHOOK — Android Google Play subscriptions
+// ══════════════════════════════════════════════════════════════════════
+const REVENUECAT_WEBHOOK_SECRET = process.env.REVENUECAT_WEBHOOK_SECRET;
 
 app.post('/api/payments/revenuecat/webhook', express.json({ limit: '1mb' }), async (req, res) => {
     try {
-        // Hard block if secret is not configured
         if (!REVENUECAT_WEBHOOK_SECRET) {
-            return res.status(503).json({ error: 'Webhook not configured on this server.' });
+            logger.error('[RevenueCat] REVENUECAT_WEBHOOK_SECRET is not configured — webhook disabled');
+            return res.status(503).json({ error: 'RevenueCat webhook is not configured on this server.' });
         }
-
-        // Authenticate the incoming request
         const authHeader = req.headers['authorization'] || '';
         if (!authHeader || authHeader !== `Bearer ${REVENUECAT_WEBHOOK_SECRET}`) {
             return res.status(401).json({ error: 'Unauthorized' });
@@ -854,45 +1009,15 @@ app.post('/api/payments/revenuecat/webhook', express.json({ limit: '1mb' }), asy
         const event = req.body?.event;
         if (!event) return res.status(400).json({ error: 'Missing event' });
 
-        const appUserId = event.app_user_id;
-        const productId = event.product_id || '';
-        if (!appUserId) {
-            return res.status(400).json({ error: 'Missing app_user_id' });
-        }
-
-        // ── Cancellation / Expiration — revoke VIP ──────────────────────
-        const revokeEvents = ['CANCELLATION', 'EXPIRATION', 'BILLING_ISSUE', 'SUBSCRIBER_ALIAS'];
-        if (revokeEvents.includes(event.type)) {
-            const db = admin.firestore();
-            const userQuery = await db.collection('profiles')
-                .where('revenuecatId', '==', appUserId)
-                .limit(1)
-                .get();
-
-            if (!userQuery.empty) {
-                const userDoc = userQuery.docs[0];
-                await db.collection('profiles').doc(userDoc.id).update({
-                    isVip: false,
-                    vipExpiry: null,
-                    vipPlan: null,
-                    vipRevokedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    vipRevokedReason: event.type,
-                });
-                logger.info({ uid: userDoc.id, eventType: event.type }, '[RevenueCat] VIP revoked via webhook');
-            } else {
-                logger.warn({ appUserId, eventType: event.type }, '[RevenueCat] No user found to revoke VIP');
-            }
-            return res.json({ ok: true, action: 'revoked' });
-        }
-
-        // ── Purchase / Renewal — grant VIP ──────────────────────────────
-        const grantEvents = ['INITIAL_PURCHASE', 'RENEWAL', 'NON_RENEWING_PURCHASE', 'UNCANCELLATION'];
-        if (!grantEvents.includes(event.type)) {
+        const validEvents = ['INITIAL_PURCHASE', 'RENEWAL', 'NON_RENEWING_PURCHASE'];
+        if (!validEvents.includes(event.type)) {
             return res.status(200).json({ ignored: true, reason: `Event type ${event.type} not processed` });
         }
 
-        if (!productId) {
-            return res.status(400).json({ error: 'Missing product_id for grant event' });
+        const appUserId = event.app_user_id;
+        const productId = event.product_id || '';
+        if (!appUserId || !productId) {
+            return res.status(400).json({ error: 'Missing app_user_id or product_id' });
         }
 
         const plan = productId.includes('annual') ? 'annual'
@@ -931,7 +1056,7 @@ app.post('/api/payments/revenuecat/webhook', express.json({ limit: '1mb' }), asy
         });
 
         logger.info({ uid: userDoc.id, plan, productId }, '[RevenueCat] VIP fulfilled via webhook');
-        res.json({ ok: true, action: 'granted' });
+        res.json({ ok: true });
     } catch (e) {
         logger.error({ error: e }, '[RevenueCat] Webhook error');
         res.status(500).json({ error: 'Webhook processing failed' });
@@ -973,13 +1098,40 @@ app.post('/api/push/subscribe', pushLimiter, requireFirebaseUser, async (req, re
             await admin.firestore().collection('push_subscriptions').doc(subId).set({
                 subscription,
                 uid,
+                platform: 'web',
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
         }
         res.status(201).json({ success: true });
     } catch (e) {
-        console.error('Push subscription error:', e);
+        logger.error({ error: e }, 'Push subscription error');
         res.status(500).json({ error: 'Failed to save subscription' });
+    }
+});
+
+// FCM token registration (Android/iOS native push via Capacitor)
+app.post('/api/push/register-fcm', pushLimiter, requireFirebaseUser, async (req, res) => {
+    try {
+        const { token, platform = 'android' } = req.body || {};
+        if (!token || typeof token !== 'string' || token.length < 20) {
+            return res.status(400).json({ error: 'Invalid FCM token' });
+        }
+
+        if (admin.apps.length > 0) {
+            const uid = req.firebaseUser.uid;
+            const tokenHash = createHash('sha256').update(token).digest('hex').substring(0, 16);
+            const subId = `${uid}_fcm_${tokenHash}`;
+            await admin.firestore().collection('push_subscriptions').doc(subId).set({
+                fcmToken: token,
+                uid,
+                platform,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+        res.status(201).json({ success: true });
+    } catch (e) {
+        logger.error({ error: e }, 'FCM registration error');
+        res.status(500).json({ error: 'Failed to register FCM token' });
     }
 });
 

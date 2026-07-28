@@ -212,7 +212,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
               <button
                 onClick={handlePayment}
                 disabled={loading}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-vantage-purple py-4 font-bold text-white shadow-lg shadow-vantage-purple/30 transition-all hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-4 font-bold text-white shadow-lg shadow-emerald-500/30 transition-all hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? <Loader2 className="animate-spin" size={20} /> : <ShieldCheck size={19} />}
                 <span>{language === 'fr' ? 'Payer avec Google Play' : 'Pay with Google Play'}</span>

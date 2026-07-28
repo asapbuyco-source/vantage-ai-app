@@ -195,8 +195,10 @@ export const getVipDailyData = async (dateStr: string, bustCache = false): Promi
             cacheSet(cacheKey, dailyAnalysis, CACHE_TTL);
             return dailyAnalysis as DailyAnalysis;
         }
-    } catch (e) {
-        console.warn(`[VIP] Firestore Fetch Error for quant_vip ${dateStr}:`, e);
+    } catch (e: any) {
+        if (e?.code !== 'permission-denied') {
+            console.warn(`[VIP] Firestore Fetch Error for quant_vip ${dateStr}:`, e);
+        }
     }
     return null;
 };
@@ -313,12 +315,15 @@ export const deleteTodaysPredictions = async (): Promise<void> => {
         if (!auth.currentUser) return;
         await Promise.all([
             deleteDoc(doc(db, "daily_predictions", todayStr)),
-            deleteDoc(doc(db, "quant_predictions", todayStr))
+            deleteDoc(doc(db, "quant_predictions", todayStr)),
+            deleteDoc(doc(db, "quant_vip", todayStr)),
+            deleteDoc(doc(db, "basketball_predictions", todayStr)),
+            deleteDoc(doc(db, "cricket_predictions", todayStr)),
         ]);
-        console.log("Firestore data cleared for today (both legacy and quant).");
+        console.log(`[DB] Firestore predictions cleared for ${todayStr}`);
     } catch (e: any) {
         if (e.code === 'permission-denied') {
-            console.warn("[DB] Firestore delete denied. Local cache cleared only.");
+            console.warn("[DB] Firestore delete denied — not admin. Local cache cleared only.");
         } else {
             console.error("Firestore Delete Error:", e);
         }
@@ -615,15 +620,15 @@ export const getResultsHistory = async (days: number = 30): Promise<DayResult[]>
     allDays.forEach(({ dateKey, matches }) => {
         if (!matches || matches.length === 0) return;
 
-        // Show all predictions including pending so admins can grade them manually
-        const graded = matches.filter(m => m.status === 'won' || m.status === 'lost' || m.status === 'void');
+        // Results page now shows all matches, even ungraded
+        if (matches.length === 0) return;
 
         results.push({
             date: dateKey,
-            matches, // include ALL matches (pending + graded)
-            wonCount: graded.filter(m => m.status === 'won').length,
-            lostCount: graded.filter(m => m.status === 'lost').length,
-            totalGraded: graded.length,
+            matches: matches,
+            wonCount: matches.filter(m => m.status === 'won').length,
+            lostCount: matches.filter(m => m.status === 'lost').length,
+            totalGraded: matches.filter(m => m.status === 'won' || m.status === 'lost' || m.status === 'void').length,
         });
     });
 
@@ -790,11 +795,22 @@ export const updateUserProfile = async (uid: string, data: Partial<UserProfile>)
 export const getUserCount = async (): Promise<{ total: number; vip: number }> => {
     try {
         const coll = collection(db, 'profiles');
+        // Use getCountFromServer first (fast, needs Firestore index)
         const [totalSnap, vipSnap] = await Promise.all([
             getCountFromServer(coll),
             getCountFromServer(query(coll, where('isVip', '==', true)))
         ]);
-        return { total: totalSnap.data().count, vip: vipSnap.data().count };
+        const total = totalSnap.data().count;
+        const vip = vipSnap.data().count;
+        if (total > 0) return { total, vip };
+        
+        // Fallback: count all docs (works without index, slower for large collections)
+        const allDocs = await getDocs(coll);
+        const profiles = allDocs.docs.map(d => d.data());
+        return {
+            total: profiles.length,
+            vip: profiles.filter((p: any) => p.isVip).length
+        };
     } catch (e) {
         console.warn('getUserCount error', e);
         return { total: 0, vip: 0 };
