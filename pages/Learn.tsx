@@ -1,41 +1,41 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, Lightbulb, GraduationCap, ChevronDown, ChevronRight, ExternalLink, TrendingUp, Target, BarChart3, Activity, PlayCircle } from 'lucide-react';
-import { BettingGuide } from './BettingGuide';
+import { AnalysisGuide } from './AnalysisGuide';
 import { useAppContext } from '../context/AppContext';
 
 const trainingModules = [
   {
     id: 'ev',
     icon: <TrendingUp size={16} className="text-emerald-400" />,
-    title_en: 'What is +EV Betting?',
+    title_en: 'What is +EV Analysis?',
     title_fr: "Qu'est-ce que le pari +VE ?",
-    content_en: 'A bet is +EV when the odds offered are better than the true probability. Example: A coin flip is 50% — fair odds are 2.00. If a bookie offers 2.10, you have +EV. Over thousands of bets, +EV compounds your edge. Vantage AI finds these gaps automatically.',
-    content_fr: "Un pari est +VE quand les cotes offertes sont meilleures que la vraie probabilité. Exemple : Un pile ou face est à 50% — les cotes équitables sont 2.00. Si un bookmaker offre 2.10, vous avez +VE. Sur des milliers de paris, +VE s'accumule.",
+    content_en: 'An outcome has value when the market odds suggest a lower probability than our model calculates. Example: Our model shows a 60% chance, which implies odds of 1.67. If the market offers 2.10, our analysis identifies an edge. Over large samples, consistently finding value leads to strong results.',
+    content_fr: "Un résultat a de la valeur quand les cotes du marché suggèrent une probabilité inférieure à celle calculée par notre modèle. Exemple : Notre modèle montre 60% de chances, ce qui implique des cotes de 1.67. Si le marché offre 2.10, notre analyse identifie un avantage.",
   },
   {
     id: 'kelly',
     icon: <Target size={16} className="text-vantage-cyan" />,
-    title_en: 'Kelly Criterion — Stake Sizing',
-    title_fr: 'Kelly Criterion — Taille des enjeux',
-    content_en: 'Kelly determines how much of your bankroll to risk based on your edge and the odds. The formula: Edge ÷ (Odds - 1). We multiply by your risk profile (0.25x, 0.5x, or 1.0x) to keep bets sustainable. Never bet more than Kelly suggests.',
-    content_fr: 'Kelly détermine combien de votre bankroll risquer selon votre avantage et les cotes. La formule : Avantage ÷ (Cotes - 1). Nous multiplions par votre profil de risque (0.25x, 0.5x, ou 1.0x) pour garder les paris durables.',
+    title_en: 'Kelly Criterion — Optimal Allocation',
+    title_fr: 'Kelly Criterion — Allocation Optimale',
+    content_en: 'Kelly calculates the optimal proportion based on your perceived edge versus the implied probability. The formula: Edge ÷ (Implied Probability - 1). We apply a conservative multiplier (0.25x, 0.5x, or 1.0x) for sustainability. Never exceed the Kelly-based allocation.',
+    content_fr: 'Kelly calcule la proportion optimale selon votre avantage perçu versus la probabilité implicite. La formule : Avantage ÷ (Probabilité Implicite - 1). Nous appliquons un multiplicateur conservateur (0.25x, 0.5x, ou 1.0x) pour la durabilité.',
   },
   {
     id: 'model',
     icon: <BarChart3 size={16} className="text-vantage-purple" />,
     title_en: 'How Vantage AI Works',
     title_fr: 'Comment fonctionne Vantage AI',
-    content_en: 'Step 1: We pull live data from football & basketball leagues. Step 2: Our statistical models calculate expected goals (xG) and win probabilities. Step 3: We compare those probabilities against bookie odds — wherever there is a gap, we flag it as +EV. Step 4: Signals are ranked by confidence and shown to you. No guesswork.',
-    content_fr: "Étape 1 : Nous collectons les données en direct. Étape 2 : Nos modèles statistiques calculent les buts attendus (xG) et les probabilités de victoire. Étape 3 : Nous comparons ces probabilités aux cotes des bookmakers — là où il y a un écart, nous le signalons comme +VE. Étape 4 : Les signaux sont classés par confiance.",
+    content_en: 'Step 1: We pull live data from football & basketball leagues. Step 2: Our statistical models calculate expected goals (xG) and outcome probabilities. Step 3: We compare those probabilities against market consensus — wherever there is a gap, our model flags it as noteworthy. Step 4: Indicators are ranked by insight score and shown to you.',
+    content_fr: "Étape 1 : Nous collectons les données en direct. Étape 2 : Nos modèles statistiques calculent les buts attendus (xG) et les probabilités. Étape 3 : Nous comparons ces probabilités au consensus du marché — là où il y a un écart, notre modèle le signale. Étape 4 : Les indicateurs sont classés par score de confiance.",
   },
   {
     id: 'variance',
     icon: <Activity size={16} className="text-amber-400" />,
     title_en: 'Long-Term Variance',
     title_fr: 'La Variance à Long Terme',
-    content_en: 'A 60% win-rate model will lose 8-10 bets in a row — regularly. That is not bad luck, that is math. Short term looks random; long term looks like the model. The key: bet consistently, never chase losses, trust the process.',
-    content_fr: "Un modèle à 60% de victoires perdra 8-10 paris de suite — régulièrement. Ce n'est pas la malchance, c'est les maths. La clé : pariez régulièrement, ne courez jamais après les pertes.",
+    content_en: 'A 60% accurate model will still be wrong 4 out of 10 times — regularly experiencing consecutive misses. That is not failure, that is statistics. Short term looks random; long term trends toward the model. The key: follow data consistently, understand variance, trust the process.',
+    content_fr: "Un modèle précis à 60% connaîtra tout de même 4 erreurs sur 10 — et des séries de résultats contraires. Ce n'est pas un échec, ce sont les statistiques. La clé : suivre les données de façon cohérente, comprendre la variance.",
   },
 ];
 
@@ -79,7 +79,7 @@ export const Learn: React.FC = () => {
           {language === 'fr' ? 'Centre' : 'Learning'} <span className="text-vantage-cyan">{language === 'fr' ? "d'Apprentissage" : 'Center'}</span>
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
-          {language === 'fr' ? 'Maîtrisez les paris sportifs quantitatifs' : 'Master quantitative sports betting'}
+          {language === 'fr' ? 'Maîtrisez les paris sportifs quantitatifs' : 'Master quantitative sports analysis'}
         </p>
       </motion.div>
 
@@ -101,7 +101,7 @@ export const Learn: React.FC = () => {
       <AnimatePresence mode="wait">
         {activeSection === 'guide' && (
           <motion.div key="guide" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
-            <BettingGuide />
+            <AnalysisGuide />
           </motion.div>
         )}
         {activeSection === 'concepts' && (
@@ -130,7 +130,7 @@ export const Learn: React.FC = () => {
                   </AnimatePresence>
                 </div>
               ))}
-              <a href="https://www.youtube.com/results?search_query=sports+betting+expected+value" target="_blank" rel="noopener noreferrer"
+              <a href="https://www.youtube.com/results?search_query=sports+analysis+expected+value" target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-3 px-4 py-3 bg-blue-500/5 rounded-xl border border-blue-500/15 hover:bg-blue-500/10 transition-colors">
                 <PlayCircle size={16} className="text-blue-400" />
                 <span className="text-xs font-bold text-slate-700 dark:text-gray-200 flex-1 text-left">

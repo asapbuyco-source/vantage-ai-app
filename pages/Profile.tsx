@@ -639,7 +639,7 @@ const shareReferral = () => {
                     >
                         <div className="flex items-center space-x-3 text-vantage-cyan">
                             <Sparkles size={20} />
-                            <span className="font-bold">{language === 'fr' ? 'Ticket Concierge' : 'Smart Ticket'}</span>
+                            <span className="font-bold">{language === 'fr' ? 'Assistant Analyse' : 'Smart Analysis'}</span>
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>

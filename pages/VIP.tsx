@@ -19,7 +19,6 @@ import { Sparkline } from '../components/Sparkline';
 import { getTopProbPicks } from '../utils';
 import { Screener } from '../components/Screener';
 import { MatchCardAlpha } from '../components/MatchCardAlpha';
-import { ResponsibleGambling } from '../components/ResponsibleGambling';
 import { Capacitor } from '@capacitor/core';
 
 import { db } from '../firebaseConfig';
@@ -66,7 +65,7 @@ export const VIP: React.FC<VIPProps> = () => {
     });
   }, []);
 
-  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault' | 'accumulators'>('predictions');
+  const [activeVipTab, setActiveVipTab] = useState<'Analyses' | 'vault' | 'accumulators'>('Analyses');
   const [activeSport, setActiveSport] = useState<'football' | 'basketball' | 'cricket'>('football');
   const activeAltPredictions = activeSport === 'cricket' ? cricketPredictions : basketballPredictions;
   const activeAltSportLabel = activeSport === 'cricket' ? 'Cricket' : 'Basketball';
@@ -382,7 +381,7 @@ export const VIP: React.FC<VIPProps> = () => {
 
                     {/* Prediction + confidence row */}
                     <div className="relative mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 overflow-hidden mt-auto">
-                      <span className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1.5">{t('free.pred_label')}</span>
+                      <span className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1.5">{t('free.analysis_label')}</span>
                       <div className="space-y-1">
                         {getTopProbPicks(match).map((p, pi) => (
                           <div key={pi} className="flex items-center justify-between gap-2">
@@ -534,8 +533,8 @@ export const VIP: React.FC<VIPProps> = () => {
        {/* â”€â”€ TAB SWITCH â”€â”€ */}
        <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 mb-6">
           <button
-            onClick={() => setActiveVipTab('predictions')}
-            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'predictions' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-vantage-cyan' : 'text-gray-500 hover:text-gray-300'}`}
+            onClick={() => setActiveVipTab('Analyses')}
+            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'Analyses' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-vantage-cyan' : 'text-gray-500 hover:text-gray-300'}`}
           >
             <BarChart2 size={16} /> <span>Signals</span>
           </button>
@@ -658,7 +657,7 @@ export const VIP: React.FC<VIPProps> = () => {
 
 
         {/* â”€â”€ VANTAGE MODEL PICKS SECTION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        {activeVipTab === 'predictions' && (
+        {activeVipTab === 'Analyses' && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300">
@@ -1191,11 +1190,6 @@ export const VIP: React.FC<VIPProps> = () => {
           </div>
         </>
       )}
-
-      {/* Responsible Gambling - required for Play Store compliance */}
-      <div className="px-4 pb-6">
-        <ResponsibleGambling compact />
-      </div>
 
       <PaymentModal
         isOpen={showPaymentModal}

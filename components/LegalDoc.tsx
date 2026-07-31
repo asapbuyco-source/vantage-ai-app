@@ -122,14 +122,14 @@ export const LegalDoc: React.FC<LegalDocProps> = ({ type, onBack }) => {
                     <p>En utilisant l'application <strong>Vantage AI</strong>, vous acceptez les conditions suivantes :</p>
 
                     <h3>1. Nature du Service</h3>
-                    <p>Vantage AI est un outil d'analyse sportive utilisant l'intelligence artificielle pour fournir des statistiques et des prédictions sur les matchs de football. <strong>Ce n'est pas une application de paris sportifs ni un bookmaker.</strong></p>
+                    <p>Vantage AI est une plateforme d'analyse sportive utilisant l'intelligence artificielle pour fournir des statistiques et des indicateurs de performance sur les matchs de football. <strong>Ce n'est pas une application de paris sportifs.</strong></p>
 
-                    <h3>2. Avertissement sur les Risques</h3>
-                    <div className="bg-red-500/10 p-3 rounded-lg border border-red-500/20 text-red-600 dark:text-red-400 not-prose my-4 flex items-start gap-2">
+                    <h3>2. Avertissement</h3>
+                    <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/20 text-amber-600 dark:text-amber-400 not-prose my-4 flex items-start gap-2">
                         <Lock className="shrink-0 mt-1" size={16} />
-                        <span className="text-xs font-bold">Les paris sportifs comportent des risques financiers. Les prédictions fournies par Vantage AI sont à titre informatif uniquement et ne garantissent aucun gain. Vous êtes seul responsable de vos paris.</span>
+                        <span className="text-xs font-bold">Vantage AI fournit des analyses statistiques à titre informatif. Les indicateurs présentés ne constituent pas des conseils financiers et ne garantissent aucun résultat. Les performances passées ne préjugent pas des résultats futurs.</span>
                     </div>
-                    <p>L'utilisateur reconnaît que les performances passées de l'algorithme ne garantissent pas les résultats futurs.</p>
+                    <p>L'utilisateur reconnaît que les analyses sont basées sur des modèles statistiques et comportent une marge d'incertitude inhérente.</p>
 
                     <h3>3. Abonnements VIP</h3>
                     <ul>
@@ -149,19 +149,19 @@ export const LegalDoc: React.FC<LegalDocProps> = ({ type, onBack }) => {
                     <p>By using the <strong>Vantage AI</strong> application, you agree to the following terms:</p>
 
                     <h3>1. Nature of Service</h3>
-                    <p>Vantage AI is a sports analysis tool using artificial intelligence to provide statistics and predictions on football matches. <strong>It is not a sports betting application or a bookmaker.</strong></p>
+                    <p>Vantage AI is a sports analytics platform using artificial intelligence to provide statistics and performance indicators on football matches. <strong>It is not a sports betting application.</strong></p>
 
-                    <h3>2. Risk Warning</h3>
-                    <div className="bg-red-500/10 p-3 rounded-lg border border-red-500/20 text-red-600 dark:text-red-400 not-prose my-4 flex items-start gap-2">
+                    <h3>2. Disclaimer</h3>
+                    <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/20 text-amber-600 dark:text-amber-400 not-prose my-4 flex items-start gap-2">
                         <Lock className="shrink-0 mt-1" size={16} />
-                        <span className="text-xs font-bold">Sports betting involves financial risks. Predictions provided by Vantage AI are for informational purposes only and do not guarantee any winnings. You are solely responsible for your bets.</span>
+                        <span className="text-xs font-bold">Vantage AI provides statistical analysis for informational purposes only. Our indicators are not financial advice and do not guarantee any outcome. Past performance does not guarantee future results.</span>
                     </div>
-                    <p>The user acknowledges that past performance of the algorithm does not guarantee future results.</p>
+                    <p>The user acknowledges that analyses are based on statistical models and carry inherent uncertainty.</p>
 
                     <h3>3. VIP Subscriptions</h3>
                     <ul>
                         <li>VIP access is activated after confirmation of payment via Google Play.</li>
-                        <li>Subscriptions (Daily, Weekly, Monthly) are <strong>non-refundable</strong> once the service (predictions) has been consumed.</li>
+                        <li>Subscriptions (Daily, Weekly, Monthly) are <strong>non-refundable</strong> once the service has been consumed.</li>
                         <li>In case of a proven technical failure, please contact support for resolution.</li>
                     </ul>
 

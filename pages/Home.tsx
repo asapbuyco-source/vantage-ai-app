@@ -271,7 +271,7 @@ export const Home: React.FC<HomeProps> = () => {
   }, [predictions]);
 
   const sortLabels: Record<SortKey, string> = {
-    probability: language === 'fr' ? 'Probabilité' : 'Probability',
+    probability: language === 'fr' ? 'Probabilité' : 'Match Index',
     time: language === 'fr' ? 'Heure' : 'Time',
     league: language === 'fr' ? 'Ligue' : 'League',
   };
@@ -664,7 +664,7 @@ export const Home: React.FC<HomeProps> = () => {
                         {/* Prediction — show each pick with its percentage */}
                         {unlocked ? (
                           <div className="mx-3 mb-3 p-2.5 rounded-xl bg-gradient-to-r from-vantage-cyan/5 to-transparent border border-vantage-cyan/15 overflow-hidden">
-                            <span className="text-[8px] text-gray-500 uppercase tracking-wide block mb-1.5">{t('free.pred_label') || 'Prediction'}</span>
+                            <span className="text-[8px] text-gray-500 uppercase tracking-wide block mb-1.5">{t('free.analysis_label') || 'Analysis'}</span>
                             <div className="space-y-1">
                               {getTopProbPicks(match).map((p, pi) => (
                                 <div key={pi} className="flex items-center justify-between gap-2">
@@ -696,7 +696,7 @@ export const Home: React.FC<HomeProps> = () => {
                           <div className="mx-3 mb-3 p-2.5 rounded-xl bg-vantage-purple/5 border border-vantage-purple/20">
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col">
-                                <span className="text-[8px] text-vantage-purple uppercase tracking-wide">{t('free.pred_label') || 'Prediction'}</span>
+                                <span className="text-[8px] text-vantage-purple uppercase tracking-wide">{t('free.analysis_label') || 'Analysis'}</span>
                                 <span className="text-[11px] font-bold text-vantage-purple/40">{language === 'fr' ? 'Réservé VIP' : 'VIP Only'}</span>
                               </div>
                               <span onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2.5 py-1 rounded-full cursor-pointer hover:bg-vantage-purple/20 flex items-center gap-1">
