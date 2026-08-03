@@ -10,7 +10,7 @@ workflows:
       vars:
         PACKAGE_NAME: "com.vantageai.app"
       android_signing:
-        - vantage_alias
+        - vantage_keystore
     scripts:
       - name: Install dependencies
         script: npm ci
