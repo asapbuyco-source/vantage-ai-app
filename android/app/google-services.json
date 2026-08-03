@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "459344360478-lpgr7h7sld69hau2f0ohoh3r2t2d8nji.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vantageai.app",
+            "certificate_hash": "497d620dc863d4e539108f0aedf35973e07363cf"
+          }
+        },
+        {
           "client_id": "459344360478-vbfnq8m0drsbjmik422s4isg8195dtiu.apps.googleusercontent.com",
           "client_type": 3
         }
