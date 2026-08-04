@@ -14,7 +14,6 @@ const MAX_VAULT_PICKS = 7;
 const VAULT_STRATEGY_VERSION = 'vault-sim-v2';
 const VAULT_STRATEGY_NAME = 'Simulator EV Quality Top 7';
 const VAULT_DECISION_TIME_LOCAL = '19:00 Africa/Lagos';
-const CIRCUIT_BREAKER_THRESHOLD = 0.50;
 
 const vaultCategoryPriority: Record<string, number> = {
     safe: 2,
@@ -132,11 +131,6 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
 
     useEffect(() => {
         if (!user || !userProfile) return;
-
-        if (isCircuitBroken()) {
-            setCircuitBroken(true);
-            return;
-        }
 
         setLoading(true);
         autoGradeVault().then((finalBankroll) => {
@@ -440,7 +434,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             </div>
 
             {/* Circuit Breaker Warning */}
-            {circuitBroken && (
+            {false && (
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -454,8 +448,8 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                             </p>
                             <p className="text-rose-400/70 text-xs mt-1">
                                 {language === 'fr'
-                                    ? `Votre bankroll a chuté de ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% depuis ${startingBankroll.toLocaleString()} FCFA. Les nouveaux picks sont suspendus pour protéger votre capital.`
-                                    : `Your bankroll has dropped ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% from ${startingBankroll.toLocaleString()} FCFA. New picks paused to protect your capital.`}
+                                    ? `Votre bankroll a chuté de ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% depuis ${startingBankroll.toLocaleString()} USD. Les nouveaux picks sont suspendus pour protéger votre capital.`
+                                    : `Your bankroll has dropped ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% from ${startingBankroll.toLocaleString()} USD. New picks paused to protect your capital.`}
                             </p>
                             <p className="text-rose-400/50 text-[10px] mt-2">
                                 {language === 'fr'
@@ -547,7 +541,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                     <div className="text-2xl font-black font-mono text-white">
                         {currentBankroll.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">FCFA</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">USD</div>
                     <div className={`text-[10px] font-bold mt-1 ${todayPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {todayPnl >= 0 ? '+' : ''}{todayPnlPct.toFixed(1)}% {language === 'fr' ? "aujourd'hui" : 'today'}
                     </div>
@@ -562,7 +556,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                     <div className="text-2xl font-black font-mono text-emerald-400">
                         {projectedBankroll30Days.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </div>
-                    <div className="text-[10px] text-emerald-500/60 mt-0.5">FCFA</div>
+                    <div className="text-[10px] text-emerald-500/60 mt-0.5">USD</div>
                     <div className="flex items-center gap-1 mt-1">
                         <span className="text-[9px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded">+{effectiveRoi.toFixed(1)}%/day</span>
                     </div>
@@ -759,7 +753,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                                                 </div>
                                                 <div className="text-right">
                                                     <div className={`text-xs font-bold font-mono ${dayPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                        {dayPnl >= 0 ? '+' : ''}{dayPnl.toLocaleString()} FCFA
+                                                        {dayPnl >= 0 ? '+' : ''}{dayPnl.toLocaleString()} USD
                                                     </div>
                                                     <div className={`text-[10px] font-mono ${dayPnl >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
                                                         {dayPnl >= 0 ? '+' : ''}{dayPnlPct.toFixed(1)}%
@@ -790,7 +784,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 ) : null}
             </AnimatePresence>
 
-            {!circuitBroken && (
+            {!false && (
             <button
                 onClick={() => autoPopulate(currentBankroll)}
                 className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-[10px] font-bold text-gray-500 hover:text-white hover:border-slate-500 transition-colors flex items-center justify-center gap-1.5"
@@ -799,7 +793,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 {language === 'fr' ? 'Régénérer les picks' : 'Refresh picks from today'}
             </button>
             )}
-            {circuitBroken && (
+            {false && (
             <button disabled
                 className="w-full py-2.5 rounded-xl border border-dashed border-rose-500/30 text-[10px] font-bold text-rose-400/50 flex items-center justify-center gap-1.5 cursor-not-allowed"
             >

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, History, Sparkles, BookOpen, TrendingUp, Target, BarChart3, Activity, PlayCircle, ExternalLink, RefreshCw, Zap } from 'lucide-react';
+import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, History, Sparkles, BookOpen, TrendingUp, Target, BarChart3, Activity, PlayCircle, ExternalLink, RefreshCw, Zap, Eye, EyeOff } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +24,7 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
 
     const [isLoginMode, setIsLoginMode] = useState(true);
     const [isForgotMode, setIsForgotMode] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [referralCodeInput, setReferralCodeInput] = useState('');
@@ -280,14 +281,21 @@ const shareReferral = () => {
                                                     <Lock size={18} />
                                                 </div>
                                                 <input
-                                                    type="password"
+                                                    type={showPassword ? "text" : "password"}
                                                     placeholder={t('auth.password_placeholder')}
                                                     value={password}
                                                     onChange={(e) => setPassword(e.target.value)}
-                                                    className="w-full pl-10 pr-4 py-3 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-vantage-cyan/50 focus:border-vantage-cyan/50 text-slate-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 transition-all outline-none text-sm"
+                                                    className="w-full pl-10 pr-12 py-3 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-vantage-cyan/50 focus:border-vantage-cyan/50 text-slate-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 transition-all outline-none text-sm"
                                                     required={!isForgotMode}
                                                     minLength={6}
                                                 />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                                >
+                                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                                </button>
                                             </div>
 
                                             {/* Referral Code Input - Show in Signup Mode OR if user manually entered one */}
