@@ -85,7 +85,7 @@ function AppContent() {
   useEffect(() => {
     if (!userProfile?.isVip || !userProfile.vipExpiry) { setShowRenewalBanner(false); return; }
     const daysLeft = Math.ceil((new Date(userProfile.vipExpiry).getTime() - Date.now()) / 86400000);
-    if (daysLeft <= 3 && daysLeft >= 0 && localStorage.getItem('vantage_renewal_dismissed') !== userProfile.vipExpiry) { setRenewalDaysLeft(daysLeft); setShowRenewalBanner(true); }
+    if (daysLeft <= 3 && daysLeft >= 0 && localStorage.getItem('vantage_renewal_dismissed') !== userProfile.vipExpiry) { setRenewalDaysLeft(daysLeft); setShowRenewalBanner(true); setTimeout(() => { localStorage.setItem('vantage_renewal_dismissed', userProfile.vipExpiry || ''); setShowRenewalBanner(false); }, 8000); }
     else { setShowRenewalBanner(false); }
   }, [userProfile]);
   const handleOnboardingComplete = () => { localStorage.setItem('vantage_onboarded', 'true'); setShowOnboarding(false); };

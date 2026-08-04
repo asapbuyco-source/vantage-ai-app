@@ -373,6 +373,11 @@ const shareReferral = () => {
                                     </button>
                                 </div>
                             )}
+                            <div className="text-center pt-3 border-t border-slate-200 dark:border-white/10">
+                                <a href="mailto:asapbuyco@gmail.com" className="text-xs text-gray-400 hover:text-vantage-cyan transition-colors">
+                                    {language === 'fr' ? 'Contactez-nous' : 'Contact Us'}
+                                </a>
+                            </div>
                         </GlassCard>
                     </motion.div>
                 }
