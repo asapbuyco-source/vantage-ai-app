@@ -17,7 +17,8 @@ import { MatchDetails } from './pages/MatchDetails';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
-import { enableFirestorePersistence } from './firebaseConfig';
+import { enableFirestorePersistence, db } from './firebaseConfig';
+import { doc, updateDoc } from 'firebase/firestore';
 import { PaymentModal } from './components/PaymentModal';
 import { MotionDiv } from './components/MotionDiv';
 import { TicketWizard } from './components/TicketWizard';
@@ -68,7 +69,34 @@ function AppContent() {
   }, []);
   useEffect(() => {
     if (!IS_NATIVE || !user?.uid) return;
-    (async () => { try { const { Purchases } = await import('@revenuecat/purchases-capacitor'); await Purchases.logIn({ appUserID: user.uid }); } catch (_) {} })();
+    const uid = user.uid;
+    let listenerHandle: any = null;
+    (async () => {
+      try {
+        const { Purchases } = await import('@revenuecat/purchases-capacitor');
+        await Purchases.logIn({ appUserID: uid });
+
+        // ✅ Listen for subscription changes (purchases, renewals, restores)
+        listenerHandle = await Purchases.addCustomerInfoUpdateListener(async (customerInfo: any) => {
+          try {
+            const activeEntitlements = customerInfo?.entitlements?.active ?? {};
+            const hasActive = Object.keys(activeEntitlements).length > 0;
+            if (hasActive) {
+              // Get expiry from whichever entitlement is active
+              const entitlement: any = activeEntitlements['vip'] ?? activeEntitlements['pro'] ?? Object.values(activeEntitlements)[0];
+              const vipExpiry = entitlement?.expirationDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+              const vipPlan = entitlement?.productIdentifier?.includes('annual') ? 'annual'
+                : entitlement?.productIdentifier?.includes('quarterly') ? 'quarterly'
+                : entitlement?.productIdentifier?.includes('weekly') ? 'weekly' : 'monthly';
+              await updateDoc(doc(db, 'profiles', uid), { isVip: true, vipExpiry, vipPlan });
+            }
+          } catch (e) {
+            console.error('[RC Listener] Firestore VIP sync failed:', e);
+          }
+        });
+      } catch (_) {}
+    })();
+    return () => { listenerHandle?.remove?.(); };
   }, [user?.uid]);
   useEffect(() => {
     if (!IS_NATIVE) return;

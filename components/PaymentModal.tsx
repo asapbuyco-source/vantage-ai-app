@@ -2,9 +2,29 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Loader2, MessageCircle, ShieldCheck, X } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 import { GlassCard } from './GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+
+/** Map RevenueCat entitlement expiry to a Firestore vipExpiry date string.
+ *  Falls back to 30 days from now if RevenueCat doesn't give us an expiry. */
+function resolveVipExpiry(customerInfo: any, planId: string): string {
+  try {
+    const entitlement = customerInfo?.entitlements?.active?.['vip']
+      ?? customerInfo?.entitlements?.active?.['pro']
+      ?? Object.values(customerInfo?.entitlements?.active ?? {})[0] as any;
+    if (entitlement?.expirationDate) return entitlement.expirationDate;
+  } catch (_) {}
+  // Fallback: calculate from plan id
+  const expiry = new Date();
+  if (planId === 'weekly') expiry.setDate(expiry.getDate() + 7);
+  else if (planId === 'quarterly') expiry.setDate(expiry.getDate() + 90);
+  else if (planId === 'annual') expiry.setFullYear(expiry.getFullYear() + 1);
+  else expiry.setDate(expiry.getDate() + 30); // monthly default
+  return expiry.toISOString();
+}
 
 const SUPPORT_URL =
   'https://wa.me/237688203629?text=Hi%2C%20I%20need%20help%20with%20my%20Vantage%20AI%20Google%20Play%20subscription.';
@@ -103,14 +123,35 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
       const pkgToBuy =
         packages.find((pkg) => pkg.identifier === plan.id || pkg.identifier.includes(plan.id)) || packages[0];
 
-      await Purchases.purchasePackage({ aPackage: pkgToBuy });
+      const purchaseResult = await Purchases.purchasePackage({ aPackage: pkgToBuy });
 
-      showToast(
-        language === 'fr'
-          ? 'Achat traite. VIP sera active sous peu.'
-          : 'Purchase processed. VIP will activate shortly.',
-        'info'
-      );
+      // ✅ THE FIX: Write VIP status to Firestore immediately after purchase
+      try {
+        const customerInfo = purchaseResult?.customerInfo
+          ?? (await Purchases.getCustomerInfo()).customerInfo;
+        const vipExpiry = resolveVipExpiry(customerInfo, plan.id);
+        if (user?.uid) {
+          await updateDoc(doc(db, 'profiles', user.uid), {
+            isVip: true,
+            vipExpiry,
+            vipPlan: plan.id,
+          });
+        }
+        showToast(
+          language === 'fr' ? '🎉 VIP active ! Profitez de toutes les fonctionnalites.' : '🎉 VIP activated! Enjoy all premium features.',
+          'success'
+        );
+      } catch (firestoreErr) {
+        console.error('[Payments] VIP write failed after purchase:', firestoreErr);
+        // Purchase went through — still tell the user it worked even if Firestore write had a hiccup
+        showToast(
+          language === 'fr'
+            ? 'Achat reussi. Reconnectez-vous si le VIP n\'apparait pas.'
+            : 'Purchase successful. Re-login if VIP does not appear.',
+          'success'
+        );
+      }
+
       localStorage.removeItem('pendingVipPlan');
       onSuccess?.();
       onClose();
