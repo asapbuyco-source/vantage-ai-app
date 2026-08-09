@@ -100,8 +100,9 @@ function AppContent() {
   }, [user?.uid]);
   useEffect(() => {
     if (!IS_NATIVE) return;
-    const handler = CapacitorApp.addListener('backButton', ({ canGoBack }) => { canGoBack ? navigate(-1) : CapacitorApp.minimizeApp(); });
-    return () => handler.remove();
+    let handler: any;
+    CapacitorApp.addListener('backButton', ({ canGoBack }) => { canGoBack ? navigate(-1) : CapacitorApp.minimizeApp(); }).then(h => { handler = h; });
+    return () => { if (handler) handler.remove(); };
   }, [navigate]);
   useEffect(() => {
     if (IS_NATIVE || !('serviceWorker' in navigator)) return;

@@ -14,6 +14,7 @@ const MAX_VAULT_PICKS = 7;
 const VAULT_STRATEGY_VERSION = 'vault-sim-v2';
 const VAULT_STRATEGY_NAME = 'Simulator EV Quality Top 7';
 const VAULT_DECISION_TIME_LOCAL = '19:00 Africa/Lagos';
+const CIRCUIT_BREAKER_THRESHOLD = 0.50; // 50% max drawdown
 
 const vaultCategoryPriority: Record<string, number> = {
     safe: 2,

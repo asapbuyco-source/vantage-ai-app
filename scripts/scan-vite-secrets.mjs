@@ -11,6 +11,7 @@ const allowedPrefixes = [
   'VITE_SUPABASE_',
   'VITE_ADMIN_EMAIL',
   'VITE_FIREBASE_VAPID_KEY',
+  'VITE_REVENUECAT_'
 ];
 const sensitive = /(SECRET|TOKEN|API_KEY|USER_TOKEN|SPORTMONKS|FAPSHI|GOOGLE|OPENAI|FOOTBALL|BASKETBALL|JSONBIN)/;
 const skipDirs = new Set(['.git', 'node_modules', 'dist', 'coverage', '.pytest_cache', '__pycache__']);
