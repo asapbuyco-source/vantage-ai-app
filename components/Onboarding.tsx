@@ -11,6 +11,17 @@ interface OnboardingProps {
 
 const slides = [
     {
+        id: 'language',
+        icon: Globe,
+        color: 'text-vantage-cyan',
+        bg: 'from-vantage-cyan/20 via-vantage-purple/10 to-transparent',
+        badge: 'Choose Language',
+        title_en: 'Choose your\nlanguage',
+        title_fr: 'Choisissez votre\nlangue',
+        desc_en: 'Select your preferred language. You can change this anytime in settings.',
+        desc_fr: 'Sélectionnez votre langue préférée. Vous pourrez la modifier à tout moment dans les paramètres.',
+    },
+    {
         id: 'welcome',
         icon: Zap,
         color: 'text-vantage-cyan',
@@ -89,11 +100,11 @@ const slides = [
     },
 ];
 
-const firstRunSlideIds = new Set(['welcome', 'ev_explained', 'long_game', 'vip']);
+const firstRunSlideIds = new Set(['language', 'welcome', 'ev_explained', 'long_game', 'vip']);
 
 export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const navigate = useNavigate();
-    const { language, showToast } = useAppContext();
+    const { language, setLanguage, showToast } = useAppContext();
     const { updateUserCountry } = useAuth();
     const [step, setStep] = useState(0);
     const [direction, setDirection] = useState(1);
@@ -104,6 +115,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const current = onboardingSlides[step];
     const isLast = step === onboardingSlides.length - 1;
     const isCountrySlide = current.id === 'country';
+    const isLanguageSlide = current.id === 'language';
 
     const countries = [
         { code: 'cm', label_en: 'Cameroon', label_fr: 'Cameroun', flag: '🇨🇲' },
@@ -208,6 +220,38 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         <p className="text-gray-400 text-sm leading-relaxed max-w-xs mb-5 text-center flex-shrink-0">
                             {language === 'fr' ? current.desc_fr : current.desc_en}
                         </p>
+
+                        {/* Language selection */}
+                        {isLanguageSlide && (
+                            <div className="w-full max-w-xs flex flex-col gap-3 flex-shrink-0 pb-4">
+                                <button
+                                    onClick={() => setLanguage('fr')}
+                                    className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left w-full ${language === 'fr' ? 'border-vantage-cyan bg-vantage-cyan/20 text-white' : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                                >
+                                    <span className="text-2xl">🇫🇷</span>
+                                    <div className="flex-1">
+                                        <p className="font-bold text-sm">Français</p>
+                                        <p className="text-[10px] text-gray-400">Côte d'Ivoire, Burkina Faso, Cameroun, Sénégal</p>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${language === 'fr' ? 'border-vantage-cyan bg-vantage-cyan' : 'border-gray-500'}`}>
+                                        {language === 'fr' && <Check size={11} className="text-white" />}
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={() => setLanguage('en')}
+                                    className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left w-full ${language === 'en' ? 'border-vantage-cyan bg-vantage-cyan/20 text-white' : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'}`}
+                                >
+                                    <span className="text-2xl">🇬🇧</span>
+                                    <div className="flex-1">
+                                        <p className="font-bold text-sm">English</p>
+                                        <p className="text-[10px] text-gray-400">Nigeria, Ghana, Kenya, South Africa & more</p>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${language === 'en' ? 'border-vantage-cyan bg-vantage-cyan' : 'border-gray-500'}`}>
+                                        {language === 'en' && <Check size={11} className="text-white" />}
+                                    </div>
+                                </button>
+                            </div>
+                        )}
 
                         {/* Country list — rendered inline, no separate scroll container needed */}
                         {isCountrySlide && (

@@ -435,7 +435,7 @@ export const Home: React.FC<HomeProps> = () => {
       </div>
 
       {/* ─── SORT & FILTER TOOLBAR ─── */}
-      <div className="space-y-3 sticky top-[72px] z-20 bg-vantage-lightBg dark:bg-vantage-bg backdrop-blur-md py-2 -mx-2 px-2">
+      <div className="space-y-3 bg-vantage-lightBg dark:bg-vantage-bg py-2 -mx-2 px-2">
         {/* Sport Toggle */}
         <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 border border-slate-200 dark:border-white/10">
           {(['football', 'basketball', 'cricket'] as Sport[]).map(sport => (
@@ -577,7 +577,7 @@ export const Home: React.FC<HomeProps> = () => {
           Object.keys(groupedMatches).map(groupKey => (
             <div key={groupKey} className="space-y-3">
               {groupKey !== 'All Matches' && (
-                <div className="sticky top-[72px] z-10 py-2 bg-gradient-to-b from-vantage-lightBg/95 to-vantage-lightBg/50 dark:from-vantage-bg/95 dark:to-vantage-bg/50 backdrop-blur-md">
+                <div className="py-2 bg-gradient-to-b from-vantage-lightBg/95 to-vantage-lightBg/50 dark:from-vantage-bg/95 dark:to-vantage-bg/50">
                   <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-slate-200/50 dark:bg-white/10 border border-slate-300 dark:border-white/10">
                     <Trophy size={12} className="text-vantage-purple" />
                     <span className="text-[10px] font-bold text-slate-800 dark:text-white uppercase tracking-wider">{groupKey}</span>
