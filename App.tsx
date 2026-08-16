@@ -36,6 +36,13 @@ const Learn = lazy(() => import('./pages/Learn').then(m => ({ default: m.Learn }
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Analytics: track page views on route change
+  useEffect(() => {
+    import('./services/analytics').then(({ trackPageView }) => {
+      trackPageView(location.pathname);
+    }).catch(() => {});
+  }, [location.pathname]);
   const [authView, setAuthView] = useState<'landing' | 'login' | 'signup' | 'stats'>(() => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
