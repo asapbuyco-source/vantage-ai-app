@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Zap, BookOpen, User } from 'lucide-react';
+import { Home, Zap, BookOpen, User, Crown } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
 export const BottomNav: React.FC = () => {
@@ -12,7 +12,7 @@ export const BottomNav: React.FC = () => {
   const getActiveTab = () => {
     const path = location.pathname;
     if (path === '/' || path === '/free') return 'home';
-    if (path.startsWith('/vip') || path.startsWith('/arb')) return 'alpha';
+    if (path.startsWith('/vip') || path.startsWith('/arb')) return 'vip';
     if (path.startsWith('/learn') || path.startsWith('/guide') || path.startsWith('/concierge')) return 'learn';
     if (path.startsWith('/profile') || path.startsWith('/admin') || path.startsWith('/stats') || path.startsWith('/results')) return 'profile';
     return 'home';
@@ -22,7 +22,7 @@ export const BottomNav: React.FC = () => {
 
   const navItems = [
     { id: 'home', path: '/', icon: Home, label: t('nav.home') || 'Home' },
-    { id: 'alpha', path: '/vip', icon: Zap, label: 'Alpha' },
+    { id: 'vip', path: '/vip', icon: Crown, label: 'VIP' },
     { id: 'learn', path: '/learn', icon: BookOpen, label: language === 'fr' ? 'Apprendre' : 'Learn' },
     { id: 'profile', path: '/profile', icon: User, label: t('nav.profile') || 'Profile' },
   ] as const;

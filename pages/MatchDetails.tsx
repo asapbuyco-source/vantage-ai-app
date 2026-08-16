@@ -42,13 +42,6 @@ export const MatchDetails: React.FC = () => {
         const foundMatch = [...predictions, ...rawFixtures].find(m => m.id === id);
         if (foundMatch) {
             setMatch(foundMatch);
-            import('../services/analytics').then(({ trackEvent }) => {
-                trackEvent('match_details_viewed', {
-                    match_id: id,
-                    league: foundMatch.league || '',
-                    teams: `${foundMatch.homeTeam || ''} v ${foundMatch.awayTeam || ''}`,
-                });
-            }).catch(() => {});
             // Find all predictions for the same fixture
             const fixtureId = foundMatch.fixture_id || foundMatch.fixtureId;
             const sameFixturePicks = predictions.filter(p =>

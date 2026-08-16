@@ -19,8 +19,7 @@ import { Sparkline } from '../components/Sparkline';
 import { getTopProbPicks } from '../utils';
 import { Screener } from '../components/Screener';
 import { MatchCardAlpha } from '../components/MatchCardAlpha';
-import { ResponsibleGambling } from '../components/ResponsibleGambling';
-import { getPricingForCountry } from '../services/pricing';
+import { Capacitor } from '@capacitor/core';
 
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
@@ -32,13 +31,28 @@ interface VIPProps {}
 export const VIP: React.FC<VIPProps> = () => {
   const navigate = useNavigate();
   const { t, language, showToast } = useAppContext();
-  const { predictions, accumulators: dataContextAccumulators, loading, basketballPredictions, cricketPredictions } = useData();
+  const { predictions, accumulators: dataContextAccumulators, loading, basketballPredictions, cricketPredictions, winRateStats } = useData();
   const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual'>('daily');
+  const [selectedPlanId, setSelectedPlanId] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('monthly');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [localizedPrices, setLocalizedPrices] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    (async () => {
+      try {
+        const { Purchases } = await import('@revenuecat/purchases-capacitor');
+        const offerings = await Purchases.getOfferings();
+        const packages = offerings.current?.availablePackages || [];
+        const map: Record<string, string> = {};
+        for (const pkg of packages) map[pkg.identifier] = pkg.product.priceString;
+        setLocalizedPrices(map);
+      } catch (_) {}
+    })();
+  }, []);
 
   // Accumulator Modal State
   const [isAccuOpen, setIsAccuOpen] = useState(false);
@@ -51,7 +65,7 @@ export const VIP: React.FC<VIPProps> = () => {
     });
   }, []);
 
-  const [activeVipTab, setActiveVipTab] = useState<'predictions' | 'vault' | 'accumulators'>('predictions');
+  const [activeVipTab, setActiveVipTab] = useState<'Analyses' | 'vault' | 'accumulators'>('Analyses');
   const [activeSport, setActiveSport] = useState<'football' | 'basketball' | 'cricket'>('football');
   const activeAltPredictions = activeSport === 'cricket' ? cricketPredictions : basketballPredictions;
   const activeAltSportLabel = activeSport === 'cricket' ? 'Cricket' : 'Basketball';
@@ -177,7 +191,7 @@ export const VIP: React.FC<VIPProps> = () => {
   const isFirstTime = userProfile && (!userProfile.totalPaid || userProfile.totalPaid === 0);
 
   const plans: Array<{
-    id: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
+    id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
     label: string;
     badge: string | null;
     price: string;
@@ -187,20 +201,10 @@ export const VIP: React.FC<VIPProps> = () => {
     claimColor: string;
   }> = [
       {
-        id: 'daily',
-        label: t('vip.plan_daily') || 'Daily Access',
-        badge: '⚡ QUICK START',
-        price: '500',
-        icon: <Zap size={20} />,
-        features: [t('vip.feat_signal_feed'), t('vip.feat_today')],
-        color: 'border-emerald-400 bg-emerald-500/5 dark:bg-emerald-500/10 shadow-[0_0_30px_rgba(16,185,129,0.1)]',
-        claimColor: 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25',
-      },
-      {
         id: 'weekly',
         label: t('vip.plan_weekly'),
         badge: '📊 7-DAY ACCESS',
-        price: '2000',
+        price: localizedPrices['weekly'] || '$3.99',
         icon: <Activity size={20} />,
         features: [t('vip.feat_signal_feed'), t('vip.feat_kelly'), t('vip.feat_screener')],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
@@ -210,7 +214,7 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'monthly',
         label: t('vip.plan_monthly'),
         badge: '🔥 MOST POPULAR',
-        price: '5000',
+        price: localizedPrices['monthly'] || '$9.99',
         icon: <Star size={20} />,
         features: [t('vip.feat_signal_feed'), t('vip.feat_screener'), t('vip.feat_whatsapp')],
         color: 'border-vantage-cyan bg-vantage-cyan/5 dark:bg-vantage-cyan/10 shadow-[0_0_40px_rgba(34,211,238,0.1)]',
@@ -220,7 +224,7 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'quarterly',
         label: t('vip.plan_quarterly'),
         badge: '💎 BEST VALUE',
-        price: '12000',
+        price: localizedPrices['quarterly'] || '$19.99',
         icon: <ShieldCheck size={20} />,
         features: [t('vip.feat_signal_feed'), t('vip.feat_screener'), t('vip.feat_whatsapp'), t('vip.feat_priority')],
         color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
@@ -230,7 +234,7 @@ export const VIP: React.FC<VIPProps> = () => {
         id: 'annual',
         label: t('vip.plan_annual') || 'Annual Access',
         badge: '👑 ULTIMATE',
-        price: '35000',
+        price: localizedPrices['annual'] || '$49.99',
         icon: <Crown size={20} />,
         features: [t('vip.feat_signal_feed'), t('vip.feat_screener'), t('vip.feat_whatsapp'), t('vip.feat_priority'), t('vip.feat_review')],
         color: 'border-vantage-purple bg-vantage-purple/5 dark:bg-vantage-purple/10 shadow-[0_0_40px_rgba(168,85,247,0.1)]',
@@ -238,12 +242,9 @@ export const VIP: React.FC<VIPProps> = () => {
       },
     ];
 
-  const handlePlanClick = (planId: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
+  const handlePlanClick = (planId: 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
     setSelectedPlanId(planId);
     setShowPaymentModal(true);
-    import('../services/analytics').then(({ trackEvent }) => {
-      trackEvent('vip_upgrade_clicked', { plan: planId });
-    }).catch(() => {});
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -380,7 +381,7 @@ export const VIP: React.FC<VIPProps> = () => {
 
                     {/* Prediction + confidence row */}
                     <div className="relative mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 overflow-hidden mt-auto">
-                      <span className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1.5">{t('free.pred_label')}</span>
+                      <span className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1.5">{t('free.analysis_label')}</span>
                       <div className="space-y-1">
                         {getTopProbPicks(match).map((p, pi) => (
                           <div key={pi} className="flex items-center justify-between gap-2">
@@ -532,8 +533,8 @@ export const VIP: React.FC<VIPProps> = () => {
        {/* â”€â”€ TAB SWITCH â”€â”€ */}
        <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 mb-6">
           <button
-            onClick={() => setActiveVipTab('predictions')}
-            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'predictions' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-vantage-cyan' : 'text-gray-500 hover:text-gray-300'}`}
+            onClick={() => setActiveVipTab('Analyses')}
+            className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeVipTab === 'Analyses' ? 'bg-white dark:bg-[#1a1d26] shadow-sm text-vantage-cyan' : 'text-gray-500 hover:text-gray-300'}`}
           >
             <BarChart2 size={16} /> <span>Signals</span>
           </button>
@@ -656,7 +657,7 @@ export const VIP: React.FC<VIPProps> = () => {
 
 
         {/* â”€â”€ VANTAGE MODEL PICKS SECTION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        {activeVipTab === 'predictions' && (
+        {activeVipTab === 'Analyses' && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300">
@@ -1092,9 +1093,34 @@ export const VIP: React.FC<VIPProps> = () => {
           </div>
 
           <div id="plans-section" className="space-y-6">
+            {/* Urgency strip */}
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 flex items-center gap-2">
+              <Clock size={14} className="text-amber-400 shrink-0" />
+              <p className="text-[11px] font-bold text-amber-600 dark:text-amber-300">
+                {language === 'fr' ? "Les analyses du jour sont publiées à 07:30 — débloquez avant le coup d'envoi" : "Today's analyses publish at 07:30 — unlock before kickoff"}
+              </p>
+            </div>
+
+            {/* Win-rate proof bar */}
+            {winRateStats.monthly > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-center">
+                  <p className="text-lg font-black font-orbitron text-green-500">{winRateStats.monthly}%</p>
+                  <p className="text-[9px] uppercase text-gray-500">{language === 'fr' ? '30 jours' : '30-Day Rate'}</p>
+                </div>
+                <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-center">
+                  <p className="text-lg font-black font-orbitron text-vantage-cyan">{winRateStats.streak}🔥</p>
+                  <p className="text-[9px] uppercase text-gray-500">{language === 'fr' ? 'Série' : 'Streak'}</p>
+                </div>
+                <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-center">
+                  <p className="text-lg font-black font-orbitron text-white">{winRateStats.todayWon}/{winRateStats.todayTotal}</p>
+                  <p className="text-[9px] uppercase text-gray-500">{language === 'fr' ? "Aujourd'hui" : 'Today'}</p>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col gap-4">
-            {plans.filter(p => showAllPlans || ['daily', 'weekly', 'monthly', 'quarterly'].includes(p.id)).map((plan) => {
-    const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'cm', plan.id);
+            {plans.filter(p => showAllPlans || ['weekly', 'monthly', 'quarterly'].includes(p.id)).map((plan) => {
                 const isPopular = plan.id === 'monthly';
                 return (
                   <motion.button
@@ -1138,10 +1164,10 @@ export const VIP: React.FC<VIPProps> = () => {
                       {/* Pricing */}
                       <div className="flex flex-col items-end">
                         <span className="text-lg md:text-xl font-black font-mono text-slate-900 dark:text-white">
-                          {pricing.symbol}{pricing.amount}
+                          {plan.price}
                         </span>
                         <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                          {pricing.code}
+                          USD
                         </span>
                         
                         <div className={`mt-4 px-4 py-2 rounded-xl font-bold text-xs transition-all ${plan.claimColor}`}>
@@ -1165,20 +1191,16 @@ export const VIP: React.FC<VIPProps> = () => {
               }
             </button>
 
-            {/* Premium Trust Signals */}
+            {/* Google Play Trust Signals */}
             <div className="pt-6 border-t border-slate-200 dark:border-white/10 flex flex-col items-center space-y-4">
               <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
                 <ShieldCheck size={14} className="text-emerald-500" />
-                <>Secure Checkout via <span className="text-slate-900 dark:text-white font-bold">Mobile Money & Card</span></>
+                <>Secure payment via <span className="text-slate-900 dark:text-white font-bold">Google Play</span></>
               </div>
-              
-              {/* Payment Methods */}
               <div className="flex items-center justify-center gap-2">
-                {['MTN MoMo', 'Orange Money', 'Visa / Mastercard'].map(method => (
-                  <div key={method} className="px-2.5 py-1 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
-                    {method}
-                  </div>
-                ))}
+                <div className="px-2.5 py-1 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
+                  Google Play Billing
+                </div>
               </div>
 
               {/* Manual Verification Button */}
@@ -1194,11 +1216,6 @@ export const VIP: React.FC<VIPProps> = () => {
           </div>
         </>
       )}
-
-      {/* Responsible Gambling - required for Play Store compliance */}
-      <div className="px-4 pb-6">
-        <ResponsibleGambling compact />
-      </div>
 
       <PaymentModal
         isOpen={showPaymentModal}

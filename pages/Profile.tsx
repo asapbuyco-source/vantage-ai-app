@@ -343,7 +343,7 @@ const shareReferral = () => {
                                 </form>
                             )}
 
-                            {!isForgotMode && !resetSent && (
+                            {!isForgotMode && !resetSent && !Capacitor.isNativePlatform() && (
                                 <>
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center">
@@ -532,10 +532,19 @@ const shareReferral = () => {
                                     )}
                                 </>
                             ) : (
-                                <span className="flex items-center w-fit text-xs font-bold text-gray-500 bg-gray-500/10 px-2 py-0.5 rounded border border-gray-500/20">
-                                    <User size={12} className="mr-1" />
-                                    {t('profile.member_free')}
-                                </span>
+                                <>
+                                    <span className="flex items-center w-fit text-xs font-bold text-gray-500 bg-gray-500/10 px-2 py-0.5 rounded border border-gray-500/20">
+                                        <User size={12} className="mr-1" />
+                                        {t('profile.member_free')}
+                                    </span>
+                                    <button
+                                        onClick={() => navigate('/vip')}
+                                        className="flex items-center gap-1.5 w-fit text-xs font-black text-white bg-gradient-to-r from-vantage-purple to-vantage-cyan px-4 py-2 rounded-xl shadow-lg shadow-vantage-purple/25 hover:opacity-90 transition-opacity"
+                                    >
+                                        <Crown size={12} />
+                                        {language === 'fr' ? 'Passer à VIP' : 'Upgrade to VIP'}
+                                    </button>
+                                </>
                             )}
                         </div>
                     </div>

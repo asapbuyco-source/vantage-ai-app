@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Zap, Crown, Gift, ArrowRight, X, Globe, Check, TrendingUp, BarChart3, BrainCircuit } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -91,6 +92,7 @@ const slides = [
 const firstRunSlideIds = new Set(['welcome', 'ev_explained', 'long_game', 'vip']);
 
 export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
+    const navigate = useNavigate();
     const { language, showToast } = useAppContext();
     const { updateUserCountry } = useAuth();
     const [step, setStep] = useState(0);
@@ -134,6 +136,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
         if (isLast) {
             onComplete();
+            navigate('/vip');
             return;
         }
         setDirection(1);
@@ -149,7 +152,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     // Determine button label
     const btnLabel = (() => {
-        if (isLast) return language === 'fr' ? 'Commencer ✨' : 'Get Started ✨';
+        if (isLast) return language === 'fr' ? 'Voir les Plans VIP →' : 'See VIP Plans →';
         if (isCountrySlide) return language === 'fr' ? 'Confirmer le pays' : 'Confirm Country';
         return language === 'fr' ? 'Suivant' : 'Next';
     })();

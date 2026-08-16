@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import {
     History, ChevronDown, ChevronUp, CheckCircle2, XCircle,
-    Loader2, Trophy, AlertCircle, Pencil, Save, X, MinusCircle
+    Loader2, Trophy, AlertCircle, Pencil, Save, X, MinusCircle, Crown
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { getResultsHistory, DayResult, savePredictionsForDate, getPredictionsForDate, getGlobalTodayKey, normalizeQuantPrediction } from '../services/db';
@@ -19,6 +20,7 @@ type MatchStatus = 'won' | 'lost' | 'void' | 'pending';
 const CYCLE: Record<string, MatchStatus> = { won: 'lost', lost: 'pending', pending: 'won', void: 'won' };
 
 export const Results: React.FC = () => {
+    const navigate = useNavigate();
     const { language, showToast } = useAppContext();
     const { isAdmin } = useAuth();
     const isVip = useAuth().userProfile?.isVip || false;
@@ -250,6 +252,17 @@ export const Results: React.FC = () => {
                         </div>
                     </GlassCard>
                 </motion.div>
+            )}
+
+            {/* Unlock CTA for free users */}
+            {!isVip && !isAdmin && totalGraded > 0 && (
+                <button
+                    onClick={() => navigate('/vip')}
+                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white font-bold text-sm shadow-lg shadow-vantage-purple/25 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                >
+                    <Crown size={16} />
+                    {language === 'fr' ? 'Débloquez toutes les analyses + Kelly — à partir de $3.99/semaine' : 'Unlock full analyses + Kelly — from $3.99/week'}
+                </button>
             )}
 
             {/* Content */}
