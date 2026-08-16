@@ -96,6 +96,7 @@ export const Home: React.FC<HomeProps> = () => {
     return () => clearInterval(timer);
   }, [scheduledTime]);
   const [visibleCount, setVisibleCount] = useState(15);
+  const [expandedPicks, setExpandedPicks] = useState<Set<string>>(new Set());
   const [showTicket, setShowTicket] = useState(false);
   const [ticketPicks, setTicketPicks] = useState<Array<{ id: string; home: string; away: string; pick: string; odds: number }>>([]);
   useEffect(() => {
@@ -661,22 +662,50 @@ export const Home: React.FC<HomeProps> = () => {
                           </div>
                         )}
 
-                        {/* Prediction — show each pick with its percentage */}
+                        {/* Prediction — show top pick, expand for more */}
                         {unlocked ? (
                           <div className="mx-3 mb-3 p-2.5 rounded-xl bg-gradient-to-r from-vantage-cyan/5 to-transparent border border-vantage-cyan/15 overflow-hidden">
                             <span className="text-[8px] text-gray-500 uppercase tracking-wide block mb-1.5">{t('free.analysis_label') || 'Analysis'}</span>
                             <div className="space-y-1">
-                              {getTopProbPicks(match).map((p, pi) => (
-                                <div key={pi} className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-bold text-vantage-cyan truncate">{p.name}</span>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <div className="w-12 h-1 rounded-full bg-slate-200 dark:bg-white/10">
-                                      <motion.div className="h-full rounded-full bg-gradient-to-r from-vantage-cyan to-emerald-400" initial={{ width: 0 }} animate={{ width: `${Math.round(p.prob * 100)}%` }} transition={{ duration: 1, delay: idx * 0.05 + 0.3 }} style={{ width: `${Math.round(p.prob * 100)}%` }} />
-                                    </div>
-                                    <span className="text-[10px] font-bold font-mono text-emerald-400 w-8 text-right">{Math.round(p.prob * 100)}%</span>
-                                  </div>
-                                </div>
-                              ))}
+                              {(() => {
+                                const picks = getTopProbPicks(match);
+                                const isExpanded = expandedPicks.has(String(match.id));
+                                const visible = isExpanded ? picks : picks.slice(0, 1);
+                                return (
+                                  <>
+                                    {visible.map((p, pi) => (
+                                      <div key={pi} className="flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-bold text-vantage-cyan truncate">{p.name}</span>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <div className="w-12 h-1 rounded-full bg-slate-200 dark:bg-white/10">
+                                            <motion.div className="h-full rounded-full bg-gradient-to-r from-vantage-cyan to-emerald-400" initial={{ width: 0 }} animate={{ width: `${Math.round(p.prob * 100)}%` }} transition={{ duration: 1, delay: idx * 0.05 + 0.3 }} style={{ width: `${Math.round(p.prob * 100)}%` }} />
+                                          </div>
+                                          <span className="text-[10px] font-bold font-mono text-emerald-400 w-8 text-right">{Math.round(p.prob * 100)}%</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {picks.length > 1 && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setExpandedPicks(prev => {
+                                            const s = new Set(prev);
+                                            if (isExpanded) s.delete(String(match.id));
+                                            else s.add(String(match.id));
+                                            return s;
+                                          });
+                                        }}
+                                        className="text-[9px] font-bold text-vantage-cyan/70 hover:text-vantage-cyan transition-colors flex items-center gap-1"
+                                      >
+                                        {isExpanded
+                                          ? (language === 'fr' ? 'Réduire' : 'Show less')
+                                          : (language === 'fr' ? `Voir ${picks.length - 1} autre${picks.length > 2 ? 's' : ''} analyse${picks.length > 2 ? 's' : ''}` : `Show ${picks.length - 1} more analys${picks.length > 2 ? 'es' : 'is'}`)}
+                                        <ChevronDown size={10} className={isExpanded ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                                      </button>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                             <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-vantage-cyan/10">
                               {match.odds > 1 && <span className="text-[9px] font-mono text-gray-400">{Number(match.odds).toFixed(2)}x</span>}
