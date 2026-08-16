@@ -11,7 +11,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { getSmartBadges } from '../utils';
-import { getTopProbPicks } from '../utils';
+import { getTopProbPicks, getPrimaryPredictionProb } from '../utils';
 
 export const MatchDetails: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -21,6 +21,17 @@ export const MatchDetails: React.FC = () => {
     const { userProfile, isAdmin } = useAuth();
     const { predictions, rawFixtures } = useData();
     const isVipUser = userProfile?.isVip === true || isAdmin;
+
+    // Free picks = top 3 'safe' matches by probability (same logic as Home)
+    const isFreeMatch = React.useMemo(() => {
+        if (!id) return false;
+        const sorted = [...predictions].sort((a, b) => getPrimaryPredictionProb(b) - getPrimaryPredictionProb(a));
+        const topSafe = sorted.filter(m => m.category === 'safe').slice(0, 3);
+        return topSafe.some(m => String(m.id) === id || String(m.fixture_id) === id);
+    }, [predictions, id]);
+
+    // Free users can view details only for free picks
+    const canViewDetails = isVipUser || isFreeMatch;
 
     const [match, setMatch] = useState<Match | null>(null);
     const [loading, setLoading] = useState(true);
@@ -237,8 +248,8 @@ fetchDetails();
                 </div>
             </div>
             
-            {/* VIP Lock Check */}
-            {!isVipUser ? (
+            {/* VIP Lock Check — free picks are fully viewable */}
+            {!canViewDetails ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center space-y-4 max-w-md mx-auto">
                     <div className="w-16 h-16 bg-vantage-purple/20 rounded-full flex items-center justify-center mb-2">
                         <Target size={32} className="text-vantage-purple" />
