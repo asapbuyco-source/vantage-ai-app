@@ -343,7 +343,7 @@ const shareReferral = () => {
                                 </form>
                             )}
 
-                            {!isForgotMode && !resetSent && !Capacitor.isNativePlatform() && (
+                            {!isForgotMode && !resetSent && (
                                 <>
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center">

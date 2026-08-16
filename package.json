@@ -28,6 +28,7 @@
     "@capacitor/push-notifications": "^8.1.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
+    "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
     "@google/genai": "^1.43.0",
     "@revenuecat/purchases-capacitor": "^13.2.0",
     "@sentry/node": "^10.45.0",

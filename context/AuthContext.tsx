@@ -8,8 +8,10 @@ import {
     signOut,
     deleteUser,
     onAuthStateChanged,
+    signInWithCredential,
     User
 } from "firebase/auth";
+import { Capacitor } from '@capacitor/core';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDoc, orderBy, runTransaction, limit, getDocs, query, where, startAfter } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
@@ -247,8 +249,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setError(null);
         try {
             const provider = new GoogleAuthProvider();
-            // Use popup mode — the COOP header is now set to unsafe-none and the
-            // Firebase auth domain is whitelisted in frame-src, so popup works correctly.
+
+            // Native path: use Capacitor Google Auth plugin (no popup, no Chrome redirect)
+            if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
+                const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+                const googleUser = await GoogleAuth.signIn();
+                if (googleUser?.authentication?.idToken) {
+                    const credential = GoogleAuthProvider.credential(googleUser.authentication.idToken);
+                    const result = await signInWithCredential(auth, credential);
+                    if (result.user) await createProfile(result.user, referralCode);
+                    return;
+                }
+                throw new Error('Google sign-in failed: no token returned');
+            }
+
+            // Web path: popup mode
             const result = await signInWithPopup(auth, provider);
             if (result.user) await createProfile(result.user, referralCode);
         } catch (e: any) {

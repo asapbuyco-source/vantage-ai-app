@@ -1,39 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, CheckCircle2, Loader2, MessageCircle, ShieldCheck, X } from 'lucide-react';
-import { Capacitor } from '@capacitor/core';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, CreditCard, Smartphone, CheckCircle2, ShieldCheck, ArrowRight, Loader2, Globe, AlertTriangle, Mail, MessageCircle } from 'lucide-react';
 import { GlassCard } from './GlassCard';
+import { initiateFapshiPayment } from '../services/fapshi';
+import { initiateSelarPayment } from '../services/selar';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-
-/** Map RevenueCat entitlement expiry to a Firestore vipExpiry date string.
- *  Falls back to 30 days from now if RevenueCat doesn't give us an expiry. */
-function resolveVipExpiry(customerInfo: any, planId: string): string {
-  try {
-    const entitlement = customerInfo?.entitlements?.active?.['vip']
-      ?? customerInfo?.entitlements?.active?.['pro']
-      ?? Object.values(customerInfo?.entitlements?.active ?? {})[0] as any;
-    if (entitlement?.expirationDate) return entitlement.expirationDate;
-  } catch (_) {}
-  // Fallback: calculate from plan id
-  const expiry = new Date();
-  if (planId === 'weekly') expiry.setDate(expiry.getDate() + 7);
-  else if (planId === 'quarterly') expiry.setDate(expiry.getDate() + 90);
-  else if (planId === 'annual') expiry.setFullYear(expiry.getFullYear() + 1);
-  else expiry.setDate(expiry.getDate() + 30); // monthly default
-  return expiry.toISOString();
-}
-
-const SUPPORT_URL =
-  'https://wa.me/237688203629?text=Hi%2C%20I%20need%20help%20with%20my%20Vantage%20AI%20Google%20Play%20subscription.';
+import { getPricingForCountry } from '../services/pricing';
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   plan: {
-    id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
+    id: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
     label: string;
     price: string;
     features: string[];
@@ -42,48 +21,37 @@ interface PaymentModalProps {
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan, onSuccess }) => {
-  const { language, showToast } = useAppContext();
-  const { user } = useAuth();
+  const { t, language, showToast } = useAppContext();
+  const { user, userProfile } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [gateway, setGateway] = useState<'fapshi' | 'selar'>('fapshi');
   const [paymentFailed, setPaymentFailed] = useState(false);
-  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
-  const isNative = Capacitor.isNativePlatform();
-  const apiKey = import.meta.env.VITE_REVENUECAT_GOOGLE_API_KEY || '';
-  const revenueCatConfigured = Boolean(apiKey) && !apiKey.includes('PLACEHOLDER') && !apiKey.includes('your_');
+  const userEmail = user?.email || '';
+
+  React.useEffect(() => {
+    if (isOpen && userProfile) {
+      if (userProfile.country && !['cm', 'ci', 'sn', 'other'].includes(userProfile.country)) {
+        setGateway('selar');
+      } else {
+        setGateway('fapshi');
+      }
+    }
+  }, [isOpen, userProfile]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    setLoading(false);
+    if (!isOpen) {
+      setPaymentFailed(false);
+      return;
+    }
     setPaymentFailed(false);
-    setErrorDetail(null);
-  }, [isOpen, plan.id]);
+  }, [isOpen, plan]);
+
+  const pricing = getPricingForCountry(Number(plan.price), userProfile?.country || 'cm', plan.id);
 
   const handlePayment = async () => {
     if (!user) {
-      showToast(language === 'fr' ? "Veuillez vous connecter d'abord" : 'Please login first', 'info');
-      return;
-    }
-
-    if (!isNative) {
-      showToast(
-        language === 'fr'
-          ? "Les abonnements Play Store sont disponibles uniquement dans l'application Android."
-          : 'Play Store subscriptions are available only in the Android app.',
-        'info'
-      );
-      setPaymentFailed(true);
-      return;
-    }
-
-    if (!revenueCatConfigured) {
-      showToast(
-        language === 'fr'
-          ? 'Google Play Billing nest pas encore configure.'
-          : 'Google Play Billing is not configured yet.',
-        'error'
-      );
-      setPaymentFailed(true);
+      showToast(language === 'fr' ? "Veuillez vous connecter d'abord" : "Please login first", "info");
       return;
     }
 
@@ -92,88 +60,42 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     localStorage.setItem('pendingVipPlan', plan.id);
 
     try {
-      if (typeof window !== 'undefined' && (window as any).fbq) {
-        (window as any).fbq('track', 'InitiateCheckout', {
-          currency: 'USD',
-          value: Number.parseFloat(plan.price),
-        });
-      }
-    } catch (err) {
-      console.error('Pixel error', err);
-    }
+        if (typeof window !== 'undefined' && (window as any).fbq) {
+            (window as any).fbq('track', 'InitiateCheckout', { currency: 'XAF', value: parseInt(plan.price) });
+        }
+    } catch(err) { console.error('Pixel error', err); }
 
     try {
-      // Dynamically import RevenueCat only when needed on native
-      const { Purchases } = await import('@revenuecat/purchases-capacitor');
-      
-      const configStatus = await Purchases.isConfigured();
-      if (!configStatus.isConfigured) {
-        await Purchases.configure({ apiKey });
-        if (user?.uid) {
-          await Purchases.logIn({ appUserID: user.uid });
+      if (gateway === 'fapshi') {
+        const { link, transId } = await initiateFapshiPayment(plan.id, user.email || undefined);
+        // CRITICAL: Fapshi does NOT append transId to the redirectUrl automatically.
+        // We must store it in localStorage so App.tsx can retrieve it on return.
+        if (transId) {
+          localStorage.setItem('pendingFapshiTransId', transId);
         }
-      }
-
-      const offerings = await Purchases.getOfferings();
-      const packages = offerings.current?.availablePackages || [];
-      if (packages.length === 0) {
-        throw new Error('No Google Play products are available for this offering.');
-      }
-
-      const pkgToBuy =
-        packages.find((pkg) => pkg.identifier === plan.id || pkg.identifier.includes(plan.id)) || packages[0];
-
-      const purchaseResult = await Purchases.purchasePackage({ aPackage: pkgToBuy });
-
-      // ✅ THE FIX: Write VIP status to Firestore immediately after purchase
-      try {
-        const customerInfo = purchaseResult?.customerInfo
-          ?? (await Purchases.getCustomerInfo()).customerInfo;
-        const vipExpiry = resolveVipExpiry(customerInfo, plan.id);
-        if (user?.uid) {
-          await updateDoc(doc(db, 'profiles', user.uid), {
-            isVip: true,
-            vipExpiry,
-            vipPlan: plan.id,
-          });
-        }
-        showToast(
-          language === 'fr' ? '🎉 VIP active ! Profitez de toutes les fonctionnalites.' : '🎉 VIP activated! Enjoy all premium features.',
-          'success'
-        );
-      } catch (firestoreErr) {
-        console.error('[Payments] VIP write failed after purchase:', firestoreErr);
-        // Purchase went through — still tell the user it worked even if Firestore write had a hiccup
-        showToast(
-          language === 'fr'
-            ? 'Achat reussi. Reconnectez-vous si le VIP n\'apparait pas.'
-            : 'Purchase successful. Re-login if VIP does not appear.',
-          'success'
-        );
-      }
-
-      localStorage.removeItem('pendingVipPlan');
-      onSuccess?.();
-      onClose();
-    } catch (e: any) {
-      if (e?.userCancelled) {
-        showToast(language === 'fr' ? 'Paiement annule.' : 'Payment cancelled.', 'info');
+        window.location.href = link;
       } else {
-        // Build a human-readable error string from RevenueCat error object
-        const code = e?.code ?? e?.underlyingErrorMessage ?? '';
-        const msg = e?.message ?? e?.localizedDescription ?? JSON.stringify(e);
-        const detail = `Code: ${code} | ${msg}`;
-        console.error('[Payments] Google Play purchase failed:', detail, e);
-        setErrorDetail(detail);
-        showToast(
-          language === 'fr'
-            ? 'Erreur Google Play. Reessayez ou contactez le support.'
-            : 'Google Play error. Try again or contact support.',
-          'error'
+        // For Selar, verify the user has an email before proceeding
+        if (!user.email) {
+          showToast(
+            language === 'fr'
+              ? "Votre compte n'a pas d'email associé. Contactez le support."
+              : "Your account has no email address. Please contact support.",
+            "error"
+          );
+          setLoading(false);
+          return;
+        }
+        const { checkout_url } = await initiateSelarPayment(
+          plan.id,
+          user.email,
+          user.uid
         );
-        setPaymentFailed(true);
+        window.location.href = checkout_url;
       }
-    } finally {
+    } catch (e: any) {
+      showToast(e.message || "Payment initiation failed", "error");
+      setPaymentFailed(true);
       setLoading(false);
     }
   };
@@ -197,98 +119,146 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
             className="relative w-full max-w-md"
           >
             <GlassCard className="border-vantage-purple/20 overflow-hidden">
-              <div className="mb-6 flex items-center justify-between">
+              <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold font-orbitron text-slate-900 dark:text-white">
-                  {language === 'fr' ? 'Google Play Billing' : 'Google Play Billing'}
+                  {language === 'fr' ? 'Paiement Sécurisé' : 'Secure Payment'}
                 </h2>
                 <button
                   onClick={onClose}
-                  className="rounded-full p-2 transition-colors hover:bg-slate-100 dark:hover:bg-white/10"
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-white/10 rounded-full transition-colors"
                 >
                   <X size={20} className="text-gray-500" />
                 </button>
               </div>
 
-              <div className="mb-6 rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
-                <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/10 mb-6">
+                <div className="flex justify-between items-center mb-2">
                   <span className="text-sm text-gray-500">{plan.label}</span>
-                  <span className="text-lg font-bold text-vantage-purple">${plan.price}</span>
+                  <span className="text-lg font-bold text-vantage-purple">{pricing.symbol}{pricing.amount.toLocaleString()} {pricing.code}</span>
                 </div>
                 <div className="space-y-1">
-                  {plan.features.slice(0, 3).map((feature, index) => (
-                    <div key={index} className="flex items-center text-[11px] text-gray-500 dark:text-gray-400">
-                      <CheckCircle2 size={11} className="mr-1.5 text-vantage-cyan" />
-                      {feature}
+                  {plan.features.slice(0, 2).map((feat, i) => (
+                    <div key={i} className="flex items-center text-[10px] text-gray-400">
+                      <CheckCircle2 size={10} className="text-vantage-cyan mr-1.5" />
+                      {feat}
                     </div>
                   ))}
                 </div>
               </div>
 
-              {!isNative && (
-                <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+              {/* Gateway Selection */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <button
+                  onClick={() => setGateway('fapshi')}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${gateway === 'fapshi' ? 'border-vantage-purple bg-vantage-purple/10 text-vantage-purple' : 'border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400'}`}
+                >
+                  <Smartphone size={20} />
+                  <span className="text-xs font-bold">Cameroon (MoMo)</span>
+                </button>
+                <button
+                  onClick={() => setGateway('selar')}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${gateway === 'selar' ? 'border-vantage-cyan bg-vantage-cyan/10 text-vantage-cyan' : 'border-slate-200 dark:border-white/10 text-gray-500 dark:text-gray-400'}`}
+                >
+                  <Globe size={20} />
+                  <span className="text-xs font-bold">Global (Selar)</span>
+                </button>
+              </div>
+
+              {/* ── Selar Email Warning ─────────────────────────────────────────────
+                  Critical: if the user pays in Selar with a different email than
+                  their Vantage account, the server cannot match the payment to
+                  their account and VIP will not be granted automatically.
+              */}
+              {gateway === 'selar' && userEmail && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30"
+                >
                   <div className="flex items-start gap-2.5">
-                    <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
-                    <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-200">
-                      {language === 'fr'
-                        ? "Pour respecter Google Play, les paiements externes ont ete retires. Ouvrez l'application Android pour acheter via Google Play."
-                        : 'External payments have been removed for Google Play compliance. Open the Android app to buy through Google Play.'}
-                    </p>
+                    <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-amber-400 mb-1">
+                        {language === 'fr' ? '⚠️ Email important' : '⚠️ Important — Email Match Required'}
+                      </p>
+                      <p className="text-[11px] text-amber-300/90 leading-relaxed">
+                        {language === 'fr'
+                          ? <>Utilisez <strong className="text-amber-200">{userEmail}</strong> lors du paiement Selar. Un email différent empêchera l'activation automatique.</>
+                          : <>Use <strong className="text-amber-200">{userEmail}</strong> when paying on Selar. Using a different email will prevent automatic VIP activation. Also after payment wait for atleast 2 min for the system to confirm your payment and activate your VIP</>
+                        }
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-2 px-2 py-1 bg-amber-500/15 rounded-lg w-fit">
+                        <Mail size={10} className="text-amber-300" />
+                        <span className="text-[10px] font-mono font-bold text-amber-200">{userEmail}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </motion.div>
               )}
 
-              {isNative && !revenueCatConfigured && (
-                <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+              {gateway === 'selar' && !userEmail && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-5 p-3 rounded-xl bg-red-500/10 border border-red-500/30"
+                >
                   <div className="flex items-start gap-2.5">
-                    <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-400" />
-                    <p className="text-xs leading-relaxed text-red-600 dark:text-red-300">
+                    <AlertTriangle size={15} className="text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-red-300 leading-relaxed">
                       {language === 'fr'
-                        ? 'RevenueCat nest pas configure dans cette build. Ajoutez VITE_REVENUECAT_GOOGLE_API_KEY dans Codemagic.'
-                        : 'RevenueCat is not configured in this build. Add VITE_REVENUECAT_GOOGLE_API_KEY in Codemagic.'}
+                        ? 'Votre compte n\'a pas d\'email associé. Veuillez utiliser Mobile Money à la place.'
+                        : 'Your account has no email address. Please use Mobile Money instead.'
+                      }
                     </p>
                   </div>
-                </div>
+                </motion.div>
               )}
 
               <button
                 onClick={handlePayment}
-                disabled={loading}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-4 font-bold text-white shadow-lg shadow-emerald-500/30 transition-all hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={loading || (gateway === 'selar' && !userEmail)}
+                className="w-full py-4 bg-vantage-purple hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition-all shadow-lg shadow-vantage-purple/30 flex items-center justify-center space-x-2"
               >
-                {loading ? <Loader2 className="animate-spin" size={20} /> : <ShieldCheck size={19} />}
-                <span>{language === 'fr' ? 'Payer avec Google Play' : 'Pay with Google Play'}</span>
+                {loading ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
+                  <>
+                    <span>{language === 'fr' ? 'Payer Maintenant' : 'Pay Now'}</span>
+                    <ArrowRight size={20} />
+                  </>
+                )}
               </button>
 
               {paymentFailed && (
-                <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center">
-                  <p className="mb-2 text-sm font-bold text-red-500">
-                    {language === 'fr' ? 'Paiement non termine.' : 'Payment not completed.'}
+                <div className="mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-center">
+                  <p className="text-sm font-bold text-red-500 mb-2">
+                    {language === 'fr' ? 'Paiement non confirmé.' : 'Payment not confirmed.'}
                   </p>
-                  {errorDetail && (
-                    <p className="mb-2 text-[10px] break-all text-red-400 font-mono bg-red-500/10 rounded p-2">
-                      {errorDetail}
-                    </p>
-                  )}
-                  <a
-                    href={SUPPORT_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1 rounded-lg bg-green-500 px-3 py-2 text-xs font-bold text-white"
-                  >
-                    <MessageCircle size={12} /> Support
-                  </a>
+                  <p className="text-[10px] text-gray-500 mb-4">
+                    {language === 'fr' ? "Votre argent n'a PAS été débité." : "Your money was NOT charged."}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPaymentFailed(false)}
+                      className="flex-1 py-2 bg-vantage-cyan text-slate-900 font-bold rounded-lg text-xs"
+                    >
+                      {language === 'fr' ? 'Réessayer' : 'Try Again'}
+                    </button>
+                    <a
+                      href={`https://wa.me/237688203629?text=${encodeURIComponent(`Hi, I need help with my payment for Vantage AI. Amount: ${plan?.price || 'unknown'} FCFA`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2 bg-green-500 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1"
+                    >
+                      <MessageCircle size={12} /> Support
+                    </a>
+                  </div>
                 </div>
               )}
 
-              <div className="mt-4 flex flex-col items-center justify-center space-y-2 text-[10px] text-gray-500">
-                <div className="flex items-center space-x-2">
-                  <ShieldCheck size={12} className="text-green-500" />
-                  <span>Google Play secure billing</span>
-                </div>
-                <div className="flex space-x-3">
-                  <a href="https://vantageai.online/privacy" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Privacy Policy</a>
-                  <a href="https://vantageai.online/terms" target="_blank" rel="noreferrer" className="underline hover:text-vantage-cyan">Terms of Service</a>
-                </div>
+              <div className="mt-4 flex items-center justify-center space-x-2 text-[10px] text-gray-500">
+                <ShieldCheck size={12} className="text-green-500" />
+                <span>Secure SSL Encryption • Vantage AI v4.0</span>
               </div>
             </GlassCard>
           </motion.div>

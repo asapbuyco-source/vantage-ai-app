@@ -31,7 +31,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (saved === 'en' || saved === 'fr') return saved as Language;
     const browserLang = (navigator.language || navigator.languages?.[0] || '').toLowerCase();
     if (browserLang.startsWith('fr')) return 'fr';
-    return 'en';  // Default to English for global audience
+    if (browserLang.startsWith('en')) return 'en';
+    return 'fr';  // Default to French (primary market: Cameroon/Francophone Africa)
   });
 
   // ─── Theme (persisted) ────────────────────────────────────────────────────
@@ -71,6 +72,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const exists = prev.some(p => p.id === pick.id);
       const next = exists ? prev.filter(p => p.id !== pick.id) : [...prev, pick];
       localStorage.setItem('vantage_saved_picks', JSON.stringify(next));
+      if (!exists) {
+        import('../services/analytics').then(({ trackEvent }) => {
+          trackEvent('pick_saved', { match: `${pick.homeTeam} v ${pick.awayTeam}`, league: pick.league || '' });
+        }).catch(() => {});
+      }
       return next;
     });
   }, []);
