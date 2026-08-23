@@ -1,7 +1,6 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { Capacitor } from '@capacitor/core';
 import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, History, Sparkles, BookOpen, TrendingUp, Target, BarChart3, Activity, PlayCircle, ExternalLink, RefreshCw, Zap, Eye, EyeOff } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
@@ -343,7 +342,7 @@ const shareReferral = () => {
                                 </form>
                             )}
 
-                            {!isForgotMode && !resetSent && !Capacitor.isNativePlatform() && (
+                            {!isForgotMode && !resetSent && (
                                 <>
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center">
