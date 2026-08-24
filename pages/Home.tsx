@@ -17,7 +17,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { getAppSettings } from '../services/db';
 import { TicketWizard } from '../components/TicketWizard';
 import { MotionDiv } from '../components/MotionDiv';
-import { getTopProbPicks, getPrimaryPredictionText, getPrimaryPredictionProb, getTopPickText } from '../utils';
+import { getTopProbPicks, getPrimaryPredictionText, getPrimaryPredictionProb, getTopPickText, plainMarket } from '../utils';
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -96,7 +96,6 @@ export const Home: React.FC<HomeProps> = () => {
     return () => clearInterval(timer);
   }, [scheduledTime]);
   const [visibleCount, setVisibleCount] = useState(15);
-  const [expandedPicks, setExpandedPicks] = useState<Set<string>>(new Set());
   const [showTicket, setShowTicket] = useState(false);
   const [ticketPicks, setTicketPicks] = useState<Array<{ id: string; home: string; away: string; pick: string; odds: number }>>([]);
   useEffect(() => {
@@ -204,10 +203,20 @@ export const Home: React.FC<HomeProps> = () => {
       );
     }
     const categoryPriority: Record<string, number> = { safe: 4, value: 3, risky: 2, lean: 1 };
+    // TOP LEAGUES ALWAYS FIRST — applied as the primary key before any user sort
+    const leagueFirst = (a: Match, b: Match) => {
+      const tierA = getLeagueTier(a);
+      const tierB = getLeagueTier(b);
+      const topA = tierA <= 2 ? 0 : 1;
+      const topB = tierB <= 2 ? 0 : 1;
+      return topA - topB;
+    };
 
     switch (sortKey) {
       case 'probability':
         result.sort((a, b) => {
+          const lf = leagueFirst(a, b);
+          if (lf !== 0) return lf;
           const probA = getPrimaryPredictionProb(a);
           const probB = getPrimaryPredictionProb(b);
           if (probA !== probB) return probB - probA;
@@ -216,6 +225,8 @@ export const Home: React.FC<HomeProps> = () => {
         break;
       case 'time': 
         result.sort((a, b) => {
+          const lf = leagueFirst(a, b);
+          if (lf !== 0) return lf;
           const timeCompare = a.time.localeCompare(b.time);
           if (timeCompare !== 0) return timeCompare;
           return (categoryPriority[b.category] || 0) - (categoryPriority[a.category] || 0);
@@ -272,7 +283,7 @@ export const Home: React.FC<HomeProps> = () => {
   }, [predictions]);
 
   const sortLabels: Record<SortKey, string> = {
-    probability: language === 'fr' ? 'Probabilité' : 'Match Index',
+    probability: language === 'fr' ? 'Probabilité' : 'Probability',
     time: language === 'fr' ? 'Heure' : 'Time',
     league: language === 'fr' ? 'Ligue' : 'League',
   };
@@ -285,19 +296,20 @@ export const Home: React.FC<HomeProps> = () => {
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white">
-            VANTAGE<span className="text-vantage-cyan">AI</span>
+          <h1 className="text-2xl font-bold font-display tracking-tight text-slate-900 dark:text-white">
+            VANTAGE<span className="text-transparent bg-clip-text bg-vantage-gradient">AI</span>
           </h1>
-          <p className="text-[10px] text-gray-500 dark:text-gray-400 tracking-widest">{t('home.system')}</p>
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 tracking-widest font-semibold">{t('home.system')}</p>
         </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setLanguage(language === 'fr' ? 'en' : 'fr')}
-            className="flex items-center space-x-1 bg-slate-100 dark:bg-white/5 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+            title={language === 'fr' ? 'Switch to English' : 'Passer au français'}
+            className="flex items-center space-x-1.5 bg-slate-100 dark:bg-white/5 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
           >
-            <Globe size={12} className="text-slate-500 dark:text-gray-400" />
-            <span className="text-[10px] font-bold font-orbitron text-slate-700 dark:text-gray-300 w-4 text-center">
-              {language.toUpperCase()}
+            <Globe size={13} className="text-slate-500 dark:text-gray-400" />
+            <span className="text-[10px] font-bold font-display text-vantage-cyan">
+              {language === 'fr' ? 'English' : 'Français'}
             </span>
           </button>
           <button
@@ -318,7 +330,7 @@ export const Home: React.FC<HomeProps> = () => {
 
       {/* Rolling Results Ticker */}
       {predictions.some(m => m.status === 'won' || m.status === 'lost') && (
-        <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5">
+        <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10">
           {(() => {
             const graded = predictions.filter(m => m.status === 'won' || m.status === 'lost');
             const won = graded.filter(m => m.status === 'won').length;
@@ -334,16 +346,16 @@ export const Home: React.FC<HomeProps> = () => {
             return (
               <>
                 <div className="flex items-center gap-1">
-                  <span className="text-[10px] font-black font-mono text-green-500">{won}W</span>
-                  <span className="text-[10px] text-gray-600">-</span>
-                  <span className="text-[10px] font-black font-mono text-red-400">{lost}L</span>
+                  <span className="text-[11px] font-black font-mono text-green-500">{won}W</span>
+                  <span className="text-[11px] text-gray-600">-</span>
+                  <span className="text-[11px] font-black font-mono text-red-400">{lost}L</span>
                 </div>
                 <div className="h-3 w-px bg-white/10" />
-                <span className={`text-[10px] font-black font-mono ${rate >= 60 ? 'text-green-500' : 'text-amber-400'}`}>
+                <span className={`text-[11px] font-black font-mono ${rate >= 60 ? 'text-green-500' : 'text-amber-400'}`}>
                   {rate}% today
                 </span>
                 {streak >= 3 && (
-                  <span className="text-[10px] font-black text-orange-500 animate-pulse flex items-center gap-0.5">
+                  <span className="text-[11px] font-black text-orange-500 animate-pulse flex items-center gap-0.5">
                     🔥 {streak} streak
                   </span>
                 )}
@@ -458,7 +470,7 @@ export const Home: React.FC<HomeProps> = () => {
       </div>
 
       {/* ─── SORT & FILTER TOOLBAR ─── */}
-      <div className="space-y-3 bg-vantage-lightBg dark:bg-vantage-bg py-2 -mx-2 px-2">
+      <div className="space-y-3 sticky top-[72px] z-20 bg-vantage-lightBg dark:bg-vantage-bg backdrop-blur-md py-2 -mx-2 px-2">
         {/* Sport Toggle */}
         <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 border border-slate-200 dark:border-white/10">
           {(['football', 'basketball', 'cricket'] as Sport[]).map(sport => (
@@ -600,7 +612,7 @@ export const Home: React.FC<HomeProps> = () => {
           Object.keys(groupedMatches).map(groupKey => (
             <div key={groupKey} className="space-y-3">
               {groupKey !== 'All Matches' && (
-                <div className="py-2 bg-gradient-to-b from-vantage-lightBg/95 to-vantage-lightBg/50 dark:from-vantage-bg/95 dark:to-vantage-bg/50">
+                <div className="sticky top-[72px] z-10 py-2 bg-gradient-to-b from-vantage-lightBg/95 to-vantage-lightBg/50 dark:from-vantage-bg/95 dark:to-vantage-bg/50 backdrop-blur-md">
                   <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-slate-200/50 dark:bg-white/10 border border-slate-300 dark:border-white/10">
                     <Trophy size={12} className="text-vantage-purple" />
                     <span className="text-[10px] font-bold text-slate-800 dark:text-white uppercase tracking-wider">{groupKey}</span>
@@ -630,34 +642,34 @@ export const Home: React.FC<HomeProps> = () => {
                       onClick={() => navigate(`/match/${match.id}`)}
                       className="cursor-pointer"
                     >
-                      <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-[#1a1d26] backdrop-blur-md shadow-sm hover:border-vantage-cyan/40 hover:shadow-md transition-all">
+                      <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-md shadow-lg hover:border-vantage-cyan/40 transition-all">
                         {/* Header: league + time */}
                         <div className="flex justify-between items-center px-4 pt-3 pb-1.5">
                           <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest truncate max-w-[140px]">{match.league}</span>
-                          <span className="flex items-center gap-1 text-[10px] text-gray-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md"><Clock size={10} /> {match.time || match.kickoff_local}</span>
+                          <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md"><Clock size={10} /> {match.time || match.kickoff_local}</span>
                         </div>
 
                         {/* Teams */}
                         <div className="flex items-center justify-between px-4 py-2">
                           <div className="flex items-center gap-2 w-5/12 min-w-0">
-                            <div className="w-9 h-9 shrink-0 rounded-xl bg-slate-100 dark:bg-white/8 flex items-center justify-center border border-slate-200 dark:border-white/8 p-1">
+                            <div className="w-9 h-9 shrink-0 rounded-xl bg-slate-100 dark:bg-white/[0.06] flex items-center justify-center border border-slate-200 dark:border-white/[0.08] p-1">
                               <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-full h-full" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{match.homeTeam}</p>
+                              <p className="text-[13px] font-bold text-slate-900 dark:text-white truncate">{match.homeTeam}</p>
                               <FormDots form={match.homeForm || match.home_form} />
                             </div>
                           </div>
                           <div className="shrink-0 flex flex-col items-center px-1">
                             <span className="text-[10px] font-mono text-gray-400">VS</span>
-                            {xgH > 0 && <span className="text-[8px] font-mono text-vantage-cyan">{xgH.toFixed(1)}-{xgA.toFixed(1)}</span>}
+                            {xgH > 0 && <span className="text-[9px] font-mono text-vantage-cyan">{xgH.toFixed(1)}-{xgA.toFixed(1)}</span>}
                           </div>
                           <div className="flex items-center gap-2 w-5/12 min-w-0 flex-row-reverse">
-                            <div className="w-9 h-9 shrink-0 rounded-xl bg-slate-100 dark:bg-white/8 flex items-center justify-center border border-slate-200 dark:border-white/8 p-1">
+                            <div className="w-9 h-9 shrink-0 rounded-xl bg-slate-100 dark:bg-white/[0.06] flex items-center justify-center border border-slate-200 dark:border-white/[0.08] p-1">
                               <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-full h-full" />
                             </div>
                             <div className="min-w-0 text-right">
-                              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{match.awayTeam}</p>
+                              <p className="text-[13px] font-bold text-slate-900 dark:text-white truncate">{match.awayTeam}</p>
                               <div className="flex justify-end"><FormDots form={match.awayForm || match.away_form} /></div>
                             </div>
                           </div>
@@ -668,96 +680,68 @@ export const Home: React.FC<HomeProps> = () => {
                           <div className="px-4 pb-1.5 flex justify-center gap-1 flex-wrap">
                             {homeProb > 0 && (
                               <>
-                                <span className="text-[9px] font-mono text-slate-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded">H {homeProb}%</span>
-                                <span className="text-[9px] font-mono text-slate-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded">D {drawProb}%</span>
-                                <span className="text-[9px] font-mono text-slate-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded">A {awayProb}%</span>
+                                <span className="text-[10px] font-mono text-slate-500 bg-black/5 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">H {homeProb}%</span>
+                                <span className="text-[10px] font-mono text-slate-500 bg-black/5 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">D {drawProb}%</span>
+                                <span className="text-[10px] font-mono text-slate-500 bg-black/5 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">A {awayProb}%</span>
                               </>
                             )}
-                            {match.over25_prob > 0 && <span className="text-[9px] font-mono text-vantage-cyan/80 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>}
-                            {match.btts_prob > 0 && <span className="text-[9px] font-mono text-amber-400/80 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>}
+                            {match.over25_prob > 0 && <span className="text-[10px] font-mono text-vantage-cyan/80 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>}
+                            {match.btts_prob > 0 && <span className="text-[10px] font-mono text-amber-400/80 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>}
                           </div>
                         ) : (
                           <div className="px-4 pb-1.5 flex justify-center">
-                            <span onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-3 py-1 rounded-full cursor-pointer hover:bg-vantage-purple/20">
+                            <span onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="text-[10px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-3 py-1 rounded-full cursor-pointer hover:bg-vantage-purple/20">
                               <Lock size={9} className="inline mr-1" />{language === 'fr' ? 'Stats VIP' : 'VIP Stats'}
                             </span>
                           </div>
                         )}
 
-                        {/* Prediction — show top pick, expand for more */}
+                        {/* Prediction — show each pick with its percentage */}
                         {unlocked ? (
-                          <div className="mx-3 mb-3 p-2.5 rounded-xl bg-gradient-to-r from-vantage-cyan/5 to-transparent border border-vantage-cyan/15 overflow-hidden">
-                            <span className="text-[8px] text-gray-500 uppercase tracking-wide block mb-1.5">{t('free.analysis_label') || 'Analysis'}</span>
-                            <div className="space-y-1">
-                              {(() => {
-                                const picks = getTopProbPicks(match);
-                                const isExpanded = expandedPicks.has(String(match.id));
-                                const visible = isExpanded ? picks : picks.slice(0, 1);
-                                return (
-                                  <>
-                                    {visible.map((p, pi) => (
-                                      <div key={pi} className="flex items-center justify-between gap-2">
-                                        <span className="text-[10px] font-bold text-vantage-cyan truncate">{p.name}</span>
-                                        <div className="flex items-center gap-2 shrink-0">
-                                          <div className="w-12 h-1 rounded-full bg-slate-200 dark:bg-white/10">
-                                            <motion.div className="h-full rounded-full bg-gradient-to-r from-vantage-cyan to-emerald-400" initial={{ width: 0 }} animate={{ width: `${Math.round(p.prob * 100)}%` }} transition={{ duration: 1, delay: idx * 0.05 + 0.3 }} style={{ width: `${Math.round(p.prob * 100)}%` }} />
-                                          </div>
-                                          <span className="text-[10px] font-bold font-mono text-emerald-400 w-8 text-right">{Math.round(p.prob * 100)}%</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                    {picks.length > 1 && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setExpandedPicks(prev => {
-                                            const s = new Set(prev);
-                                            if (isExpanded) s.delete(String(match.id));
-                                            else s.add(String(match.id));
-                                            return s;
-                                          });
-                                        }}
-                                        className="text-[9px] font-bold text-vantage-cyan/70 hover:text-vantage-cyan transition-colors flex items-center gap-1"
-                                      >
-                                        {isExpanded
-                                          ? (language === 'fr' ? 'Réduire' : 'Show less')
-                                          : (language === 'fr' ? `Voir ${picks.length - 1} autre${picks.length > 2 ? 's' : ''} analyse${picks.length > 2 ? 's' : ''}` : `Show ${picks.length - 1} more analys${picks.length > 2 ? 'es' : 'is'}`)}
-                                        <ChevronDown size={10} className={isExpanded ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                                      </button>
-                                    )}
-                                  </>
-                                );
-                              })()}
+                          <div className="mx-3 mb-3 p-3 rounded-xl bg-vantage-cyan/5 border border-vantage-cyan/15 overflow-hidden">
+                            <span className="text-[9px] text-vantage-cyan uppercase tracking-widest block mb-1.5 font-bold">{t('free.pred_label') || 'Prediction'}</span>
+                            <div className="space-y-1.5">
+                              {getTopProbPicks(match).map((p, pi) => (
+                                <div key={pi} className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] font-bold text-slate-900 dark:text-white truncate">{plainMarket(p.name)}</span>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <div className="w-12 h-1 rounded-full bg-slate-200 dark:bg-white/10">
+                                      <motion.div className="h-full rounded-full bg-vantage-cyan" initial={{ width: 0 }} animate={{ width: `${Math.round(p.prob * 100)}%` }} transition={{ duration: 1, delay: idx * 0.05 + 0.3 }} style={{ width: `${Math.round(p.prob * 100)}%` }} />
+                                    </div>
+                                    <span className="text-[11px] font-bold font-mono text-emerald-400 w-8 text-right">{Math.round(p.prob * 100)}%</span>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                             <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-vantage-cyan/10">
-                              {match.odds > 1 && <span className="text-[9px] font-mono text-gray-400">{Number(match.odds).toFixed(2)}x</span>}
-                              <span className="text-[9px] font-mono text-gray-400">{confidence}% match</span>
+                              {match.odds > 1 && <span className="text-[10px] font-mono text-gray-400">{Number(match.odds).toFixed(2)}x</span>}
+                              <span className="text-[10px] font-mono text-gray-400">{confidence}% match</span>
                               {isVip && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setTicketPicks(prev => { if (prev.some(p => p.id === match.id)) return prev; return [...prev, { id: match.id, home: match.homeTeam || match.home_team || '', away: match.awayTeam || match.away_team || '', pick: pred || '', odds: Number(match.odds) || 0 }]; }); }}
                                   className="p-1 rounded-lg bg-vantage-cyan/10 hover:bg-vantage-cyan/20 text-vantage-cyan transition-colors"
                                   title={language === 'fr' ? 'Ajouter au ticket' : 'Add to ticket'}
                                 >
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                                 </button>
                               )}
                             </div>
                           </div>
                         ) : (
-                          <div className="mx-3 mb-3 p-2.5 rounded-xl bg-vantage-purple/5 border border-vantage-purple/20">
+                          <div className="mx-3 mb-3 p-3 rounded-xl bg-vantage-purple/5 border border-vantage-purple/20">
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col">
-                                <span className="text-[8px] text-vantage-purple uppercase tracking-wide">{t('free.analysis_label') || 'Analysis'}</span>
-                                <span className="text-[11px] font-bold text-vantage-purple/40">{language === 'fr' ? 'Réservé VIP' : 'VIP Only'}</span>
+                                <span className="text-[9px] text-vantage-purple uppercase tracking-widest font-bold">{t('free.pred_label') || 'Prediction'}</span>
+                                <span className="text-xs font-bold text-vantage-purple/40">{language === 'fr' ? 'Réservé VIP' : 'VIP Only'}</span>
                               </div>
-                              <span onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="text-[9px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2.5 py-1 rounded-full cursor-pointer hover:bg-vantage-purple/20 flex items-center gap-1">
-                                <Lock size={9} /> {language === 'fr' ? 'Débloquer' : 'Unlock'}
+                              <span onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="text-[10px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2.5 py-1 rounded-full cursor-pointer hover:bg-vantage-purple/20 flex items-center gap-1">
+                                <Lock size={10} /> {language === 'fr' ? 'Débloquer' : 'Unlock'}
                               </span>
                             </div>
                           </div>
                         )}
-                        <div className="px-3 pb-2 flex justify-center">
-                          <span className="text-[8px] text-gray-400 flex items-center gap-1">
+                        <div className="px-3 pb-2.5 flex justify-center">
+                          <span className="text-[9px] font-semibold text-gray-400 flex items-center gap-1">
                             <ChevronRight size={10} /> {language === 'fr' ? 'Voir les détails' : 'Tap to view'}
                           </span>
                         </div>

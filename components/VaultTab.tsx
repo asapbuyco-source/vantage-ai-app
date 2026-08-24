@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, TrendingUp, TrendingDown, Minus, Calendar, ChevronDown, ChevronUp, Pencil, Info, AlertTriangle } from 'lucide-react';
+import { RefreshCw, TrendingUp, TrendingDown, Minus, Calendar, ChevronDown, ChevronUp, Pencil, Info, AlertTriangle, Copy, Check } from 'lucide-react';
+import { TeamCrest } from './intel/TeamCrest';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
@@ -14,7 +15,7 @@ const MAX_VAULT_PICKS = 7;
 const VAULT_STRATEGY_VERSION = 'vault-sim-v2';
 const VAULT_STRATEGY_NAME = 'Simulator EV Quality Top 7';
 const VAULT_DECISION_TIME_LOCAL = '19:00 Africa/Lagos';
-const CIRCUIT_BREAKER_THRESHOLD = 0.50; // 50% max drawdown
+const CIRCUIT_BREAKER_THRESHOLD = 0.50;
 
 const vaultCategoryPriority: Record<string, number> = {
     safe: 2,
@@ -117,6 +118,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [showInfo, setShowInfo] = useState(false);
     const [circuitBroken, setCircuitBroken] = useState(false);
+    const [copiedPickId, setCopiedPickId] = useState<string | null>(null);
 
     const todayKey = getGlobalTodayKey();
     const vaultStartDate = userProfile?.vaultProgress?.startDate || user?.metadata?.creationTime?.split('T')[0] || todayKey;
@@ -132,6 +134,11 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
 
     useEffect(() => {
         if (!user || !userProfile) return;
+
+        if (isCircuitBroken()) {
+            setCircuitBroken(true);
+            return;
+        }
 
         setLoading(true);
         autoGradeVault().then((finalBankroll) => {
@@ -435,7 +442,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             </div>
 
             {/* Circuit Breaker Warning */}
-            {false && (
+            {circuitBroken && (
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -449,8 +456,8 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                             </p>
                             <p className="text-rose-400/70 text-xs mt-1">
                                 {language === 'fr'
-                                    ? `Votre bankroll a chuté de ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% depuis ${startingBankroll.toLocaleString()} USD. Les nouveaux picks sont suspendus pour protéger votre capital.`
-                                    : `Your bankroll has dropped ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% from ${startingBankroll.toLocaleString()} USD. New picks paused to protect your capital.`}
+                                    ? `Votre bankroll a chuté de ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% depuis ${startingBankroll.toLocaleString()} FCFA. Les nouveaux picks sont suspendus pour protéger votre capital.`
+                                    : `Your bankroll has dropped ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% from ${startingBankroll.toLocaleString()} FCFA. New picks paused to protect your capital.`}
                             </p>
                             <p className="text-rose-400/50 text-[10px] mt-2">
                                 {language === 'fr'
@@ -542,7 +549,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                     <div className="text-2xl font-black font-mono text-white">
                         {currentBankroll.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">USD</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">FCFA</div>
                     <div className={`text-[10px] font-bold mt-1 ${todayPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {todayPnl >= 0 ? '+' : ''}{todayPnlPct.toFixed(1)}% {language === 'fr' ? "aujourd'hui" : 'today'}
                     </div>
@@ -557,7 +564,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                     <div className="text-2xl font-black font-mono text-emerald-400">
                         {projectedBankroll30Days.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </div>
-                    <div className="text-[10px] text-emerald-500/60 mt-0.5">USD</div>
+                    <div className="text-[10px] text-emerald-500/60 mt-0.5">FCFA</div>
                     <div className="flex items-center gap-1 mt-1">
                         <span className="text-[9px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded">+{effectiveRoi.toFixed(1)}%/day</span>
                     </div>
@@ -635,12 +642,32 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                                 <div className="p-3">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-black text-gray-400">#{i + 1}</span>
-                                                <span className="text-sm font-bold text-white truncate">
-                                                    {pick.homeTeam} vs {pick.awayTeam}
-                                                </span>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-[10px] font-black text-gray-400 shrink-0">#{i + 1}</span>
+                                                <TeamCrest teamName={pick.homeTeam} size={22} />
+                                                <span className="text-[13px] font-bold text-white truncate">{pick.homeTeam}</span>
+                                                <span className="text-[9px] font-bold text-gray-500 shrink-0">vs</span>
+                                                <TeamCrest teamName={pick.awayTeam} size={22} />
+                                                <span className="text-[13px] font-bold text-white truncate">{pick.awayTeam}</span>
                                             </div>
+                                            <button
+                                                onClick={() => {
+                                                    const text = `${pick.homeTeam} vs ${pick.awayTeam} — ${pick.market} @ ${pick.odds.toFixed(2)}`;
+                                                    navigator.clipboard.writeText(text).then(() => {
+                                                        setCopiedPickId(pick.fixtureId);
+                                                        setTimeout(() => setCopiedPickId(null), 1500);
+                                                    }).catch(() => {});
+                                                }}
+                                                className={`mt-1.5 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded transition-colors ${
+                                                    copiedPickId === pick.fixtureId
+                                                        ? 'bg-emerald-500/15 text-emerald-400'
+                                                        : 'bg-white/5 text-gray-500 hover:text-vantage-cyan hover:bg-vantage-cyan/10'
+                                                }`}
+                                                title="Copy this pick"
+                                            >
+                                                {copiedPickId === pick.fixtureId ? <Check size={10} /> : <Copy size={10} />}
+                                                {copiedPickId === pick.fixtureId ? 'Copied!' : 'Copy'}
+                                            </button>
                                             <div className="flex items-center gap-2 mt-2 flex-wrap">
                                                 <span className={`text-[11px] font-black px-2 py-1 rounded-lg ${
                                                     isWon ? 'bg-emerald-500/20 text-emerald-400' :
@@ -754,7 +781,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                                                 </div>
                                                 <div className="text-right">
                                                     <div className={`text-xs font-bold font-mono ${dayPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                        {dayPnl >= 0 ? '+' : ''}{dayPnl.toLocaleString()} USD
+                                                        {dayPnl >= 0 ? '+' : ''}{dayPnl.toLocaleString()} FCFA
                                                     </div>
                                                     <div className={`text-[10px] font-mono ${dayPnl >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
                                                         {dayPnl >= 0 ? '+' : ''}{dayPnlPct.toFixed(1)}%
@@ -785,7 +812,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 ) : null}
             </AnimatePresence>
 
-            {!false && (
+            {!circuitBroken && (
             <button
                 onClick={() => autoPopulate(currentBankroll)}
                 className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-[10px] font-bold text-gray-500 hover:text-white hover:border-slate-500 transition-colors flex items-center justify-center gap-1.5"
@@ -794,7 +821,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 {language === 'fr' ? 'Régénérer les picks' : 'Refresh picks from today'}
             </button>
             )}
-            {false && (
+            {circuitBroken && (
             <button disabled
                 className="w-full py-2.5 rounded-xl border border-dashed border-rose-500/30 text-[10px] font-bold text-rose-400/50 flex items-center justify-center gap-1.5 cursor-not-allowed"
             >

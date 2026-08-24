@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Users, Crown, Search, RefreshCw, ChevronLeft, CheckCircle2, XCircle, ShieldAlert, Trash2, StopCircle, Ban, Lock, AlertTriangle, Database, Activity, Server, Zap, Globe, Cpu, ChevronDown, ChevronUp, Play, Coins, Wallet, BookCheck, ImagePlus, Link, Layers, Send, Bell, Gift, Save, BarChart3 } from 'lucide-react';
+import { Shield, Users, Crown, Search, RefreshCw, ChevronLeft, CheckCircle2, XCircle, ShieldAlert, Trash2, StopCircle, Ban, Lock, AlertTriangle, Database, Activity, Server, Zap, Globe, Cpu, ChevronDown, ChevronUp, Play, Coins, Wallet, BookCheck, ImagePlus, Link, Layers, Send, Bell, Gift, Save, BarChart3, Smartphone } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAuth } from '../context/AuthContext';
 import { UserProfile, NavigationTab, Match, PayoutRequest, TeamAsset } from '../types';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
 import { testGeminiConnection, enrichMatchStats, setGeminiModel, getGeminiModel, AVAILABLE_MODELS } from '../services/gemini';
-import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, saveTodaysPredictions, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount, getInternalSettings, saveInternalSettings } from '../services/db';
+import { getFirestorePredictionsOnly, getGlobalTodayKey, getGlobalYesterdayKey, saveTodaysPredictions, saveTeamAsset, deleteTeamAsset, getAllTeamAssets, getAppSettings, saveAppSettings, getUserCount, getInternalSettings, saveInternalSettings, isVipActive } from '../services/db';
+import { getAnalyticsRange, DailyAnalytics } from '../services/analytics';
 import { auth } from '../firebaseConfig';
 import { TeamLogo } from '../components/TeamLogo';
 import { adminFetch } from '../services/adminApi';
@@ -21,7 +22,7 @@ export const Admin: React.FC<AdminProps> = () => {
     const { getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, getPayoutRequests, processPayout } = useAuth();
     const { clearData, generateData, generateAccumulators, generateBasketballData, isSystemGenerating, setIsSystemGenerating, isBasketballGenerating, setIsBasketballGenerating, cancelAnalysis, systemError, predictions } = useData();
 
-    const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'payouts' | 'assets' | 'bots'>('users');
+    const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'payouts' | 'assets' | 'bots' | 'analytics'>('users');
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [userLastDoc, setUserLastDoc] = useState<any>(null);
     const [payouts, setPayouts] = useState<PayoutRequest[]>([]);
@@ -31,6 +32,8 @@ export const Admin: React.FC<AdminProps> = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [selectPlanFor, setSelectPlanFor] = useState<string | null>(null);
+    const [analyticsData, setAnalyticsData] = useState<DailyAnalytics[]>([]);
+    const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
     // Mounted Ref for Async Safety
     const isMounted = useRef(false);
@@ -317,18 +320,27 @@ export const Admin: React.FC<AdminProps> = () => {
         if (activeAdminTab === 'users') fetchUsers();
         else if (activeAdminTab === 'payouts') fetchPayouts();
         else if (activeAdminTab === 'assets') fetchAssets();
+        else if (activeAdminTab === 'analytics') {
+            setAnalyticsLoading(true);
+            getAnalyticsRange(14)
+                .then(data => setAnalyticsData(data))
+                .catch(() => setAnalyticsData([]))
+                .finally(() => setAnalyticsLoading(false));
+        }
     }, [activeAdminTab, fetchUsers, fetchPayouts, fetchAssets]);
 
     const handleToggleVip = async (user: UserProfile) => {
         if (processingId) return;
-        
-        // If revoking, do it immediately. If granting, show plan dropdown.
-        if (user.isVip) {
+
+        // Use EFFECTIVE status (flag + expiry) so expired-but-flagged users
+        // can be revoked cleanly and re-granted without stale-state issues.
+        const currentlyActive = isVipActive(user);
+        if (currentlyActive || user.isVip) {
             setProcessingId(user.uid);
             try {
-                await toggleUserVip(user.uid, user.isVip);
-                setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: false, vipPlan: undefined } : u));
-                setUserStats(prev => ({ ...prev, vip: prev.vip - 1, free: prev.free + 1 }));
+                await toggleUserVip(user.uid, true);
+                setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: false, vipPlan: undefined, vipExpiry: undefined } : u));
+                setUserStats(prev => ({ ...prev, vip: Math.max(0, prev.vip - 1), free: prev.free + 1 }));
             } catch (e) { console.error(e); }
             finally { setProcessingId(null); }
         } else {
@@ -340,9 +352,21 @@ export const Admin: React.FC<AdminProps> = () => {
         setSelectPlanFor(null);
         setProcessingId(user.uid);
         try {
-            await toggleUserVip(user.uid, user.isVip, plan);
-            setUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, isVip: true, vipPlan: plan } : u));
-            setUserStats(prev => ({ ...prev, vip: prev.vip + 1, free: prev.free - 1 }));
+            await toggleUserVip(user.uid, false, plan);
+            // Refresh authoritative counts from server after grant
+            getUserCount().then(({ total, vip }) => {
+                setUserStats(prev => ({ ...prev, total, vip, free: total - vip }));
+            }).catch(() => {});
+            setUsers(prev => prev.map(u => {
+                if (u.uid !== user.uid) return u;
+                const expiry = new Date();
+                if (plan === 'daily') expiry.setDate(expiry.getDate() + 1);
+                else if (plan === 'weekly') expiry.setDate(expiry.getDate() + 7);
+                else if (plan === 'quarterly') expiry.setDate(expiry.getDate() + 90);
+                else if (plan === 'annual') expiry.setDate(expiry.getDate() + 365);
+                else expiry.setDate(expiry.getDate() + 30);
+                return { ...u, isVip: true, vipPlan: plan, vipExpiry: expiry.toISOString() };
+            }));
         } catch (e) { console.error(e); }
         finally { setProcessingId(null); }
     };
@@ -678,11 +702,12 @@ export const Admin: React.FC<AdminProps> = () => {
             </div>
 
             {/* Tab Switcher */}
-            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-200 dark:bg-white/5 rounded-xl">
+            <div className="grid grid-cols-5 gap-1 p-1 bg-slate-200 dark:bg-white/5 rounded-xl">
                 <button onClick={() => setActiveAdminTab('users')} className={`py-2 rounded-lg text-[10px] font-bold transition-colors ${activeAdminTab === 'users' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}>System</button>
                 <button onClick={() => setActiveAdminTab('payouts')} className={`py-2 rounded-lg text-[10px] font-bold transition-colors ${activeAdminTab === 'payouts' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}>Payouts</button>
                 <button onClick={() => setActiveAdminTab('assets')} className={`py-2 rounded-lg text-[10px] font-bold transition-colors ${activeAdminTab === 'assets' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}>Teams</button>
                 <button onClick={() => setActiveAdminTab('bots')} className={`py-2 rounded-lg text-[10px] font-bold transition-colors ${activeAdminTab === 'bots' ? 'bg-white dark:bg-white/10 shadow text-vantage-cyan' : 'text-gray-500'}`}>Bots</button>
+                <button onClick={() => setActiveAdminTab('analytics')} className={`py-2 rounded-lg text-[10px] font-bold transition-colors ${activeAdminTab === 'analytics' ? 'bg-white dark:bg-white/10 shadow text-vantage-purple' : 'text-gray-500'}`}>Analytics</button>
             </div>
 
             {activeAdminTab === 'users' && (
@@ -1251,7 +1276,7 @@ export const Admin: React.FC<AdminProps> = () => {
                                         className={`flex items-center justify-between p-3 rounded-xl border ${u.isBlocked ? 'bg-red-900/10 border-red-500/20' : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/5'}`}
                                     >
                                         <div className="flex items-center space-x-3 overflow-hidden">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${u.isAdmin ? 'bg-red-500 text-white' : (u.isVip ? 'bg-vantage-purple text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500')}`}>
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${u.isAdmin ? 'bg-red-500 text-white' : (isVipActive(u) ? 'bg-vantage-purple text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500')}`}>
                                                 {u.email ? u.email.substring(0, 2).toUpperCase() : '??'}
                                             </div>
                                             <div className="flex flex-col min-w-0">
@@ -1259,7 +1284,9 @@ export const Admin: React.FC<AdminProps> = () => {
                                                     {u.email}
                                                 </span>
                                                 <span className="text-[10px] text-gray-500 flex items-center gap-2">
-                                                    {u.isVip ? (
+                                                    {u.isVip && !isVipActive(u) ? (
+                                                        <span className="text-gray-400 flex items-center gap-1"><Crown size={10} /> VIP Expired</span>
+                                                    ) : isVipActive(u) ? (
                                                         <span className="text-vantage-purple flex items-center gap-1"><Crown size={10} /> VIP</span>
                                                     ) : 'Free'}
                                                     {u.isAdmin && (
@@ -1288,15 +1315,15 @@ export const Admin: React.FC<AdminProps> = () => {
                                             <button
                                                 onClick={() => handleToggleVip(u)}
                                                 disabled={processingId === u.uid}
-                                                className={`p-2 rounded-lg transition-colors ${u.isVip
+                                                className={`p-2 rounded-lg transition-colors ${isVipActive(u)
                                                     ? 'bg-vantage-purple/10 text-vantage-purple hover:bg-vantage-purple/20'
                                                     : 'bg-gray-200 dark:bg-white/5 text-gray-400 hover:text-green-500'
                                                     }`}
-                                                title={u.isVip ? "Revoke VIP" : "Grant VIP"}
+                                                title={isVipActive(u) ? "Revoke VIP" : "Grant VIP"}
                                             >
                                                 {processingId === u.uid ? (
                                                     <RefreshCw size={16} className="animate-spin" />
-                                                ) : u.isVip ? (
+                                                ) : isVipActive(u) ? (
                                                     <XCircle size={16} />
                                                 ) : (
                                                     <CheckCircle2 size={16} />
@@ -1619,6 +1646,60 @@ export const Admin: React.FC<AdminProps> = () => {
                                 </button>
                             </div>
 
+                            {/* New Triggers: Banker & VIP Teaser */}
+                            <div className="flex gap-2">
+                                <button
+                                    disabled={isTelegramActing}
+                                    onClick={async () => {
+                                        if (!window.confirm("Send Banker of the Day to Telegram right now?")) return;
+                                        setIsTelegramActing(true);
+                                        setTelegramActionResult(null);
+                                        try {
+                                            const data = await adminFetch('/api/admin/trigger-banker', {
+                                                method: 'POST'
+                                            });
+                                            if (data.status === 'success') {
+                                                setTelegramActionResult(`✅ Banker sent: ${data.banker}`);
+                                            } else {
+                                                setTelegramActionResult(`⚠️ ${data.reason || data.error}`);
+                                            }
+                                        } catch (e: any) {
+                                            setTelegramActionResult(`❌ ${e.message}`);
+                                        } finally {
+                                            setIsTelegramActing(false);
+                                        }
+                                    }}
+                                    className="flex-1 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 rounded-lg text-xs font-bold border border-yellow-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                                >
+                                    <Send size={12} /> Send Banker
+                                </button>
+                                <button
+                                    disabled={isTelegramActing}
+                                    onClick={async () => {
+                                        if (!window.confirm("Send VIP Teaser to Telegram right now?")) return;
+                                        setIsTelegramActing(true);
+                                        setTelegramActionResult(null);
+                                        try {
+                                            const data = await adminFetch('/api/admin/trigger-vip-teaser', {
+                                                method: 'POST'
+                                            });
+                                            if (data.status === 'success') {
+                                                setTelegramActionResult(`✅ VIP Teaser sent (${data.vipCount} hidden picks teased)!`);
+                                            } else {
+                                                setTelegramActionResult(`⚠️ ${data.reason || data.error}`);
+                                            }
+                                        } catch (e: any) {
+                                            setTelegramActionResult(`❌ ${e.message}`);
+                                        } finally {
+                                            setIsTelegramActing(false);
+                                        }
+                                    }}
+                                    className="flex-1 py-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg text-xs font-bold border border-purple-500/20 flex items-center justify-center gap-2 transition-colors disabled:opacity-50 active:scale-[0.98]"
+                                >
+                                    <Send size={12} /> Send VIP Teaser
+                                </button>
+                            </div>
+
                             {telegramActionResult && (
                                 <div className={`text-xs font-mono text-center p-2 rounded-lg ${telegramActionResult.startsWith('✅') ? 'bg-green-500/10 text-green-400 border border-green-500/20' : telegramActionResult.startsWith('⚠️') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
                                     {telegramActionResult}
@@ -1734,6 +1815,154 @@ export const Admin: React.FC<AdminProps> = () => {
                         <Save size={16} />
                         {botSettingsSaved ? '✅ Settings Saved!' : savingBotSettings ? 'Saving...' : 'Save Bot & Referral Settings'}
                     </button>
+                </div>
+            )}
+
+            {activeAdminTab === 'analytics' && (
+                <div className="space-y-4 animate-in slide-in-from-right duration-300">
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 gap-3">
+                        {(() => {
+                            const today = analyticsData.find(d => {
+                                const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+                                return d.date === todayKey;
+                            });
+                            const weekViews = analyticsData.slice(0, 7).reduce((sum, d) => sum + (d.total_page_views || 0), 0);
+                            const weekEvents = analyticsData.slice(0, 7).reduce((sum, d) => sum + (d.total_events || 0), 0);
+                            return (
+                                <>
+                                    <GlassCard className="p-4 border-vantage-cyan/20">
+                                        <p className="text-[10px] text-gray-500 uppercase font-bold">Today's Page Views</p>
+                                        <p className="text-2xl font-black font-mono text-vantage-cyan">{today?.total_page_views || 0}</p>
+                                    </GlassCard>
+                                    <GlassCard className="p-4 border-vantage-purple/20">
+                                        <p className="text-[10px] text-gray-500 uppercase font-bold">7-Day Page Views</p>
+                                        <p className="text-2xl font-black font-mono text-vantage-purple">{weekViews}</p>
+                                    </GlassCard>
+                                    <GlassCard className="p-4 border-emerald-500/20">
+                                        <p className="text-[10px] text-gray-500 uppercase font-bold">7-Day Events</p>
+                                        <p className="text-2xl font-black font-mono text-emerald-500">{weekEvents}</p>
+                                    </GlassCard>
+                                    <GlassCard className="p-4 border-amber-500/20">
+                                        <p className="text-[10px] text-gray-500 uppercase font-bold">Smart Tickets Generated</p>
+                                        <p className="text-2xl font-black font-mono text-amber-500">
+                                            {analyticsData.slice(0, 7).reduce((sum, d) => sum + (d.event_smart_ticket_generated || 0), 0)}
+                                        </p>
+                                    </GlassCard>
+                                </>
+                            );
+                        })()}
+                    </div>
+
+                    {/* Platform Split: App vs Web */}
+                    <GlassCard className="p-4 border-vantage-purple/20">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                            <Smartphone size={16} className="text-vantage-purple" /> Platform Usage (7 days)
+                        </h3>
+                        {(() => {
+                            const appViews = analyticsData.slice(0, 7).reduce((sum, d) => sum + (d.platform_app || 0), 0);
+                            const webViews = analyticsData.slice(0, 7).reduce((sum, d) => sum + (d.platform_web || 0), 0);
+                            const total = appViews + webViews;
+                            const appPct = total > 0 ? Math.round((appViews / total) * 100) : 0;
+                            const webPct = total > 0 ? Math.round((webViews / total) * 100) : 0;
+                            return (
+                                <>
+                                    <div className="flex h-4 rounded-full overflow-hidden bg-slate-100 dark:bg-white/5 mb-3">
+                                        <div className="bg-vantage-purple" style={{ width: `${appPct}%` }} title={`App: ${appPct}%`} />
+                                        <div className="bg-vantage-cyan" style={{ width: `${webPct}%` }} title={`Web: ${webPct}%`} />
+                                    </div>
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-gray-500">📱 App: <span className="font-bold font-mono text-vantage-purple">{appViews}</span> ({appPct}%)</span>
+                                        <span className="text-gray-500">🌐 Web: <span className="font-bold font-mono text-vantage-cyan">{webViews}</span> ({webPct}%)</span>
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </GlassCard>
+
+                    {/* Page Views Bar Chart */}
+                    <GlassCard className="p-4">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                            <BarChart3 size={16} className="text-vantage-cyan" /> Daily Page Views (14 days)
+                        </h3>
+                        {analyticsLoading ? (
+                            <div className="h-32 flex items-center justify-center">
+                                <RefreshCw size={20} className="animate-spin text-gray-400" />
+                            </div>
+                        ) : (
+                            <div className="flex items-end gap-1 h-32">
+                                {[...analyticsData].reverse().map((d, i) => {
+                                    const max = Math.max(...analyticsData.map(x => x.total_page_views || 0), 1);
+                                    const h = Math.max(4, ((d.total_page_views || 0) / max) * 100);
+                                    return (
+                                        <div key={i} className="flex-1 flex flex-col items-center gap-1" title={`${d.date}: ${d.total_page_views} views`}>
+                                            <span className="text-[8px] text-gray-400">{d.total_page_views || 0}</span>
+                                            <div className="w-full bg-vantage-cyan/60 rounded-t" style={{ height: `${h}%` }} />
+                                            <span className="text-[8px] text-gray-500">{d.date.slice(5)}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </GlassCard>
+
+                    {/* Feature Usage */}
+                    <GlassCard className="p-4">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                            <Activity size={16} className="text-vantage-purple" /> Feature Usage (7 days)
+                        </h3>
+                        <div className="space-y-2">
+                            {[
+                                { key: 'event_smart_ticket_generated', label: 'Smart Ticket Generated', color: 'bg-vantage-purple' },
+                                { key: 'event_vip_upgrade_clicked', label: 'VIP Upgrade Clicked', color: 'bg-amber-500' },
+                                { key: 'event_match_details_viewed', label: 'Match Details Viewed', color: 'bg-vantage-cyan' },
+                                { key: 'event_pick_saved', label: 'Picks Saved', color: 'bg-emerald-500' },
+                            ].map(item => {
+                                const total = analyticsData.slice(0, 7).reduce((sum, d) => sum + (d[item.key] || 0), 0);
+                                return (
+                                    <div key={item.key} className="flex items-center gap-3">
+                                        <span className="text-xs text-gray-500 w-40 shrink-0">{item.label}</span>
+                                        <div className="flex-1 h-2 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                                            <div className={`h-full ${item.color} rounded-full transition-all`} style={{ width: `${Math.min(100, total * 5)}%` }} />
+                                        </div>
+                                        <span className="text-xs font-bold font-mono text-slate-900 dark:text-white w-8 text-right">{total}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </GlassCard>
+
+                    {/* Top Pages */}
+                    <GlassCard className="p-4">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                            <Globe size={16} className="text-emerald-500" /> Most Visited Pages (7 days)
+                        </h3>
+                        <div className="space-y-2">
+                            {[
+                                { key: 'page_home_view', label: 'Home' },
+                                { key: 'page_vip_view', label: 'VIP / Alpha' },
+                                { key: 'page_match_view', label: 'Match Details' },
+                                { key: 'page_concierge_view', label: 'Smart Ticket' },
+                                { key: 'page_free_picks_view', label: 'Free Picks' },
+                                { key: 'page_guide_view', label: 'Guide' },
+                                { key: 'page_stats_view', label: 'Stats' },
+                                { key: 'page_results_view', label: 'Results' },
+                            ].map(item => {
+                                const total = analyticsData.slice(0, 7).reduce((sum, d) => sum + (d[item.key] || 0), 0);
+                                const maxTotal = Math.max(...analyticsData.slice(0, 7).map(d => Math.max(...['page_home_view','page_vip_view','page_match_view','page_concierge_view','page_free_picks_view','page_guide_view','page_stats_view','page_results_view'].map(k => d[k] || 0))), 1);
+                                return (
+                                    <div key={item.key} className="flex items-center gap-3">
+                                        <span className="text-xs text-gray-500 w-28 shrink-0">{item.label}</span>
+                                        <div className="flex-1 h-2 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                                            <div className="h-full bg-vantage-cyan/70 rounded-full" style={{ width: `${Math.min(100, (total / maxTotal) * 100)}%` }} />
+                                        </div>
+                                        <span className="text-xs font-bold font-mono text-slate-900 dark:text-white w-10 text-right">{total}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <p className="text-[9px] text-gray-400 mt-3">Tracking started with this deployment. Data accumulates from the first page load after update.</p>
+                    </GlassCard>
                 </div>
             )}
         </div>
