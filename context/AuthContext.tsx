@@ -112,10 +112,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     await updateDoc(userRef, { referralCode: newCode });
                     profileData.referralCode = newCode;
                 }
-            if (!profileData.revenuecatId) {
-                // revenuecatId stored for subscription management
-                profileData.revenuecatId = firebaseUser.uid;
-            }
+                if (!profileData.revenuecatId) {
+                    // Persist revenuecatId so the RevenueCat webhook can find this user
+                    try {
+                        await updateDoc(userRef, { revenuecatId: firebaseUser.uid });
+                    } catch (rcErr) {
+                        console.warn('[Auth] Could not write revenuecatId:', rcErr);
+                    }
+                    profileData.revenuecatId = firebaseUser.uid;
+                }
             if (profileData.isVip && profileData.vipExpiry) {
                     if (new Date() > new Date(profileData.vipExpiry)) {
                         try {
