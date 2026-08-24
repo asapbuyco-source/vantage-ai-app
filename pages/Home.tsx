@@ -294,12 +294,12 @@ export const Home: React.FC<HomeProps> = () => {
     <div className="space-y-5 pb-32">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold font-display tracking-tight text-slate-900 dark:text-white">
             VANTAGE<span className="text-transparent bg-clip-text bg-vantage-gradient">AI</span>
           </h1>
-          <p className="text-[10px] text-gray-500 dark:text-gray-400 tracking-widest font-semibold">{t('home.system')}</p>
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 tracking-widest font-semibold truncate">{t('home.system')}</p>
         </div>
         <div className="flex items-center space-x-2">
           <button
@@ -451,18 +451,18 @@ export const Home: React.FC<HomeProps> = () => {
       </button>
 
       {/* ── Date Bar ── */}
-      <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 px-4 py-2.5 rounded-xl border border-black/5 dark:border-white/5 text-xs">
-        <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-between gap-2 flex-wrap bg-black/5 dark:bg-white/5 px-3 py-2.5 rounded-xl border border-black/5 dark:border-white/5 text-xs">
+        <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 shrink-0">
           <Clock size={12} />
           <span className="font-medium uppercase tracking-wide">
             {language === 'fr' ? `Prochain: ${scheduledTime}` : `Next: ${scheduledTimeDisplay}`}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 text-vantage-cyan font-bold">
-          <Calendar size={12} />
+        <div className="flex items-center gap-1.5 text-vantage-cyan font-bold min-w-0 flex-wrap">
+          <Calendar size={12} className="shrink-0" />
           <span className="uppercase">{todayDisplay}</span>
           {predictions.length > 0 && (
-            <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+            <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full whitespace-nowrap">
               {language === 'fr' ? '✓ Publié aujourd\'hui' : '✓ Published today'}
             </span>
           )}
