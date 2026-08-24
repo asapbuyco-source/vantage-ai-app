@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon,
   Trophy, AlertTriangle, Hourglass, Search, SlidersHorizontal, ChevronDown,
-  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Copy, Check, Share2, Target
+  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Copy, Check, Share2, Target, BrainCircuit
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { CircularProgress } from '../components/CircularProgress';
@@ -415,6 +415,28 @@ export const Home: React.FC<HomeProps> = () => {
           )}
         </div>
       )}
+
+      {/* ── Vantage Intelligence CTA ── */}
+      <button
+        onClick={() => navigate('/research')}
+        className="relative overflow-hidden w-full rounded-2xl border border-vantage-purple/25 bg-vantage-gradient-soft p-4 flex items-center gap-3 text-left hover:border-vantage-purple/50 transition-all group"
+      >
+        <div className="shrink-0 w-11 h-11 rounded-xl bg-white/10 dark:bg-black/30 border border-vantage-purple/30 flex items-center justify-center">
+          <BrainCircuit size={22} className="text-vantage-purple" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-black text-slate-900 dark:text-white leading-tight">
+            {language === 'fr' ? 'Intelligence Vantage' : 'Vantage Intelligence'}
+            <span className="ml-2 text-[8px] font-black px-1.5 py-0.5 rounded bg-vantage-purple/20 text-vantage-purple align-middle">RESEARCH</span>
+          </p>
+          <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-snug mt-0.5">
+            {language === 'fr'
+              ? 'Recherchez n\'importe quelle équipe ou joueur — classé par rapport à la ligue.'
+              : 'Research any team or player — ranked vs their league.'}
+          </p>
+        </div>
+        <ChevronRight size={16} className="text-gray-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+      </button>
 
       {/* ── Date Bar ── */}
       <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 px-4 py-2.5 rounded-xl border border-black/5 dark:border-white/5 text-xs">

@@ -23,6 +23,10 @@ export default {
                     glassBorder: 'rgba(255, 255, 255, 0.1)',
                 }
             },
+            backgroundImage: {
+                'vantage-gradient': 'linear-gradient(135deg, #22d3ee 0%, #a855f7 100%)',
+                'vantage-gradient-soft': 'linear-gradient(135deg, rgba(34,211,238,0.15) 0%, rgba(168,85,247,0.15) 100%)',
+            },
             animation: {
                 'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                 'glow': 'glow 2s ease-in-out infinite alternate',

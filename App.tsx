@@ -32,6 +32,10 @@ const BlogPost = !IS_NATIVE ? lazy(() => import('./pages/BlogPost').then(m => ({
 const VIP = lazy(() => import('./pages/VIP').then(m => ({ default: m.VIP })));
 const Admin = !IS_NATIVE ? lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin }))) : null;
 const Learn = lazy(() => import('./pages/Learn').then(m => ({ default: m.Learn })));
+const IntelligenceTeam = lazy(() => import('./pages/IntelligenceTeam').then(m => ({ default: m.IntelligenceTeam })));
+const IntelligencePlayer = lazy(() => import('./pages/IntelligencePlayer').then(m => ({ default: m.IntelligencePlayer })));
+const Research = lazy(() => import('./pages/Research').then(m => ({ default: m.Research })));
+const IntelligenceVersus = lazy(() => import('./pages/IntelligenceChallenge').then(m => ({ default: m.IntelligenceChallenge })));
 
 function AppContent() {
   const location = useLocation();
@@ -144,6 +148,28 @@ function AppContent() {
       {!IS_NATIVE && <Route path="/blog" element={<Suspense fallback={null}>{BlogIndex && <BlogIndex />}</Suspense>} />}
       {!IS_NATIVE && <Route path="/blog/:date" element={<Suspense fallback={null}>{BlogPost && <BlogPost />}</Suspense>} />}
       <Route path="/match/:id" element={<MatchDetails />} />
+
+      {/* Intelligence Pages (full-screen, no bottom nav) */}
+      <Route path="/intel/team/:id" element={
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-vantage-bg"><Loader2 className="animate-spin text-vantage-cyan" size={32} /></div>}>
+          <IntelligenceTeam />
+        </Suspense>
+      } />
+      <Route path="/intel/player/:id" element={
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-vantage-bg"><Loader2 className="animate-spin text-vantage-cyan" size={32} /></div>}>
+          <IntelligencePlayer />
+        </Suspense>
+      } />
+      <Route path="/intel/versus" element={
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-vantage-bg"><Loader2 className="animate-spin text-vantage-cyan" size={32} /></div>}>
+          <IntelligenceVersus />
+        </Suspense>
+      } />
+      <Route path="/research" element={
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-vantage-bg"><Loader2 className="animate-spin text-vantage-cyan" size={32} /></div>}>
+          <Research />
+        </Suspense>
+      } />
       <Route path="*" element={
         <div className="min-h-screen selection:bg-vantage-cyan/30 font-sans md:flex">
           <div className="fixed inset-0 pointer-events-none z-0">
