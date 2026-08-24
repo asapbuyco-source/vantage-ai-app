@@ -393,20 +393,19 @@ const shareReferral = () => {
                                         <span>Google</span>
                                     </button>
 
-                                    <div className="text-center">
+                                    <div className="text-center pt-1">
                                         {isLoginMode ? (
-                                            <button onClick={() => { setIsLoginMode(false); clearError(); }} className="w-full py-3 rounded-xl bg-gradient-to-r from-vantage-cyan to-vantage-purple text-white text-sm font-bold shadow-lg shadow-vantage-cyan/25 hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                                                <Sparkles size={15} />
-                                                Create an Account
+                                            <button onClick={() => { setIsLoginMode(false); clearError(); }} className="text-sm font-bold text-vantage-cyan hover:text-vantage-purple transition-colors">
+                                                New here? <span className="underline underline-offset-2">Create an Account</span> →
                                             </button>
                                         ) : (
-                                            <button onClick={() => { setIsLoginMode(true); clearError(); }} className="w-full py-3 rounded-xl border border-vantage-cyan/40 bg-vantage-cyan/10 text-vantage-cyan text-sm font-bold hover:bg-vantage-cyan/20 transition-colors">
-                                                Already have an account? Sign in
+                                            <button onClick={() => { setIsLoginMode(true); clearError(); }} className="text-sm font-bold text-vantage-cyan hover:text-vantage-purple transition-colors">
+                                                Have an account? <span className="underline underline-offset-2">Sign in</span> →
                                             </button>
                                         )}
                                     </div>
 
-                                    <div className="flex justify-center pt-2">
+                                    <div className="flex justify-center pt-3 pb-1">
                                         <a href="https://wa.me/237688203629" className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-gray-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-4 py-2 rounded-full hover:border-vantage-cyan/40 hover:text-vantage-cyan transition-colors">
                                             <Mail size={12} />
                                             {language === 'fr' ? 'Contactez-nous' : 'Contact Us'}
