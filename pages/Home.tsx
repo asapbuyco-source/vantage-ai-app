@@ -373,7 +373,7 @@ export const Home: React.FC<HomeProps> = () => {
               <Trophy size={18} className="text-amber-500" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">
+              <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">
                 {language === 'fr' ? 'Banker du Jour' : 'Banker of the Day'}
               </p>
               {todayBanker?.pick ? (
@@ -439,7 +439,7 @@ export const Home: React.FC<HomeProps> = () => {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-black text-slate-900 dark:text-white leading-tight">
             {language === 'fr' ? 'Intelligence Vantage' : 'Vantage Intelligence'}
-            <span className="ml-2 text-[8px] font-black px-1.5 py-0.5 rounded bg-vantage-purple/20 text-vantage-purple align-middle">RESEARCH</span>
+            <span className="ml-2 text-[10px] font-black px-1.5 py-0.5 rounded bg-vantage-purple/20 text-vantage-purple align-middle">RESEARCH</span>
           </p>
           <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-snug mt-0.5">
             {language === 'fr'
@@ -462,7 +462,7 @@ export const Home: React.FC<HomeProps> = () => {
           <Calendar size={12} />
           <span className="uppercase">{todayDisplay}</span>
           {predictions.length > 0 && (
-            <span className="text-[9px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+            <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
               {language === 'fr' ? '✓ Publié aujourd\'hui' : '✓ Published today'}
             </span>
           )}
@@ -470,7 +470,7 @@ export const Home: React.FC<HomeProps> = () => {
       </div>
 
       {/* ─── SORT & FILTER TOOLBAR ─── */}
-      <div className="space-y-3 sticky top-[72px] z-20 bg-vantage-lightBg dark:bg-vantage-bg backdrop-blur-md py-2 -mx-2 px-2">
+      <div className="space-y-3 bg-vantage-lightBg dark:bg-vantage-bg py-2 -mx-2 px-2">
         {/* Sport Toggle */}
         <div className="flex bg-slate-100 dark:bg-white/5 rounded-xl p-1 border border-slate-200 dark:border-white/10">
           {(['football', 'basketball', 'cricket'] as Sport[]).map(sport => (
@@ -612,7 +612,7 @@ export const Home: React.FC<HomeProps> = () => {
           Object.keys(groupedMatches).map(groupKey => (
             <div key={groupKey} className="space-y-3">
               {groupKey !== 'All Matches' && (
-                <div className="sticky top-[72px] z-10 py-2 bg-gradient-to-b from-vantage-lightBg/95 to-vantage-lightBg/50 dark:from-vantage-bg/95 dark:to-vantage-bg/50 backdrop-blur-md">
+                <div className="py-2 bg-gradient-to-b from-vantage-lightBg/95 to-vantage-lightBg/50 dark:from-vantage-bg/95 dark:to-vantage-bg/50 backdrop-blur-md">
                   <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-slate-200/50 dark:bg-white/10 border border-slate-300 dark:border-white/10">
                     <Trophy size={12} className="text-vantage-purple" />
                     <span className="text-[10px] font-bold text-slate-800 dark:text-white uppercase tracking-wider">{groupKey}</span>
@@ -699,7 +699,7 @@ export const Home: React.FC<HomeProps> = () => {
                         {/* Prediction — show each pick with its percentage */}
                         {unlocked ? (
                           <div className="mx-3 mb-3 p-3 rounded-xl bg-vantage-cyan/5 border border-vantage-cyan/15 overflow-hidden">
-                            <span className="text-[9px] text-vantage-cyan uppercase tracking-widest block mb-1.5 font-bold">{t('free.pred_label') || 'Prediction'}</span>
+                            <span className="text-[10px] text-vantage-cyan uppercase tracking-widest block mb-1.5 font-bold">{t('free.pred_label') || 'Prediction'}</span>
                             <div className="space-y-1.5">
                               {getTopProbPicks(match).map((p, pi) => (
                                 <div key={pi} className="flex items-center justify-between gap-2">
@@ -731,7 +731,7 @@ export const Home: React.FC<HomeProps> = () => {
                           <div className="mx-3 mb-3 p-3 rounded-xl bg-vantage-purple/5 border border-vantage-purple/20">
                             <div className="flex items-center justify-between">
                               <div className="flex flex-col">
-                                <span className="text-[9px] text-vantage-purple uppercase tracking-widest font-bold">{t('free.pred_label') || 'Prediction'}</span>
+                                <span className="text-[10px] text-vantage-purple uppercase tracking-widest font-bold">{t('free.pred_label') || 'Prediction'}</span>
                                 <span className="text-xs font-bold text-vantage-purple/40">{language === 'fr' ? 'Réservé VIP' : 'VIP Only'}</span>
                               </div>
                               <span onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="text-[10px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2.5 py-1 rounded-full cursor-pointer hover:bg-vantage-purple/20 flex items-center gap-1">

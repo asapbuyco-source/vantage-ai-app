@@ -165,11 +165,7 @@ function AppContent() {
           <IntelligenceVersus />
         </Suspense>
       } />
-      <Route path="/research" element={
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-vantage-bg"><Loader2 className="animate-spin text-vantage-cyan" size={32} /></div>}>
-          <Research />
-        </Suspense>
-      } />
+      {/* Intel detail pages stay full-screen; /research lives in the shell below */}
       <Route path="*" element={
         <div className="min-h-screen selection:bg-vantage-cyan/30 font-sans md:flex">
           <div className="fixed inset-0 pointer-events-none z-0">
@@ -203,6 +199,11 @@ function AppContent() {
                   <Routes>
           <Route path="/" element={<Home />} /><Route path="/free" element={<FreePicks />} />
           <Route path="/vip" element={<VIP />} /><Route path="/arb" element={<VIP />} />
+          <Route path="/research" element={
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-vantage-cyan" size={40} /></div>}>
+              <Research />
+            </Suspense>
+          } />
           <Route path="/learn" element={<Learn />} /><Route path="/guide" element={<Learn />} />
           <Route path="/concierge" element={<TicketWizard />} />
           <Route path="/profile" element={<Profile />} />

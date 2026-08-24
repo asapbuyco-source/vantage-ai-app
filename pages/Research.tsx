@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, BrainCircuit, User, Users, Clock, ArrowUpRight, X, Loader2, Swords, Trash2, Sparkles, ArrowLeft } from 'lucide-react';
-import { useAppContext } from '../context/AppContext';
+import { Search, BrainCircuit, User, Users, Clock, ArrowUpRight, X, Loader2, Swords, Trash2, Sparkles } from 'lucide-react';
 import { searchIntelligence, fetchCoverageStats, fetchTopXI, fetchPlayersByIds, CoverageStats } from '../services/intelligence/db';
 import { SearchResult, PlayerIntelligence } from '../services/intelligence/types';
 import { projectGoals } from '../services/intelligence/stats';
@@ -21,7 +20,6 @@ type ChallengeKind = 'teams' | 'players' | 'dream';
 
 export const Research: React.FC = () => {
   const navigate = useNavigate();
-  const { language } = useAppContext();
   const [params] = useSearchParams();
   const [mode, setMode] = useState<Mode>('search');
   const [kind, setKind] = useState<ChallengeKind>('teams');
@@ -159,31 +157,21 @@ export const Research: React.FC = () => {
   }, [mode, pickingSide]);
 
   return (
-    <div className="space-y-4">
-      {/* Back button */}
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-vantage-cyan transition-colors"
-      >
-        <ArrowLeft size={14} /> {language === 'fr' ? 'Retour' : 'Back'}
-      </button>
-
-      {/* Hero — compact on mobile */}
-      <div className="relative overflow-hidden rounded-2xl border border-vantage-cyan/20 bg-gradient-to-br from-vantage-cyan/[0.07] via-transparent to-vantage-purple/[0.07] p-4 text-center">
+    <div className="space-y-5">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-2xl border border-vantage-cyan/20 bg-gradient-to-br from-vantage-cyan/[0.07] via-transparent to-vantage-purple/[0.07] p-6 text-center">
         <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-vantage-cyan/50 to-transparent pointer-events-none" />
-        <div className="flex items-center justify-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-vantage-cyan/15 border border-vantage-cyan/30 flex items-center justify-center">
-            <BrainCircuit size={20} className="text-vantage-cyan" />
-          </div>
-          <h1 className="text-lg font-black font-display tracking-tight text-white">
-            VANTAGE <span className="text-transparent bg-clip-text bg-vantage-gradient">INTELLIGENCE</span>
-          </h1>
+        <div className="w-14 h-14 mx-auto rounded-2xl bg-vantage-cyan/15 border border-vantage-cyan/30 flex items-center justify-center mb-3">
+          <BrainCircuit size={26} className="text-vantage-cyan" />
         </div>
-        <p className="text-[11px] text-gray-400 max-w-xs mx-auto leading-relaxed">
+        <h1 className="text-xl font-black font-display tracking-tight text-white mb-1">
+          VANTAGE <span className="text-transparent bg-clip-text bg-vantage-gradient">INTELLIGENCE</span>
+        </h1>
+        <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">
           Research any team or player — or pit two clubs against each other.
         </p>
         {coverage && (
-          <div className="flex items-center justify-center gap-4 mt-2 text-[10px] font-mono">
+          <div className="flex items-center justify-center gap-4 mt-4 text-[10px] font-mono">
             <span className="text-gray-300"><span className="font-black text-vantage-cyan">{coverage.players.toLocaleString()}</span> players</span>
             <span className="w-px h-3 bg-white/10" />
             <span className="text-gray-300"><span className="font-black text-vantage-purple">{coverage.teams.toLocaleString()}</span> teams</span>
@@ -428,7 +416,7 @@ export const Research: React.FC = () => {
             ].map(([t, d]) => (
               <div key={t} className="flex items-start gap-2.5">
                 <span className="w-1 h-1 rounded-full bg-vantage-cyan mt-1.5 shrink-0" />
-                <p className="text-[11px] text-gray-500 dark:text-gray-500 dark:text-gray-300 leading-snug"><span className="font-bold text-slate-900 dark:text-white">{t}</span> — {d}</p>
+                <p className="text-[11px] text-gray-300 leading-snug"><span className="font-bold text-white">{t}</span> — {d}</p>
               </div>
             ))}
           </section>
