@@ -407,7 +407,7 @@ const shareReferral = () => {
                                     </div>
 
                                     <div className="flex justify-center pt-2">
-                                        <a href="mailto:asapbuyco@gmail.com" className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-gray-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-4 py-2 rounded-full hover:border-vantage-cyan/40 hover:text-vantage-cyan transition-colors">
+                                        <a href="https://wa.me/237688203629" className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-gray-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-4 py-2 rounded-full hover:border-vantage-cyan/40 hover:text-vantage-cyan transition-colors">
                                             <Mail size={12} />
                                             {language === 'fr' ? 'Contactez-nous' : 'Contact Us'}
                                         </a>
