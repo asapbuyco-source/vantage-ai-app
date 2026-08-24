@@ -394,13 +394,21 @@ const shareReferral = () => {
                                     </button>
 
                                     <div className="text-center">
-                                        <button onClick={() => { setIsLoginMode(!isLoginMode); clearError(); }} className="text-xs text-slate-500 dark:text-gray-400 hover:text-vantage-cyan transition-colors">
-                                            {isLoginMode ? t('auth.no_account') : t('auth.has_account')}
-                                        </button>
+                                        {isLoginMode ? (
+                                            <button onClick={() => { setIsLoginMode(false); clearError(); }} className="w-full py-3 rounded-xl bg-gradient-to-r from-vantage-cyan to-vantage-purple text-white text-sm font-bold shadow-lg shadow-vantage-cyan/25 hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                                                <Sparkles size={15} />
+                                                Create an Account
+                                            </button>
+                                        ) : (
+                                            <button onClick={() => { setIsLoginMode(true); clearError(); }} className="w-full py-3 rounded-xl border border-vantage-cyan/40 bg-vantage-cyan/10 text-vantage-cyan text-sm font-bold hover:bg-vantage-cyan/20 transition-colors">
+                                                Already have an account? Sign in
+                                            </button>
+                                        )}
                                     </div>
 
-                                    <div className="text-center pt-3 border-t border-slate-200 dark:border-white/10">
-                                        <a href="mailto:asapbuyco@gmail.com" className="text-xs text-gray-400 hover:text-vantage-cyan transition-colors">
+                                    <div className="flex justify-center pt-2">
+                                        <a href="mailto:asapbuyco@gmail.com" className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-gray-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-4 py-2 rounded-full hover:border-vantage-cyan/40 hover:text-vantage-cyan transition-colors">
+                                            <Mail size={12} />
                                             {language === 'fr' ? 'Contactez-nous' : 'Contact Us'}
                                         </a>
                                     </div>
