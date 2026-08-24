@@ -144,7 +144,7 @@ export const Research: React.FC = () => {
       sessionStorage.setItem('dream_challenge', JSON.stringify({
         h: dreamH.map(p => p.id),
         a: (aiXIRoster ?? []).map(p => p.player_id),
-        awayLabel: 'Vantage AI XI',
+        awayLabel: 'Rival XI',
       }));
       navigate(`/intel/challenge?type=dream`);
       return;
@@ -267,7 +267,7 @@ export const Research: React.FC = () => {
               <div className="rounded-xl border border-vantage-purple/30 bg-vantage-purple/5 p-3 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-vantage-purple/15 flex items-center justify-center text-lg shrink-0">🤖</div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black text-white leading-tight">Vantage AI XI</p>
+                  <p className="text-xs font-black text-white leading-tight">Rival Squad</p>
                   {aiXIRoster ? (
                     <p className="text-[9px] text-gray-400 truncate">
                       Auto-built from the world's top-ranked players — led by {aiXI?.top?.name}
@@ -329,7 +329,7 @@ export const Research: React.FC = () => {
             onClick={launchChallenge}
             className="w-full py-3.5 rounded-xl bg-vantage-gradient text-white text-sm font-black tracking-wide flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
           >
-            <Swords size={16} /> Challenge Vantage AI
+            <Swords size={16} /> Play a Rival
           </button>
           {kind === 'dream' && dreamH.length < 5 && <p className="text-center text-[10px] text-gray-500">Pick at least 5 players for your XI ({dreamH.length}/11)</p>}
           {!canBattle && kind !== 'dream' && <p className="text-center text-[10px] text-gray-500">Select two different {kind} to continue</p>}

@@ -120,7 +120,23 @@ export const IntelligenceChallenge: React.FC = () => {
     );
   }
 
-  // ── Compose comparison data per type ──
+  // Dream rosters that failed to resolve → clear message instead of blank report
+  if (type === 'dream' && !loading && (dreamH.length === 0 || dreamA.length === 0)) {
+    return (
+      <Shell>
+        <BrainCircuit size={40} className="text-gray-600 mx-auto mb-3" />
+        <h2 className="text-base font-bold text-white text-center">Roster data unavailable</h2>
+        <p className="text-xs text-gray-500 text-center max-w-xs mt-1">
+          Some players in your XI aren't in the intelligence database yet. Try picking well-known league players.
+        </p>
+        <div className="flex justify-center mt-4">
+          <button onClick={() => navigate('/research')} className="px-5 py-2 rounded-full bg-vantage-cyan/15 text-vantage-cyan text-xs font-bold border border-vantage-cyan/30">
+            Back to Research
+          </button>
+        </div>
+      </Shell>
+    );
+  }
   let homeName = '', awayName = '', homeIdx: number | null = null, awayIdx: number | null = null;
   let radar: any[] = [];
   let tug: any[] = [];

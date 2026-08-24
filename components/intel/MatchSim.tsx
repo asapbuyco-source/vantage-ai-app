@@ -33,8 +33,12 @@ export const MatchSim: React.FC<MatchSimProps> = ({ homeName, awayName, homeAtta
   const [ft, setFt] = useState(false);
   const timer = useRef<any>(null);
 
-  const hg = sampleGoals(homeAttack);
-  const ag = sampleGoals(awayAttack);
+  const hg0 = sampleGoals(homeAttack);
+  const ag0 = sampleGoals(awayAttack);
+  // The stronger squad always wins (or draws if evenly matched)
+  const homeStronger = (homeAttack ?? 50) >= (awayAttack ?? 50);
+  const hg = homeStronger ? Math.max(hg0, ag0) : Math.min(hg0, ag0);
+  const ag = homeStronger ? Math.min(hg0, ag0) : Math.max(hg0, ag0);
 
   useEffect(() => {
     const events: SimEvent[] = [];

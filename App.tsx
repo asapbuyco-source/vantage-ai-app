@@ -165,6 +165,11 @@ function AppContent() {
           <IntelligenceVersus />
         </Suspense>
       } />
+      <Route path="/intel/challenge" element={
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-vantage-bg"><Loader2 className="animate-spin text-vantage-cyan" size={32} /></div>}>
+          <IntelligenceVersus />
+        </Suspense>
+      } />
       {/* Intel detail pages stay full-screen; /research lives in the shell below */}
       <Route path="*" element={
         <div className="min-h-screen selection:bg-vantage-cyan/30 font-sans md:flex">
