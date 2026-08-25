@@ -217,6 +217,26 @@ const shareReferral = () => {
                             </button>
                         )}
 
+                        {/* Language switch — visible before anything else */}
+                        <div className="flex justify-center mb-2">
+                            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-white/5 rounded-full p-1 border border-slate-200 dark:border-white/10">
+                                <button
+                                    type="button"
+                                    onClick={() => setLanguage('fr')}
+                                    className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${language === 'fr' ? 'bg-vantage-cyan text-white' : 'text-gray-500 hover:text-vantage-cyan'}`}
+                                >
+                                    Français
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setLanguage('en')}
+                                    className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${language === 'en' ? 'bg-vantage-cyan text-white' : 'text-gray-500 hover:text-vantage-cyan'}`}
+                                >
+                                    English
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="text-center space-y-2 mb-8 mt-4">
                             <div className="w-20 h-20 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-cyan-200 dark:border-cyan-500/20 shadow-[0_0_30px_rgba(34,211,238,0.2)] dark:bg-vantage-cyan/10 dark:border-vantage-cyan/20">
                                 <User size={40} className="text-cyan-600 dark:text-vantage-cyan" />
