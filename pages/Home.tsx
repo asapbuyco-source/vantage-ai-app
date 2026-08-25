@@ -294,22 +294,21 @@ export const Home: React.FC<HomeProps> = () => {
     <div className="space-y-5 pb-32">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold font-display tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-xl font-bold font-display tracking-tight text-slate-900 dark:text-white">
             VANTAGE<span className="text-transparent bg-clip-text bg-vantage-gradient">AI</span>
           </h1>
-          <p className="text-[10px] text-gray-500 dark:text-gray-400 tracking-widest font-semibold truncate">{t('home.system')}</p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => setLanguage(language === 'fr' ? 'en' : 'fr')}
-            title={language === 'fr' ? 'Switch to English' : 'Passer au français'}
-            className="flex items-center space-x-1.5 bg-slate-100 dark:bg-white/5 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+            title={language === 'fr' ? 'Switch to English' : 'Passer au fran�ais'}
+            className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
           >
-            <Globe size={13} className="text-slate-500 dark:text-gray-400" />
-            <span className="text-[10px] font-bold font-display text-vantage-cyan">
-              {language === 'fr' ? 'English' : 'Français'}
+            <Globe size={13} className="text-vantage-cyan" />
+            <span className="text-[11px] font-bold font-display text-vantage-cyan">
+              {language === 'fr' ? 'EN' : 'FR'}
             </span>
           </button>
           <button
@@ -318,13 +317,6 @@ export const Home: React.FC<HomeProps> = () => {
           >
             {theme === 'dark' ? <Sun size={14} className="text-yellow-500" /> : <Moon size={14} className="text-slate-600" />}
           </button>
-          {/* Live status dot */}
-          <div className={`flex items-center justify-center w-8 h-7 rounded-lg border ${isSystemGenerating ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-vantage-cyan/10 border-vantage-cyan/20'}`}>
-            <span className="relative flex h-2 w-2">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isSystemGenerating ? 'bg-yellow-500' : 'bg-vantage-cyan'}`} />
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${isSystemGenerating ? 'bg-yellow-500' : 'bg-vantage-cyan'}`} />
-            </span>
-          </div>
         </div>
       </div>
 
