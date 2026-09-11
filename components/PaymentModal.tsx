@@ -117,7 +117,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
       const offerings = await Purchases.getOfferings();
       const packages = offerings.current?.availablePackages || [];
       if (packages.length === 0) {
-        throw new Error('No Google Play products are available for this offering.');
+        throw new Error(
+          '[NO_PRODUCTS] RevenueCat returned 0 products. Fix: 1) RevenueCat > App Settings > upload your Google Play service account JSON, 2) Play Console > Monetize > Subscriptions must be ACTIVE, 3) RevenueCat product IDs must match your Play Console product IDs exactly.'
+        );
       }
 
       const pkgToBuy =
@@ -161,7 +163,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
       } else {
         // Build a human-readable error string from RevenueCat error object
         const code = e?.code ?? e?.underlyingErrorMessage ?? '';
-        const msg = e?.message ?? e?.localizedDescription ?? JSON.stringify(e);
+        const rawMsg = e?.message ?? e?.localizedDescription ?? JSON.stringify(e);
+        const msg = String(rawMsg).startsWith('[NO_PRODUCTS]')
+          ? (language === 'fr'
+            ? 'Aucun abonnement trouve dans Google Play. Contactez le support (WhatsApp) — cela vient des reglages RevenueCat/Play Console, pas de votre telephone.'
+            : 'No Google Play subscriptions found. Contact support via WhatsApp — this is a RevenueCat/Play Console configuration issue, not your phone.')
+          : rawMsg;
         const detail = `Code: ${code} | ${msg}`;
         console.error('[Payments] Google Play purchase failed:', detail, e);
         setErrorDetail(detail);
