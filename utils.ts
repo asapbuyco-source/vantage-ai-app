@@ -74,6 +74,16 @@ export const getTopPickText = (match: Match): string => {
   return match.prediction_en || match.prediction || '';
 };
 
+/**
+ * Canonical language-aware label for a match's stored prediction field.
+ * French users get the French label with a fallback to English/base value
+ * (legacy or custom bet types often lack prediction_fr).
+ */
+export const getPredictionLabel = (match: Match, language: string): string => {
+  if (language === 'fr') return match.prediction_fr || match.prediction_en || match.prediction || '';
+  return match.prediction_en || match.prediction || '';
+};
+
 export const getPrimaryPredictionProb = (match: Match): number => {
   const topPicks = getTopProbPicks(match);
   if (topPicks.length > 0) {

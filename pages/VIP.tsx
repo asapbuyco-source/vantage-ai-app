@@ -791,7 +791,7 @@ export const VIP: React.FC<VIPProps> = () => {
                                   <div className="flex items-center justify-between">
                                     <div className="flex flex-col flex-1 mr-3">
                                       <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">Prediction</span>
-                                      <span className="text-xs font-bold text-orange-400">{language === 'fr' ? (match as any).prediction_fr : match.prediction}</span>
+                                      <span className="text-xs font-bold text-orange-400">{language === 'fr' ? ((match as any).prediction_fr || match.prediction_en || match.prediction || '') : (match.prediction_en || match.prediction || '')}</span>
                                     </div>
                                     <div className="flex flex-col items-center shrink-0">
                                       <span className="text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">Confidence</span>

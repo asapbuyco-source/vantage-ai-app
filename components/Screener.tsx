@@ -163,7 +163,9 @@ export const Screener: React.FC<ScreenerProps> = ({ matches }) => {
                                 const stakeAmt = bankroll > 0 ? Math.round(bankroll * (kelly / 100) * riskMult) : 0;
                                 
                                 const teamString = `${m.home_team || m.homeTeam} v ${m.away_team || m.awayTeam}`;
-                                const predictionStr = m.prediction_en || m.prediction || m.bet_type;
+                                const predictionStr = language === 'fr'
+                                    ? (m.prediction_fr || m.prediction_en || m.prediction || m.bet_type || '')
+                                    : (m.prediction_en || m.prediction || m.bet_type || '');
 
                                 return (
                                     <tr key={m.id || m.fixture_id} className="hover:bg-slate-800/40 transition-colors group">

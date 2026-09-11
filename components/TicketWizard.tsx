@@ -43,8 +43,9 @@ function getMarketBase(market: string): string {
     return m || 'unknown';
 }
 
-function getTicketMarket(match: Match): string {
-    return match.bet_type ?? match.prediction_en ?? match.prediction ?? '';
+function getTicketMarket(match: Match, language: string): string {
+    if (language === 'fr') return match.prediction_fr ?? match.prediction_en ?? match.prediction ?? match.bet_type ?? '';
+    return match.prediction_en ?? match.prediction ?? match.bet_type ?? '';
 }
 
 function getTeamKeys(match: Match): string[] {
@@ -170,7 +171,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
             const st = getMatchSport(match);
             if ((sportLegs[st] ?? 0) >= 3) continue;
 
-            const mb = getMarketBase(getTicketMarket(match));
+            const mb = getMarketBase(getTicketMarket(match, language));
             const cap = marketCaps[mb] ?? 2;
             if ((usedMarketBases[mb] ?? 0) >= cap) continue;
 

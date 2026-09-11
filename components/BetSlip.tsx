@@ -20,6 +20,11 @@ export const BetSlip: React.FC = () => {
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     };
 
+    const displayPred = (p: any) =>
+        language === 'fr'
+            ? (p as any).prediction_fr || (p as any).prediction_en || p.prediction || ''
+            : (p as any).prediction_en || p.prediction || '';
+
     return (
         <>
             {/* Floating Action Button */}
@@ -107,7 +112,7 @@ export const BetSlip: React.FC = () => {
                                                     {pick.homeTeam} vs {pick.awayTeam}
                                                 </p>
                                                 <p className="text-[11px] text-gray-400 truncate">
-                                                    {pick.prediction} · {pick.confidence}% · @{pick.odds}
+                                                    {displayPred(pick)} · {pick.confidence}% · @{pick.odds}
                                                 </p>
                                             </div>
 

@@ -3,9 +3,10 @@ import { motion } from 'framer-motion';
 import { Clock, ChevronRight } from 'lucide-react';
 import { Match } from '../types';
 import { TeamLogo } from './TeamLogo';
-import { getTopProbPicks, getSmartBadges, plainMarket } from '../utils';
+import { getTopProbPicks, getSmartBadges, plainMarket, getPredictionLabel } from '../utils';
 import { DeepAnalysisModal } from './DeepAnalysisModal';
 import { useNavigate } from 'react-router-dom';
+import { useAppContext } from '../context/AppContext';
 
 interface MatchCardAlphaProps {
   match: Match;
@@ -18,13 +19,14 @@ interface MatchCardAlphaProps {
 
 export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx }) => {
   const navigate = useNavigate();
+  const { language } = useAppContext();
   const [showDeepAnalysis, setShowDeepAnalysis] = useState(false);
   const xgH = match.expected_goals_home ?? 0;
   const xgA = match.expected_goals_away ?? 0;
   const topPicks = getTopProbPicks(match);
   const displayPickName = topPicks.length > 0
     ? topPicks.map(p => plainMarket(p.name)).join(' / ')
-    : plainMarket(match.bet_type || match.prediction);
+    : getPredictionLabel(match, language);
   const displayPickProb = topPicks.length > 0 ? Math.round(topPicks[0].prob * 100) : (match.confidence ?? 0);
   const badges = getSmartBadges(match).slice(0, 2);
 
