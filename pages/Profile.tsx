@@ -694,6 +694,16 @@ const shareReferral = () => {
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>
+                    <button
+                        onClick={() => window.open('https://t.me/vantageai', '_blank')}
+                        className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                    >
+                        <div className="flex items-center space-x-3 text-slate-700 dark:text-gray-300">
+                            <Send size={20} className="text-sky-400" />
+                            <span className="font-medium">{language === 'fr' ? 'Rejoindre le groupe Telegram' : 'Join our Telegram group'}</span>
+                        </div>
+                        <ChevronRight size={18} className="text-gray-400" />
+                    </button>
                 </GlassCard>
 
                 {userProfile?.isAdmin && (
