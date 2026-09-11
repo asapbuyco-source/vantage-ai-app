@@ -10,7 +10,7 @@ import { VisualPitch } from '../components/VisualPitch';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { getSmartBadges, getTopProbPicks, plainMarket } from '../utils';
+import { getSmartBadges, getTopProbPicks, plainMarket, getPredictionLabel } from '../utils';
 import { TeamStrengthSection } from '../components/intel/TeamStrengthSection';
 import { TeamDetailSheet } from '../components/TeamDetailSheet';
 
@@ -199,7 +199,7 @@ fetchDetails();
                         </button>
                         <div className="flex items-center gap-2">
                             <Zap size={16} className="text-vantage-cyan" />
-                            <h1 className="text-sm font-bold text-white">Analysis</h1>
+                            <h1 className="text-sm font-bold text-white">{language === 'fr' ? 'Analyse' : 'Analysis'}</h1>
                         </div>
                     </div>
 
@@ -237,7 +237,7 @@ fetchDetails();
                             <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-12 h-12 md:w-14 md:h-14 rounded-xl ring-1 ring-white/10 hover:ring-vantage-cyan/40" />
                         </button>
                         <span className="text-base md:text-xl font-bold leading-tight">{match.homeTeam}</span>
-                        <span className="text-xs text-gray-500 hidden md:inline ml-2">Home</span>
+                        <span className="text-xs text-gray-500 hidden md:inline ml-2">{language === 'fr' ? 'Domicile' : 'Home'}</span>
                     </div>
                     
                     <div className="flex flex-col items-center justify-center w-1/3 text-center">
@@ -248,7 +248,7 @@ fetchDetails();
                     </div>
 
                     <div className="flex items-center justify-end gap-3 w-1/3 text-right">
-                        <span className="text-xs text-gray-500 hidden md:inline mr-2">Away</span>
+                        <span className="text-xs text-gray-500 hidden md:inline mr-2">{language === 'fr' ? 'Ext�rieur' : 'Away'}</span>
                         <span className="text-base md:text-xl font-bold leading-tight">{match.awayTeam}</span>
                         <button onClick={() => setDetailSheet('away')} className="shrink-0 active:scale-90 transition-transform" title={`${match.awayTeam} — view squad & lineup`}>
                             <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-12 h-12 md:w-14 md:h-14 rounded-xl ring-1 ring-white/10 hover:ring-vantage-purple/40" />
@@ -260,17 +260,24 @@ fetchDetails();
             {/* Section tabs — livescore style, under team logos */}
             <div className="sticky top-[57px] z-10 bg-vantage-bg/95 backdrop-blur-md border-b border-white/10 overflow-x-auto no-scrollbar">
                 <div className="flex gap-6 flex-nowrap px-4">
-                    {['Prediction', 'Correct Scores', 'AI Reasons', 'Trends', 'Lineup', 'H2H'].map(tab => (
+                    {[
+                        ['Prediction', language === 'fr' ? 'Pronostic' : 'Prediction'],
+                        ['Correct Scores', language === 'fr' ? 'Scores Exactes' : 'Correct Scores'],
+                        ['AI Reasons', language === 'fr' ? 'Raisons IA' : 'AI Reasons'],
+                        ['Trends', language === 'fr' ? 'Tendances' : 'Trends'],
+                        ['Lineup', language === 'fr' ? 'Compositions' : 'Lineup'],
+                        ['H2H', 'H2H'],
+                    ].map(([tab, label]) => (
                         <button
                             key={tab}
-                            onClick={() => setSecondaryTab(tab)}
+                            onClick={() => setSecondaryTab(tab as string)}
                             className={`py-3 text-xs font-bold whitespace-nowrap flex-shrink-0 border-b-2 transition-colors ${
                                 secondaryTab === tab
                                     ? 'border-vantage-cyan text-vantage-cyan'
                                     : 'border-transparent text-gray-400 hover:text-white'
                             }`}
                         >
-                            {tab}
+                            {label}
                         </button>
                     ))}
                 </div>
@@ -308,15 +315,15 @@ fetchDetails();
                             <Trophy size={16} className="text-emerald-400 shrink-0" />
                             <div className="min-w-0 flex-1">
                                 <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block">
-                                    Safest Pick
+                                    {language === 'fr' ? 'Analyse la Plus Sûre' : 'Safest Pick'}
                                     {match.odds_fresh === false && (
-                                        <span className="ml-2 text-[8px] font-black px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 align-middle">STALE ODDS</span>
+                                        <span className="ml-2 text-[8px] font-black px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 align-middle">{language === 'fr' ? 'COTES ANCIENNES' : 'STALE ODDS'}</span>
                                     )}
                                 </span>
                                 <span className="text-sm font-bold text-white truncate block">
                                     {(() => {
                                         const top = getTopProbPicks(match);
-                                        return top.length > 0 ? top.map((p: any) => plainMarket(p.name)).join(' / ') : plainMarket(match.prediction_en || match.prediction || match.bet_type);
+                                        return top.length > 0 ? top.map((p: any) => plainMarket(p.name)).join(' / ') : getPredictionLabel(match, language);
                                     })()}
                                 </span>
                             </div>
@@ -456,14 +463,16 @@ fetchDetails();
                                         const xg = (match.expected_goals_home ?? 0) + (match.expected_goals_away ?? 0);
                                         const ag = match.model_agreement ?? match.result_confidence ?? 0;
 
-                                        if (h != null && Number(h) > 1.2) reasons.push(`${match.homeTeam} score often — about ${Number(h).toFixed(1)} goals a game`);
-                                        if (a != null && Number(a) > 1.2) reasons.push(`${match.awayTeam} score often — about ${Number(a).toFixed(1)} goals a game`);
-                                        if (xg > 2) reasons.push(`Expect a lively match — around ${xg.toFixed(0)} goals between both teams`);
-                                        if (ag > 0.7) reasons.push(ag >= 0.9 ? 'Every part of our analysis points the same way' : 'Most angles of our analysis agree');
-                                        if (Number(match.odds) > 1.05 && (match.expected_value ?? 0) > 0) reasons.push('The bookmaker price is better than the true chance — good value');
-                                        if (match.vault_eligible) reasons.push('Ranked among our safest picks of the day');
+                                        if (h != null && Number(h) > 1.2) reasons.push(language === 'fr' ? `${match.homeTeam} marque souvent — environ ${Number(h).toFixed(1)} buts par match` : `${match.homeTeam} score often — about ${Number(h).toFixed(1)} goals a game`);
+                                        if (a != null && Number(a) > 1.2) reasons.push(language === 'fr' ? `${match.awayTeam} marque souvent — environ ${Number(a).toFixed(1)} buts par match` : `${match.awayTeam} score often — about ${Number(a).toFixed(1)} goals a game`);
+                                        if (xg > 2) reasons.push(language === 'fr' ? `Match animé attendu — environ ${xg.toFixed(0)} buts au total` : `Expect a lively match — around ${xg.toFixed(0)} goals between both teams`);
+                                        if (ag > 0.7) reasons.push(ag >= 0.9
+                                            ? (language === 'fr' ? 'Tous nos indicateurs convergent' : 'Every part of our analysis points the same way')
+                                            : (language === 'fr' ? 'La plupart de nos angles d\'analyse concordent' : 'Most angles of our analysis agree'));
+                                        if (Number(match.odds) > 1.05 && (match.expected_value ?? 0) > 0) reasons.push(language === 'fr' ? 'La cote du bookmaker est meilleure que la vraie probabilité — bonne valeur' : 'The bookmaker price is better than the true chance — good value');
+                                        if (match.vault_eligible) reasons.push(language === 'fr' ? 'Classé parmi nos analyses les plus sûres du jour' : 'Ranked among our safest picks of the day');
 
-                                        if (reasons.length === 0) return <p className="text-[10px] text-gray-500">Our model sees no strong edge here — treat this match with caution.</p>;
+                                        if (reasons.length === 0) return <p className="text-[10px] text-gray-500">{language === 'fr' ? 'Notre modèle ne voit pas d\'avantage fort ici — prudence sur ce match.' : 'Our model sees no strong edge here — treat this match with caution.'}</p>;
                                         return reasons.map((r, i) => (
                                             <p key={i} className="text-[11px] text-gray-300 flex items-start gap-1.5 leading-snug">
                                                 <CheckCircle2 size={12} className="text-emerald-400 shrink-0 mt-px" />
