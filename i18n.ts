@@ -25,15 +25,15 @@ nav: {
       system: 'SYSTEME QUANTITATIF V.4.0',
       online: 'En Ligne',
       performance: 'Performance',
-      performance_desc: 'Précision de l\'IA pour les parieurs au Cameroun sur 1xBet et Premier Bet.',
+      performance_desc: 'Précision de l\'IA pour les parieurs au Cameroun.',
       success_rate: 'TAUX DE SUCCÈS',
       daily_rate: 'Taux Journalier',
       weekly_rate: 'Taux Hebdo',
       monthly_rate: 'Taux Mensuel',
-      perf_daily: 'Précision sur les matchs d\'hier (1xBet).',
+      perf_daily: 'Précision sur les matchs d\'hier.',
       perf_weekly: 'Moyenne Cameroun (7 derniers jours).',
       perf_monthly: 'Performance globale ce mois.',
-      featured: 'Match Vedette (Betmomo)',
+      featured: 'Match Vedette',
       high_conf: 'Confiance Élevée',
       hot_pick: 'HOT PICK',
       ai_pred: 'Signal IA',
@@ -45,10 +45,10 @@ nav: {
     free: {
       title: 'PRONOSTICS',
       title_accent: 'GRATUITS',
-      subtitle: 'Sélection quotidienne pour Premier Bet et 1xBet.',
+      subtitle: 'Sélection quotidienne.',
       pred_label: 'Signal',
       prob_label: 'Probabilité',
-      disclaimer: 'Les cotes 1xBet/Premier Bet sont indicatives.'
+      disclaimer: 'Les cotes affichées sont indicatives.'
     },
     vip: {
       title: 'ESPACE',
@@ -59,7 +59,7 @@ nav: {
       vip_only: 'ALPHA SEULEMENT',
       locked_title: 'Débloquer les Signaux Alpha',
       feat_1: 'Signaux Haute Probabilité',
-      feat_2: 'Cote Totale: 5.00+ (Premier Bet)',
+      feat_2: 'Cote Totale: 5.00+',
       feat_3: 'Gestion Kelly',
       select_plan: 'Choisissez votre pass',
       plan_daily: 'Pass Journalier',
@@ -147,7 +147,7 @@ nav: {
       payout_success: 'Demande envoyée avec succès.'
     },
     auth: {
-      login_subtitle: 'Connectez-vous pour vos pronostics 1xBet.',
+      login_subtitle: 'Connectez-vous pour vos pronostics.',
       signup_subtitle: 'Créez un compte pour commencer à gagner.',
       email_placeholder: 'Email',
       password_placeholder: 'Mot de passe',
@@ -274,12 +274,12 @@ nav: {
       system: 'QUANTITATIVE SYSTEM V.4.0',
       online: 'Online',
       performance: 'Performance',
-      performance_desc: 'AI accuracy for bettors in Cameroon (1xBet & Premier Bet).',
+      performance_desc: 'AI accuracy for bettors in Cameroon.',
       success_rate: 'SUCCESS RATE',
       daily_rate: 'Daily Rate',
       weekly_rate: 'Weekly Rate',
       monthly_rate: 'Monthly Rate',
-      perf_daily: 'Accuracy on yesterday\'s 1xBet matches.',
+      perf_daily: 'Accuracy on yesterday\'s matches.',
       perf_weekly: 'Average Cameroon performance (7 days).',
       perf_monthly: 'Consistent performance this month.',
       featured: 'Featured Match',
@@ -294,7 +294,7 @@ nav: {
     free: {
       title: 'FREE',
       title_accent: 'PICKS',
-      subtitle: 'Daily algorithm selection for Premier Bet.',
+      subtitle: 'Daily algorithm selection.',
       pred_label: 'Signal',
       prob_label: 'Probability',
       disclaimer: 'Odds are indicative and may change.'
@@ -396,7 +396,7 @@ nav: {
       payout_success: 'Request sent successfully.'
     },
     auth: {
-      login_subtitle: 'Log in for your 1xBet predictions.',
+      login_subtitle: 'Log in for your predictions.',
       signup_subtitle: 'Create an account to start winning.',
       email_placeholder: 'Email',
       password_placeholder: 'Password',
@@ -418,7 +418,7 @@ nav: {
     concierge: {
       title: 'SMART',
       title_accent: 'TICKET',
-      subtitle: 'Let AI build your perfect betting slip.',
+      subtitle: 'Let AI build your perfect ticket.',
       step_1: 'Stake',
       step_2: 'Selections',
       step_3: 'Your Ticket',
