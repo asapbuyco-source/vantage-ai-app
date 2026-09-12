@@ -25,7 +25,7 @@ export const MatchCardAlpha: React.FC<MatchCardAlphaProps> = ({ match, idx }) =>
   const xgA = match.expected_goals_away ?? 0;
   const topPicks = getTopProbPicks(match);
   const displayPickName = topPicks.length > 0
-    ? topPicks.map(p => plainMarket(p.name)).join(' / ')
+    ? topPicks.map(p => plainMarket(p.name, language)).join(' / ')
     : getPredictionLabel(match, language);
   const displayPickProb = topPicks.length > 0 ? Math.round(topPicks[0].prob * 100) : (match.confidence ?? 0);
   const badges = getSmartBadges(match).slice(0, 2);

@@ -42,29 +42,40 @@ export const getTopProbPicks = (match: Match): ProbPick[] => {
  * Plain-language market names for non-technical users.
  * "Double Chance (1X)" → "Home or Draw", "FH Over 0.5" → "1st-Half Goal".
  */
-export const plainMarket = (market: string): string => {
+export const plainMarket = (market: string, language: string = 'en'): string => {
   if (!market) return market;
   const m = market.toLowerCase();
-  if (m === 'double chance (1x)' || m === 'double chance 1x') return 'Home or Draw';
-  if (m === 'double chance (x2)' || m === 'double chance x2') return 'Draw or Away';
-  if (m === 'double chance (12)' || m === 'double chance 12') return 'Home or Away';
-  if (m === 'btts' || m.includes('both teams to score') && !m.includes('no')) return 'Both Teams Score';
-  if (m.includes('btts no')) return 'One Team Fails to Score';
-  if (m === 'draw no bet (home)') return 'Home Win (draw refunds)';
-  if (m === 'draw no bet (away)') return 'Away Win (draw refunds)';
-  if (m.includes('fh over 0.5')) return '1st-Half Goal';
-  if (m.includes('fh over 1.5')) return '1st-Half Over 1.5';
-  if (m.includes('fh btts')) return '1st-Half: Both Score';
-  if (/^over \d(\.\d)? goals?$/.test(m)) return market.replace(/^Over/, 'Over').replace(/Goals$/i, 'goals');
+  const isFr = language === 'fr';
+  if (m === 'double chance (1x)' || m === 'double chance 1x') return isFr ? 'Domicile ou Nul' : 'Home or Draw';
+  if (m === 'double chance (x2)' || m === 'double chance x2') return isFr ? 'Nul ou Extérieur' : 'Draw or Away';
+  if (m === 'double chance (12)' || m === 'double chance 12') return isFr ? 'Domicile ou Extérieur' : 'Home or Away';
+  if (m === 'btts' || m.includes('both teams to score') && !m.includes('no')) return isFr ? 'Les deux marquent' : 'Both Teams Score';
+  if (m.includes('btts no')) return isFr ? 'Une équipe ne marque pas' : 'One Team Fails to Score';
+  if (m === 'draw no bet (home)') return isFr ? 'Victoire Domicile (nul remboursé)' : 'Home Win (draw refunds)';
+  if (m === 'draw no bet (away)') return isFr ? 'Victoire Extérieur (nul remboursé)' : 'Away Win (draw refunds)';
+  if (m.includes('fh over 0.5')) return isFr ? 'But 1ère MT' : '1st-Half Goal';
+  if (m.includes('fh over 1.5')) return isFr ? 'Plus de 1,5 en 1ère MT' : '1st-Half Over 1.5';
+  if (m.includes('fh btts')) return isFr ? '1ère MT : Les deux marquent' : '1st-Half: Both Score';
+  if (m === 'home win') return isFr ? 'Victoire Domicile' : 'Home Win';
+  if (m === 'away win') return isFr ? 'Victoire Extérieur' : 'Away Win';
+  if (m === 'draw') return isFr ? 'Match Nul' : 'Draw';
+  const overMatch = m.match(/^over (\d+(?:\.\d+)?) goals?$/);
+  if (overMatch) return isFr ? `Plus de ${overMatch[1].replace('.', ',')} buts` : `Over ${overMatch[1]} goals`;
+  const underMatch = m.match(/^under (\d+(?:\.\d+)?) goals?$/);
+  if (underMatch) return isFr ? `Moins de ${underMatch[1].replace('.', ',')} buts` : `Under ${underMatch[1]} goals`;
+  const overShort = m.match(/^over (\d+(?:\.\d+)?)$/);
+  if (overShort) return isFr ? `Plus de ${overShort[1].replace('.', ',')}` : `Over ${overShort[1]}`;
+  const underShort = m.match(/^under (\d+(?:\.\d+)?)$/);
+  if (underShort) return isFr ? `Moins de ${underShort[1].replace('.', ',')}` : `Under ${underShort[1]}`;
   return market;
 };
 
 export const getPrimaryPredictionText = (match: Match, language: string): string => {
   const topPicks = getTopProbPicks(match);
   if (topPicks.length > 0) {
-    return topPicks.map(p => `${p.name} ${Math.round(p.prob * 100)}%`).join(' / ');
+    return topPicks.map(p => `${plainMarket(p.name, language)} ${Math.round(p.prob * 100)}%`).join(' / ');
   }
-  if (language === 'fr') return match.prediction_fr || match.prediction || '';
+  if (language === 'fr') return match.prediction_fr || match.prediction_en || match.prediction || '';
   return match.prediction_en || match.prediction || '';
 };
 

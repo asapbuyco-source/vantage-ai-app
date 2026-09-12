@@ -303,7 +303,7 @@ export const Home: React.FC<HomeProps> = () => {
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => setLanguage(language === 'fr' ? 'en' : 'fr')}
-            title={language === 'fr' ? 'Switch to English' : 'Passer au français'}
+            title={language === 'fr' ? 'Switch to English' : 'Passer au franï¿½ais'}
             className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
           >
             <Globe size={13} className="text-vantage-cyan" />
@@ -695,7 +695,7 @@ export const Home: React.FC<HomeProps> = () => {
                             <div className="space-y-1.5">
                               {getTopProbPicks(match).map((p, pi) => (
                                 <div key={pi} className="flex items-center justify-between gap-2">
-                                  <span className="text-[11px] font-bold text-slate-900 dark:text-white truncate">{plainMarket(p.name)}</span>
+                                  <span className="text-[11px] font-bold text-slate-900 dark:text-white truncate">{plainMarket(p.name, language)}</span>
                                   <div className="flex items-center gap-2 shrink-0">
                                     <div className="w-12 h-1 rounded-full bg-slate-200 dark:bg-white/10">
                                       <motion.div className="h-full rounded-full bg-vantage-cyan" initial={{ width: 0 }} animate={{ width: `${Math.round(p.prob * 100)}%` }} transition={{ duration: 1, delay: idx * 0.05 + 0.3 }} style={{ width: `${Math.round(p.prob * 100)}%` }} />

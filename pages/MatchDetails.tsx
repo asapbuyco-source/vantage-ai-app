@@ -323,7 +323,7 @@ fetchDetails();
                                 <span className="text-sm font-bold text-white truncate block">
                                     {(() => {
                                         const top = getTopProbPicks(match);
-                                        return top.length > 0 ? top.map((p: any) => plainMarket(p.name)).join(' / ') : getPredictionLabel(match, language);
+                                        return top.length > 0 ? top.map((p: any) => plainMarket(p.name, language)).join(' / ') : getPredictionLabel(match, language);
                                     })()}
                                 </span>
                             </div>

@@ -16,6 +16,29 @@ import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDo
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
 
+const getLang = (): 'fr' | 'en' => {
+    try {
+        const saved = localStorage.getItem('vantage_language');
+        if (saved === 'fr' || saved === 'en') return saved as 'fr' | 'en';
+        return navigator.language.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+    } catch { return 'en'; }
+};
+const tr = (fr: string, en: string) => getLang() === 'fr' ? fr : en;
+const translateFirebaseError = (msg: string): string => {
+    const fr = getLang() === 'fr';
+    if (!msg) return fr ? 'Erreur inconnue.' : 'Unknown error.';
+    const m = msg.toLowerCase();
+    if (m.includes('invalid-email')) return fr ? 'Email invalide.' : 'Invalid email.';
+    if (m.includes('user-not-found') || m.includes('invalid-credential')) return fr ? 'Email ou mot de passe incorrect.' : 'Invalid email or password.';
+    if (m.includes('wrong-password')) return fr ? 'Mot de passe incorrect.' : 'Wrong password.';
+    if (m.includes('email-already-in-use')) return fr ? 'Cet email est déjà utilisé.' : 'Email already in use.';
+    if (m.includes('weak-password')) return fr ? 'Mot de passe trop faible (min 6 caractères).' : 'Password too weak (min 6 characters).';
+    if (m.includes('too-many-requests')) return fr ? 'Trop de tentatives. Réessayez plus tard.' : 'Too many attempts. Try again later.';
+    if (m.includes('network-request-failed')) return fr ? 'Erreur réseau. Vérifiez votre connexion.' : 'Network error. Check your connection.';
+    if (m.includes('requires-recent-login')) return fr ? 'Veuillez vous reconnecter récemment pour cette action.' : 'Please re-login recently to do this.';
+    return msg;
+};
+
 interface AuthContextType {
     user: User | null;
     userProfile: UserProfile | null;
@@ -101,7 +124,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     await signOut(auth);
                     setUser(null);
                     setUserProfile(null);
-                    setError("Votre compte a été suspendu par l'administrateur.");
+                    setError(tr("Votre compte a été suspendu par l'administrateur.", "Your account has been suspended by an administrator."));
                     return;
                 }
                 
@@ -213,7 +236,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.warn("[Auth] Firebase auth initialization timed out; showing signed-out UI.");
             setUser(null);
             setUserProfile(null);
-            setError("Authentication is taking longer than expected. You can retry login.");
+            setError(tr("L'authentification prend plus de temps que prévu. Vous pouvez réessayer.", "Authentication is taking longer than expected. You can retry login."));
             setLoading(false);
         }, 8000);
 
@@ -233,14 +256,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 settled = true;
                 window.clearTimeout(timeout);
                 console.error("Auth Listener Error:", authError);
-                setError("Authentication service unavailable. Please check your connection.");
+                setError(tr("Service d'authentification indisponible. Vérifiez votre connexion.", "Authentication service unavailable. Please check your connection."));
                 setLoading(false);
             });
         } catch (e: any) {
             settled = true;
             window.clearTimeout(timeout);
             console.error("Critical Auth Error:", e);
-            setError("System Configuration Error. Please verify API keys.");
+            setError(tr("Erreur de configuration système. Vérifiez les clés API.", "System Configuration Error. Please verify API keys."));
             setLoading(false);
         }
 
@@ -272,7 +295,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const result = await signInWithPopup(auth, provider);
             if (result.user) await createProfile(result.user, referralCode);
         } catch (e: any) {
-            setError(e.message);
+            setError(translateFirebaseError(e.message));
         }
     };
 
@@ -281,7 +304,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             await signInWithEmailAndPassword(auth, email, pass);
         } catch (e: any) {
-            setError(e.message);
+            setError(translateFirebaseError(e.message));
         }
     };
 
@@ -291,7 +314,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const result = await createUserWithEmailAndPassword(auth, email, pass);
             if (result.user) await createProfile(result.user, referralCode);
         } catch (e: any) {
-            setError(e.message);
+            setError(translateFirebaseError(e.message));
         }
     };
 

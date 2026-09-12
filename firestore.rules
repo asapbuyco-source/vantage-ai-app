@@ -36,7 +36,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           "uid", "email", "displayName", "isVip", "isAdmin", "isBlocked",
           "referralCode", "referralCount", "referralEarnings", "lifetimeEarnings",
-          "createdAt"
+          "createdAt", "installationId", "onboardingCompleted", "preferences", "revenuecatId"
         ])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.isVip == false
@@ -53,6 +53,8 @@ service cloud.firestore {
           "referralEarnings", "lifetimeEarnings", "referralCount"
         ])
       ) || isAdmin();
+
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
     match /referral_codes/{code} {

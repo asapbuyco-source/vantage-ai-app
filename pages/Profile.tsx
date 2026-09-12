@@ -102,7 +102,7 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
             try {
                 await deleteAccount();
             } catch (e: any) {
-                alert(e.message || "Error deleting account. You may need to re-login recently.");
+                alert(e.message || (language === 'fr' ? "Erreur lors de la suppression. Veuillez vous reconnecter récemment." : "Error deleting account. You may need to re-login recently."));
             }
         }
     };
@@ -354,11 +354,11 @@ const shareReferral = () => {
                                     <div className="text-center pt-1">
                                         {isLoginMode ? (
                                             <button onClick={() => { setIsLoginMode(false); clearError(); }} className="text-sm font-bold text-vantage-cyan hover:text-vantage-purple transition-colors">
-                                                New here? <span className="underline underline-offset-2">Create an Account</span> →
+                                                {language === 'fr' ? 'Nouveau ici ? ' : 'New here? '}<span className="underline underline-offset-2">{language === 'fr' ? 'Créer un compte' : 'Create an Account'}</span> →
                                             </button>
                                         ) : (
                                             <button onClick={() => { setIsLoginMode(true); clearError(); }} className="text-sm font-bold text-vantage-cyan hover:text-vantage-purple transition-colors">
-                                                Have an account? <span className="underline underline-offset-2">Sign in</span> →
+                                                {language === 'fr' ? 'Déjà un compte ? ' : 'Have an account? '}<span className="underline underline-offset-2">{language === 'fr' ? 'Se connecter' : 'Sign in'}</span> →
                                             </button>
                                         )}
                                     </div>
