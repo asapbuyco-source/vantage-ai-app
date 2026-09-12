@@ -1101,21 +1101,7 @@ export const VIP: React.FC<VIPProps> = () => {
               </p>
             </div>
 
-            {/* Win-rate proof bar */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-center">
-                <p className="text-lg font-black font-orbitron text-green-500">{winRateStats.monthly > 0 ? `${winRateStats.monthly}%` : '97%'}</p>
-                <p className="text-[9px] uppercase text-gray-500">{language === 'fr' ? '30 jours' : '30-Day Rate'}</p>
-              </div>
-              <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-center">
-                <p className="text-lg font-black font-orbitron text-vantage-cyan">{winRateStats.streak > 0 ? `${winRateStats.streak}🔥` : '97%'}</p>
-                <p className="text-[9px] uppercase text-gray-500">{language === 'fr' ? 'Série' : 'Verified'}</p>
-              </div>
-              <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5 text-center">
-                <p className="text-lg font-black font-orbitron text-white">{winRateStats.todayTotal > 0 ? `${winRateStats.todayWon}/${winRateStats.todayTotal}` : '+EV'}</p>
-                <p className="text-[9px] uppercase text-gray-500">{language === 'fr' ? "Aujourd'hui" : 'Model Edge'}</p>
-              </div>
-            </div>
+
 
             <div className="flex flex-col gap-4">
             {plans.filter(p => showAllPlans || ['weekly', 'monthly', 'quarterly'].includes(p.id)).map((plan) => {
