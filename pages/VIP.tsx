@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, RefreshCw, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, ChevronRight, Calendar, Activity, Pencil, Banknote, Radio, LayoutGrid, Radar } from 'lucide-react';
+import { Lock, Star, ShieldCheck, CheckCircle2, Loader2, Zap, Flame, Copy, Check, Clock, User, ArrowRight, ShieldAlert, BrainCircuit, Layers, Crown, Sparkles, TrendingUp, BarChart2, ChevronDown, ChevronUp, ChevronRight, Calendar, Activity, Pencil, Banknote, Radio, LayoutGrid, Radar } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useData } from '../context/DataContext';
@@ -17,11 +17,13 @@ import { getTomorrowFixturesFromDB } from '../services/sportsData';
 import { PortfolioOnboarding } from '../components/PortfolioOnboarding';
 import { Sparkline } from '../components/Sparkline';
 import { getTopProbPicks } from '../utils';
+import { parseVipExpiry } from '../utils';
 import { Screener } from '../components/Screener';
 import { MatchCardAlpha } from '../components/MatchCardAlpha';
 import { Capacitor } from '@capacitor/core';
 
 import { db } from '../firebaseConfig';
+import { auth } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
@@ -30,14 +32,13 @@ interface VIPProps {}
 
 export const VIP: React.FC<VIPProps> = () => {
   const navigate = useNavigate();
-  const { t, language, showToast } = useAppContext();
+  const { t, language } = useAppContext();
   const { predictions, accumulators: dataContextAccumulators, loading, basketballPredictions, cricketPredictions, winRateStats } = useData();
-  const { user, userProfile, isAdmin, verifyTransaction } = useAuth();
+  const { user, userProfile, isAdmin, isVipActive } = useAuth();
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<'weekly' | 'monthly' | 'quarterly' | 'annual'>('monthly');
+  const [selectedPlanId, setSelectedPlanId] = useState<'weekly' | 'monthly' | 'annual'>('monthly');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isVerifying, setIsVerifying] = useState(false);
   const [localizedPrices, setLocalizedPrices] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -86,7 +87,7 @@ export const VIP: React.FC<VIPProps> = () => {
 
   // isUnlocked must be declared HERE (before the useEffect that references it)
   // to avoid a Temporal Dead Zone (TDZ) ReferenceError crash.
-  const isUnlocked = (userProfile?.isVip === true) || isAdmin;
+  const isUnlocked = isVipActive || isAdmin;
 
   // â”€â”€ Quant Model State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Use DataContext predictions to avoid duplicate Firestore reads.
@@ -135,9 +136,14 @@ export const VIP: React.FC<VIPProps> = () => {
     const fetchAIFeatures = async () => {
       setAiLoading(true);
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        try {
+          const idToken = await auth.currentUser?.getIdToken();
+          if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+        } catch (_) { /* unauthenticated fallback */ }
         const response = await fetch(`${backendUrl}/api/ai/features`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ predictions: quantPredictions })
         });
         if (response.ok) {
@@ -191,7 +197,7 @@ export const VIP: React.FC<VIPProps> = () => {
   const isFirstTime = userProfile && (!userProfile.totalPaid || userProfile.totalPaid === 0);
 
   const plans: Array<{
-    id: 'weekly' | 'monthly' | 'quarterly' | 'annual';
+    id: 'weekly' | 'monthly' | 'annual';
     label: string;
     badge: string | null;
     price: string;
@@ -221,16 +227,6 @@ export const VIP: React.FC<VIPProps> = () => {
         claimColor: 'bg-vantage-cyan hover:bg-cyan-400 text-slate-900 shadow-lg shadow-vantage-cyan/25',
       },
       {
-        id: 'quarterly',
-        label: t('vip.plan_quarterly'),
-        badge: '💎 BEST VALUE',
-        price: localizedPrices['quarterly'] || '$19.99',
-        icon: <ShieldCheck size={20} />,
-        features: [t('vip.feat_signal_feed'), t('vip.feat_screener'), t('vip.feat_whatsapp'), t('vip.feat_priority')],
-        color: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm',
-        claimColor: 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90',
-      },
-      {
         id: 'annual',
         label: t('vip.plan_annual') || 'Annual Access',
         badge: '👑 ULTIMATE',
@@ -242,7 +238,7 @@ export const VIP: React.FC<VIPProps> = () => {
       },
     ];
 
-  const handlePlanClick = (planId: 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
+  const handlePlanClick = (planId: 'weekly' | 'monthly' | 'annual') => {
     setSelectedPlanId(planId);
     setShowPaymentModal(true);
   };
@@ -257,35 +253,6 @@ export const VIP: React.FC<VIPProps> = () => {
   const openAccumulator = (tier: string) => {
     setAccuTier(tier);
     setIsAccuOpen(true);
-  };
-
-  const handleManualCheck = async () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const transId = urlParams.get('transId');
-
-    if (!transId) {
-      showToast(
-        language === 'fr' ? "Aucune transaction trouvée dans l'URL." : "No transaction ID found.",
-        'info'
-      );
-      return;
-    }
-
-    setIsVerifying(true);
-    const success = await verifyTransaction(transId);
-    setIsVerifying(false);
-
-    if (success) {
-      showToast(
-        language === 'fr' ? "Transaction validée ! Bienvenue VIP." : "Transaction verified! Welcome VIP.",
-        'success'
-      );
-    } else {
-      showToast(
-        language === 'fr' ? "Transaction non trouvée ou échouée." : "Transaction not found or failed.",
-        'warning'
-      );
-    }
   };
 
   const getPredictionText = (match: Match) => {
@@ -421,7 +388,7 @@ export const VIP: React.FC<VIPProps> = () => {
 
   // --- UNLOCKED VIEW (Active VIP) ---
   if (isUnlocked) {
-    const expiryDate = userProfile?.vipExpiry ? new Date(userProfile.vipExpiry) : null;
+    const expiryDate = parseVipExpiry(userProfile?.vipExpiry);
     const daysLeft = expiryDate ? Math.max(0, Math.ceil((expiryDate.getTime() - Date.now()) / 86400000)) : null;
 
     const needsPortfolioOnboarding = userProfile && !userProfile.portfolioBankroll;
@@ -1104,7 +1071,7 @@ export const VIP: React.FC<VIPProps> = () => {
 
 
             <div className="flex flex-col gap-4">
-            {plans.filter(p => showAllPlans || ['weekly', 'monthly', 'quarterly'].includes(p.id)).map((plan) => {
+            {plans.filter(p => showAllPlans || ['weekly', 'monthly'].includes(p.id)).map((plan) => {
                 const isPopular = plan.id === 'monthly';
                 return (
                   <motion.button
@@ -1186,16 +1153,6 @@ export const VIP: React.FC<VIPProps> = () => {
                   Google Play Billing
                 </div>
               </div>
-
-              {/* Manual Verification Button */}
-              <button
-                onClick={handleManualCheck}
-                disabled={isVerifying}
-                className="text-[10px] text-gray-400 hover:text-vantage-cyan flex items-center justify-center space-x-1 py-2 transition-colors uppercase font-bold tracking-widest mt-4"
-              >
-                <RefreshCw size={10} className={isVerifying ? "animate-spin" : ""} />
-                <span>{language === 'fr' ? "Vérifier l'activation manuellement" : "Verify Activation Manually"}</span>
-              </button>
             </div>
           </div>
         </>

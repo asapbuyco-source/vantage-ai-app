@@ -78,13 +78,13 @@ const FormDots = ({ form }: { form?: string }) => {
 export const Home: React.FC<HomeProps> = () => {
   const navigate = useNavigate();
   const { t, language, setLanguage, theme, toggleTheme, showToast } = useAppContext();
-  const { user, userProfile, isAdmin } = useAuth();
+  const { user, isAdmin, isVipActive } = useAuth();
   const {
     activeDate, predictions, rawFixtures, basketballPredictions, cricketPredictions,
     winRateStats, loading, isSystemGenerating, systemError
   } = useData();
 
-  const isVip = userProfile?.isVip || isAdmin;
+  const isVip = isVipActive || isAdmin;
 
   // Load the scheduled football gen time from Firestore settings (for display only)
   const [scheduledTime, setScheduledTime] = useState('19:00');

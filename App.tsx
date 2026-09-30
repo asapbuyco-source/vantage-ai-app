@@ -6,6 +6,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Loader2, X, Crown, RefreshCw } from 'lucide-react';
 import { BottomNav } from './components/BottomNav';
 import { ToastContainer } from './components/Toast';
+import { initFacebookTracking } from './services/facebookTracking';
 import { BetSlip } from './components/BetSlip';
 import { Onboarding } from './components/Onboarding';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -19,9 +20,9 @@ import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { enableFirestorePersistence, db } from './firebaseConfig';
-import { doc, updateDoc } from 'firebase/firestore';
 import { PaymentModal } from './components/PaymentModal';
 import { MotionDiv } from './components/MotionDiv';
+import { parseVipExpiry } from './utils';
 import { TicketWizard } from './components/TicketWizard';
 
 const IS_NATIVE = Capacitor.isNativePlatform();
@@ -66,6 +67,7 @@ function AppContent() {
   const { user, userProfile, loading: authLoading, isAdmin } = useAuth();
 
   useEffect(() => { enableFirestorePersistence(); }, []);
+  useEffect(() => { initFacebookTracking(); }, []);
   useEffect(() => {
     if (!IS_NATIVE) return;
     const setupRevenueCat = async () => {
@@ -88,23 +90,14 @@ function AppContent() {
         const { Purchases } = await import('@revenuecat/purchases-capacitor');
         await Purchases.logIn({ appUserID: uid });
 
-        // ✅ Listen for subscription changes (purchases, renewals, restores)
-        listenerHandle = await Purchases.addCustomerInfoUpdateListener(async (customerInfo: any) => {
-          try {
-            const activeEntitlements = customerInfo?.entitlements?.active ?? {};
-            const hasActive = Object.keys(activeEntitlements).length > 0;
-            if (hasActive) {
-              // Get expiry from whichever entitlement is active
-              const entitlement: any = activeEntitlements['vip'] ?? activeEntitlements['pro'] ?? Object.values(activeEntitlements)[0];
-              const vipExpiry = entitlement?.expirationDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-              const vipPlan = entitlement?.productIdentifier?.includes('annual') ? 'annual'
-                : entitlement?.productIdentifier?.includes('quarterly') ? 'quarterly'
-                : entitlement?.productIdentifier?.includes('weekly') ? 'weekly' : 'monthly';
-              await updateDoc(doc(db, 'profiles', uid), { isVip: true, vipExpiry, vipPlan });
-            }
-          } catch (e) {
-            console.error('[RC Listener] Firestore VIP sync failed:', e);
-          }
+        // Listen for subscription changes (purchases, renewals, restores).
+        // VIP is granted server-side by the RevenueCat webhook; the AuthContext
+        // profile snapshot listener picks up the Firestore change automatically.
+        // (Client-side writes to isVip/vipExpiry are rejected by Firestore rules.)
+        listenerHandle = await Purchases.addCustomerInfoUpdateListener((customerInfo: any) => {
+          const activeEntitlements = customerInfo?.entitlements?.active ?? {};
+          const hasActive = Object.keys(activeEntitlements).length > 0;
+          if (!hasActive) console.info('[RC Listener] No active entitlements');
         });
       } catch (_) {}
     })();
@@ -124,9 +117,11 @@ function AppContent() {
   }, []);
   useEffect(() => { if (user && !localStorage.getItem('vantage_onboarded')) setShowOnboarding(true); }, [user]);
   useEffect(() => {
-    if (!userProfile?.isVip || !userProfile.vipExpiry) { setShowRenewalBanner(false); return; }
-    const daysLeft = Math.ceil((new Date(userProfile.vipExpiry).getTime() - Date.now()) / 86400000);
-    if (daysLeft <= 3 && daysLeft >= 0 && localStorage.getItem('vantage_renewal_dismissed') !== userProfile.vipExpiry) { setRenewalDaysLeft(daysLeft); setShowRenewalBanner(true); setTimeout(() => { localStorage.setItem('vantage_renewal_dismissed', userProfile.vipExpiry || ''); setShowRenewalBanner(false); }, 8000); }
+    const vipExpiry = parseVipExpiry(userProfile.vipExpiry);
+    if (!userProfile?.isVip || !vipExpiry) { setShowRenewalBanner(false); return; }
+    const daysLeft = Math.ceil((vipExpiry.getTime() - Date.now()) / 86400000);
+    const dismissalKey = vipExpiry.toISOString();
+    if (daysLeft <= 3 && daysLeft >= 0 && localStorage.getItem('vantage_renewal_dismissed') !== dismissalKey) { setRenewalDaysLeft(daysLeft); setShowRenewalBanner(true); setTimeout(() => { localStorage.setItem('vantage_renewal_dismissed', dismissalKey); setShowRenewalBanner(false); }, 8000); }
     else { setShowRenewalBanner(false); }
   }, [userProfile]);
   const handleOnboardingComplete = () => { localStorage.setItem('vantage_onboarded', 'true'); setShowOnboarding(false); };

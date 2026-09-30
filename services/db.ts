@@ -1,5 +1,6 @@
 
 import { Match, TeamAsset, AccumulatorSet, DailyAnalysis, WinRateStats, UserProfile } from "../types";
+import { parseVipExpiry } from "../utils";
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, updateDoc, serverTimestamp, getCountFromServer, query, where, writeBatch } from "firebase/firestore";
 import { db, auth } from "../firebaseConfig";
 
@@ -66,6 +67,9 @@ export const normalizeQuantPrediction = (p: any): any => {
             score: p.score ?? '',
             graded_at: p.graded_at ?? '',
             graded_by: p.graded_by ?? '',
+            // camelCase aliases consumed by TicketWizard
+            leagueTier: p.leagueTier ?? p.league_tier,
+            allValueBets: p.allValueBets ?? p.all_value_bets,
         };
     }
 
@@ -100,6 +104,9 @@ export const normalizeQuantPrediction = (p: any): any => {
         score: p.score ?? '',
         graded_at: p.graded_at ?? '',
         graded_by: p.graded_by ?? '',
+        // camelCase aliases consumed by TicketWizard
+        leagueTier: p.leagueTier ?? p.league_tier,
+        allValueBets: p.allValueBets ?? p.all_value_bets,
     };
 };
 
@@ -795,12 +802,9 @@ export const updateUserProfile = async (uid: string, data: Partial<UserProfile>)
 /** True only if the profile's VIP flag is set AND the subscription hasn't expired. */
 export const isVipActive = (profile: any): boolean => {
     if (!profile?.isVip) return false;
-    if (!profile.vipExpiry) return true; // no expiry = lifetime/admin-granted
-    try {
-        return new Date() < new Date(profile.vipExpiry);
-    } catch {
-        return false;
-    }
+    const expiry = parseVipExpiry(profile.vipExpiry);
+    if (!expiry) return true; // no expiry = lifetime/admin-granted
+    return new Date() < expiry;
 };
 
 export const getUserCount = async (): Promise<{ total: number; vip: number }> => {

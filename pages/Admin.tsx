@@ -348,7 +348,7 @@ export const Admin: React.FC<AdminProps> = () => {
         }
     };
 
-    const handleSelectPlan = async (user: UserProfile, plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual') => {
+    const handleSelectPlan = async (user: UserProfile, plan: 'daily' | 'weekly' | 'monthly' | 'annual') => {
         setSelectPlanFor(null);
         setProcessingId(user.uid);
         try {
@@ -362,7 +362,6 @@ export const Admin: React.FC<AdminProps> = () => {
                 const expiry = new Date();
                 if (plan === 'daily') expiry.setDate(expiry.getDate() + 1);
                 else if (plan === 'weekly') expiry.setDate(expiry.getDate() + 7);
-                else if (plan === 'quarterly') expiry.setDate(expiry.getDate() + 90);
                 else if (plan === 'annual') expiry.setDate(expiry.getDate() + 365);
                 else expiry.setDate(expiry.getDate() + 30);
                 return { ...u, isVip: true, vipPlan: plan, vipExpiry: expiry.toISOString() };
@@ -1331,7 +1330,7 @@ export const Admin: React.FC<AdminProps> = () => {
                                             </button>
                                             {selectPlanFor === u.uid && (
                                                 <div className="flex gap-1 flex-wrap mt-1">
-                                                    {(['daily', 'weekly', 'monthly', 'quarterly', 'annual'] as const).map(plan => (
+                                                    {(['daily', 'weekly', 'monthly', 'annual'] as const).map(plan => (
                                                         <button
                                                             key={plan}
                                                             onClick={() => handleSelectPlan(u, plan)}

@@ -11,6 +11,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { getSmartBadges, getTopProbPicks, plainMarket, getPredictionLabel } from '../utils';
+import { getAppSettings } from '../services/db';
 import { TeamStrengthSection } from '../components/intel/TeamStrengthSection';
 import { TeamDetailSheet } from '../components/TeamDetailSheet';
 
@@ -19,9 +20,9 @@ export const MatchDetails: React.FC = () => {
     const navigate = useNavigate();
     const { language, showToast } = useAppContext();
     const { t } = useAppContext();
-    const { userProfile, isAdmin } = useAuth();
+    const { userProfile, isAdmin, isVipActive } = useAuth();
     const { predictions, rawFixtures } = useData();
-    const isVipUser = userProfile?.isVip === true || isAdmin;
+    const isVipUser = isVipActive || isAdmin;
 
     const [match, setMatch] = useState<Match | null>(null);
     
@@ -31,6 +32,13 @@ export const MatchDetails: React.FC = () => {
     const [allMatchPicks, setAllMatchPicks] = useState<Match[]>([]);
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
     const [selectedScoreline, setSelectedScoreline] = useState<number>(0);
+    const [freePicksCount, setFreePicksCount] = useState(3);
+
+    useEffect(() => {
+        getAppSettings().then(s => {
+            if (s.freePicksCount !== undefined) setFreePicksCount(s.freePicksCount);
+        }).catch(() => {});
+    }, []);
 
     const [odds, setOdds] = useState<MatchOdds | null>(null);
     const [realH2H, setRealH2H] = useState<H2HRecord | null>(null);
@@ -182,7 +190,7 @@ fetchDetails();
         });
         const topPicks = sorted.filter(m => m.category === 'safe');
         const freeablePicks = topPicks.length > 0 ? topPicks : sorted.filter(m => m.category === 'value');
-        const freeIds = new Set(freeablePicks.slice(0, 3).map(m => m.id));
+        const freeIds = new Set(freeablePicks.slice(0, freePicksCount).map(m => m.id));
         return freeIds.has(match.id);
     };
     
@@ -659,13 +667,11 @@ fetchDetails();
                                             { l: 'Away', p: (match.away_win_prob || 0) * 100 },
                                         ].sort((a: any, b: any) => b.p - a.p) },
                                         { g: 'Goals Over', items: [
-                                            { l: 'Over 0.5', p: (match.over05_prob || 0) * 100 },
                                             { l: 'Over 1.5', p: (match.over15_prob || 0) * 100 },
                                             { l: 'Over 2.5', p: (match.over25_prob || 0) * 100 },
                                             { l: 'Over 3.5', p: (match.over35_prob || 0) * 100 },
                                         ].filter((r: any) => r.p > 0).sort((a: any, b: any) => b.p - a.p) },
                                         { g: 'Goals Under', items: [
-                                            { l: 'Under 0.5', p: (match.under05_prob || 0) * 100 },
                                             { l: 'Under 1.5', p: (match.under15_prob || 0) * 100 },
                                             { l: 'Under 2.5', p: (match.under25_prob || 0) * 100 },
                                             { l: 'Under 3.5', p: (match.under35_prob || 0) * 100 },

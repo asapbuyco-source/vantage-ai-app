@@ -105,8 +105,10 @@ export interface Match {
   over95_corners_prob?: number;
   top_scorelines?: Array<{ score: string; prob: number }>;
   all_value_bets?: Array<{ market: string; prob: number; raw_prob?: number; odds: number; ev: number; calibration_tier?: string }>;
+  allValueBets?: Array<{ market: string; prob: number; raw_prob?: number; odds: number; ev: number; calibration_tier?: string }>;
   value_rank?: 'high' | 'medium' | 'low' | 'none';
   league_tier?: number;
+  leagueTier?: number;
   home_form?: string;
   away_form?: string;
   home_win_rate?: number;
@@ -275,8 +277,8 @@ export interface UserProfile {
   isAdmin?: boolean;
   isBlocked?: boolean;
   country?: string;
-  vipExpiry?: string;
-  vipPlan?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
+  vipExpiry?: string | { toDate: () => Date };
+  vipPlan?: 'daily' | 'weekly' | 'monthly' | 'annual';
   totalPaid?: number;
   createdAt?: string;
   referralCode?: string;

@@ -39,7 +39,7 @@ const DEFAULT_WIN_RATES: WinRateStats = { daily: 0, weekly: 0, monthly: 0, strea
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { user, loading: authLoading, isAdmin, userProfile } = useAuth();
+    const { user, loading: authLoading, isAdmin, userProfile, isVipActive } = useAuth();
     const [activeDate, setActiveDate] = useState<string>(getGlobalTodayKey());
     const [predictions, setPredictions] = useState<Match[]>([]);
     const [rawFixtures, setRawFixtures] = useState<Match[]>([]);
@@ -125,7 +125,7 @@ const fetchFromDB = async (bypassCache = false) => {
 
             try {
                 // Use VIP data source if user is VIP, otherwise use public data
-                const isVipUser = userProfile?.isVip === true || isAdmin;
+                const isVipUser = isVipActive || isAdmin;
                 const dailyData = isVipUser
                     ? await getVipDailyData(targetDate)
                     : await getDailyData(targetDate);
@@ -261,7 +261,7 @@ const fetchFromDB = async (bypassCache = false) => {
     useEffect(() => {
         if (!user || authLoading) return;
 
-        const isVipUser = userProfile?.isVip === true || isAdmin;
+        const isVipUser = isVipActive || isAdmin;
         const collectionName = isVipUser ? 'quant_vip' : 'quant_predictions';
 
         const unsub = onSnapshot(
@@ -281,7 +281,7 @@ const fetchFromDB = async (bypassCache = false) => {
         );
 
         return () => unsub();
-    }, [user, authLoading, todayKey, userProfile?.isVip]);
+    }, [user, authLoading, todayKey, isVipActive]);
 
     return (
         <DataContext.Provider value={{

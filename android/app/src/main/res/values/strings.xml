@@ -4,4 +4,8 @@
     <string name="title_activity_main">Vantage AI</string>
     <string name="package_name">com.vantageai.app</string>
     <string name="custom_url_scheme">com.vantageai.app</string>
+
+    <!-- Facebook SDK (Meta App Events) -->
+    <string name="facebook_app_id">1104820668689099</string>
+    <string name="facebook_client_token">a61f424f78f38e3ce011af432cfb63f5</string>
 </resources>

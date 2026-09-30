@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, ReactNode } from 'react';
 import {
     GoogleAuthProvider,
     signInWithPopup,
@@ -12,9 +12,10 @@ import {
     User
 } from "firebase/auth";
 import { Capacitor } from '@capacitor/core';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDoc, orderBy, runTransaction, limit, getDocs, query, where, startAfter } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, increment, addDoc, orderBy, runTransaction, limit, getDocs, query, where, startAfter, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
+import { parseVipExpiry } from '../utils';
 
 const getLang = (): 'fr' | 'en' => {
     try {
@@ -45,6 +46,7 @@ interface AuthContextType {
     loading: boolean;
     error: string | null;
     isAdmin: boolean;
+    isVipActive: boolean;
     signInWithGoogle: (referralCode?: string) => Promise<void>;
     signInWithEmail: (email: string, password: string) => Promise<void>;
     signUpWithEmail: (email: string, password: string, referralCode?: string) => Promise<void>;
@@ -53,7 +55,7 @@ interface AuthContextType {
     deleteAccount: () => Promise<void>;
     clearError: () => void;
     getAllUsers: (lastDoc?: any, pageSize?: number) => Promise<{ users: UserProfile[]; lastDoc: any; error?: string }>;
-    toggleUserVip: (uid: string, currentStatus: boolean, plan?: 'daily'|'weekly'|'monthly'|'quarterly'|'annual') => Promise<void>;
+    toggleUserVip: (uid: string, currentStatus: boolean, plan?: 'daily'|'weekly'|'monthly'|'annual') => Promise<void>;
     toggleUserAdmin: (uid: string, currentStatus: boolean) => Promise<void>;
     toggleUserBlock: (uid: string, currentStatus: boolean) => Promise<void>;
     verifyTransaction: (transId: string) => Promise<boolean>;
@@ -79,6 +81,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // isAdmin is derived purely from Firestore — no email string in the bundle
     const isAdmin = userProfile?.isAdmin === true;
+
+    // VIP is considered active only if the flag is set AND the expiry (if any) is in the future.
+    // Prevents expired subscribers from keeping premium access until their next login.
+    const isVipActive = useMemo(() => {
+        if (!userProfile) return false;
+        if (userProfile.isVip !== true) return false;
+        const expiry = parseVipExpiry(userProfile.vipExpiry);
+        if (expiry) {
+            return expiry.getTime() > Date.now();
+        }
+        return true;
+    }, [userProfile]);
 
     const generateReferralCode = (name: string | null): string => {
         // Fix: Properly sanitize name to get exactly 3 uppercase letters, or 'VAN' as fallback
@@ -144,8 +158,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                     profileData.revenuecatId = firebaseUser.uid;
                 }
-            if (profileData.isVip && profileData.vipExpiry) {
-                    if (new Date() > new Date(profileData.vipExpiry)) {
+            const vipExpiryDate = parseVipExpiry(profileData.vipExpiry);
+            if (profileData.isVip && vipExpiryDate) {
+                    if (new Date() > vipExpiryDate) {
                         try {
                             // Fix: Ensure UI state reflects expiration even if DB write fails temporarily
                             await updateDoc(userRef, { isVip: false, vipExpiry: null });
@@ -205,6 +220,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 createdAt: new Date().toISOString(),
             };
             await setDoc(userRef, profileData);
+
+            // Meta App Events: new user registration (native only, no-op on web)
+            import('../services/facebookTracking').then(({ logFacebookEvent }) => {
+                logFacebookEvent('CompletedRegistration', {
+                    registration_method: referralCodeInput ? 'referral' : 'direct',
+                }).catch(() => {});
+            }).catch(() => {});
 
             // FIX: Write reverse-index for O(1) referral lookups.
             // Key = the referral code, value = the owner's UID.
@@ -272,6 +294,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (unsubscribe) unsubscribe();
         };
     }, []);
+
+    // Real-time profile sync: react to server-side changes (e.g. the RevenueCat webhook
+    // granting VIP) without forcing the user to re-login. Also clears local VIP state
+    // when the subscription expires, and signs blocked users out immediately.
+    useEffect(() => {
+        if (!user?.uid) return;
+        const userRef = doc(db, "profiles", user.uid);
+        const unsub = onSnapshot(userRef, (snap) => {
+            if (!snap.exists()) return;
+            const data: any = snap.data();
+            if (data.isBlocked) {
+                signOut(auth);
+                setUser(null);
+                setUserProfile(null);
+                setError(tr("Votre compte a été suspendu par l'administrateur.", "Your account has been suspended by an administrator."));
+                return;
+            }
+            const vipExp = parseVipExpiry(data.vipExpiry);
+            if (data.isVip && vipExp && new Date() > vipExp) {
+                data.isVip = false;
+                data.vipExpiry = null;
+            }
+            setUserProfile(data as UserProfile);
+        }, (err) => {
+            console.warn('[Auth] Profile snapshot listener error:', err);
+        });
+        return () => unsub();
+    }, [user?.uid]);
 
     const signInWithGoogle = async (referralCode?: string) => {
         setError(null);
@@ -451,17 +501,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const toggleUserVip = async (uid: string, currentStatus: boolean, plan: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' = 'monthly') => {
+    const toggleUserVip = async (uid: string, currentStatus: boolean, plan: 'daily' | 'weekly' | 'monthly' | 'annual' = 'monthly') => {
         if (!isAdmin) return;
         const userRef = doc(db, "profiles", uid);
         if (!currentStatus) {
             const expiry = new Date();
             if (plan === 'daily') expiry.setDate(expiry.getDate() + 1);
             else if (plan === 'weekly') expiry.setDate(expiry.getDate() + 7);
-            else if (plan === 'quarterly') expiry.setDate(expiry.getDate() + 90);
             else if (plan === 'annual') expiry.setDate(expiry.getDate() + 365);
             else expiry.setDate(expiry.getDate() + 30);
-            await updateDoc(userRef, { isVip: true, vipExpiry: expiry.toISOString(), vipPlan: plan });
+            // Store as a Date so Firestore saves a Timestamp — required for the
+            // firestore.rules expiry check (request.time comparisons).
+            await updateDoc(userRef, { isVip: true, vipExpiry: expiry, vipPlan: plan });
         } else {
             await updateDoc(userRef, { isVip: false, vipExpiry: null, vipPlan: null });
         }
@@ -558,7 +609,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     return (
         <AuthContext.Provider value={{
-            user, userProfile, loading, error, isAdmin,
+            user, userProfile, loading, error, isAdmin, isVipActive,
             signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, clearError: () => setError(null),
             getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, verifyTransaction,
             requestPayout, getPayoutRequests, processPayout, updateUserCountry, updateVaultProgress, updatePortfolioConfig

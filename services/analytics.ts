@@ -1,6 +1,7 @@
 
 import { db, auth } from "../firebaseConfig";
 import { doc, setDoc, increment, getDoc } from "firebase/firestore";
+import { logFacebookEvent } from "./facebookTracking";
 
 const getLagosTodayKey = (): string =>
     new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
@@ -77,6 +78,8 @@ export const trackPageView = (pathname: string) => {
         const userRef = doc(db, 'analytics_daily_users', `${dateKey}_${uid}`);
         setDoc(userRef, { date: dateKey, uid, platform, last_seen: new Date().toISOString() }, { merge: true })
             .catch(() => {});
+        // Mirror to Meta App Events (native only, no-op on web)
+        logFacebookEvent('PageView', { page: key, path: pathname }).catch(() => {});
     } catch (e) {
         console.warn('[Analytics] page view failed:', e);
     }
@@ -100,6 +103,14 @@ export const trackEvent = (eventName: string, metadata: Record<string, any> = {}
             metadata,
             timestamp: new Date().toISOString(),
         }).catch(() => {});
+        // Mirror to Meta App Events (native only, no-op on web). Only scalar values are
+        // forwarded — Firebase Timestamps/objects are dropped.
+        const fbParams: Record<string, string | number | boolean | null> = {};
+        for (const [k, v] of Object.entries(metadata)) {
+            const t = typeof v;
+            if (t === 'string' || t === 'number' || t === 'boolean') fbParams[k] = v as any;
+        }
+        logFacebookEvent(eventName, fbParams).catch(() => {});
     } catch (e) {
         console.warn('[Analytics] event failed:', e);
     }

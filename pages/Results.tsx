@@ -22,8 +22,8 @@ const CYCLE: Record<string, MatchStatus> = { won: 'lost', lost: 'pending', pendi
 export const Results: React.FC = () => {
     const navigate = useNavigate();
     const { language, showToast } = useAppContext();
-    const { isAdmin } = useAuth();
-    const isVip = useAuth().userProfile?.isVip || false;
+    const { isAdmin, isVipActive } = useAuth();
+    const isVip = isVipActive || isAdmin;
 
     const [history, setHistory] = useState<DayResult[]>([]);
     const [loading, setLoading] = useState(true);

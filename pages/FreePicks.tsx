@@ -62,8 +62,8 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
   const navigate = useNavigate();
   const { t, language } = useAppContext();
   const { predictions, loading } = useData();
-  const { userProfile, isAdmin } = useAuth();
-  const isVip = userProfile?.isVip || isAdmin;
+  const { isAdmin, isVipActive } = useAuth();
+  const isVip = isVipActive || isAdmin;
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAllLeans, setShowAllLeans] = useState(false);
   const [freePicksCount, setFreePicksCount] = useState(3);

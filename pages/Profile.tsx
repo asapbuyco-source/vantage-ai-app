@@ -8,6 +8,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LegalDoc } from '../components/LegalDoc';
+import { parseVipExpiry } from '../utils';
 import { AppGuide } from '../components/AppGuide';
 import { ensureReferralCode } from '../services/db';
 import { useNavigate } from 'react-router-dom';
@@ -510,9 +511,9 @@ const shareReferral = () => {
                                         <Crown size={12} className="mr-1" />
                                         {t('profile.member_vip')}
                                     </span>
-                                    {userProfile.vipExpiry && (
+                                    {parseVipExpiry(userProfile.vipExpiry) && (
                                         <span className="text-[10px] text-gray-500">
-                                            {t('profile.expires_on')}: {new Date(userProfile.vipExpiry).toLocaleDateString()}
+                                            {t('profile.expires_on')}: {parseVipExpiry(userProfile.vipExpiry)!.toLocaleDateString()}
                                         </span>
                                     )}
                                 </>
@@ -608,8 +609,8 @@ const shareReferral = () => {
                         <span className="text-xs uppercase tracking-wide">{t('profile.expiry')}</span>
                     </div>
                     <span className="text-lg font-bold font-orbitron text-slate-900 dark:text-white truncate">
-                        {userProfile?.vipExpiry
-                            ? new Date(userProfile.vipExpiry).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: '2-digit' })
+                        {parseVipExpiry(userProfile?.vipExpiry)
+                            ? parseVipExpiry(userProfile?.vipExpiry)!.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: '2-digit' })
                             : (userProfile?.isVip ? (language === 'fr' ? 'Illimité' : 'Unlimited') : (language === 'fr' ? 'Inactif' : 'Inactive'))}
                     </span>
                 </GlassCard>

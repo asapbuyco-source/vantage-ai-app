@@ -12,22 +12,15 @@ import { GlassCard } from './GlassCard';
 import { TeamLogo } from './TeamLogo';
 import { useAuth } from '../context/AuthContext';
 import { Match } from '../types';
+import { auth } from '../firebaseConfig';
+import { plainMarket } from '../utils';
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
 
 interface TicketWizardProps {}
 
-const DEFAULT_SPORT = 'football';
 const MIN_CONFIDENCE = 60;
 const MIN_PROBABILITY = 0.50;
-
-function getMatchKey(match: Match): string {
-    return String(match.fixture_id ?? match.fixtureId ?? match.id);
-}
-
-function getMatchSport(match: Match): string {
-    return match.sport ?? DEFAULT_SPORT;
-}
 
 function getModelProbability(match: Match): number {
     return match.calibrated_probability ?? match.probability ?? ((match.confidence ?? 0) / 100);
@@ -54,10 +47,6 @@ function getTeamKeys(match: Match): string[] {
         .filter(Boolean);
 }
 
-function isTicketEligible(match: Match): boolean {
-    return (match.odds ?? 0) > 1 && (match.confidence ?? 0) > 0;
-}
-
 function ticketQualityScore(match: Match): number {
     const confidence = match.confidence ?? 0;
     const prob = getModelProbability(match);
@@ -68,10 +57,10 @@ function ticketQualityScore(match: Match): number {
 export const TicketWizard: React.FC<TicketWizardProps> = () => {
     const navigate = useNavigate();
     const { t, language } = useAppContext();
-    const { predictions, basketballPredictions, cricketPredictions } = useData();
+    const { predictions } = useData();
     const { toggleSavedPick, isPickSaved } = useAppContext();
-    const { userProfile } = useAuth();
-    const isVip = userProfile?.isVip || false;
+    const { userProfile, isAdmin } = useAuth();
+    const isVip = (userProfile?.isVip === true) || isAdmin;
 
     const [step, setStep] = useState(1);
     const [stake, setStake] = useState<string>('1000');
@@ -88,9 +77,14 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
     const [ticketExplanation, setTicketExplanation] = useState<string | null>(null);
     const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
 
+    // Smart Tickets are football-only, from the top leagues (tier 1-2).
     const allMatches = useMemo(
-        () => [...predictions, ...basketballPredictions, ...cricketPredictions],
-        [predictions, basketballPredictions, cricketPredictions]
+        () => predictions.filter(m => {
+            const sport = (m.sport ?? 'football').toLowerCase();
+            const tier = m.leagueTier ?? m.league_tier ?? 5;
+            return sport === 'football' && tier <= 2;
+        }),
+        [predictions]
     );
 
     const generateTicket = () => {
@@ -113,9 +107,14 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
 
     const fetchTicketExplanation = async (ticket: Match[]) => {
         try {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            try {
+                const idToken = await auth.currentUser?.getIdToken();
+                if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+            } catch (_) { /* unauthenticated fallback */ }
             const response = await fetch(`${backendUrl}/api/ai/ticket-explanation`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     ticket,
                     stake: parseFloat(stake) || 1000,
@@ -148,30 +147,62 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
             dnb: maxLegs <= 5 ? 1 : 2,
         };
 
-        const pool = matches
-            .filter(m => isTicketEligible(m) && (m.confidence ?? 0) >= MIN_CONFIDENCE && getModelProbability(m) >= MIN_PROBABILITY)
-            .sort((a, b) => ticketQualityScore(b) - ticketQualityScore(a));
+        // Each fixture contributes its headline pick plus its approved value bets
+        // (the same markets shown in "Other Good Markets"). We keep only the
+        // strongest market per fixture — max one leg per match.
+        const candidates: Match[] = [];
+        for (const match of matches) {
+            if ((match.confidence ?? 0) < MIN_CONFIDENCE) continue;
 
-        if (pool.length === 0) return null;
+            const options: Array<{ market: string; prob: number; odds: number; ev: number }> = [];
+
+            const headlineMarket = match.bet_type || match.prediction || '';
+            const headlineProb = getModelProbability(match);
+            const headlineOdds = match.odds ?? 0;
+            if (headlineMarket && headlineOdds > 1 && headlineProb >= MIN_PROBABILITY) {
+                options.push({ market: headlineMarket, prob: headlineProb, odds: headlineOdds, ev: match.expected_value ?? 0 });
+            }
+
+            const valueBets = match.allValueBets ?? match.all_value_bets ?? [];
+            for (const bet of valueBets) {
+                if (!bet?.market || !((bet.odds ?? 0) > 1) || (bet.prob ?? 0) < MIN_PROBABILITY) continue;
+                options.push({ market: bet.market, prob: bet.prob, odds: bet.odds, ev: bet.ev ?? 0 });
+            }
+
+            if (options.length === 0) continue;
+
+            options.sort((a, b) => (b.prob - a.prob) || (b.ev - a.ev));
+            const best = options[0];
+
+            candidates.push({
+                ...match,
+                prediction: best.market,
+                prediction_en: plainMarket(best.market, 'en'),
+                prediction_fr: plainMarket(best.market, 'fr'),
+                bet_type: best.market,
+                odds: best.odds,
+                calibrated_probability: best.prob,
+                probability: best.prob,
+                expected_value: best.ev,
+            });
+        }
+
+        if (candidates.length === 0) return null;
+
+        candidates.sort((a, b) => ticketQualityScore(b) - ticketQualityScore(a));
 
         const ticket: Match[] = [];
         const usedMarketBases: Record<string, number> = {};
-        const sportLegs: Record<string, number> = {};
         const usedTeams = new Set<string>();
 
-        for (const match of pool) {
+        for (const match of candidates) {
             if (ticket.length >= maxLegs) break;
-
-            if (ticket.some(m => getMatchKey(m) === getMatchKey(match))) continue;
 
             const l = match.league || 'unknown';
             const leagueCount = ticket.filter(m => (m.league || 'unknown') === l).length;
             if (leagueCount >= sameLeagueCap) continue;
 
-            const st = getMatchSport(match);
-            if ((sportLegs[st] ?? 0) >= 3) continue;
-
-            const mb = getMarketBase(getTicketMarket(match, language));
+            const mb = getMarketBase(match.bet_type || getTicketMarket(match, language));
             const cap = marketCaps[mb] ?? 2;
             if ((usedMarketBases[mb] ?? 0) >= cap) continue;
 
@@ -181,7 +212,6 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
 
             ticket.push(match);
             usedMarketBases[mb] = (usedMarketBases[mb] ?? 0) + 1;
-            sportLegs[st] = (sportLegs[st] ?? 0) + 1;
         }
 
         return ticket.length > 0 ? ticket : null;
@@ -436,7 +466,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                                                         {match.homeTeam} v {match.awayTeam}
                                                     </p>
                                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                                        <span className="text-[10px] font-black text-vantage-purple uppercase">{getTicketMarket(match)}</span>
+                                                        <span className="text-[10px] font-black text-vantage-purple uppercase">{getTicketMarket(match, language)}</span>
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-gray-500 font-bold font-mono">@{match.odds.toFixed(2)}</span>
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 dark:text-green-400 font-bold">
                                                             {(getModelProbability(match) * 100).toFixed(0)}%

@@ -1,5 +1,23 @@
 import { Match } from './types';
 
+/** vipExpiry is stored as an ISO string (legacy / backend) or a Firestore Timestamp (new grants).
+ *  This normalizes either into a Date, or null if missing/invalid. */
+export const parseVipExpiry = (expiry: unknown): Date | null => {
+  if (!expiry) return null;
+  try {
+    if (typeof expiry === 'object' && expiry !== null && typeof (expiry as any).toDate === 'function') {
+      return (expiry as any).toDate() as Date;
+    }
+    if (typeof expiry === 'string') {
+      const d = new Date(expiry);
+      return isNaN(d.getTime()) ? null : d;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
 export interface ProbPick {
   name: string;
   prob: number;

@@ -16,10 +16,15 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isAdmin == true;
     }
 
+    // VIP access requires the flag AND (for Timestamp expiries — the format used by
+    // new grants) an expiry that hasn't passed. Legacy string expiries cannot be
+    // compared to request.time, so they fall back to the flag check.
     function isVip() {
+      let profile = get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
       return signedIn()
         && exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
-        && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isVip == true;
+        && profile.isVip == true
+        && (!(profile.vipExpiry is timestamp) || profile.vipExpiry >= request.time);
     }
 
     function doesNotTouchProtectedFields() {

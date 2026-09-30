@@ -18,7 +18,6 @@ export const LOCAL_CFA_PRICING: Record<string, number> = {
   'daily': 500,
   'weekly': 2000,
   'monthly': 5000,
-  'quarterly': 12000,
   'annual': 35000,
 };
 
