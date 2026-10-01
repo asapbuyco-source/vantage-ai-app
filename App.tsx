@@ -117,7 +117,7 @@ function AppContent() {
   }, []);
   useEffect(() => { if (user && !localStorage.getItem('vantage_onboarded')) setShowOnboarding(true); }, [user]);
   useEffect(() => {
-    const vipExpiry = parseVipExpiry(userProfile.vipExpiry);
+    const vipExpiry = parseVipExpiry(userProfile?.vipExpiry);
     if (!userProfile?.isVip || !vipExpiry) { setShowRenewalBanner(false); return; }
     const daysLeft = Math.ceil((vipExpiry.getTime() - Date.now()) / 86400000);
     const dismissalKey = vipExpiry.toISOString();
