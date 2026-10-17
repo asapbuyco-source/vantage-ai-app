@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ArrowLeft, Activity, Scale, ShieldAlert, Zap, Loader2, Trophy, Crosshair, Target, BarChart3, Newspaper, Users, CheckCircle2, ChevronRight, Crown, Clock, MapPin, Home as HomeIcon, CloudSun, Copy, AlertTriangle } from 'lucide-react';
+import { X, ArrowLeft, Activity, Scale, ShieldAlert, Zap, Loader2, Trophy, Crosshair, Target, BarChart3, Newspaper, Users, CheckCircle2, ChevronRight, Crown, Clock, MapPin, Home as HomeIcon, CloudSun, Copy, AlertTriangle, Lock } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { NavigationTab, Match, MatchNews } from '../types';
 import { getLiveOddsFromDB, getH2HFromDB, getMatchNewsFromDB, getFixtureLineupsFromDB, getMatchStatsFromDB, getMatchFactsFromDB, LineupPlayer, H2HRecord, MatchOdds, MatchStatsData, MatchFact } from '../services/sportsData';
@@ -18,7 +18,7 @@ import { TeamDetailSheet } from '../components/TeamDetailSheet';
 export const MatchDetails: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { language, showToast } = useAppContext();
+    const { language, showToast, tr } = useAppContext();
     const { t } = useAppContext();
     const { userProfile, isAdmin, isVipActive } = useAuth();
     const { predictions, rawFixtures } = useData();
@@ -145,7 +145,7 @@ fetchDetails();
             <div className="min-h-screen flex flex-col items-center justify-center bg-vantage-bg">
                 <Loader2 className="animate-spin text-vantage-cyan mb-4" size={40} />
                 <p className="text-gray-500 text-sm font-medium animate-pulse">
-                    {language === 'fr' ? 'Chargement des détails...' : 'Loading match details...'}
+                    {tr('Chargement des détails...', 'Loading match details...', 'Cargando detalles...', 'Carregando detalhes...')}
                 </p>
             </div>
         );
@@ -159,7 +159,7 @@ fetchDetails();
                     onClick={handleBack}
                     className="mt-4 px-4 py-2 bg-vantage-cyan/10 text-vantage-cyan rounded-lg"
                 >
-                    {language === 'fr' ? 'Retour' : 'Go Back'}
+                    {tr('Retour', 'Go Back', 'Volver', 'Voltar')}
                 </button>
             </div>
         );
@@ -207,7 +207,7 @@ fetchDetails();
                         </button>
                         <div className="flex items-center gap-2">
                             <Zap size={16} className="text-vantage-cyan" />
-                            <h1 className="text-sm font-bold text-white">{language === 'fr' ? 'Analyse' : 'Analysis'}</h1>
+                            <h1 className="text-sm font-bold text-white">{tr('Analyse', 'Analysis', 'Análisis', 'Análise')}</h1>
                         </div>
                     </div>
 
@@ -215,7 +215,7 @@ fetchDetails();
                         onClick={() => {
                             const text = `${match.homeTeam} vs ${match.awayTeam}`;
                             navigator.clipboard.writeText(text).then(() => {
-                                showToast?.(language === 'fr' ? 'Copié !' : 'Copied!');
+                                showToast?.(tr('Copié !', 'Copied!', '¡Copiado!', 'Copiado!'));
                             }).catch(() => {});
                         }}
                         title="Copy team names"
@@ -245,7 +245,7 @@ fetchDetails();
                             <TeamLogo src={match.homeTeamLogo} teamName={match.homeTeam} className="w-12 h-12 md:w-14 md:h-14 rounded-xl ring-1 ring-white/10 hover:ring-vantage-cyan/40" />
                         </button>
                         <span className="text-base md:text-xl font-bold leading-tight">{match.homeTeam}</span>
-                        <span className="text-xs text-gray-500 hidden md:inline ml-2">{language === 'fr' ? 'Domicile' : 'Home'}</span>
+                        <span className="text-xs text-gray-500 hidden md:inline ml-2">{tr('Domicile', 'Home', 'Local', 'Casa')}</span>
                     </div>
                     
                     <div className="flex flex-col items-center justify-center w-1/3 text-center">
@@ -256,7 +256,7 @@ fetchDetails();
                     </div>
 
                     <div className="flex items-center justify-end gap-3 w-1/3 text-right">
-                        <span className="text-xs text-gray-500 hidden md:inline mr-2">{language === 'fr' ? 'Ext�rieur' : 'Away'}</span>
+                        <span className="text-xs text-gray-500 hidden md:inline mr-2">{tr('Extérieur', 'Away', 'Visitante', 'Fora')}</span>
                         <span className="text-base md:text-xl font-bold leading-tight">{match.awayTeam}</span>
                         <button onClick={() => setDetailSheet('away')} className="shrink-0 active:scale-90 transition-transform" title={`${match.awayTeam} — view squad & lineup`}>
                             <TeamLogo src={match.awayTeamLogo} teamName={match.awayTeam} className="w-12 h-12 md:w-14 md:h-14 rounded-xl ring-1 ring-white/10 hover:ring-vantage-purple/40" />
@@ -269,11 +269,11 @@ fetchDetails();
             <div className="sticky top-[57px] z-10 bg-vantage-bg/95 backdrop-blur-md border-b border-white/10 overflow-x-auto no-scrollbar">
                 <div className="flex gap-6 flex-nowrap px-4">
                     {[
-                        ['Prediction', language === 'fr' ? 'Pronostic' : 'Prediction'],
-                        ['Correct Scores', language === 'fr' ? 'Scores Exactes' : 'Correct Scores'],
-                        ['AI Reasons', language === 'fr' ? 'Raisons IA' : 'AI Reasons'],
-                        ['Trends', language === 'fr' ? 'Tendances' : 'Trends'],
-                        ['Lineup', language === 'fr' ? 'Compositions' : 'Lineup'],
+                        ['Prediction', tr('Pronostic', 'Prediction', 'Pronóstico', 'Palpite')],
+                        ['Correct Scores', tr('Scores Exactes', 'Correct Scores', 'Marcadores Exactos', 'Placares Exatos')],
+                        ['AI Reasons', tr('Raisons IA', 'AI Reasons', 'Razones IA', 'Razões IA')],
+                        ['Trends', tr('Tendances', 'Trends', 'Tendencias', 'Tendências')],
+                        ['Lineup', tr('Compositions', 'Lineup', 'Alineaciones', 'Escalações')],
                         ['H2H', 'H2H'],
                     ].map(([tab, label]) => (
                         <button
@@ -298,19 +298,22 @@ fetchDetails();
                         <Target size={32} className="text-vantage-purple" />
                     </div>
                     <h3 className="text-lg font-bold">
-                        {language === 'fr' ? 'Prédiction VIP Exclusive' : 'Exclusive VIP Prediction'}
+                        {tr('Prédiction VIP Exclusive', 'Exclusive VIP Prediction', 'Predicción VIP Exclusiva', 'Palpite VIP Exclusivo')}
                     </h3>
                     <p className="text-sm text-gray-500">
-                        {language === 'fr'
-                            ? 'Débloquez cette analyse IA complète, la probabilité de réussite et notre pronostic exact en devenant membre VIP.'
-                            : 'Unlock this comprehensive AI analysis, the exact success probability, and our precise prediction by becoming a VIP member.'}
+                        {tr(
+                            'Débloquez cette analyse IA complète, la probabilité de réussite et notre pronostic exact en devenant membre VIP.',
+                            'Unlock this comprehensive AI analysis, the exact success probability, and our precise prediction by becoming a VIP member.',
+                            'Desbloquea este análisis IA completo, la probabilidad exacta de acierto y nuestro pronóstico preciso haciéndote miembro VIP.',
+                            'Desbloqueie esta análise IA completa, a probabilidade exata de acerto e nosso palpite preciso tornando-se membro VIP.'
+                        )}
                     </p>
                     <button
                         onClick={() => navigate('/vip')}
                         className="mt-4 flex items-center justify-center gap-2 px-6 py-3 bg-vantage-purple hover:bg-purple-600 active:scale-95 transition-all text-white w-full rounded-xl font-bold shadow-lg shadow-vantage-purple/20"
                     >
                         <Zap size={18} className="text-yellow-400 fill-yellow-400" />
-                        {language === 'fr' ? 'DEVENIR ALPHA' : 'BECOME ALPHA'}
+                        {tr('DEVENIR ALPHA', 'BECOME ALPHA', 'HAZTE ALPHA', 'TORNE-SE ALPHA')}
                     </button>
                 </div>
             ) : (
@@ -323,9 +326,9 @@ fetchDetails();
                             <Trophy size={16} className="text-emerald-400 shrink-0" />
                             <div className="min-w-0 flex-1">
                                 <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block">
-                                    {language === 'fr' ? 'Analyse la Plus Sûre' : 'Safest Pick'}
+                                    {tr('Analyse la Plus Sûre', 'Safest Pick', 'Análisis Más Seguro', 'Palpite Mais Seguro')}
                                     {match.odds_fresh === false && (
-                                        <span className="ml-2 text-[8px] font-black px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 align-middle">{language === 'fr' ? 'COTES ANCIENNES' : 'STALE ODDS'}</span>
+                                        <span className="ml-2 text-[8px] font-black px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 align-middle">{tr('COTES ANCIENNES', 'STALE ODDS', 'CUOTAS ANTIGUAS', 'ODDS ANTIGAS')}</span>
                                     )}
                                 </span>
                                 <span className="text-sm font-bold text-white truncate block">
@@ -356,6 +359,53 @@ fetchDetails();
                         </div>
                     </div>
 
+                    {/* Highest Value Bet — the EV-best pick, with model-vs-market math + method */}
+                    {(() => {
+                        const market = match.prediction_en || match.prediction || match.bet_type || '';
+                        const modelProb = Number((match as any).calibrated_probability ?? match.probability ?? 0); // 0..1
+                        const odds = Number(match.odds) || 0;
+                        if (!market || odds <= 1) return null;
+                        const implied = 1 / odds;
+                        const edge = modelProb > 0 ? (modelProb * odds - 1) * 100 : null;
+                        const isValue = edge != null && edge > 0;
+                        return (
+                            <div className="relative rounded-xl overflow-hidden mb-4 border border-vantage-purple/25 bg-gradient-to-r from-vantage-purple/15 to-vantage-bg">
+                                <div className="relative z-10 px-4 py-3">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-[10px] font-bold text-vantage-purple uppercase tracking-widest flex items-center gap-1.5">
+                                            <Crown size={12} /> {tr('MEILLEUR VALUE BET', 'HIGHEST VALUE BET', 'MEJOR VALUE BET', 'MELHOR VALUE BET')}
+                                        </span>
+                                        {isValue && (
+                                            <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
+                                                +{edge!.toFixed(0)}% {tr('AVANTAGE', 'EDGE', 'VENTAJA', 'VANTAGEM')}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-sm font-bold text-white truncate">{plainMarket(market, language)}</span>
+                                        <span className="text-sm font-black font-mono text-white shrink-0">{odds.toFixed(2)}</span>
+                                    </div>
+                                    <div className="mt-1.5 flex items-center gap-3 text-[10px]">
+                                        <span className="text-gray-400">
+                                            {tr('Modèle', 'Model', 'Modelo', 'Modelo')} <b className="text-emerald-400">{modelProb > 0 ? Math.round(modelProb * 100) : '—'}%</b>
+                                        </span>
+                                        <span className="text-gray-400">
+                                            {tr('Cotes impliquent', 'Odds imply', 'Cuotas implican', 'Odds implicam')} <b className="text-gray-300">{Math.round(implied * 100)}%</b>
+                                        </span>
+                                    </div>
+                                    <p className="text-[9px] text-gray-500 mt-1.5">
+                                        {tr(
+                                            'Poisson + Elo + forme + xG : la probabilité du modèle comparée à celle implicite des cotes.',
+                                            'Poisson + Elo + form + xG ensemble — our model probability vs the probability implied by the odds.',
+                                            'Poisson + Elo + forma + xG: probabilidad del modelo frente a la implícita en las cuotas.',
+                                            'Poisson + Elo + forma + xG: probabilidade do modelo versus a implícita nas odds.'
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {/* Other Good Markets — only our statistically strongest, direction-aligned markets */}
                     {(() => {
                         // Direction of the prediction: favored side + goals lean
@@ -383,12 +433,12 @@ fetchDetails();
                         const over15 = (match.over15_prob || 0) * 100;
                         const over35 = (match.over35_prob || 0) * 100;
                         const candidates: { l: string; code: string; p: number; side?: string; goals?: string }[] = [
-                            { l: 'Home or Draw', code: '1X', p: ((match.double_chance_1x || 0) * 100), side: 'home' },
-                            { l: 'Draw or Away', code: 'X2', p: ((match.double_chance_x2 || 0) * 100), side: 'away' },
-                            { l: 'Home or Away', code: '12', p: ((match.double_chance_12 || 0) * 100) },
+                            { l: tr('Domicile ou Nul', 'Home or Draw', 'Local o Empate', 'Casa ou Empate'), code: '1X', p: ((match.double_chance_1x || 0) * 100), side: 'home' },
+                            { l: tr('Nul ou Extérieur', 'Draw or Away', 'Empate o Visitante', 'Empate ou Fora'), code: 'X2', p: ((match.double_chance_x2 || 0) * 100), side: 'away' },
+                            { l: tr('Domicile ou Extérieur', 'Home or Away', 'Local o Visitante', 'Casa ou Fora'), code: '12', p: ((match.double_chance_12 || 0) * 100) },
                             goalLean === 'over'
-                                ? { l: 'Over 1.5 Goals', code: 'O1.5', p: over15, goals: 'over' }
-                                : { l: 'Under 3.5 Goals', code: 'U3.5', p: (100 - over35), goals: 'under' },
+                                ? { l: tr('Plus de 1,5 buts', 'Over 1.5 Goals', 'Más de 1.5 goles', 'Mais de 1.5 gols'), code: 'O1.5', p: over15, goals: 'over' }
+                                : { l: tr('Moins de 3,5 buts', 'Under 3.5 Goals', 'Menos de 3.5 goles', 'Menos de 3.5 gols'), code: 'U3.5', p: (100 - over35), goals: 'under' },
                         ];
 
                         // Only direction-aligned, value-worthy markets make the cut
@@ -402,24 +452,53 @@ fetchDetails();
                         return (
                             <div className="mb-4 rounded-xl border border-vantage-cyan/20 bg-vantage-cyan/[0.04] p-3">
                                 <span className="text-[10px] font-bold text-vantage-cyan uppercase tracking-widest block mb-2.5">
-                                    {language === 'fr' ? 'AUTRES BONS MARCHÉS' : 'OTHER GOOD MARKETS'}
+                                    {tr('AUTRES BONS MARCHÉS', 'OTHER GOOD MARKETS', 'OTROS BUENOS MERCADOS', 'OUTROS BONS MERCADOS')}
                                 </span>
                                 <div className="grid grid-cols-2 gap-2">
-                                    {markets.map((m, i) => (
-                                        <div key={i} className="rounded-lg bg-white/5 px-2.5 py-2">
-                                            <div className="flex items-center justify-between gap-1 mb-1">
-                                                <span className="text-[10px] font-semibold text-gray-300 truncate">{m.l}</span>
-                                                <span className="text-[8px] font-black text-gray-500 shrink-0">{m.code}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between gap-1">
-                                                <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
-                                                    <div className="h-full bg-emerald-400/80 rounded-full" style={{ width: `${m.p}%` }} />
+                                    {markets.map((m, i) => {
+                                        const isLocked = !isVipUser && i > 0;
+                                        return (
+                                            <div
+                                                key={i}
+                                                className={`relative rounded-lg bg-white/5 px-2.5 py-2 overflow-hidden transition-all ${isLocked ? 'cursor-pointer hover:bg-white/10' : ''}`}
+                                                onClick={isLocked ? () => navigate('/vip') : undefined}
+                                            >
+                                                <div className={`flex items-center justify-between gap-1 mb-1 ${isLocked ? 'blur-[3px] select-none opacity-40' : ''}`}>
+                                                    <span className="text-[10px] font-semibold text-gray-300 truncate">{m.l}</span>
+                                                    <span className="text-[8px] font-black text-gray-500 shrink-0">{m.code}</span>
                                                 </div>
-                                                <span className="text-[11px] font-black font-mono text-emerald-400 ml-1.5 shrink-0">{m.p.toFixed(0)}%</span>
+                                                <div className={`flex items-center justify-between gap-1 ${isLocked ? 'blur-[3px] select-none opacity-40' : ''}`}>
+                                                    <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                                                        <div className="h-full bg-emerald-400/80 rounded-full" style={{ width: `${m.p}%` }} />
+                                                    </div>
+                                                    <span className="text-[11px] font-black font-mono text-emerald-400 ml-1.5 shrink-0">{m.p.toFixed(0)}%</span>
+                                                </div>
+                                                {isLocked && (
+                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
+                                                        <span className="text-[9px] font-black text-vantage-purple flex items-center gap-1 bg-vantage-purple/20 px-2 py-0.5 rounded-full border border-vantage-purple/40">
+                                                            <Lock size={8} /> VIP
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
+                                {!isVipUser && markets.length > 1 && (
+                                    <div className="mt-2.5 pt-2 border-t border-vantage-cyan/15 flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5 text-[10px] text-vantage-cyan font-bold">
+                                            <Crown size={12} className="text-yellow-400 shrink-0" />
+                                            <span>{tr(`${markets.length - 1} marchés alternatifs réservés VIP`, `${markets.length - 1} alternative markets reserved for VIP`, `${markets.length - 1} mercados alternativos reservados para VIP`, `${markets.length - 1} mercados alternativos reservados para VIP`)}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => navigate('/vip')}
+                                            className="px-2.5 py-1 rounded-lg bg-vantage-purple text-white text-[10px] font-black hover:bg-purple-600 transition-colors flex items-center gap-1 shadow-sm shadow-vantage-purple/30"
+                                        >
+                                            <Lock size={9} />
+                                            {tr('Débloquer', 'Unlock', 'Desbloquear', 'Desbloquear')}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         );
                     })()}
@@ -461,7 +540,7 @@ fetchDetails();
                         <div className="grid grid-cols-5 gap-3">
                             <div className="col-span-3 bg-white/5 border border-white/5 rounded-xl p-3">
                                 <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block mb-2">
-                                    {language === 'fr' ? 'POURQUOI CE PICK' : 'WHY THIS PICK'}
+                                    {tr('POURQUOI CE PICK', 'WHY THIS PICK', 'POR QUÉ ESTE PICK', 'POR QUE ESTE PICK')}
                                 </span>
                                 <div className="space-y-1.5">
                                     {(() => {
@@ -471,16 +550,16 @@ fetchDetails();
                                         const xg = (match.expected_goals_home ?? 0) + (match.expected_goals_away ?? 0);
                                         const ag = match.model_agreement ?? match.result_confidence ?? 0;
 
-                                        if (h != null && Number(h) > 1.2) reasons.push(language === 'fr' ? `${match.homeTeam} marque souvent — environ ${Number(h).toFixed(1)} buts par match` : `${match.homeTeam} score often — about ${Number(h).toFixed(1)} goals a game`);
-                                        if (a != null && Number(a) > 1.2) reasons.push(language === 'fr' ? `${match.awayTeam} marque souvent — environ ${Number(a).toFixed(1)} buts par match` : `${match.awayTeam} score often — about ${Number(a).toFixed(1)} goals a game`);
-                                        if (xg > 2) reasons.push(language === 'fr' ? `Match animé attendu — environ ${xg.toFixed(0)} buts au total` : `Expect a lively match — around ${xg.toFixed(0)} goals between both teams`);
+                                        if (h != null && Number(h) > 1.2) reasons.push(tr(`${match.homeTeam} marque souvent — environ ${Number(h).toFixed(1)} buts par match`, `${match.homeTeam} score often — about ${Number(h).toFixed(1)} goals a game`, `${match.homeTeam} marca seguido — unos ${Number(h).toFixed(1)} goles por partido`, `${match.homeTeam} marca com frequência — cerca de ${Number(h).toFixed(1)} gols por jogo`));
+                                        if (a != null && Number(a) > 1.2) reasons.push(tr(`${match.awayTeam} marque souvent — environ ${Number(a).toFixed(1)} buts par match`, `${match.awayTeam} score often — about ${Number(a).toFixed(1)} goals a game`, `${match.awayTeam} marca seguido — unos ${Number(a).toFixed(1)} goles por partido`, `${match.awayTeam} marca com frequência — cerca de ${Number(a).toFixed(1)} gols por jogo`));
+                                        if (xg > 2) reasons.push(tr(`Match animé attendu — environ ${xg.toFixed(0)} buts au total`, `Expect a lively match — around ${xg.toFixed(0)} goals between both teams`, `Se espera un partido animado — alrededor de ${xg.toFixed(0)} goles en total`, `Espere um jogo movimentado — cerca de ${xg.toFixed(0)} gols no total`));
                                         if (ag > 0.7) reasons.push(ag >= 0.9
-                                            ? (language === 'fr' ? 'Tous nos indicateurs convergent' : 'Every part of our analysis points the same way')
-                                            : (language === 'fr' ? 'La plupart de nos angles d\'analyse concordent' : 'Most angles of our analysis agree'));
-                                        if (Number(match.odds) > 1.05 && (match.expected_value ?? 0) > 0) reasons.push(language === 'fr' ? 'La cote du bookmaker est meilleure que la vraie probabilité — bonne valeur' : 'The bookmaker price is better than the true chance — good value');
-                                        if (match.vault_eligible) reasons.push(language === 'fr' ? 'Classé parmi nos analyses les plus sûres du jour' : 'Ranked among our safest picks of the day');
+                                            ? tr('Tous nos indicateurs convergent', 'Every part of our analysis points the same way', 'Todos nuestros indicadores coinciden', 'Todos os nossos indicadores convergem')
+                                            : tr('La plupart de nos angles d\'analyse concordent', 'Most angles of our analysis agree', 'La mayoría de nuestros análisis coinciden', 'A maioria das nossas análises concorda'));
+                                        if (Number(match.odds) > 1.05 && (match.expected_value ?? 0) > 0) reasons.push(tr('La cote du bookmaker est meilleure que la vraie probabilité — bonne valeur', 'The bookmaker price is better than the true chance — good value', 'La cuota es mejor que la probabilidad real — buen valor', 'A odd está melhor que a probabilidade real — bom valor'));
+                                        if (match.vault_eligible) reasons.push(tr('Classé parmi nos analyses les plus sûres du jour', 'Ranked among our safest picks of the day', 'Clasificado entre nuestros análisis más seguros del día', 'Classificado entre nossos palpites mais seguros do dia'));
 
-                                        if (reasons.length === 0) return <p className="text-[10px] text-gray-500">{language === 'fr' ? 'Notre modèle ne voit pas d\'avantage fort ici — prudence sur ce match.' : 'Our model sees no strong edge here — treat this match with caution.'}</p>;
+                                        if (reasons.length === 0) return <p className="text-[10px] text-gray-500">{tr('Notre modèle ne voit pas d\'avantage fort ici — prudence sur ce match.', 'Our model sees no strong edge here — treat this match with caution.', 'Nuestro modelo no ve una ventaja clara aquí — precaución con este partido.', 'Nosso modelo não vê vantagem forte aqui — cautela neste jogo.')}</p>;
                                         return reasons.map((r, i) => (
                                             <p key={i} className="text-[11px] text-gray-300 flex items-start gap-1.5 leading-snug">
                                                 <CheckCircle2 size={12} className="text-emerald-400 shrink-0 mt-px" />
@@ -492,7 +571,7 @@ fetchDetails();
                             </div>
                             <div className="col-span-2 bg-white/5 border border-white/5 rounded-xl p-3">
                                 <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block mb-2">
-                                    {language === 'fr' ? 'FACTEURS DE RISQUE' : 'RISK FACTORS'}
+                                    {tr('FACTEURS DE RISQUE', 'RISK FACTORS', 'FACTORES DE RIESGO', 'FATORES DE RISCO')}
                                 </span>
                                 <div className="space-y-1.5">
                                     {(() => {
@@ -531,17 +610,17 @@ fetchDetails();
                             return (
                                 <div className="bg-white/5 border border-white/5 rounded-xl p-3">
                                     <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block mb-2">
-                                        {language === 'fr' ? 'À ÉVITER' : 'WHAT TO AVOID'}
+                                        {tr('À ÉVITER', 'WHAT TO AVOID', 'A EVITAR', 'A EVITAR')}
                                     </span>
                                     <div className="space-y-1">
                                         {avoidMarkets.slice(0, 2).map((m, i) => (
                                             <p key={i} className="text-[10px] text-gray-400">
-                                                ❌ {m.l} — {m.p.toFixed(0)}% {language === 'fr' ? 'de chance' : 'chance'}
+                                                ❌ {m.l} — {m.p.toFixed(0)}% {tr('de chance', 'chance', 'de probabilidad', 'de chance')}
                                             </p>
                                         ))}
                                     </div>
                                     <p className="text-[9px] text-gray-500 mt-1">
-                                        {language === 'fr' ? 'Ces marchés ont une faible probabilité.' : 'These markets have low probability of success.'}
+                                        {tr('Ces marchés ont une faible probabilité.', 'These markets have low probability of success.', 'Estos mercados tienen baja probabilidad de acierto.', 'Estes mercados têm baixa probabilidade de sucesso.')}
                                     </p>
                                 </div>
                             );
@@ -550,7 +629,7 @@ fetchDetails();
                         {/* Risk Meter */}
                         <div className="bg-white/5 border border-white/5 rounded-xl p-3">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                                {language === 'fr' ? 'NIVEAU DE RISQUE' : 'RISK LEVEL'}
+                                {tr('NIVEAU DE RISQUE', 'RISK LEVEL', 'NIVEL DE RIESGO', 'NÍVEL DE RISCO')}
                             </span>
                             {(() => {
                                 const rest = Math.min(match.home_days_rest ?? 7, match.away_days_rest ?? 7);
@@ -565,7 +644,7 @@ fetchDetails();
                                 if (hasSharpDisagree) riskScore += 20;
                                 if (hasWeather) riskScore += 15;
                                 riskScore = Math.min(riskScore, 100);
-                                const label = riskScore < 30 ? (language === 'fr' ? 'Très Faible' : 'Very Low') : riskScore < 50 ? (language === 'fr' ? 'Faible' : 'Low') : riskScore < 70 ? (language === 'fr' ? 'Moyen' : 'Medium') : (language === 'fr' ? 'Élevé' : 'High');
+                                const label = riskScore < 30 ? tr('Très Faible', 'Very Low', 'Muy Bajo', 'Muito Baixo') : riskScore < 50 ? tr('Faible', 'Low', 'Bajo', 'Baixo') : riskScore < 70 ? tr('Moyen', 'Medium', 'Medio', 'Médio') : tr('Élevé', 'High', 'Alto', 'Alto');
                                 const color = riskScore < 30 ? 'bg-emerald-500' : riskScore < 50 ? 'bg-vantage-cyan' : riskScore < 70 ? 'bg-amber-500' : 'bg-rose-500';
                                 const textColor = riskScore < 30 ? 'text-emerald-400' : riskScore < 50 ? 'text-vantage-cyan' : riskScore < 70 ? 'text-amber-400' : 'text-rose-400';
                                 return (
@@ -578,10 +657,10 @@ fetchDetails();
                                             <div className={`h-full rounded-full ${color}`} style={{width: `${riskScore}%`}} />
                                         </div>
                                         <p className="text-[9px] text-gray-500 mt-1">
-                                            {riskScore < 30 ? (language === 'fr' ? 'Idéal pour les accumulators.' : 'Ideal for accumulators.') :
-                                             riskScore < 50 ? (language === 'fr' ? 'Bon pour les paris simples.' : 'Good for single bets.') :
-                                             riskScore < 70 ? (language === 'fr' ? 'À considérer avec prudence.' : 'Consider with caution.') :
-                                             (language === 'fr' ? 'Éviter les accumulators.' : 'Avoid accumulators.')}
+                                            {riskScore < 30 ? tr('Idéal pour les accumulators.', 'Ideal for accumulators.', 'Ideal para combinadas.', 'Ideal para acumuladas.') :
+                                             riskScore < 50 ? tr('Bon pour les paris simples.', 'Good for single bets.', 'Bueno para apuestas simples.', 'Bom para apostas simples.') :
+                                             riskScore < 70 ? tr('À considérer avec prudence.', 'Consider with caution.', 'Considerar con precaución.', 'Considerar com cautela.') :
+                                             tr('Éviter les accumulators.', 'Avoid accumulators.', 'Evitar las combinadas.', 'Evitar acumuladas.')}
                                         </p>
                                     </>
                                 );
@@ -591,7 +670,7 @@ fetchDetails();
                         {/* Confidence Breakdown */}
                         <div className="bg-white/5 border border-white/5 rounded-xl p-3">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                                {language === 'fr' ? 'CONFIANCE DÉTAILLÉE' : 'CONFIDENCE BREAKDOWN'}
+                                {tr('CONFIANCE DÉTAILLÉE', 'CONFIDENCE BREAKDOWN', 'CONFIANZA DETALLADA', 'CONFIANÇA DETALHADA')}
                             </span>
                             <div className="space-y-1.5">
                                 {(() => {
@@ -600,9 +679,9 @@ fetchDetails();
                                     const ev = (match.expected_value ?? 0) * 100;
                                     const evPct = Math.max(4, Math.min(100, Math.abs(ev) * 2));
                                     const rows = [
-                                        { l: language === 'fr' ? 'Accord du Modèle' : 'Model Agreement', v: `${agreement}%`, w: `${Math.max(4, Math.min(100, agreement))}%` },
-                                        { l: language === 'fr' ? 'Qualité Données' : 'Data Quality', v: `${quality}%`, w: `${Math.max(4, Math.min(100, quality))}%` },
-                                        { l: language === 'fr' ? 'Valeur Marché' : 'Market Value', v: `${ev > 0 ? '+' : ''}${ev.toFixed(1)}% EV`, w: `${evPct}%` },
+                                        { l: tr('Accord du Modèle', 'Model Agreement', 'Acuerdo del Modelo', 'Concordância do Modelo'), v: `${agreement}%`, w: `${Math.max(4, Math.min(100, agreement))}%` },
+                                        { l: tr('Qualité Données', 'Data Quality', 'Calidad de Datos', 'Qualidade dos Dados'), v: `${quality}%`, w: `${Math.max(4, Math.min(100, quality))}%` },
+                                        { l: tr('Valeur Marché', 'Market Value', 'Valor de Mercado', 'Valor de Mercado'), v: `${ev > 0 ? '+' : ''}${ev.toFixed(1)}% EV`, w: `${evPct}%` },
                                     ];
                                     return rows.map(row => (
                                         <div key={row.l} className="flex items-center gap-2">

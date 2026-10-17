@@ -14,7 +14,7 @@ interface ArbFinderProps {}
 
 export const ArbFinder: React.FC<ArbFinderProps> = () => {
     const navigate = useNavigate();
-    const { t, language } = useAppContext();
+    const { t, language, tr } = useAppContext();
     const { userProfile } = useAuth();
     
     const [arbs, setArbs] = useState<any[]>([]);
@@ -63,15 +63,18 @@ export const ArbFinder: React.FC<ArbFinderProps> = () => {
                     ARB <span className="text-vantage-cyan">FINDER</span>
                 </h1>
                 <p className="text-gray-500 text-center max-w-xs mt-2">
-                    {language === 'fr' 
-                        ? 'Le scanner d\'Arbitrage (Surebet) est réservé aux abonnés VIP.' 
-                        : 'The Arbitrage (Surebet) scanner is restricted to VIP subscribers.'}
+                    {tr(
+                        'Le scanner d\'Arbitrage (Surebet) est réservé aux abonnés VIP.',
+                        'The Arbitrage (Surebet) scanner is restricted to VIP subscribers.',
+                        'El escáner de Arbitraje (Surebet) está reservado para suscriptores VIP.',
+                        'O scanner de Arbitragem (Surebet) é restrito a assinantes VIP.'
+                    )}
                 </p>
                 <button 
                     onClick={() => navigate('/vip')}
                     className="mt-6 px-6 py-3 bg-vantage-cyan text-slate-900 font-bold rounded-full hover:bg-cyan-400 transition"
                 >
-                    {language === 'fr' ? 'Devenir VIP' : 'Upgrade to VIP'}
+                    {tr('Devenir VIP', 'Upgrade to VIP', 'Hazte VIP', 'Torne-se VIP')}
                 </button>
             </div>
         );
@@ -97,9 +100,12 @@ export const ArbFinder: React.FC<ArbFinderProps> = () => {
                 <div className="flex gap-3 items-start">
                     <Zap size={16} className="text-vantage-cyan shrink-0 mt-0.5" />
                     <p className="text-xs text-gray-400 leading-relaxed">
-                        {language === 'fr'
-                            ? 'L\'IA scanne plusieurs bookmakers en temps réel pour trouver des écarts de cotes où un staking discipliné peut verrouiller un petit edge.'
-                            : 'The AI scans multiple bookmakers in real-time to find odds discrepancies where disciplined stake sizing can lock in a small edge.'}
+                        {tr(
+                            'L\'IA scanne plusieurs bookmakers en temps réel pour trouver des écarts de cotes où un staking discipliné peut verrouiller un petit edge.',
+                            'The AI scans multiple bookmakers in real-time to find odds discrepancies where disciplined stake sizing can lock in a small edge.',
+                            'La IA escanea varias casas de apuestas en tiempo real para encontrar diferencias de cuotas explotables.',
+                            'A IA escaneia várias casas em tempo real para encontrar diferenças de odds exploráveis.'
+                        )}
                     </p>
                 </div>
             </GlassCard>
@@ -109,12 +115,15 @@ export const ArbFinder: React.FC<ArbFinderProps> = () => {
                     <div className="text-center py-12 px-4 border border-dashed border-gray-300 dark:border-white/10 rounded-2xl">
                         <TrendingUp size={32} className="text-gray-400 mx-auto mb-3 opacity-50" />
                         <h3 className="text-sm font-bold text-slate-700 dark:text-gray-300 mb-1">
-                            {language === 'fr' ? 'Aucune opportunité' : 'No Arbs Available'}
+                            {tr('Aucune opportunité', 'No Arbs Available', 'Sin oportunidades', 'Nenhuma oportunidade')}
                         </h3>
                         <p className="text-xs text-gray-500">
-                            {language === 'fr' 
-                                ? 'L\'algorithme scanne les marchés. Les opportunités d\'arbitrage apparaissent et disparaissent rapidement.' 
-                                : 'The algorithm is scanning the markets. Arbitrage opportunities appear and disappear rapidly.'}
+                            {tr(
+                                'L\'algorithme scanne les marchés. Les opportunités d\'arbitrage apparaissent et disparaissent rapidement.',
+                                'The algorithm is scanning the markets. Arbitrage opportunities appear and disappear rapidly.',
+                                'El algoritmo escanea los mercados. Las oportunidades de arbitraje aparecen y desaparecen rápido.',
+                                'O algoritmo escaneia os mercados. As oportunidades de arbitragem aparecem e desaparecem rápido.'
+                            )}
                         </p>
                     </div>
                 ) : (
@@ -156,7 +165,7 @@ export const ArbFinder: React.FC<ArbFinderProps> = () => {
                                         onClick={() => setSelectedArb(arb)}
                                         className="w-full py-2.5 bg-vantage-cyan/10 hover:bg-vantage-cyan/20 text-vantage-cyan font-bold text-xs rounded-xl transition-colors border border-vantage-cyan/20"
                                     >
-                                        {language === 'fr' ? 'Calculer les Mises' : 'Calculate Stakes'}
+                                        {tr('Calculer les Mises', 'Calculate Stakes', 'Calcular Apuestas', 'Calcular Apostas')}
                                     </button>
                                 </div>
                             </GlassCard>

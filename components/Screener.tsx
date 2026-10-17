@@ -9,7 +9,7 @@ interface ScreenerProps {
 }
 
 export const Screener: React.FC<ScreenerProps> = ({ matches }) => {
-    const { language } = useAppContext();
+    const { language, tr } = useAppContext();
     const { userProfile } = useAuth();
     
     const [minEV, setMinEV] = useState<number>(2); // 2% default
@@ -57,7 +57,7 @@ export const Screener: React.FC<ScreenerProps> = ({ matches }) => {
                     <div className="flex items-center gap-2">
                         <SlidersHorizontal size={16} className="text-vantage-cyan" />
                         <span className="font-bold uppercase tracking-wider text-xs text-white">
-                            {language === 'fr' ? 'Filtres Quantitatifs' : 'Quantitative Screener'}
+                            {tr('Filtres Quantitatifs', 'Quantitative Screener', 'Filtros Cuantitativos', 'Filtros Quantitativos')}
                         </span>
                     </div>
                     {showFilters ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}

@@ -8,25 +8,31 @@ interface ResponsibleGamblingProps {
 }
 
 export const ResponsibleGambling: React.FC<ResponsibleGamblingProps> = ({ compact = false }) => {
-  const { language } = useAppContext();
+  const { language, tr } = useAppContext();
   const [expanded, setExpanded] = useState(false);
 
   const text = {
-    title: language === 'fr' ? 'Jeu Responsable' : 'Responsible Gambling',
-    subtitle: language === 'fr'
-      ? 'Les pronostics ne garantissent pas les gains. Pariez de manière responsable.'
-      : 'Predictions do not guarantee winnings. Gamble responsibly.',
-    age: language === 'fr' ? 'Réservé aux 18 ans et plus' : '18+ Only',
-    helpTitle: language === 'fr' ? 'Besoin d\'aide ?' : 'Need help?',
-    helpText: language === 'fr'
-      ? 'Si vous pensez avoir un problème de jeu, des organisations peuvent vous aider gratuitement et confidentiellement.'
-      : 'If you think you have a gambling problem, free and confidential support is available.',
-    selfExclude: language === 'fr' ? 'Auto-exclusion' : 'Self-Exclude',
+    title: tr('Jeu Responsable', 'Responsible Gambling', 'Juego Responsable', 'Jogo Responsável'),
+    subtitle: tr(
+      'Les pronostics ne garantissent pas les gains. Pariez de manière responsable.',
+      'Predictions do not guarantee winnings. Gamble responsibly.',
+      'Los pronósticos no garantizan ganancias. Juega de forma responsable.',
+      'Os palpites não garantem ganhos. Jogue de forma responsável.'
+    ),
+    age: tr('Réservé aux 18 ans et plus', '18+ Only', 'Solo para mayores de 18', 'Apenas 18+'),
+    helpTitle: tr('Besoin d\'aide ?', 'Need help?', '¿Necesitas ayuda?', 'Precisa de ajuda?'),
+    helpText: tr(
+      'Si vous pensez avoir un problème de jeu, des organisations peuvent vous aider gratuitement et confidentiellement.',
+      'If you think you have a gambling problem, free and confidential support is available.',
+      'Si crees que tienes un problema con el juego, hay organizaciones que pueden ayudarte gratis y de forma confidencial.',
+      'Se você acha que tem um problema com jogos, há organizações que podem ajudar gratuitamente e com confidencialidade.'
+    ),
+    selfExclude: tr('Auto-exclusion', 'Self-Exclude', 'Autoexclusión', 'Autoexclusão'),
     reminders: [
-      language === 'fr' ? '🎯 Fixez-vous un budget et respectez-le' : '🎯 Set a budget and stick to it',
-      language === 'fr' ? '⏰ Limitez votre temps de jeu' : '⏰ Limit your gambling time',
-      language === 'fr' ? '🚫 Ne pariez jamais ce que vous ne pouvez pas perdre' : '🚫 Never bet what you cannot afford to lose',
-      language === 'fr' ? '🧘 Le jeu doit rester un divertissement' : '🧘 Gambling should remain entertainment',
+      tr('🎯 Fixez-vous un budget et respectez-le', '🎯 Set a budget and stick to it', '🎯 Fija un presupuesto y respétalo', '🎯 Defina um orçamento e respeite-o'),
+      tr('⏰ Limitez votre temps de jeu', '⏰ Limit your gambling time', '⏰ Limita tu tiempo de juego', '⏰ Limite seu tempo de jogo'),
+      tr('🚫 Ne pariez jamais ce que vous ne pouvez pas perdre', '🚫 Never bet what you cannot afford to lose', '🚫 Nunca apuestes lo que no puedes perder', '🚫 Nunca aposte o que não pode perder'),
+      tr('🧘 Le jeu doit rester un divertissement', '🧘 Gambling should remain entertainment', '🧘 El juego debe seguir siendo un entretenimiento', '🧘 O jogo deve continuar sendo diversão'),
     ],
   };
 

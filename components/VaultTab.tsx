@@ -108,7 +108,7 @@ function dayNumber(startDate: string): number {
 }
 
 export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () => void }> = ({ quantPredictions, onEditBankroll }) => {
-    const { language } = useAppContext();
+    const { language, tr } = useAppContext();
     const { user, userProfile } = useAuth();
 
     const [vaultDay, setVaultDay] = useState<VaultDay | null>(null);
@@ -392,11 +392,11 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
     const hasAnyResult = wonCount + lostCount > 0 || Boolean(vaultDay?.picks.some(p => p.result === 'void'));
     const isBankrollUpdated = Boolean(vaultDay && vaultDay.bankrollEnd !== vaultDay.bankrollStart);
     const journeySteps = [
-        { label: language === 'fr' ? 'Capital' : 'Bankroll', done: hasBankroll },
-        { label: language === 'fr' ? 'Picks verrouillés' : 'Picks locked', done: hasLockedPicks },
-        { label: language === 'fr' ? 'Paris simples' : 'Singles only', done: hasStakePlan },
-        { label: language === 'fr' ? 'Résultats' : 'Results', done: hasAnyResult },
-        { label: language === 'fr' ? 'Mise à jour' : 'Updated', done: isBankrollUpdated },
+        { label: tr('Capital', 'Bankroll', 'Capital', 'Banca'), done: hasBankroll },
+        { label: tr('Picks verrouillés', 'Picks locked', 'Picks fijados', 'Picks bloqueados'), done: hasLockedPicks },
+        { label: tr('Paris simples', 'Singles only', 'Solo simples', 'Só simples'), done: hasStakePlan },
+        { label: tr('Résultats', 'Results', 'Resultados', 'Resultados'), done: hasAnyResult },
+        { label: tr('Mise à jour', 'Updated', 'Actualizado', 'Atualizado'), done: isBankrollUpdated },
     ];
 
     if (loading) {
@@ -417,11 +417,11 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                     </div>
                     <div>
                         <h3 className="text-base font-black text-white flex items-center gap-2">
-                            {language === 'fr' ? `Vault - Jour ${currentDay}` : `Vault - Day ${currentDay}`}
+                            {tr(`Vault - Jour ${currentDay}`, `Vault - Day ${currentDay}`, `Vault - Día ${currentDay}`, `Vault - Dia ${currentDay}`)}
                             <span className="text-[10px] font-mono text-gray-500 font-normal">{todayKey}</span>
                         </h3>
                         <p className="text-[10px] text-gray-400">
-                            {vaultDay?.picks.length || 0} {language === 'fr' ? 'picks actifs' : 'active picks'}
+                            {vaultDay?.picks.length || 0} {tr('picks actifs', 'active picks', 'picks activos', 'picks ativos')}
                         </p>
                     </div>
                 </div>
@@ -452,17 +452,23 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                         <AlertTriangle size={20} className="text-rose-400 mt-0.5 shrink-0" />
                         <div>
                             <p className="text-rose-300 text-sm font-bold">
-                                {language === 'fr' ? 'Circuit Breaker Activé' : 'Circuit Breaker Activated'}
+                                {tr('Circuit Breaker Activé', 'Circuit Breaker Activated', 'Circuit Breaker Activado', 'Circuit Breaker Ativado')}
                             </p>
                             <p className="text-rose-400/70 text-xs mt-1">
-                                {language === 'fr'
-                                    ? `Votre bankroll a chuté de ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% depuis ${startingBankroll.toLocaleString()} FCFA. Les nouveaux picks sont suspendus pour protéger votre capital.`
-                                    : `Your bankroll has dropped ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% from ${startingBankroll.toLocaleString()} FCFA. New picks paused to protect your capital.`}
+                                {tr(
+                                    `Votre bankroll a chuté de ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% depuis ${startingBankroll.toLocaleString()} FCFA. Les nouveaux picks sont suspendus pour protéger votre capital.`,
+                                    `Your bankroll has dropped ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% from ${startingBankroll.toLocaleString()} FCFA. New picks paused to protect your capital.`,
+                                    `Tu banca ha caído ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% desde ${startingBankroll.toLocaleString()} FCFA. Nuevos picks pausados para proteger tu capital.`,
+                                    `Sua banca caiu ${((startingBankroll - bankrollStart) / startingBankroll * 100).toFixed(0)}% de ${startingBankroll.toLocaleString()} FCFA. Novos picks pausados para proteger seu capital.`
+                                )}
                             </p>
                             <p className="text-rose-400/50 text-[10px] mt-2">
-                                {language === 'fr'
-                                    ? 'Reprendra quand la bankroll remontera au-dessus du seuil de sécurité.'
-                                    : 'Will resume when bankroll recovers above the safety threshold.'}
+                                {tr(
+                                    'Reprendra quand la bankroll remontera au-dessus du seuil de sécurité.',
+                                    'Will resume when bankroll recovers above the safety threshold.',
+                                    'Se reanudará cuando la banca supere el umbral de seguridad.',
+                                    'Será retomado quando a banca recuperar acima do limite de segurança.'
+                                )}
                             </p>
                         </div>
                     </div>
@@ -484,12 +490,15 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                                 </div>
                                 <div>
                                     <h4 className="text-xs font-black text-amber-400 uppercase tracking-wide mb-1">
-                                        {language === 'fr' ? '⚠️ RÈGLE CRITIQUE' : '⚠️ CRITICAL RULE'}
+                                        {tr('⚠️ RÈGLE CRITIQUE', '⚠️ CRITICAL RULE', '⚠️ REGLA CRÍTICA', '⚠️ REGRA CRÍTICA')}
                                     </h4>
                                     <p className="text-[11px] text-amber-500/90 leading-relaxed">
-                                        {language === 'fr' 
-                                            ? 'Jouez chaque pick du Vault comme un pari SIMPLE. La taille de mise Kelly est calculée pour des événements individuels. Combiner ces paris augmente la variance.' 
-                                            : 'Play every Vault pick as a SINGLE bet. Kelly stake size is calculated for individual events. Combining picks increases variance and erodes model edge.'}
+                                        {tr(
+                                            'Jouez chaque pick du Vault comme un pari SIMPLE. La taille de mise Kelly est calculée pour des événements individuels. Combiner ces paris augmente la variance.',
+                                            'Play every Vault pick as a SINGLE bet. Kelly stake size is calculated for individual events. Combining picks increases variance and erodes model edge.',
+                                            'Juega cada pick del Vault como apuesta SIMPLE. El tamaño Kelly se calcula para eventos individuales. Combinar picks aumenta la varianza.',
+                                            'Jogue cada pick do Vault como aposta SIMPLES. O tamanho Kelly é calculado para eventos individuais. Combinar picks aumenta a variância.'
+                                        )}
                                     </p>
                                 </div>
                             </div>
@@ -503,10 +512,10 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 <div className="flex items-center justify-between mb-4">
                     <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
-                            {language === 'fr' ? 'Parcours du Vault' : 'Vault Progress'}
+                            {tr('Parcours du Vault', 'Vault Progress', 'Progreso del Vault', 'Progresso do Vault')}
                         </p>
                         <p className="text-[10px] text-gray-400 mt-0.5">
-                            {language === 'fr' ? 'Picks = Paris simples uniquement' : 'Picks = Single bets only'}
+                            {tr('Picks = Paris simples uniquement', 'Picks = Single bets only', 'Picks = Solo apuestas simples', 'Picks = Apenas apostas simples')}
                         </p>
                     </div>
                     <div className="text-right">
@@ -551,7 +560,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                     </div>
                     <div className="text-[10px] text-gray-500 mt-0.5">FCFA</div>
                     <div className={`text-[10px] font-bold mt-1 ${todayPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {todayPnl >= 0 ? '+' : ''}{todayPnlPct.toFixed(1)}% {language === 'fr' ? "aujourd'hui" : 'today'}
+                        {todayPnl >= 0 ? '+' : ''}{todayPnlPct.toFixed(1)}% {tr("aujourd'hui", 'today', 'hoy', 'hoje')}
                     </div>
                 </div>
 
@@ -559,7 +568,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 <div className="bg-gradient-to-br from-emerald-500/15 to-teal-500/5 rounded-2xl p-4 border border-emerald-500/20 relative overflow-hidden">
                     <div className="absolute -right-3 -top-3 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl" />
                     <p className="text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider mb-1 flex items-center gap-1">
-                        <TrendingUp size={10} /> {language === 'fr' ? '30J Projection' : '30D Projection'}
+                        <TrendingUp size={10} /> {tr('30J Projection', '30D Projection', 'Proyección 30D', 'Projeção 30D')}
                     </p>
                     <div className="text-2xl font-black font-mono text-emerald-400">
                         {projectedBankroll30Days.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -574,7 +583,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
             {chartData.path && (
                 <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">
-                        {language === 'fr' ? '📈 Courbe du Bankroll' : '📈 Bankroll Curve'}
+                        {tr('📈 Courbe du Bankroll', '📈 Bankroll Curve', '📈 Curva de Banca', '📈 Curva da Banca')}
                     </p>
                     <svg viewBox="0 0 100 50" className="w-full h-20" preserveAspectRatio="none">
                         <defs>
@@ -606,18 +615,21 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                         <TrendingUp size={28} className="text-gray-500" />
                     </div>
                     <div className="text-gray-400 text-sm font-bold mb-1">
-                        {language === 'fr' ? 'Aucun pick disponible' : 'No picks available today'}
+                        {tr('Aucun pick disponible', 'No picks available today', 'No hay picks disponibles hoy', 'Nenhum pick disponível hoje')}
                     </div>
                     <div className="text-gray-500 text-xs">
-                        {language === 'fr'
-                            ? "Les picks avec faible edge ou cotes anciennes sont filtrés."
-                            : "Picks with weak edge or stale odds are filtered out."}
+                        {tr(
+                            "Les picks avec faible edge ou cotes anciennes sont filtrés.",
+                            "Picks with weak edge or stale odds are filtered out.",
+                            "Los picks con poco valor o cuotas antiguas se filtran.",
+                            "Picks com pouco valor ou odds antigas são filtrados."
+                        )}
                     </div>
                 </div>
             ) : (
                 <div className="space-y-3">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                        {language === 'fr' ? '📋 Vos Picks du Jour' : '📋 Today\'s Picks'}
+                        {tr('📋 Vos Picks du Jour', '📋 Today\'s Picks', '📋 Picks de Hoy', '📋 Picks de Hoje')}
                     </p>
                     {vaultDay?.picks.map((pick, i) => {
                         const isPending = pick.result === 'pending';
@@ -729,7 +741,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                                             </div>
                                             {pick.profit !== null && (
                                                 <div>
-                                                    <p className="text-[9px] text-gray-500 uppercase">{language === 'fr' ? 'Gain/Perte' : 'P/L'}</p>
+                                                    <p className="text-[9px] text-gray-500 uppercase">{tr('Gain/Perte', 'P/L', 'Gan./Pér.', 'Lucro/Perda')}</p>
                                                     <p className={`text-[11px] font-black font-mono ${pick.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                         {pick.profit >= 0 ? '+' : ''}{pick.profit.toLocaleString()} F
                                                     </p>
@@ -758,14 +770,14 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                         className="overflow-hidden mt-6"
                     >
                         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                            {language === 'fr' ? 'Historique du Vault' : 'Vault History'}
+                            {tr('Historique du Vault', 'Vault History', 'Historial del Vault', 'Histórico do Vault')}
                         </h4>
                         
                         {loadingHistory ? (
                             <div className="flex justify-center py-6"><RefreshCw size={16} className="animate-spin text-gray-500" /></div>
                         ) : vaultHistory.length === 0 ? (
                             <div className="text-center py-6 text-gray-500 text-xs">
-                                {language === 'fr' ? 'Aucun historique disponible' : 'No history available yet'}
+                                {tr('Aucun historique disponible', 'No history available yet', 'Sin historial disponible', 'Nenhum histórico disponível')}
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -818,7 +830,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-[10px] font-bold text-gray-500 hover:text-white hover:border-slate-500 transition-colors flex items-center justify-center gap-1.5"
             >
                 <RefreshCw size={12} />
-                {language === 'fr' ? 'Régénérer les picks' : 'Refresh picks from today'}
+                        {tr('Régénérer les picks', 'Refresh picks from today', 'Regenerar picks de hoy', 'Regenerar picks de hoje')}
             </button>
             )}
             {circuitBroken && (
@@ -826,7 +838,7 @@ export const VaultTab: React.FC<{ quantPredictions: any[], onEditBankroll?: () =
                 className="w-full py-2.5 rounded-xl border border-dashed border-rose-500/30 text-[10px] font-bold text-rose-400/50 flex items-center justify-center gap-1.5 cursor-not-allowed"
             >
                 <AlertTriangle size={12} />
-                {language === 'fr' ? 'Picks suspendus — Circuit Breaker' : 'Picks paused — Circuit Breaker'}
+                {tr('Picks suspendus - Circuit Breaker', 'Picks paused - Circuit Breaker', 'Picks pausados - Circuit Breaker', 'Picks pausados - Circuit Breaker')}
             </button>
             )}
         </div>

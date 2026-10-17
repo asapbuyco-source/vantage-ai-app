@@ -6,6 +6,7 @@ import { getLiveMatchesFromDB } from '../services/sportsData';
 import { LiveMatch, NavigationTab } from '../types';
 import { TeamLogo } from '../components/TeamLogo';
 import { useAppContext } from '../context/AppContext';
+import { translate } from '../i18n';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
@@ -40,7 +41,7 @@ function getEventIcon(type: string): string {
 
 function getEventDisplay(ev: any, language: string): string {
   if (ev.type === 'goal' || ev.type === 'penalty') {
-    const lbl = language === 'fr' ? 'But' : 'Goal';
+    const lbl = translate(language, 'But', 'Goal', 'Gol', 'Gol');
     return `${ev.playerName || lbl}${ev.result ? ` (${ev.result})` : ''}`;
   }
   if (ev.type === 'substitution') {
@@ -51,26 +52,27 @@ function getEventDisplay(ev: any, language: string): string {
     if (ev.playerName) return ev.playerName;
     if (ev.name) return ev.name;
     const isRed = (ev.type === 'redcard' || ev.type === 'red_card');
-    if (language === 'fr') return isRed ? 'Carton Rouge' : 'Carton Jaune';
-    return isRed ? 'Red Card' : 'Yellow Card';
+    return isRed
+      ? translate(language, 'Carton Rouge', 'Red Card', 'Tarjeta Roja', 'Cartão Vermelho')
+      : translate(language, 'Carton Jaune', 'Yellow Card', 'Tarjeta Amarilla', 'Cartão Amarelo');
   }
   if (ev.playerName) return ev.playerName;
   if (ev.name) return ev.name;
   
   const labels: Record<string, any> = {
-    'var': { en: 'VAR', fr: 'VAR' },
-    'event': { en: 'Event', fr: 'Événement' },
-    'own_goal': { en: 'Own Goal', fr: 'Contre son camp' },
-    'penalty_miss': { en: 'Penalty Miss', fr: 'Penalty raté' },
+    'var': { en: 'VAR', fr: 'VAR', es: 'VAR', pt: 'VAR' },
+    'event': { en: 'Event', fr: 'Événement', es: 'Evento', pt: 'Evento' },
+    'own_goal': { en: 'Own Goal', fr: 'Contre son camp', es: 'Autogol', pt: 'Gol contra' },
+    'penalty_miss': { en: 'Penalty Miss', fr: 'Penalty raté', es: 'Penal fallado', pt: 'Pênalti perdido' },
   };
-  return labels[ev.type]?.[language] || labels[ev.type]?.en || 'Event';
+  return labels[ev.type]?.[language === 'fr' ? 'fr' : language === 'es' ? 'es' : language === 'pt' ? 'pt' : 'en'] || labels[ev.type]?.en || 'Event';
 }
 
 function getStateConfig(short: string, language: string) {
   const key = short?.toUpperCase();
   const config = { ...(STATE_CONFIG[key] || { label: short || 'LIVE', color: 'text-green-400', bg: 'bg-green-400/15 border-green-400/30' }) };
   
-  // Apply French overrides
+  // Localized state labels
   if (language === 'fr') {
       if (key === '1H') config.label = '1ÈRE MI-TEMPS';
       else if (key === '2H') config.label = '2ÈME MI-TEMPS';
@@ -78,6 +80,20 @@ function getStateConfig(short: string, language: string) {
       else if (key === 'ET') config.label = 'PROLONGATION';
       else if (key === 'PEN') config.label = 'TIRS AU BUT';
       else if (key === 'FT') config.label = 'TERMINÉ';
+  } else if (language === 'es') {
+      if (key === '1H') config.label = 'PRIMER TIEMPO';
+      else if (key === '2H') config.label = 'SEGUNDO TIEMPO';
+      else if (key === 'HT') config.label = 'MEDIO TIEMPO';
+      else if (key === 'ET') config.label = 'PRÓRROGA';
+      else if (key === 'PEN') config.label = 'PENALES';
+      else if (key === 'FT') config.label = 'FINALIZADO';
+  } else if (language === 'pt') {
+      if (key === '1H') config.label = '1º TEMPO';
+      else if (key === '2H') config.label = '2º TEMPO';
+      else if (key === 'HT') config.label = 'INTERVALO';
+      else if (key === 'ET') config.label = 'PRORROGAÇÃO';
+      else if (key === 'PEN') config.label = 'PÊNALTIS';
+      else if (key === 'FT') config.label = 'ENCERRADO';
   }
   return config;
 }
@@ -171,7 +187,7 @@ const LiveMatchCard: React.FC<{ match: LiveMatch; idx: number; language: string 
 };
 
 export const LiveScores: React.FC<LiveScoresProps> = () => {
-  const { language } = useAppContext();
+  const { language, tr } = useAppContext();
   const [matches, setMatches] = useState<LiveMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -237,7 +253,7 @@ export const LiveScores: React.FC<LiveScoresProps> = () => {
             )}
           </div>
           <p className="text-[10px] text-gray-500 tracking-widest">
-            {language === 'fr' ? 'Scores en temps réel' : 'Real-time scores via SportMonks'}
+            {tr('Scores en temps réel', 'Real-time scores via SportMonks', 'Resultados en tiempo real', 'Placares em tempo real')}
           </p>
         </div>
 
@@ -262,13 +278,13 @@ export const LiveScores: React.FC<LiveScoresProps> = () => {
             onClick={() => setGroupByLeague(false)}
             className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${!groupByLeague ? 'bg-white dark:bg-white/10 shadow text-vantage-cyan' : 'text-gray-500'}`}
           >
-            {language === 'fr' ? 'Tous' : 'All'}
+            {tr('Tous', 'All', 'Todos', 'Todos')}
           </button>
           <button
             onClick={() => setGroupByLeague(true)}
             className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${groupByLeague ? 'bg-white dark:bg-white/10 shadow text-vantage-cyan' : 'text-gray-500'}`}
           >
-            {language === 'fr' ? 'Par ligue' : 'By League'}
+            {tr('Par ligue', 'By League', 'Por Liga', 'Por Liga')}
           </button>
         </div>
         <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10">
@@ -290,16 +306,19 @@ export const LiveScores: React.FC<LiveScoresProps> = () => {
             <Activity size={36} className="text-gray-400" />
           </div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-            {language === 'fr' ? 'Aucun match en direct' : 'No Matches Live'}
+            {tr('Aucun match en direct', 'No Matches Live', 'No hay partidos en vivo', 'Nenhum jogo ao vivo')}
           </h3>
           <p className="text-sm text-gray-500 max-w-[220px] leading-relaxed">
-            {language === 'fr'
-              ? "Les matchs en direct apparaîtront ici dès qu'ils commencent."
-              : 'Live matches will appear here as they kick off. Check back later!'}
+            {tr(
+              "Les matchs en direct apparaîtront ici dès qu'ils commencent.",
+              'Live matches will appear here as they kick off. Check back later!',
+              'Los partidos en vivo aparecerán aquí cuando comiencen. ¡Vuelve más tarde!',
+              'Os jogos ao vivo aparecerão aqui quando começarem. Volte mais tarde!'
+            )}
           </p>
           <div className="flex items-center gap-1.5 mt-5 text-[11px] text-gray-400">
             <Clock size={11} />
-            <span>{language === 'fr' ? 'Mis à jour toutes les 60s par le serveur' : 'Auto-updated every 60s by backend'}</span>
+            <span>{tr('Mis à jour toutes les 60s par le serveur', 'Auto-updated every 60s by backend', 'Actualizado cada 60s por el servidor', 'Atualizado a cada 60s pelo servidor')}</span>
           </div>
         </div>
       ) : (

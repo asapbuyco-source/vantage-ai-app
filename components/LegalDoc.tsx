@@ -10,7 +10,7 @@ interface LegalDocProps {
 }
 
 export const LegalDoc: React.FC<LegalDocProps> = ({ type, onBack }) => {
-  const { language } = useAppContext();
+  const { language, tr } = useAppContext();
 
   // Scroll to top when opened
   useEffect(() => {
@@ -19,8 +19,8 @@ export const LegalDoc: React.FC<LegalDocProps> = ({ type, onBack }) => {
 
   const isPrivacy = type === 'privacy';
   const title = isPrivacy 
-    ? (language === 'fr' ? 'Politique de Confidentialité' : 'Privacy Policy')
-    : (language === 'fr' ? 'Conditions d\'Utilisation' : 'Terms of Service');
+    ? tr('Politique de Confidentialité', 'Privacy Policy', 'Política de Privacidad', 'Política de Privacidade')
+    : tr('Conditions d\'Utilisation', 'Terms of Service', 'Términos de Servicio', 'Termos de Serviço');
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">

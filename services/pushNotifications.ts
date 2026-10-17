@@ -13,11 +13,77 @@
 
 import { getMessaging, getToken, onMessage, MessagePayload } from 'firebase/messaging';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { db, auth } from '../firebaseConfig';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 
 const VAPID_KEY = import.meta.env?.VITE_FIREBASE_VAPID_KEY;
+
+const backendUrl = () => {
+    const url = import.meta.env.VITE_BACKEND_URL as string | undefined;
+    return url ? url.replace(/\/$/, '') : '';
+};
+
+// Attach the native FCM listeners only once per app session
+let nativeListenersAttached = false;
+
+const attachNativeListeners = (uid: string) => {
+    if (nativeListenersAttached) return;
+    nativeListenersAttached = true;
+
+    PushNotifications.addListener('registration', async (token) => {
+        const fcmToken = token.value;
+        // 1) Save on the profile doc (backend jobs may read it from here)
+        try {
+            await setDoc(doc(db, 'profiles', uid), {
+                fcmToken,
+                fcmUpdatedAt: new Date().toISOString(),
+            }, { merge: true });
+        } catch (e) {
+            console.warn('[Native Push] profile token save failed:', e);
+        }
+        // 2) Register with the backend push service (writes push_subscriptions)
+        try {
+            const idToken = await auth.currentUser?.getIdToken();
+            const base = backendUrl();
+            if (idToken && base) {
+                await fetch(`${base}/api/push/register-fcm`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({ token: fcmToken, platform: 'android' }),
+                });
+            }
+        } catch (e) {
+            console.warn('[Native Push] backend FCM registration failed:', e);
+        }
+        console.log('[Native Push] ✅ Push token saved for user:', uid);
+    });
+
+    PushNotifications.addListener('registrationError', (error: any) => {
+        console.error('[Native Push] Error on registration:', error);
+    });
+};
+
+/** Current push permission state (for the Profile settings toggle). */
+export const getPushPermissionStatus = async (): Promise<'granted' | 'denied' | 'prompt' | 'unsupported'> => {
+    try {
+        if (Capacitor.isNativePlatform()) {
+            const s = await PushNotifications.checkPermissions();
+            if (s.receive === 'granted') return 'granted';
+            if (s.receive === 'denied') return 'denied';
+            return 'prompt';
+        }
+        if (!('Notification' in window)) return 'unsupported';
+        if (Notification.permission === 'granted') return 'granted';
+        if (Notification.permission === 'denied') return 'denied';
+        return 'prompt';
+    } catch {
+        return 'unsupported';
+    }
+};
 
 /** Request push permission and save the FCM token to the user's Firestore profile. */
 export const requestPushPermission = async (uid: string): Promise<boolean> => {
@@ -32,21 +98,8 @@ export const requestPushPermission = async (uid: string): Promise<boolean> => {
                 return false;
             }
 
+            attachNativeListeners(uid);
             await PushNotifications.register();
-            
-            // Note: In a real app, you would add this listener only once. 
-            // For simplicity here, we add it during request and save the token.
-            PushNotifications.addListener('registration', async (token) => {
-                await setDoc(doc(db, 'profiles', uid), {
-                    fcmToken: token.value,
-                    fcmUpdatedAt: new Date().toISOString(),
-                }, { merge: true });
-                console.log('[Native Push] ✅ Push token saved for user:', uid);
-            });
-            
-            PushNotifications.addListener('registrationError', (error: any) => {
-                console.error('[Native Push] Error on registration:', error);
-            });
             return true;
         } else {
             if (!('Notification' in window) || !('serviceWorker' in navigator)) {

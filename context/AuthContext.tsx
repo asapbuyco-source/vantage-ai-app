@@ -17,26 +17,35 @@ import { auth, db } from "../firebaseConfig";
 import { UserProfile, PayoutRequest } from '../types';
 import { parseVipExpiry } from '../utils';
 
-const getLang = (): 'fr' | 'en' => {
+const getLang = (): 'fr' | 'en' | 'es' | 'pt' => {
     try {
         const saved = localStorage.getItem('vantage_language');
-        if (saved === 'fr' || saved === 'en') return saved as 'fr' | 'en';
-        return navigator.language.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+        if (saved === 'fr' || saved === 'en' || saved === 'es' || saved === 'pt') return saved as 'fr' | 'en' | 'es' | 'pt';
+        const l = (navigator.language || '').toLowerCase();
+        if (l.startsWith('fr')) return 'fr';
+        if (l.startsWith('es')) return 'es';
+        if (l.startsWith('pt')) return 'pt';
+        return 'en';
     } catch { return 'en'; }
 };
-const tr = (fr: string, en: string) => getLang() === 'fr' ? fr : en;
+const tr = (fr: string, en: string, es?: string, pt?: string) => {
+    const l = getLang();
+    if (l === 'fr') return fr;
+    if (l === 'es') return es ?? en;
+    if (l === 'pt') return pt ?? en;
+    return en;
+};
 const translateFirebaseError = (msg: string): string => {
-    const fr = getLang() === 'fr';
-    if (!msg) return fr ? 'Erreur inconnue.' : 'Unknown error.';
+    if (!msg) return tr('Erreur inconnue.', 'Unknown error.', 'Error desconocido.', 'Erro desconhecido.');
     const m = msg.toLowerCase();
-    if (m.includes('invalid-email')) return fr ? 'Email invalide.' : 'Invalid email.';
-    if (m.includes('user-not-found') || m.includes('invalid-credential')) return fr ? 'Email ou mot de passe incorrect.' : 'Invalid email or password.';
-    if (m.includes('wrong-password')) return fr ? 'Mot de passe incorrect.' : 'Wrong password.';
-    if (m.includes('email-already-in-use')) return fr ? 'Cet email est déjà utilisé.' : 'Email already in use.';
-    if (m.includes('weak-password')) return fr ? 'Mot de passe trop faible (min 6 caractères).' : 'Password too weak (min 6 characters).';
-    if (m.includes('too-many-requests')) return fr ? 'Trop de tentatives. Réessayez plus tard.' : 'Too many attempts. Try again later.';
-    if (m.includes('network-request-failed')) return fr ? 'Erreur réseau. Vérifiez votre connexion.' : 'Network error. Check your connection.';
-    if (m.includes('requires-recent-login')) return fr ? 'Veuillez vous reconnecter récemment pour cette action.' : 'Please re-login recently to do this.';
+    if (m.includes('invalid-email')) return tr('Email invalide.', 'Invalid email.', 'Email inválido.', 'Email inválido.');
+    if (m.includes('user-not-found') || m.includes('invalid-credential')) return tr('Email ou mot de passe incorrect.', 'Invalid email or password.', 'Email o contraseña incorrectos.', 'Email ou senha incorretos.');
+    if (m.includes('wrong-password')) return tr('Mot de passe incorrect.', 'Wrong password.', 'Contraseña incorrecta.', 'Senha incorreta.');
+    if (m.includes('email-already-in-use')) return tr('Cet email est déjà utilisé.', 'Email already in use.', 'Este email ya está en uso.', 'Este email já está em uso.');
+    if (m.includes('weak-password')) return tr('Mot de passe trop faible (min 6 caractères).', 'Password too weak (min 6 characters).', 'Contraseña muy débil (mín 6 caracteres).', 'Senha muito fraca (mín 6 caracteres).');
+    if (m.includes('too-many-requests')) return tr('Trop de tentatives. Réessayez plus tard.', 'Too many attempts. Try again later.', 'Demasiados intentos. Inténtalo más tarde.', 'Muitas tentativas. Tente novamente mais tarde.');
+    if (m.includes('network-request-failed')) return tr('Erreur réseau. Vérifiez votre connexion.', 'Network error. Check your connection.', 'Error de red. Verifica tu conexión.', 'Erro de rede. Verifique sua conexão.');
+    if (m.includes('requires-recent-login')) return tr('Veuillez vous reconnecter récemment pour cette action.', 'Please re-login recently to do this.', 'Vuelve a iniciar sesión para hacer esto.', 'Faça login novamente para fazer isso.');
     return msg;
 };
 

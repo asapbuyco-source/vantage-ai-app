@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { translations, Language } from '../i18n';
+import { translations, Language, translate } from '../i18n';
 import { Toast, ToastType, SavedPick } from '../types';
 
 type Theme = 'light' | 'dark';
@@ -11,6 +11,8 @@ interface AppContextType {
   theme: Theme;
   toggleTheme: () => void;
   t: (path: string) => string;
+  /** Inline string picker: tr(fr, en, es?, pt?) — es/pt fall back to en. */
+  tr: (fr: string, en: string, es?: string, pt?: string) => string;
   // Toast System
   toasts: Toast[];
   showToast: (message: string, type?: ToastType) => void;
@@ -28,9 +30,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // ─── Language ─────────────────────────────────────────────────────────────
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = localStorage.getItem('vantage_language');
-    if (saved === 'en' || saved === 'fr') return saved as Language;
+    if (saved === 'en' || saved === 'fr' || saved === 'es' || saved === 'pt') return saved as Language;
     const browserLang = (navigator.language || navigator.languages?.[0] || '').toLowerCase();
     if (browserLang.startsWith('fr')) return 'fr';
+    if (browserLang.startsWith('es')) return 'es';
+    if (browserLang.startsWith('pt')) return 'pt';
     if (browserLang.startsWith('en')) return 'en';
     return 'fr';  // Default to French (primary market: Cameroon/Francophone Africa)
   });
@@ -121,8 +125,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const handleLanguageChange = () => {
       const saved = localStorage.getItem('vantage_language');
       if (!saved) {
-        const browserLang = navigator.language || navigator.languages?.[0];
-        setLanguageState(browserLang?.toLowerCase().startsWith('en') ? 'en' : 'fr');
+        const browserLang = (navigator.language || navigator.languages?.[0] || '').toLowerCase();
+        if (browserLang.startsWith('fr')) setLanguageState('fr');
+        else if (browserLang.startsWith('es')) setLanguageState('es');
+        else if (browserLang.startsWith('pt')) setLanguageState('pt');
+        else setLanguageState('en');
       }
     };
     window.addEventListener('languagechange', handleLanguageChange);
@@ -140,11 +147,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return typeof current === 'string' ? current : path;
   };
 
+  // Inline string picker for the current language (fr/en/es/pt)
+  const tr = (fr: string, en: string, es?: string, pt?: string): string =>
+    translate(language, fr, en, es, pt);
+
   return (
     <AppContext.Provider value={{
       language, setLanguage,
       theme, toggleTheme,
-      t,
+      t, tr,
       toasts, showToast, removeToast,
       savedPicks, toggleSavedPick, clearSavedPicks, isPickSaved
     }}>

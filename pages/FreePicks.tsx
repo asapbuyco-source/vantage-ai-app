@@ -60,7 +60,7 @@ const getCountdownToNextPicks = (scheduleTime = '19:00') => {
 
 export const FreePicks: React.FC<FreePicksProps> = () => {
   const navigate = useNavigate();
-  const { t, language } = useAppContext();
+  const { t, language, tr } = useAppContext();
   const { predictions, loading } = useData();
   const { isAdmin, isVipActive } = useAuth();
   const isVip = isVipActive || isAdmin;
@@ -250,7 +250,7 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
                     className="mt-1 px-3 py-1.5 bg-vantage-purple/10 hover:bg-vantage-purple/20 border border-vantage-purple/30 text-vantage-purple text-xs font-bold rounded-full transition-all flex items-center gap-1.5"
                   >
                     <Lock size={10} />
-                    {language === 'fr' ? 'Débloquer' : 'Unlock'}
+                    {tr('Débloquer', 'Unlock', 'Desbloquear', 'Desbloquear')}
                   </button>
                 </div>
                 <div className="flex flex-col items-end">
@@ -306,16 +306,16 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
               </div>
               <div>
                 <p className="text-xs font-black text-white uppercase tracking-widest">
-                  {language === 'fr' ? 'Rapport Intelligence IA' : 'AI Intelligence Report'}
+                  {tr('Rapport Intelligence IA', 'AI Intelligence Report', 'Informe de Inteligencia IA', 'Relatório de Inteligência IA')}
                 </p>
                 <p className="text-[10px] text-gray-500">
-                  {language === 'fr' ? 'Accès Alpha requis' : 'Alpha Access Required'}
+                  {tr('Accès Alpha requis', 'Alpha Access Required', 'Acceso Alpha requerido', 'Acesso Alpha necessário')}
                 </p>
               </div>
             </div>
             <span className="flex items-center gap-1 text-xs font-black text-vantage-purple bg-vantage-purple/15 border border-vantage-purple/30 px-2.5 py-1 rounded-full">
               <Lock size={10} />
-              {hiddenCount} {language === 'fr' ? 'cachés' : 'hidden'}
+              {hiddenCount} {tr('cachés', 'hidden', 'ocultos', 'ocultos')}
             </span>
           </div>
         </div>
@@ -326,12 +326,15 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
           {/* Match count + single-line upgrade CTA */}
           <div className="p-3 rounded-xl bg-white/5 border border-white/5">
             <p className="text-[10px] text-gray-500 mb-1">
-              {language === 'fr'
-                ? `Voir ce que l'IA a choisi — accès dès 2000 FCFA/semaine`
-                : `See what the model picked — 7-day access from 2000 FCFA`}
+              {tr(
+                `Voir ce que l'IA a choisi — accès dès 2000 FCFA/semaine`,
+                `See what the model picked — 7-day access from 2000 FCFA`,
+                `Mira lo que eligió la IA — acceso por 2000 FCFA/semana`,
+                `Veja o que a IA escolheu — acesso por 2000 FCFA/semana`
+              )}
             </p>
             <div className="text-[10px] text-vantage-purple font-bold mt-1">
-              {language === 'fr' ? `${totalAnalyzed} matchs analysés` : `${totalAnalyzed} matches analyzed today`}
+              {tr(`${totalAnalyzed} matchs analysés`, `${totalAnalyzed} matches analyzed today`, `${totalAnalyzed} partidos analizados`, `${totalAnalyzed} jogos analisados`)}
             </div>
           </div>
         </div>
@@ -350,10 +353,10 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
             </div>
             <div className="text-left">
               <div className="text-sm font-black text-white tracking-wide">
-                {language === 'fr' ? `Débloquer les ${hiddenCount} analyses` : `Unlock all ${hiddenCount} analyses`}
+                {tr(`Débloquer les ${hiddenCount} analyses`, `Unlock all ${hiddenCount} analyses`, `Desbloquear los ${hiddenCount} análisis`, `Desbloquear as ${hiddenCount} análises`)}
               </div>
               <div className="text-[10px] text-white/70">
-                {language === 'fr' ? 'Dès 2000 FCFA/semaine • Actif instantanément' : 'From 2000 FCFA/week • Active instantly'}
+                {tr('Dès 2000 FCFA/semaine • Actif instantanément', 'From 2000 FCFA/week • Active instantly', 'Desde 2000 FCFA/semana • Activo al instante', 'A partir de 2000 FCFA/semana • Ativo na hora')}
               </div>
             </div>
           </div>
@@ -369,7 +372,7 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
       {/* ── Header with match count ── */}
       <div className="flex flex-col space-y-2">
         <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white mb-2">
-          {language === 'fr' ? 'Analyse' : 'Match'} <span className="text-vantage-cyan">{language === 'fr' ? 'des Matchs' : 'Analysis'}</span>
+          {tr('Analyse', 'Match', 'Análisis', 'Análise')} <span className="text-vantage-cyan">{tr('des Matchs', 'Analysis', 'de Partidos', 'de Jogos')}</span>
         </h1>
 
         <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4">
@@ -379,17 +382,17 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
-                {language === 'fr' ? 'Votre action gratuite' : 'Your free action'}
+                {tr('Votre action gratuite', 'Your free action', 'Tu acción gratuita', 'Sua ação gratuita')}
               </p>
               <p className="text-sm font-black text-slate-900 dark:text-white">
                 {predictions.length > 0
-                  ? (language === 'fr' ? `${Math.min(freePicksCount, hookPicks.length)} picks ouverts aujourd'hui` : `${Math.min(freePicksCount, hookPicks.length)} picks unlocked today`)
-                  : (language === 'fr' ? `Prochains picks à ${scheduledTime}` : `Next picks at ${scheduledTimeDisplay}`)}
+                  ? tr(`${Math.min(freePicksCount, hookPicks.length)} picks ouverts aujourd'hui`, `${Math.min(freePicksCount, hookPicks.length)} picks unlocked today`, `${Math.min(freePicksCount, hookPicks.length)} picks abiertos hoy`, `${Math.min(freePicksCount, hookPicks.length)} picks liberados hoje`)
+                  : tr(`Prochains picks à ${scheduledTime}`, `Next picks at ${scheduledTimeDisplay}`, `Próximos picks a las ${scheduledTimeDisplay}`, `Próximos picks às ${scheduledTimeDisplay}`)}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {predictions.length > 0
-                  ? (language === 'fr' ? 'Copiez un pick, puis consultez le VIP pour le staking Kelly.' : 'Copy one pick, then use VIP for Kelly staking.')
-                  : (language === 'fr' ? `Revenez dans ${countdown.h}h ${countdown.m}m.` : `Come back in ${countdown.h}h ${countdown.m}m.`)}
+                  ? tr('Copiez un pick, puis consultez le VIP pour le staking Kelly.', 'Copy one pick, then use VIP for Kelly staking.', 'Copia un pick y usa VIP para el staking Kelly.', 'Copie um pick e use o VIP para o staking Kelly.')
+                  : tr(`Revenez dans ${countdown.h}h ${countdown.m}m.`, `Come back in ${countdown.h}h ${countdown.m}m.`, `Vuelve en ${countdown.h}h ${countdown.m}m.`, `Volte em ${countdown.h}h ${countdown.m}m.`)}
               </p>
             </div>
             {!isVip && predictions.length > 0 && (
@@ -397,7 +400,7 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
                 onClick={() => navigate('/vip')}
                 className="shrink-0 px-3 py-2 rounded-xl bg-vantage-purple text-white text-xs font-black"
               >
-                {language === 'fr' ? 'VIP' : 'Unlock'}
+                {tr('VIP', 'Unlock', 'VIP', 'VIP')}
               </button>
             )}
           </div>
@@ -414,13 +417,13 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-bold text-slate-700 dark:text-gray-300">
                 <span className="text-vantage-cyan font-black">{totalAnalyzed}</span>
-                {language === 'fr' ? ' matchs analysés par notre IA' : ' matches analyzed by AI today'}
+                {tr(' matchs analysés par notre IA', ' matches analyzed by AI today', ' partidos analizados por nuestra IA', ' jogos analisados pela nossa IA')}
               </span>
             </div>
             {!isVip && (
               <button onClick={() => navigate('/vip')} className="flex items-center gap-1 text-[10px] font-bold text-vantage-purple hover:text-purple-400 transition-colors">
                 <Lock size={9} />
-                {language === 'fr' ? 'Voir tout' : 'View all'}
+                {tr('Voir tout', 'View all', 'Ver todo', 'Ver tudo')}
                 <ChevronRight size={10} />
               </button>
             )}
@@ -435,8 +438,8 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
       ) : predictions.length === 0 ? (
         <div className="text-center py-10">
           <Activity size={28} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
-          <p className="text-gray-500 mb-2">{language === 'fr' ? "Aucune analyse disponible" : "No analysis available yet"}</p>
-          <p className="text-xs text-vantage-cyan font-medium italic">{language === 'fr' ? `Pronostics publiés à ${scheduledTime}. Revenez dans ${countdown.h}h ${countdown.m}m.` : `Match analysis publishes at ${scheduledTimeDisplay}. Come back in ${countdown.h}h ${countdown.m}m.`}</p>
+          <p className="text-gray-500 mb-2">{tr("Aucune analyse disponible", "No analysis available yet", "No hay análisis disponible aún", "Nenhuma análise disponível ainda")}</p>
+          <p className="text-xs text-vantage-cyan font-medium italic">{tr(`Pronostics publiés à ${scheduledTime}. Revenez dans ${countdown.h}h ${countdown.m}m.`, `Match analysis publishes at ${scheduledTimeDisplay}. Come back in ${countdown.h}h ${countdown.m}m.`, `Los pronósticos se publican a las ${scheduledTimeDisplay}. Vuelve en ${countdown.h}h ${countdown.m}m.`, `Os palpites são publicados às ${scheduledTimeDisplay}. Volte em ${countdown.h}h ${countdown.m}m.`)}</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -448,7 +451,7 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 <h2 className="text-sm font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                   <Star size={14} className="fill-emerald-500 text-emerald-500" />
-                  {language === 'fr' ? "Picks Gratuits du Jour" : "Today's Free Picks"}
+                  {tr("Picks Gratuits du Jour", "Today's Free Picks", "Picks Gratis de Hoy", "Picks Grátis de Hoje")}
                 </h2>
                 <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 font-bold">FREE</span>
               </div>
@@ -462,7 +465,7 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
               <div className="flex items-center gap-2 mb-1">
                 <Lock size={12} className="text-vantage-purple" />
                 <h2 className="text-sm font-bold uppercase tracking-widest text-vantage-purple flex items-center gap-1.5">
-                  {language === 'fr' ? 'Signaux Alpha' : 'Alpha Signals'}
+                  {tr('Signaux Alpha', 'Alpha Signals', 'Señales Alpha', 'Sinais Alpha')}
                 </h2>
                 <span className="text-[9px] px-2 py-0.5 rounded-full bg-vantage-purple/15 border border-vantage-purple/30 text-vantage-purple font-bold">
                   {vipTeasers.length} PICKS
@@ -487,10 +490,10 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
                   </div>
                   <div className="text-left">
                     <div className="text-sm font-black text-white tracking-wide">
-                      {language === 'fr' ? `Débloquer ${vipTeasers.length} Signaux Alpha` : `Unlock ${vipTeasers.length} Alpha Signals`}
+                      {tr(`Débloquer ${vipTeasers.length} Signaux Alpha`, `Unlock ${vipTeasers.length} Alpha Signals`, `Desbloquear ${vipTeasers.length} Señales Alpha`, `Desbloquear ${vipTeasers.length} Sinais Alpha`)}
                     </div>
                     <div className="text-[10px] text-white/70 font-medium">
-                      {language === 'fr' ? 'Analyse complète + Kelly Staking' : 'Full analysis + Kelly Staking'}
+                      {tr('Analyse complète + Kelly Staking', 'Full analysis + Kelly Staking', 'Análisis completo + Kelly Staking', 'Análise completa + Kelly Staking')}
                     </div>
                   </div>
                 </div>
@@ -505,7 +508,7 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
               <div className="flex items-center gap-2 mb-1">
                 <Shield size={12} className="text-emerald-500" />
                 <h2 className="text-sm font-bold uppercase tracking-widest text-slate-600 dark:text-gray-300">
-                  {language === 'fr' ? 'Tous les Picks' : 'All Value Picks'}
+                  {tr('Tous les Picks', 'All Value Picks', 'Todos los Picks', 'Todos os Picks')}
                 </h2>
               </div>
               {vipTeasers.map((match, idx) => renderRichMatchCard(match, idx + 2, false))}
@@ -518,7 +521,7 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
               <div className="flex items-center gap-2 mb-1">
                 <BarChart3 size={12} className="text-slate-500" />
                 <h2 className="text-sm font-bold uppercase tracking-widest text-slate-500">
-                  {language === 'fr' ? 'Leans du Marché' : 'Market Leans'}
+                  {tr('Leans du Marché', 'Market Leans', 'Tendencias del Mercado', 'Tendências do Mercado')}
                 </h2>
                 <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-500/15 border border-slate-500/30 text-slate-500 font-bold">{dataCards.length}</span>
               </div>
@@ -529,7 +532,7 @@ export const FreePicks: React.FC<FreePicksProps> = () => {
                   className="w-full py-3 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-bold text-gray-500 hover:text-vantage-cyan transition-colors flex items-center justify-center gap-1.5"
                 >
                   <ChevronDown size={14} />
-                  {language === 'fr' ? `Voir ${dataCards.length - 10} autres` : `Show ${dataCards.length - 10} more`}
+                  {tr(`Voir ${dataCards.length - 10} autres`, `Show ${dataCards.length - 10} more`, `Ver ${dataCards.length - 10} más`, `Ver mais ${dataCards.length - 10}`)}
                 </button>
               )}
             </div>

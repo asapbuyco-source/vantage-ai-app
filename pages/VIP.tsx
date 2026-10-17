@@ -17,6 +17,7 @@ import { getTomorrowFixturesFromDB } from '../services/sportsData';
 import { PortfolioOnboarding } from '../components/PortfolioOnboarding';
 import { Sparkline } from '../components/Sparkline';
 import { getTopProbPicks } from '../utils';
+import { plainMarket } from '../utils';
 import { parseVipExpiry } from '../utils';
 import { Screener } from '../components/Screener';
 import { MatchCardAlpha } from '../components/MatchCardAlpha';
@@ -32,7 +33,7 @@ interface VIPProps {}
 
 export const VIP: React.FC<VIPProps> = () => {
   const navigate = useNavigate();
-  const { t, language } = useAppContext();
+  const { t, language, tr } = useAppContext();
   const { predictions, accumulators: dataContextAccumulators, loading, basketballPredictions, cricketPredictions, winRateStats } = useData();
   const { user, userProfile, isAdmin, isVipActive } = useAuth();
 
@@ -293,6 +294,17 @@ export const VIP: React.FC<VIPProps> = () => {
             {matches.map((match, idx) => {
               const cat = match.category as keyof typeof CAT_CONFIG;
               const cfg = CAT_CONFIG[cat] || CAT_CONFIG.safe;
+              const evPct = match.ev_pct ?? (match.expected_value != null ? match.expected_value * 100 : null);
+              const odds = Number(match.odds) || 0;
+              const modelProb = Number((match as any).calibrated_probability ?? match.probability ?? 0);
+              const edgePct = modelProb > 0 && odds > 1 ? (modelProb * odds - 1) * 100 : null;
+              const kelly = match.kelly_stake ?? null;
+              const bankroll = userProfile?.portfolioBankroll || 0;
+              const riskMult = userProfile?.riskTolerance === 'low' ? 0.25 : userProfile?.riskTolerance === 'high' ? 1.0 : 0.5;
+              const stakeAmount = bankroll > 0 && kelly ? Math.round(bankroll * (kelly / 100) * riskMult) : 0;
+              const valueBets = ((match as any).all_value_bets ?? (match as any).allValueBets ?? [])
+                .filter((b: any) => (b?.odds ?? 0) > 1)
+                .slice(0, 3);
               return (
                 <motion.div
                   key={match.id}
@@ -301,7 +313,10 @@ export const VIP: React.FC<VIPProps> = () => {
                   transition={{ duration: 0.35, delay: idx * 0.07, ease: [0.25, 0.46, 0.45, 0.94] }}
                   className="h-full"
                 >
-                  <div className={`relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 h-full flex flex-col ${cfg.border}`}>
+                  <div
+                    onClick={() => navigate(`/match/${match.id}`)}
+                    className={`relative overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-md shadow-lg border-l-4 h-full flex flex-col cursor-pointer hover:border-vantage-cyan/40 hover:shadow-xl transition-all ${cfg.border}`}
+                  >
 
                     {/* Header row */}
                     <div className="flex justify-between items-center px-4 pt-4 pb-2">
@@ -316,7 +331,7 @@ export const VIP: React.FC<VIPProps> = () => {
                           <Clock size={10} />{match.time}
                         </span>
                         <button
-                          onClick={() => handleCopy(`${match.homeTeam} vs ${match.awayTeam} - ${getPredictionText(match)}`, match.id)}
+                          onClick={(e) => { e.stopPropagation(); handleCopy(`${match.homeTeam} vs ${match.awayTeam} - ${getPredictionText(match)}`, match.id); }}
                           className="p-1.5 rounded-md bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-gray-400 hover:text-vantage-cyan shrink-0"
                         >
                           {copiedId === match.id ? <Check size={11} className="text-green-500" /> : <Copy size={11} />}
@@ -347,12 +362,12 @@ export const VIP: React.FC<VIPProps> = () => {
                     </div>
 
                     {/* Prediction + confidence row */}
-                    <div className="relative mx-4 mb-3 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 overflow-hidden mt-auto">
+                    <div className="relative mx-4 mb-2 p-3 bg-slate-50 dark:bg-black/30 rounded-xl border border-slate-200 dark:border-white/5 overflow-hidden mt-auto">
                       <span className="text-[10px] text-gray-500 uppercase tracking-wide block mb-1.5">{t('free.analysis_label')}</span>
                       <div className="space-y-1">
                         {getTopProbPicks(match).map((p, pi) => (
                           <div key={pi} className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-bold text-vantage-cyan truncate">{p.name}</span>
+                            <span className="text-[10px] font-bold text-vantage-cyan truncate">{plainMarket(p.name, language)}</span>
                             <div className="flex items-center gap-2 shrink-0">
                               <div className="w-10 h-1 rounded-full bg-slate-200 dark:bg-white/10">
                                 <motion.div className="h-full rounded-full bg-gradient-to-r from-vantage-cyan to-emerald-400" initial={{ width: 0 }} animate={{ width: `${Math.round(p.prob * 100)}%` }} transition={{ duration: 1, delay: idx * 0.05 + 0.3 }} style={{ width: `${Math.round(p.prob * 100)}%` }} />
@@ -364,14 +379,57 @@ export const VIP: React.FC<VIPProps> = () => {
                       </div>
                     </div>
 
+                    {/* VIP edge metrics — model vs market (VIP exclusive) */}
+                    <div className="mx-4 mb-2 grid grid-cols-3 gap-1.5">
+                      <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/15 px-2 py-1.5 text-center">
+                        <p className="text-[8px] text-gray-500 uppercase font-bold">EV</p>
+                        <p className="text-[11px] font-black font-mono text-emerald-400">{evPct != null ? `${evPct > 0 ? '+' : ''}${Number(evPct).toFixed(1)}%` : '—'}</p>
+                      </div>
+                      <div className="rounded-lg bg-vantage-purple/5 border border-vantage-purple/15 px-2 py-1.5 text-center">
+                        <p className="text-[8px] text-gray-500 uppercase font-bold">{tr('Avantage', 'Edge', 'Ventaja', 'Vantagem')}</p>
+                        <p className="text-[11px] font-black font-mono text-vantage-purple">{edgePct != null ? `${edgePct > 0 ? '+' : ''}${edgePct.toFixed(0)}%` : '—'}</p>
+                      </div>
+                      <div className="rounded-lg bg-vantage-cyan/5 border border-vantage-cyan/15 px-2 py-1.5 text-center">
+                        <p className="text-[8px] text-gray-500 uppercase font-bold">Kelly</p>
+                        <p className="text-[11px] font-black font-mono text-vantage-cyan">{kelly != null && kelly > 0 ? `${Number(kelly).toFixed(1)}%` : '—'}</p>
+                      </div>
+                    </div>
+
+                    {/* Suggested stake — VIP-only bankroll guidance */}
+                    {stakeAmount > 0 && (
+                      <div className="mx-4 mb-2 flex items-center justify-between rounded-lg bg-gradient-to-r from-vantage-purple/10 to-transparent border border-vantage-purple/20 px-2.5 py-1.5">
+                        <span className="text-[9px] font-bold text-vantage-purple uppercase tracking-wide">{tr('Mise conseillée', 'Suggested stake', 'Apuesta sugerida', 'Aposta sugerida')}</span>
+                        <span className="text-[11px] font-black font-mono text-slate-900 dark:text-white">{stakeAmount.toLocaleString()} FCFA</span>
+                      </div>
+                    )}
+
+                    {/* Other approved value markets (VIP) */}
+                    {valueBets.length > 0 && (
+                      <div className="mx-4 mb-2 flex flex-wrap gap-1">
+                        {valueBets.map((b: any, bi: number) => (
+                          <span key={bi} className="text-[9px] font-bold text-gray-500 dark:text-gray-300 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">
+                            {plainMarket(b.market, language)} <span className="font-mono text-emerald-400">@{Number(b.odds).toFixed(2)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     {/* AI Reasoning */}
-                    <div className="mx-4 mb-4 p-3 rounded-xl bg-gradient-to-r from-vantage-purple/5 to-transparent border border-vantage-purple/15">
+                    <div className="mx-4 mb-2 p-3 rounded-xl bg-gradient-to-r from-vantage-purple/5 to-transparent border border-vantage-purple/15">
                       <div className="flex items-start gap-2">
                         <BrainCircuit size={13} className="text-vantage-purple mt-0.5 shrink-0" />
                         <div>
-                          <span className="text-[10px] text-vantage-purple font-bold uppercase tracking-wide">AI Analysis</span>
-                          <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed mt-0.5 line-clamp-3" title={getAnalysisText(match)}>{getAnalysisText(match)}</p>
+                          <span className="text-[10px] text-vantage-purple font-bold uppercase tracking-wide">{tr('Analyse IA', 'AI Analysis', 'Análisis IA', 'Análise IA')}</span>
+                          <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed mt-0.5 line-clamp-2" title={getAnalysisText(match)}>{getAnalysisText(match)}</p>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Explicit CTA — clear affordance */}
+                    <div className="px-4 pb-4 mt-1">
+                      <div className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white text-[11px] font-black uppercase tracking-wide shadow-lg shadow-vantage-purple/20 hover:opacity-95 transition-opacity">
+                        {tr('Ouvrir l\'analyse complète', 'Open full analysis', 'Abrir análisis completo', 'Abrir análise completa')}
+                        <ChevronRight size={13} />
                       </div>
                     </div>
                   </div>
@@ -472,7 +530,7 @@ export const VIP: React.FC<VIPProps> = () => {
                 <button
                   onClick={() => setShowPortfolioEdit(true)}
                   className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-vantage-cyan transition-colors"
-                  title={language === 'fr' ? 'Modifier le portefeuille' : 'Edit bankroll'}
+                  title={tr('Modifier le portefeuille', 'Edit bankroll', 'Editar la banca', 'Editar a banca')}
                 >
                   <Pencil size={16} />
                 </button>
@@ -493,7 +551,7 @@ export const VIP: React.FC<VIPProps> = () => {
               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
               <path d="M12 0C5.373 0 0 5.373 0 12c0 2.125.553 4.122 1.523 5.858L.057 23.945l6.305-1.654A11.952 11.952 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.906a9.896 9.896 0 01-5.043-1.38l-.361-.214-3.744.982.999-3.648-.235-.374A9.86 9.86 0 012.094 12C2.094 6.58 6.58 2.094 12 2.094S21.906 6.58 21.906 12 17.42 21.906 12 21.906z" />
             </svg>
-            {language === 'fr' ? 'Rejoindre le Groupe VIP WhatsApp' : 'Join VIP WhatsApp Group'}
+            {tr('Rejoindre le Groupe VIP WhatsApp', 'Join VIP WhatsApp Group', 'Unirse al Grupo VIP de WhatsApp', 'Entrar no Grupo VIP do WhatsApp')}
           </a>
         )}
 
@@ -556,10 +614,10 @@ export const VIP: React.FC<VIPProps> = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
                   { key: 'safe_stack', icon: '🔒', label: 'Safe Stack', color: 'teal', desc: '85%+ probability' },
-                  { key: 'baseline', icon: '🛡️', label: 'Baseline', color: 'emerald', desc: language === 'fr' ? 'Safest picks' : 'Safest combinations' },
-                  { key: 'alpha_edge', icon: '⚡', label: 'Alpha Edge', color: 'cyan', desc: language === 'fr' ? 'Balanced risk-reward' : 'Balanced risk-reward' },
-                  { key: 'syndicate', icon: '🎯', label: 'Syndicate', color: 'yellow', desc: language === 'fr' ? 'Medium risk' : 'Medium risk' },
-                  { key: 'variance_play', icon: '🚀', label: 'Variance', color: 'purple', desc: language === 'fr' ? 'Higher odds' : 'Higher odds' },
+                  { key: 'baseline', icon: '🛡️', label: 'Baseline', color: 'emerald', desc: tr('Safest picks', 'Safest combinations', 'Combinadas más seguras', 'Combinadas mais seguras') },
+                  { key: 'alpha_edge', icon: '⚡', label: 'Alpha Edge', color: 'cyan', desc: tr('Balanced risk-reward', 'Balanced risk-reward', 'Riesgo-beneficio equilibrado', 'Risco-retorno equilibrado') },
+                  { key: 'syndicate', icon: '🎯', label: 'Syndicate', color: 'yellow', desc: tr('Medium risk', 'Medium risk', 'Riesgo medio', 'Risco médio') },
+                  { key: 'variance_play', icon: '🚀', label: 'Variance', color: 'purple', desc: tr('Higher odds', 'Higher odds', 'Cuotas más altas', 'Odds mais altas') },
                 ].map(tier => {
                   const tierData = quantAccumulators[tier.key];
                   if (!tierData || tierData.length === 0) return null;
@@ -595,7 +653,7 @@ export const VIP: React.FC<VIPProps> = () => {
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">{language === 'fr' ? 'Meilleur slip' : 'Top Slip'}</p>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">{tr('Meilleur slip', 'Top Slip', 'Mejor Slip', 'Melhor Slip')}</p>
                         {bestSlip.matches?.slice(0, 3).map((m: any, i: number) => (
                           <div key={i} className="flex items-center gap-2 text-[11px]">
                             <span className="text-gray-400">{i + 1}.</span>
@@ -609,9 +667,9 @@ export const VIP: React.FC<VIPProps> = () => {
                         )}
                       </div>
                       <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between">
-                        <span className="text-[10px] text-gray-400">{tierData.length} {language === 'fr' ? 'slips disponibles' : 'slips available'}</span>
+                        <span className="text-[10px] text-gray-400">{tierData.length} {tr('slips disponibles', 'slips available', 'slips disponibles', 'slips disponíveis')}</span>
                         <span className={`text-[10px] font-bold ${cfg.text} flex items-center gap-1`}>
-                          {language === 'fr' ? 'Voir tout' : 'View all'} <ChevronRight size={12} />
+                          {tr('Voir tout', 'View all', 'Ver todo', 'Ver tudo')} <ChevronRight size={12} />
                         </span>
                       </div>
                     </motion.button>
@@ -708,7 +766,7 @@ export const VIP: React.FC<VIPProps> = () => {
                       >
                         <div className="flex items-center gap-1.5 mb-0.5">
                           <Layers size={10} className="text-purple-500" />
-                          <span className="text-[9px] font-bold text-purple-500">ACCA</span>
+                          <span className="text-[9px] font-bold text-purple-500">{tr('ACCUMULATEURS', 'ACCUMULATORS', 'COMBINADAS', 'ACUMULADAS')}</span>
                         </div>
                         <p className="text-[10px] text-gray-600 dark:text-gray-300">Tap cards â†“</p>
                       </motion.div>
@@ -889,13 +947,13 @@ export const VIP: React.FC<VIPProps> = () => {
             onClick={() => setPicksDay('today')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${picksDay === 'today' ? 'bg-white dark:bg-white/15 shadow text-vantage-cyan' : 'text-gray-500'}`}
           >
-            <Zap size={12} /> {language === 'fr' ? "Aujourd'hui" : "Today's Picks"}
+            <Zap size={12} /> {tr("Aujourd'hui", "Today's Picks", 'Picks de Hoy', 'Palpites de Hoje')}
           </button>
           <button
             onClick={() => setPicksDay('tomorrow')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${picksDay === 'tomorrow' ? 'bg-white dark:bg-white/15 shadow text-vantage-purple' : 'text-gray-500'}`}
           >
-            <Calendar size={12} /> {language === 'fr' ? 'Demain' : "Tomorrow"}
+            <Calendar size={12} /> {tr('Demain', 'Tomorrow', 'Mañana', 'Amanhã')}
           </button>
         </div>
 
@@ -903,7 +961,7 @@ export const VIP: React.FC<VIPProps> = () => {
           <div className="space-y-3">
             <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-slate-700 dark:text-gray-300">
               <Calendar size={16} className="text-vantage-purple" />
-              {language === 'fr' ? "Matchs de Demain" : "Tomorrow's Fixtures"}
+              {tr("Matchs de Demain", "Tomorrow's Fixtures", 'Partidos de Mañana', 'Jogos de Amanhã')}
               <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-vantage-purple/15 border border-vantage-purple/30 text-vantage-purple">LIVE DATA</span>
             </h3>
             {tomorrowLoading ? (
@@ -913,8 +971,8 @@ export const VIP: React.FC<VIPProps> = () => {
             ) : tomorrowFixtures.length === 0 ? (
               <div className="text-center py-10 text-gray-500 text-sm border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl">
                 <Calendar size={28} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
-                <p className="font-medium">{language === 'fr' ? "Aucun match prévu pour demain" : "No fixtures yet for tomorrow"}</p>
-                <p className="text-xs text-gray-400 mt-1">{language === 'fr' ? "Disponible après 23:00 Lagos" : "Available after 23:00 Lagos time"}</p>
+                <p className="font-medium">{tr("Aucun match prévu pour demain", "No fixtures yet for tomorrow", 'Aún no hay partidos para mañana', 'Ainda não há jogos para amanhã')}</p>
+                <p className="text-xs text-gray-400 mt-1">{tr("Disponible après 23:00 Lagos", "Available after 23:00 Lagos time", 'Disponible después de las 23:00 (Lagos)', 'Disponível após 23:00 (Lagos)')}</p>
               </div>
             ) : (
               tomorrowFixtures.map((fixture, i) => (
@@ -1064,7 +1122,7 @@ export const VIP: React.FC<VIPProps> = () => {
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 flex items-center gap-2">
               <Clock size={14} className="text-amber-400 shrink-0" />
               <p className="text-[11px] font-bold text-amber-600 dark:text-amber-300">
-                {language === 'fr' ? "Les analyses du jour sont publiées à 07:30 — débloquez avant le coup d'envoi" : "Today's analyses publish at 07:30 — unlock before kickoff"}
+                {tr("Les analyses du jour sont publiées à 07:30 — débloquez avant le coup d'envoi", "Today's analyses publish at 07:30 — unlock before kickoff", 'Los análisis de hoy se publican a las 07:30 — desbloquea antes del inicio', 'As análises de hoje são publicadas às 07:30 — desbloqueie antes do início')}
               </p>
             </div>
 
@@ -1137,8 +1195,8 @@ export const VIP: React.FC<VIPProps> = () => {
               className="text-xs font-bold text-gray-400 hover:text-vantage-cyan transition-colors flex items-center justify-center gap-1 py-2"
             >
               {showAllPlans
-                ? <><ChevronUp size={12} /> {language === 'fr' ? 'Réduire les plans' : 'Show less'}</>
-                : <><ChevronDown size={12} /> {language === 'fr' ? 'Voir tous les plans' : 'See all plans'}</>
+                ? <><ChevronUp size={12} /> {tr('Réduire les plans', 'Show less', 'Mostrar menos', 'Mostrar menos')}</>
+                : <><ChevronDown size={12} /> {tr('Voir tous les plans', 'See all plans', 'Ver todos los planes', 'Ver todos os planos')}</>
               }
             </button>
 

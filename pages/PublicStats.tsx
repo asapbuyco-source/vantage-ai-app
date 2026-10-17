@@ -6,28 +6,33 @@ import { GlassCard } from '../components/GlassCard';
 import { useData } from '../context/DataContext';
 import { useAppContext } from '../context/AppContext';
 import { getUserCount, getWinRateStats } from '../services/db';
+import { getTrackRecord, TrackRecord } from '../services/trackRecord';
+import { plainMarket } from '../utils';
 
 interface PublicStatsProps {}
 
 export const PublicStats: React.FC<PublicStatsProps> = () => {
     const navigate = useNavigate();
     const { winRateStats, predictions } = useData();
-    const { language } = useAppContext();
+    const { language, tr } = useAppContext();
     const [memberCount, setMemberCount] = useState<{ total: number; vip: number } | null>(null);
     const [totalWins, setTotalWins] = useState<number | null>(null);
     const [loadingCounts, setLoadingCounts] = useState(true);
     const [localStats, setLocalStats] = useState<any>(null);
+    const [record, setRecord] = useState<TrackRecord | null>(null);
 
     useEffect(() => {
         (async () => {
             setLoadingCounts(true);
             try {
-                const [counts, stats] = await Promise.all([
+                const [counts, stats, rec] = await Promise.all([
                     getUserCount(),
                     getWinRateStats(),
+                    getTrackRecord(30),
                 ]);
                 setMemberCount(counts);
                 setLocalStats(stats);
+                setRecord(rec);
                 // Estimate total wins from monthly win rate × graded matches
                 const guessedTotal = Math.round((stats.monthly / 100) * 30 * 8);
                 setTotalWins(guessedTotal > 0 ? guessedTotal : null);
@@ -45,25 +50,25 @@ export const PublicStats: React.FC<PublicStatsProps> = () => {
 
     const statsGrid = [
         {
-            label: language === 'fr' ? 'Membres Actifs' : 'Active Members',
+            label: tr('Membres Actifs', 'Active Members', 'Miembros Activos', 'Membros Ativos'),
             value: loadingCounts ? '—' : totalCount > 0 ? `${totalCount.toLocaleString()}+` : '—',
             icon: <Users className="text-vantage-purple" size={22} />,
             color: 'text-vantage-purple',
         },
         {
-            label: language === 'fr' ? 'Membres VIP' : 'VIP Members',
+            label: tr('Membres VIP', 'VIP Members', 'Miembros VIP', 'Membros VIP'),
             value: loadingCounts ? '—' : vipCount > 0 ? `${vipCount.toLocaleString()}` : '—',
             icon: <Trophy className="text-vantage-cyan" size={22} />,
             color: 'text-vantage-cyan',
         },
         {
-            label: language === 'fr' ? 'Taux de Victoires' : 'Monthly Win Rate',
+            label: tr('Taux de Victoires', 'Monthly Win Rate', 'Tasa de Aciertos', 'Taxa de Acertos'),
             value: monthlyRate > 0 ? `${monthlyRate}%` : '—',
             icon: <Star className="text-yellow-400" size={22} />,
             color: 'text-yellow-400',
         },
         {
-            label: language === 'fr' ? 'Série de Victoires' : 'Win Streak',
+            label: tr('Série de Victoires', 'Win Streak', 'Racha de Victorias', 'Sequência de Vitórias'),
             value: streak > 0 ? `${streak}d` : '—',
             icon: <TrendingUp className="text-green-500" size={22} />,
             color: 'text-green-500',
@@ -75,10 +80,10 @@ export const PublicStats: React.FC<PublicStatsProps> = () => {
             {/* Header */}
             <div className="flex flex-col space-y-1">
                 <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white">
-                    {language === 'fr' ? 'PERFORMANCE' : 'LIVE'} <span className="text-vantage-purple">{language === 'fr' ? 'EN DIRECT' : 'STATS'}</span>
+                    {tr('PERFORMANCE', 'LIVE', 'RENDIMIENTO', 'DESEMPENHO')} <span className="text-vantage-purple">{tr('EN DIRECT', 'STATS', 'EN VIVO', 'AO VIVO')}</span>
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {language === 'fr' ? 'Données réelles depuis notre base de données' : 'Real data sourced live from our verified database'}
+                    {tr('Données réelles depuis notre base de données', 'Real data sourced live from our verified database', 'Datos reales de nuestra base de datos verificada', 'Dados reais da nossa base de dados verificada')}
                 </p>
             </div>
 
@@ -111,20 +116,20 @@ export const PublicStats: React.FC<PublicStatsProps> = () => {
                     <div className="flex items-center gap-2">
                         <BarChart3 size={18} className="text-vantage-cyan" />
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wide">
-                            {language === 'fr' ? 'Taux Mensuels' : 'Performance Rates'}
+                            {tr('Taux Mensuels', 'Performance Rates', 'Tasas de Rendimiento', 'Taxas de Desempenho')}
                         </h3>
                     </div>
                     {monthlyRate > 0 && (
                         <span className="flex items-center gap-1 text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">
-                            <ArrowUpRight size={12} /> {monthlyRate}% {language === 'fr' ? 'Mensuel' : 'Monthly'}
+                            <ArrowUpRight size={12} /> {monthlyRate}% {tr('Mensuel', 'Monthly', 'Mensual', 'Mensal')}
                         </span>
                     )}
                 </div>
                 <div className="flex gap-4">
                     {[
-                        { label: language === 'fr' ? "Aujourd'hui" : 'Today', value: displayStats?.daily ?? 0 },
-                        { label: language === 'fr' ? '7 Jours' : '7 Days', value: displayStats?.weekly ?? 0 },
-                        { label: language === 'fr' ? '30 Jours' : '30 Days', value: displayStats?.monthly ?? 0 },
+                        { label: tr("Aujourd'hui", 'Today', 'Hoy', 'Hoje'), value: displayStats?.daily ?? 0 },
+                        { label: tr('7 Jours', '7 Days', '7 Días', '7 Dias'), value: displayStats?.weekly ?? 0 },
+                        { label: tr('30 Jours', '30 Days', '30 Días', '30 Dias'), value: displayStats?.monthly ?? 0 },
                     ].map((r, i) => (
                         <div key={i} className="flex-1 flex flex-col items-center gap-2">
                             <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-1.5 overflow-hidden">
@@ -143,6 +148,49 @@ export const PublicStats: React.FC<PublicStatsProps> = () => {
                 </div>
             </GlassCard>
 
+            {/* 30-day Track Record — win-rate AND odds-weighted ROI (honest KPI) */}
+            {record && record.graded.total > 0 && (
+                <GlassCard className="border-vantage-purple/20 bg-vantage-purple/5">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            <Trophy size={18} className="text-vantage-purple" />
+                            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-900 dark:text-white">
+                                {tr('Bilan 30 jours', '30-Day Track Record', 'Registro de 30 días', 'Registro de 30 dias')}
+                            </h3>
+                        </div>
+                        <span className={`text-xs font-black px-2 py-0.5 rounded-full ${record.roi >= 0 ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}`}>
+                            ROI {record.roi >= 0 ? '+' : ''}{record.roi}%
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                        <div>
+                            <div className="text-xl font-black font-orbitron text-slate-900 dark:text-white">{record.graded.total}</div>
+                            <div className="text-[10px] text-gray-500 uppercase">{tr('Analysés', 'Settled', 'Analizados', 'Analisados')}</div>
+                        </div>
+                        <div>
+                            <div className="text-xl font-black font-orbitron text-vantage-cyan">{record.winRate}%</div>
+                            <div className="text-[10px] text-gray-500 uppercase">{tr('Victoires', 'Win rate', 'Victorias', 'Vitórias')}</div>
+                        </div>
+                        <div>
+                            <div className={`text-xl font-black font-orbitron ${record.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>{record.roi >= 0 ? '+' : ''}{record.roi}%</div>
+                            <div className="text-[10px] text-gray-500 uppercase">ROI</div>
+                        </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-white/5 space-y-1">
+                        {Object.entries(record.byMarket)
+                            .filter(([, m]) => m.staked >= 20)
+                            .sort((a, b) => b[1].roi - a[1].roi)
+                            .slice(0, 4)
+                            .map(([name, m]) => (
+                                <div key={name} className="flex items-center justify-between text-[11px]">
+                                    <span className="text-gray-400 truncate">{plainMarket(name, language)}</span>
+                                    <span className={`font-mono font-bold ${m.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>{m.winRate}% · {m.roi >= 0 ? '+' : ''}{m.roi}%</span>
+                                </div>
+                            ))}
+                    </div>
+                </GlassCard>
+            )}
+
             {/* Trust Signals */}
             <div className="grid grid-cols-1 gap-3">
                 <GlassCard className="border-green-500/20 bg-green-500/5">
@@ -150,12 +198,15 @@ export const PublicStats: React.FC<PublicStatsProps> = () => {
                         <ShieldCheck className="text-green-500 shrink-0" size={22} />
                         <div>
                             <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                                {language === 'fr' ? 'Prédictions Vérifiées' : 'Verified Predictions'}
+                                {tr('Prédictions Vérifiées', 'Verified Predictions', 'Predicciones Verificadas', 'Palpites Verificados')}
                             </h4>
                             <p className="text-xs text-gray-500 mt-1">
-                                {language === 'fr'
-                                    ? 'Chaque résultat est vérifié via API officielle et archivé publiquement.'
-                                    : 'Every match result is cross-referenced with official API data and archived publicly.'}
+                                {tr(
+                                    'Chaque résultat est vérifié via API officielle et archivé publiquement.',
+                                    'Every match result is cross-referenced with official API data and archived publicly.',
+                                    'Cada resultado se verifica con datos oficiales de API y se archiva públicamente.',
+                                    'Cada resultado é verificado com dados oficiais de API e arquivado publicamente.'
+                                )}
                             </p>
                         </div>
                     </div>
@@ -168,9 +219,12 @@ export const PublicStats: React.FC<PublicStatsProps> = () => {
                                 {language === 'fr' ? 'Powered by Vantage AI' : 'Powered by Vantage AI'}
                             </h4>
                             <p className="text-xs text-gray-500 mt-1">
-                                {language === 'fr'
-                                    ? 'Notre moteur IA Vantage analyse les données en temps réel pour chaque prédiction.'
-                                    : 'Our Vantage AI engine analyzes real-time fixture data for every single prediction.'}
+                                {tr(
+                                    'Notre moteur IA Vantage analyse les données en temps réel pour chaque prédiction.',
+                                    'Our Vantage AI engine analyzes real-time fixture data for every single prediction.',
+                                    'Nuestro motor de IA Vantage analiza datos en tiempo real para cada predicción.',
+                                    'Nosso motor de IA Vantage analisa dados em tempo real para cada palpite.'
+                                )}
                             </p>
                         </div>
                     </div>
@@ -183,7 +237,7 @@ export const PublicStats: React.FC<PublicStatsProps> = () => {
                 className="w-full py-4 bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-transform"
             >
                 <History size={18} />
-                {language === 'fr' ? 'Voir l\'Archive Complète des Résultats' : 'View Full Results Archive'}
+                {tr('Voir l\'Archive Complète des Résultats', 'View Full Results Archive', 'Ver el Archivo Completo de Resultados', 'Ver o Arquivo Completo de Resultados')}
             </button>
         </div>
     );

@@ -40,35 +40,47 @@ const trainingModules = [
 ];
 
 export const Learn: React.FC = () => {
-  const { t, language } = useAppContext();
+  const { t, language, tr } = useAppContext();
   const [activeSection, setActiveSection] = useState<'guide' | 'concepts' | 'faq'>('guide');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [openConcept, setOpenConcept] = useState<string | null>(null);
 
   const faqItems = [
     {
-      q: language === 'fr' ? "Qu'est-ce que l'EV (Expected Value) ?" : 'What is EV (Expected Value)?',
-      a: language === 'fr'
-        ? "L'EV mesure votre avantage mathematique. Un EV de +10% signifie que pour chaque $100 mises, vous gagnez en moyenne $10 de profit sur le long terme."
-        : 'EV measures your mathematical edge. An EV of +10% means for every 100 units staked, you expect 10 units profit long-term.',
+      q: tr("Qu'est-ce que l'EV (Expected Value) ?", 'What is EV (Expected Value)?', '¿Qué es el EV (Valor Esperado)?', 'O que é EV (Valor Esperado)?'),
+      a: tr(
+        "L'EV mesure votre avantage mathematique. Un EV de +10% signifie que pour chaque $100 mises, vous gagnez en moyenne $10 de profit sur le long terme.",
+        'EV measures your mathematical edge. An EV of +10% means for every 100 units staked, you expect 10 units profit long-term.',
+        'El EV mide tu ventaja matemática. Un EV de +10% significa que por cada 100 unidades apostadas esperas 10 de ganancia a largo plazo.',
+        'O EV mede sua vantagem matemática. Um EV de +10% significa que para cada 100 unidades apostadas você espera 10 de lucro a longo prazo.'
+      ),
     },
     {
-      q: language === 'fr' ? "Comment fonctionne le Kelly Criterion ?" : 'How does Kelly Criterion work?',
-      a: language === 'fr'
-        ? "Le Kelly Criterion calcule la taille optimale de mise en fonction de votre avantage. Nous utilisons un Kelly fractionnaire (12.5%) pour réduire la volatilité."
-        : 'The Kelly Criterion calculates optimal bet size from your edge. We use fractional Kelly (12.5%) to reduce volatility.',
+      q: tr("Comment fonctionne le Kelly Criterion ?", 'How does Kelly Criterion work?', '¿Cómo funciona el Criterio de Kelly?', 'Como funciona o Critério de Kelly?'),
+      a: tr(
+        "Le Kelly Criterion calcule la taille optimale de mise en fonction de votre avantage. Nous utilisons un Kelly fractionnaire (12.5%) pour réduire la volatilité.",
+        'The Kelly Criterion calculates optimal bet size from your edge. We use fractional Kelly (12.5%) to reduce volatility.',
+        'El Criterio de Kelly calcula el tamaño óptimo de apuesta según tu ventaja. Usamos Kelly fraccionado (12.5%) para reducir la volatilidad.',
+        'O Critério de Kelly calcula o tamanho ideal da aposta com base na sua vantagem. Usamos Kelly fracionado (12.5%) para reduzir a volatilidade.'
+      ),
     },
     {
-      q: language === 'fr' ? "Qu'est-ce que le CLV (Closing Line Value) ?" : 'What is CLV (Closing Line Value)?',
-      a: language === 'fr'
-        ? "Le CLV mesure si nos cotes étaient meilleures que la ligne de clôture. Un CLV positif signifie que le marché a évolué dans notre direction, confirmant notre avantage."
-        : 'CLV measures if our odds beat the closing line. Positive CLV means the market moved our way — confirming our edge.',
+      q: tr("Qu'est-ce que le CLV (Closing Line Value) ?", 'What is CLV (Closing Line Value)?', '¿Qué es el CLV (Closing Line Value)?', 'O que é CLV (Closing Line Value)?'),
+      a: tr(
+        "Le CLV mesure si nos cotes étaient meilleures que la ligne de clôture. Un CLV positif signifie que le marché a évolué dans notre direction, confirmant notre avantage.",
+        'CLV measures if our odds beat the closing line. Positive CLV means the market moved our way — confirming our edge.',
+        'El CLV mide si nuestras cuotas superaron la línea de cierre. Un CLV positivo significa que el mercado se movió a nuestro favor.',
+        'O CLV mede se nossas odds superaram a linha de fechamento. CLV positivo significa que o mercado se moveu a nosso favor.'
+      ),
     },
     {
-      q: language === 'fr' ? 'Quels marchés sont les plus fiables ?' : 'Which markets are most reliable?',
-      a: language === 'fr'
-        ? "Les marchés de buts (Over 1.5, Over 2.5) ont le meilleur taux de réussite à 72%. Les marchés de résultat (Home/Away Win) sont supprimés du pool de paris en raison de performances insuffisantes."
-        : 'Goals markets (Over 1.5, Over 2.5) have the best hit rate at 72%. Match winner markets are suppressed from our bet pool due to poor performance.',
+      q: tr('Quels marchés sont les plus fiables ?', 'Which markets are most reliable?', '¿Qué mercados son más fiables?', 'Quais mercados são mais confiáveis?'),
+      a: tr(
+        "Les marchés de buts (Over 1.5, Over 2.5) ont le meilleur taux de réussite à 72%. Les marchés de résultat (Home/Away Win) sont supprimés du pool de paris en raison de performances insuffisantes.",
+        'Goals markets (Over 1.5, Over 2.5) have the best hit rate at 72%. Match winner markets are suppressed from our bet pool due to poor performance.',
+        'Los mercados de goles (Más de 1.5, Más de 2.5) tienen la mejor tasa de acierto: 72%. Los mercados de ganador se excluyen por bajo rendimiento.',
+        'Os mercados de gols (Mais de 1.5, Mais de 2.5) têm a melhor taxa de acerto: 72%. Os mercados de vencedor são excluídos por baixo desempenho.'
+      ),
     },
   ];
 
@@ -76,10 +88,10 @@ export const Learn: React.FC = () => {
     <div className="space-y-4 pb-24">
       <motion.div className="flex flex-col space-y-1 mb-4" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-black font-orbitron text-slate-900 dark:text-white uppercase tracking-tight">
-          {language === 'fr' ? 'Centre' : 'Learning'} <span className="text-vantage-cyan">{language === 'fr' ? "d'Apprentissage" : 'Center'}</span>
+          {tr('Centre', 'Learning', 'Centro', 'Central')} <span className="text-vantage-cyan">{tr("d'Apprentissage", 'Center', 'de Aprendizaje', 'de Aprendizagem')}</span>
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
-          {language === 'fr' ? 'Maîtrisez les paris sportifs quantitatifs' : 'Master quantitative sports analysis'}
+          {tr('Maîtrisez les paris sportifs quantitatifs', 'Master quantitative sports analysis', 'Domina el análisis deportivo cuantitativo', 'Domine a análise esportiva quantitativa')}
         </p>
       </motion.div>
 
@@ -134,7 +146,7 @@ export const Learn: React.FC = () => {
                 className="flex items-center gap-3 px-4 py-3 bg-blue-500/5 rounded-xl border border-blue-500/15 hover:bg-blue-500/10 transition-colors">
                 <PlayCircle size={16} className="text-blue-400" />
                 <span className="text-xs font-bold text-slate-700 dark:text-gray-200 flex-1 text-left">
-                  {language === 'fr' ? 'Vidéos Éducatives' : 'Educational Videos'}
+                  {tr('Vidéos Éducatives', 'Educational Videos', 'Videos Educativos', 'Vídeos Educativos')}
                 </span>
                 <ExternalLink size={14} className="text-blue-400" />
               </a>

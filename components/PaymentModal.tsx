@@ -24,7 +24,7 @@ interface PaymentModalProps {
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan, onSuccess }) => {
-  const { language, showToast } = useAppContext();
+  const { language, showToast, tr } = useAppContext();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [paymentFailed, setPaymentFailed] = useState(false);
@@ -55,15 +55,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
 
   const handlePayment = async () => {
     if (!user) {
-      showToast(language === 'fr' ? "Veuillez vous connecter d'abord" : 'Please login first', 'info');
+      showToast(tr("Veuillez vous connecter d'abord", 'Please login first', 'Inicia sesión primero', 'Faça login primeiro'), 'info');
       return;
     }
 
     if (!isNative) {
       showToast(
-        language === 'fr'
-          ? "Les abonnements Play Store sont disponibles uniquement dans l'application Android."
-          : 'Play Store subscriptions are available only in the Android app.',
+        tr(
+          "Les abonnements Play Store sont disponibles uniquement dans l'application Android.",
+          'Play Store subscriptions are available only in the Android app.',
+          'Las suscripciones de Play Store solo están disponibles en la app de Android.',
+          'As assinaturas da Play Store estão disponíveis apenas no app Android.'
+        ),
         'info'
       );
       setPaymentFailed(true);
@@ -72,9 +75,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
 
     if (!revenueCatConfigured) {
       showToast(
-        language === 'fr'
-          ? 'Google Play Billing nest pas encore configure.'
-          : 'Google Play Billing is not configured yet.',
+        tr(
+          'Google Play Billing nest pas encore configure.',
+          'Google Play Billing is not configured yet.',
+          'Google Play Billing aún no está configurado.',
+          'Google Play Billing ainda não está configurado.'
+        ),
         'error'
       );
       setPaymentFailed(true);
@@ -132,14 +138,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
           logFacebookEvent('Subscribe', { plan: plan.id, currency: 'USD' }).catch(() => {});
         }).catch(() => {});
         showToast(
-          language === 'fr' ? '🎉 VIP actif ! Profitez de toutes les fonctionnalités.' : '🎉 VIP activated! Enjoy all premium features.',
+          tr('🎉 VIP actif ! Profitez de toutes les fonctionnalités.', '🎉 VIP activated! Enjoy all premium features.', '🎉 ¡VIP activado! Disfruta de todas las funciones.', '🎉 VIP ativado! Aproveite todos os recursos.'),
           'success'
         );
       } else {
         showToast(
-          language === 'fr'
-            ? "Achat réussi. Le VIP sera activé automatiquement — reconnectez-vous si nécessaire."
-            : 'Purchase successful. VIP will activate automatically — re-login if needed.',
+          tr(
+            "Achat réussi. Le VIP sera activé automatiquement — reconnectez-vous si nécessaire.",
+            'Purchase successful. VIP will activate automatically — re-login if needed.',
+            'Compra exitosa. El VIP se activará automáticamente — vuelve a iniciar sesión si es necesario.',
+            'Compra bem-sucedida. O VIP será ativado automaticamente — faça login novamente se necessário.'
+          ),
           'success'
         );
       }
@@ -149,23 +158,29 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
       onClose();
     } catch (e: any) {
       if (e?.userCancelled) {
-        showToast(language === 'fr' ? 'Paiement annule.' : 'Payment cancelled.', 'info');
+        showToast(tr('Paiement annule.', 'Payment cancelled.', 'Pago cancelado.', 'Pagamento cancelado.'), 'info');
       } else {
         // Build a human-readable error string from RevenueCat error object
         const code = e?.code ?? e?.underlyingErrorMessage ?? '';
         const rawMsg = e?.message ?? e?.localizedDescription ?? JSON.stringify(e);
         const msg = String(rawMsg).startsWith('[NO_PRODUCTS]')
-          ? (language === 'fr'
-            ? 'Aucun abonnement trouve dans Google Play. Contactez le support (WhatsApp) — cela vient des reglages RevenueCat/Play Console, pas de votre telephone.'
-            : 'No Google Play subscriptions found. Contact support via WhatsApp — this is a RevenueCat/Play Console configuration issue, not your phone.')
+          ? tr(
+            'Aucun abonnement trouve dans Google Play. Contactez le support (WhatsApp) — cela vient des reglages RevenueCat/Play Console, pas de votre telephone.',
+            'No Google Play subscriptions found. Contact support via WhatsApp — this is a RevenueCat/Play Console configuration issue, not your phone.',
+            'No se encontraron suscripciones de Google Play. Contacta al soporte (WhatsApp) — es un problema de configuración de RevenueCat/Play Console, no de tu teléfono.',
+            'Nenhuma assinatura da Google Play encontrada. Contate o suporte (WhatsApp) — é um problema de configuração do RevenueCat/Play Console, não do seu telefone.'
+          )
           : rawMsg;
         const detail = `Code: ${code} | ${msg}`;
         console.error('[Payments] Google Play purchase failed:', detail, e);
         setErrorDetail(detail);
         showToast(
-          language === 'fr'
-            ? 'Erreur Google Play. Reessayez ou contactez le support.'
-            : 'Google Play error. Try again or contact support.',
+          tr(
+            'Erreur Google Play. Reessayez ou contactez le support.',
+            'Google Play error. Try again or contact support.',
+            'Error de Google Play. Reintenta o contacta al soporte.',
+            'Erro na Google Play. Tente novamente ou contate o suporte.'
+          ),
           'error'
         );
         setPaymentFailed(true);
@@ -226,9 +241,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                   <div className="flex items-start gap-2.5">
                     <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
                     <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-200">
-                      {language === 'fr'
-                        ? "Pour respecter Google Play, les paiements externes ont ete retires. Ouvrez l'application Android pour acheter via Google Play."
-                        : 'External payments have been removed for Google Play compliance. Open the Android app to buy through Google Play.'}
+                      {tr(
+                        "Pour respecter Google Play, les paiements externes ont ete retires. Ouvrez l'application Android pour acheter via Google Play.",
+                        'External payments have been removed for Google Play compliance. Open the Android app to buy through Google Play.',
+                        'Para cumplir con Google Play, los pagos externos fueron retirados. Abre la app de Android para comprar vía Google Play.',
+                        'Para cumprir com a Google Play, os pagamentos externos foram removidos. Abra o app Android para comprar pela Google Play.'
+                      )}
                     </p>
                   </div>
                 </div>
@@ -239,9 +257,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                   <div className="flex items-start gap-2.5">
                     <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-400" />
                     <p className="text-xs leading-relaxed text-red-600 dark:text-red-300">
-                      {language === 'fr'
-                        ? 'RevenueCat nest pas configure dans cette build. Ajoutez VITE_REVENUECAT_GOOGLE_API_KEY dans Codemagic.'
-                        : 'RevenueCat is not configured in this build. Add VITE_REVENUECAT_GOOGLE_API_KEY in Codemagic.'}
+                      {tr(
+                        'RevenueCat nest pas configure dans cette build. Ajoutez VITE_REVENUECAT_GOOGLE_API_KEY dans Codemagic.',
+                        'RevenueCat is not configured in this build. Add VITE_REVENUECAT_GOOGLE_API_KEY in Codemagic.',
+                        'RevenueCat no está configurado en esta compilación. Agrega VITE_REVENUECAT_GOOGLE_API_KEY en Codemagic.',
+                        'RevenueCat não está configurado nesta build. Adicione VITE_REVENUECAT_GOOGLE_API_KEY no Codemagic.'
+                      )}
                     </p>
                   </div>
                 </div>
@@ -253,13 +274,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-4 font-bold text-white shadow-lg shadow-emerald-500/30 transition-all hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? <Loader2 className="animate-spin" size={20} /> : <ShieldCheck size={19} />}
-                <span>{language === 'fr' ? 'Payer avec Google Play' : 'Pay with Google Play'}</span>
+                <span>{tr('Payer avec Google Play', 'Pay with Google Play', 'Pagar con Google Play', 'Pagar com o Google Play')}</span>
               </button>
 
               {paymentFailed && (
                 <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center">
                   <p className="mb-2 text-sm font-bold text-red-500">
-                    {language === 'fr' ? 'Paiement non termine.' : 'Payment not completed.'}
+                    {tr('Paiement non termine.', 'Payment not completed.', 'Pago no completado.', 'Pagamento não concluído.')}
                   </p>
                   {errorDetail && (
                     <p className="mb-2 text-[10px] break-all text-red-400 font-mono bg-red-500/10 rounded p-2">

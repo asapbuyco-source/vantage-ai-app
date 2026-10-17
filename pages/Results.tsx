@@ -21,7 +21,7 @@ const CYCLE: Record<string, MatchStatus> = { won: 'lost', lost: 'pending', pendi
 
 export const Results: React.FC = () => {
     const navigate = useNavigate();
-    const { language, showToast } = useAppContext();
+    const { language, showToast, tr } = useAppContext();
     const { isAdmin, isVipActive } = useAuth();
     const isVip = isVipActive || isAdmin;
 
@@ -76,7 +76,7 @@ export const Results: React.FC = () => {
             },
             (err) => {
                 console.warn('[Results] Live listener error:', err);
-                setLiveError(language === 'fr' ? 'Connexion en temps réel perdue. Les résultats peuvent ne pas être à jour.' : 'Real-time connection lost. Results may be outdated.');
+                setLiveError(tr('Connexion en temps réel perdue. Les résultats peuvent ne pas être à jour.', 'Real-time connection lost. Results may be outdated.', 'Conexión en tiempo real perdida. Los resultados pueden estar desactualizados.', 'Conexão em tempo real perdida. Os resultados podem estar desatualizados.'));
             }
         );
         return () => unsub();
@@ -148,9 +148,9 @@ export const Results: React.FC = () => {
             // Clear edits and exit edit mode for this day
             setLocalEdits(prev => { const n = { ...prev }; delete n[date]; return n; });
             setEditMode(prev => ({ ...prev, [date]: false }));
-            showToast?.(language === 'fr' ? 'Résultats sauvegardés ✓' : 'Results saved ✓', 'success');
+            showToast?.(tr('Résultats sauvegardés ✓', 'Results saved ✓', 'Resultados guardados ✓', 'Resultados salvos ✓'), 'success');
         } catch (e: any) {
-            showToast?.(language === 'fr' ? 'Erreur de sauvegarde' : 'Save failed', 'error');
+            showToast?.(tr('Erreur de sauvegarde', 'Save failed', 'Error al guardar', 'Falha ao salvar'), 'error');
             console.error('[AdminGrade] Save error:', e);
         } finally {
             setSaving(s => ({ ...s, [date]: false }));
@@ -159,7 +159,7 @@ export const Results: React.FC = () => {
 
     const formatDate = (dateStr: string) => {
         const d = new Date(dateStr + 'T12:00:00');
-        return d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', {
+        return d.toLocaleDateString(tr('fr-FR', 'en-GB', 'es-MX', 'pt-BR'), {
             weekday: 'short', day: 'numeric', month: 'short',
         });
     };
@@ -193,14 +193,17 @@ export const Results: React.FC = () => {
                 <div className="flex items-center gap-2">
                     <History size={22} className="text-vantage-cyan" />
                     <h1 className="text-2xl font-bold font-orbitron text-slate-900 dark:text-white">
-                        {language === 'fr' ? 'ARCHIVE' : 'RESULTS'}{' '}
-                        <span className="text-vantage-cyan">{language === 'fr' ? 'DES RÉSULTATS' : 'HISTORY'}</span>
+                        {tr('ARCHIVE', 'RESULTS', 'ARCHIVO', 'ARQUIVO')}{' '}
+                        <span className="text-vantage-cyan">{tr('DES RÉSULTATS', 'HISTORY', 'DE RESULTADOS', 'DE RESULTADOS')}</span>
                     </h1>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {language === 'fr'
-                        ? '30 derniers jours · Données vérifiées & archivées'
-                        : 'Last 30 days · Verified & archived prediction data'}
+                    {tr(
+                        '30 derniers jours · Données vérifiées & archivées',
+                        'Last 30 days · Verified & archived prediction data',
+                        'Últimos 30 días · Datos verificados y archivados',
+                        'Últimos 30 dias · Dados verificados e arquivados'
+                    )}
                     {isAdmin && (
                         <span className="ml-2 text-vantage-cyan text-[10px] font-bold uppercase tracking-wider">
                             · Admin Edit Mode Available
@@ -239,15 +242,15 @@ export const Results: React.FC = () => {
 
                             <div>
                                 <p className="text-2xl font-black font-orbitron text-green-500">{totalWon}</p>
-                                <p className="text-[10px] uppercase text-gray-500">{language === 'fr' ? 'Gagnés' : 'Won'}</p>
+                                <p className="text-[10px] uppercase text-gray-500">{tr('Gagnés', 'Won', 'Ganados', 'Ganhos')}</p>
                             </div>
                             <div>
                                 <p className="text-2xl font-black font-orbitron text-vantage-cyan">{overallRate}%</p>
-                                <p className="text-[10px] uppercase text-gray-500">{language === 'fr' ? 'Taux Global' : 'Win Rate'}</p>
+                                <p className="text-[10px] uppercase text-gray-500">{tr('Taux Global', 'Win Rate', 'Tasa Global', 'Taxa Global')}</p>
                             </div>
                             <div>
                                 <p className="text-2xl font-black font-orbitron text-red-400">{totalLost}</p>
-                                <p className="text-[10px] uppercase text-gray-500">{language === 'fr' ? 'Perdus' : 'Lost'}</p>
+                                <p className="text-[10px] uppercase text-gray-500">{tr('Perdus', 'Lost', 'Perdidos', 'Perdidos')}</p>
                             </div>
                         </div>
                     </GlassCard>
@@ -261,7 +264,7 @@ export const Results: React.FC = () => {
                     className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white font-bold text-sm shadow-lg shadow-vantage-purple/25 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
                 >
                     <Crown size={16} />
-                    {language === 'fr' ? 'Débloquez toutes les analyses + Kelly — à partir de $3.99/semaine' : 'Unlock full analyses + Kelly — from $3.99/week'}
+                    {tr('Débloquez toutes les analyses + Kelly — à partir de $3.99/semaine', 'Unlock full analyses + Kelly — from $3.99/week', 'Desbloquea todos los análisis + Kelly — desde $3.99/semana', 'Desbloqueie todas as análises + Kelly — a partir de $3.99/semana')}
                 </button>
             )}
 
@@ -269,19 +272,22 @@ export const Results: React.FC = () => {
             {loading ? (
                 <div className="flex flex-col items-center justify-center mt-20 py-10 gap-3">
                     <Loader2 className="animate-spin text-vantage-cyan" size={36} />
-                    <p className="text-sm text-gray-500">{language === 'fr' ? 'Chargement des résultats...' : 'Loading results...'}</p>
+                    <p className="text-sm text-gray-500">{tr('Chargement des résultats...', 'Loading results...', 'Cargando resultados...', 'Carregando resultados...')}</p>
                 </div>
             ) : history.length === 0 ? (
                 <div className="mt-8">
                     <GlassCard className="flex flex-col items-center py-12 text-center gap-3 border-slate-200 dark:border-white/5">
                         <AlertCircle size={36} className="text-gray-400" />
                         <h3 className="font-bold text-slate-900 dark:text-white">
-                            {language === 'fr' ? 'Aucun résultat archivé' : 'No archived results yet'}
+                            {tr('Aucun résultat archivé', 'No archived results yet', 'Sin resultados archivados', 'Nenhum resultado arquivado ainda')}
                         </h3>
                         <p className="text-sm text-gray-500 max-w-xs">
-                            {language === 'fr'
-                                ? "Les résultats apparaissent une fois que les prédictions sont notées."
-                                : 'Results appear once predictions are graded each day.'}
+                            {tr(
+                                "Les résultats apparaissent une fois que les prédictions sont notées.",
+                                'Results appear once predictions are graded each day.',
+                                'Los resultados aparecen cuando las predicciones se califican cada día.',
+                                'Os resultados aparecem quando os palpites são avaliados diariamente.'
+                            )}
                         </p>
                     </GlassCard>
                 </div>
@@ -360,7 +366,7 @@ export const Results: React.FC = () => {
                                                         {saving[day.date]
                                                             ? <Loader2 size={12} className="animate-spin" />
                                                             : <Save size={12} />}
-                                                        {language === 'fr' ? 'Sauv.' : 'Save'}
+                                                        {tr('Sauv.', 'Save', 'Guardar', 'Salvar')}
                                                     </button>
                                                     <button
                                                         onClick={() => toggleEditMode(day.date)}
@@ -378,7 +384,7 @@ export const Results: React.FC = () => {
                                                     className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-vantage-cyan/10 text-vantage-cyan hover:bg-vantage-cyan/20 border border-vantage-cyan/20 transition-all active:scale-95"
                                                 >
                                                     <Pencil size={12} />
-                                                    {language === 'fr' ? 'Éditer' : 'Edit'}
+                                                    {tr('Éditer', 'Edit', 'Editar', 'Editar')}
                                                 </button>
                                             )}
                                         </div>
@@ -398,9 +404,12 @@ export const Results: React.FC = () => {
                                             {isInEdit && (
                                                 <p className="text-[10px] text-vantage-cyan flex items-center gap-1 pb-1 pl-1">
                                                     <Pencil size={9} />
-                                                    {language === 'fr'
-                                                        ? 'Tapez un match pour changer son résultat'
-                                                        : 'Tap a match to cycle its result: Won → Lost → Pending'}
+                                                    {tr(
+                                                        'Tapez un match pour changer son résultat',
+                                                        'Tap a match to cycle its result: Won → Lost → Pending',
+                                                        'Toca un partido para cambiar su resultado: Ganado → Perdido → Pendiente',
+                                                        'Toque em um jogo para mudar o resultado: Ganho → Perdido → Pendente'
+                                                    )}
                                                 </p>
                                             )}
                                             {effectiveMatches.map((match) => {
@@ -424,7 +433,7 @@ export const Results: React.FC = () => {
                                                                     {match.homeTeam || match.home_team} vs {match.awayTeam || match.away_team}
                                                                 </span>
                                                                 <span className="text-[10px] text-gray-500 truncate">
-                                                    {match.league} · {(isAdmin || isVip) ? pred : (language === 'fr' ? 'Réservé VIP' : 'VIP Only')}
+                                                    {match.league} · {(isAdmin || isVip) ? pred : tr('Réservé VIP', 'VIP Only', 'Solo VIP', 'Só VIP')}
                                                 </span>
                                                             </div>
                                                         </div>
@@ -450,7 +459,7 @@ export const Results: React.FC = () => {
                                             })}
                                             {effectiveMatches.length === 0 && (
                                                 <div className="text-center py-4 text-xs text-gray-500">
-                                                    {language === 'fr' ? 'Aucun match noté pour ce jour' : 'No graded matches for this day'}
+                                                    {tr('Aucun match noté pour ce jour', 'No graded matches for this day', 'Sin partidos calificados para este día', 'Nenhum jogo avaliado para este dia')}
                                                 </div>
                                             )}
                                         </motion.div>

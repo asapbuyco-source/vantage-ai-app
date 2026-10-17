@@ -20,7 +20,7 @@ export const PortfolioOnboarding: React.FC<PortfolioOnboardingProps> = ({
     isEditMode = false
 }) => {
     const { updatePortfolioConfig } = useAuth();
-    const { t, language, showToast } = useAppContext();
+    const { t, language, showToast, tr } = useAppContext();
     const [bankroll, setBankroll] = useState<string>(initialBankroll ? String(initialBankroll) : '');
     const [risk, setRisk] = useState<'low' | 'medium' | 'high'>(initialRisk || 'medium');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,18 +34,18 @@ export const PortfolioOnboarding: React.FC<PortfolioOnboardingProps> = ({
         e.preventDefault();
         const value = parseInt(bankroll, 10);
         if (isNaN(value) || value < 1000) {
-            showToast(language === 'fr' ? 'Le capital initial doit être d\'au moins 1000' : 'Starting bankroll must be at least 1000', 'error');
+            showToast(tr('Le capital initial doit être d\'au moins 1000', 'Starting bankroll must be at least 1000', 'El capital inicial debe ser al menos 1000', 'O capital inicial deve ser pelo menos 1000'), 'error');
             return;
         }
 
         setIsSubmitting(true);
         try {
             await updatePortfolioConfig(value, risk);
-            showToast(language === 'fr' ? 'Configuration du portefeuille enregistrée' : 'Portfolio configuration saved', 'success');
+            showToast(tr('Configuration du portefeuille enregistrée', 'Portfolio configuration saved', 'Configuración de banca guardada', 'Configuração de banca salva'), 'success');
             onComplete();
         } catch (error) {
             console.error(error);
-            showToast(language === 'fr' ? 'Erreur lors de la sauvegarde' : 'Error saving configuration', 'error');
+            showToast(tr('Erreur lors de la sauvegarde', 'Error saving configuration', 'Error al guardar', 'Erro ao salvar'), 'error');
             setIsSubmitting(false);
         }
     };
@@ -63,19 +63,22 @@ export const PortfolioOnboarding: React.FC<PortfolioOnboardingProps> = ({
                     </div>
                     
                     <h2 className="text-2xl font-black text-center text-white mb-2 uppercase tracking-wide">
-                        {language === 'fr' ? 'Configuration Alpha' : 'Alpha Configuration'}
+                        {tr('Configuration Alpha', 'Alpha Configuration', 'Configuración Alpha', 'Configuração Alpha')}
                     </h2>
                     <p className="text-gray-400 text-center mb-8 text-sm">
-                        {language === 'fr' 
-                            ? 'Définissez votre capital pour que notre IA calcule précisément la taille de vos positions.'
-                            : 'Set your bankroll so our AI can calculate precise position sizing using the Kelly Criterion.'}
+                        {tr(
+                            'Définissez votre capital pour que notre IA calcule précisément la taille de vos positions.',
+                            'Set your bankroll so our AI can calculate precise position sizing using the Kelly Criterion.',
+                            'Define tu banca para que nuestra IA calcule el tamaño exacto de tus posiciones con el criterio de Kelly.',
+                            'Defina sua banca para que nossa IA calcule o tamanho exato das suas posições com o critério de Kelly.'
+                        )}
                     </p>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Bankroll Input */}
                         <div>
                             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                                {language === 'fr' ? 'Capital Initial ($)' : 'Starting Bankroll ($)'}
+                                {tr('Capital Initial ($)', 'Starting Bankroll ($)', 'Banca Inicial ($)', 'Banca Inicial ($)')}
                             </label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -96,7 +99,7 @@ export const PortfolioOnboarding: React.FC<PortfolioOnboardingProps> = ({
                         {/* Risk Tolerance */}
                         <div>
                             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                                {language === 'fr' ? 'Profil de Risque (Kelly Multiplier)' : 'Risk Profile (Kelly Multiplier)'}
+                                {tr('Profil de Risque (Kelly Multiplier)', 'Risk Profile (Kelly Multiplier)', 'Perfil de Riesgo (Multiplicador Kelly)', 'Perfil de Risco (Multiplicador Kelly)')}
                             </label>
                             <div className="grid grid-cols-3 gap-2">
                                 <button
@@ -109,7 +112,7 @@ export const PortfolioOnboarding: React.FC<PortfolioOnboardingProps> = ({
                                     }`}
                                 >
                                     <ShieldAlert className="w-5 h-5 mb-1" />
-                                    <span className="text-[10px] font-bold uppercase">{language === 'fr' ? 'Faible' : 'Low'}</span>
+                                    <span className="text-[10px] font-bold uppercase">{tr('Faible', 'Low', 'Bajo', 'Baixo')}</span>
                                     <span className="text-[9px] font-mono opacity-70">0.25x</span>
                                 </button>
                                 <button
@@ -122,7 +125,7 @@ export const PortfolioOnboarding: React.FC<PortfolioOnboardingProps> = ({
                                     }`}
                                 >
                                     <CheckCircle2 className="w-5 h-5 mb-1" />
-                                    <span className="text-[10px] font-bold uppercase">{language === 'fr' ? 'Moyen' : 'Med'}</span>
+                                    <span className="text-[10px] font-bold uppercase">{tr('Moyen', 'Med', 'Medio', 'Médio')}</span>
                                     <span className="text-[9px] font-mono opacity-70">0.5x</span>
                                 </button>
                                 <button
@@ -135,7 +138,7 @@ export const PortfolioOnboarding: React.FC<PortfolioOnboardingProps> = ({
                                     }`}
                                 >
                                     <TrendingUp className="w-5 h-5 mb-1" />
-                                    <span className="text-[10px] font-bold uppercase">{language === 'fr' ? 'Élevé' : 'High'}</span>
+                                    <span className="text-[10px] font-bold uppercase">{tr('Élevé', 'High', 'Alto', 'Alto')}</span>
                                     <span className="text-[9px] font-mono opacity-70">1.0x</span>
                                 </button>
                             </div>
@@ -147,9 +150,9 @@ export const PortfolioOnboarding: React.FC<PortfolioOnboardingProps> = ({
                             className="w-full bg-vantage-cyan text-slate-900 font-bold uppercase tracking-wider py-4 rounded-xl hover:bg-vantage-cyan/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                         >
                             {isSubmitting ? (
-                                <span className="animate-pulse">{language === 'fr' ? 'Enregistrement...' : 'Saving...'}</span>
+                                <span className="animate-pulse">{tr('Enregistrement...', 'Saving...', 'Guardando...', 'Salvando...')}</span>
                             ) : (
-                                <span>{language === 'fr' ? 'Enregistrer les modifications' : 'Save Changes'}</span>
+                                <span>{tr('Enregistrer les modifications', 'Save Changes', 'Guardar cambios', 'Salvar alterações')}</span>
                             )}
                         </button>
 
@@ -159,7 +162,7 @@ export const PortfolioOnboarding: React.FC<PortfolioOnboardingProps> = ({
                                 onClick={handleCancel}
                                 className="w-full py-3 border border-slate-700 text-gray-400 font-bold uppercase tracking-wider rounded-xl hover:bg-white/5 transition-colors"
                             >
-                                {language === 'fr' ? 'Annuler' : 'Cancel'}
+                                {tr('Annuler', 'Cancel', 'Cancelar', 'Cancelar')}
                             </button>
                         )}
                     </form>

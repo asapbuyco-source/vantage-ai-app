@@ -36,6 +36,7 @@ const Learn = lazy(() => import('./pages/Learn').then(m => ({ default: m.Learn }
 const IntelligenceTeam = lazy(() => import('./pages/IntelligenceTeam').then(m => ({ default: m.IntelligenceTeam })));
 const IntelligencePlayer = lazy(() => import('./pages/IntelligencePlayer').then(m => ({ default: m.IntelligencePlayer })));
 const Research = lazy(() => import('./pages/Research').then(m => ({ default: m.Research })));
+const LiveScores = lazy(() => import('./pages/LiveScores').then(m => ({ default: m.LiveScores })));
 const IntelligenceVersus = lazy(() => import('./pages/IntelligenceChallenge').then(m => ({ default: m.IntelligenceChallenge })));
 
 function AppContent() {
@@ -103,6 +104,32 @@ function AppContent() {
     })();
     return () => { listenerHandle?.remove?.(); };
   }, [user?.uid]);
+  // Push notifications (native only): ask permission shortly after login so we can
+  // re-engage users with "picks published" / "results in" notifications.
+  useEffect(() => {
+    if (!IS_NATIVE || !user?.uid) return;
+    const timer = setTimeout(() => {
+      import('./services/pushNotifications')
+        .then(({ requestPushPermission }) => requestPushPermission(user.uid))
+        .catch(() => {});
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [user?.uid]);
+  // Notification tap → open the matching page (data.url from the push payload)
+  useEffect(() => {
+    if (!IS_NATIVE) return;
+    let handle: any;
+    (async () => {
+      try {
+        const { PushNotifications } = await import('@capacitor/push-notifications');
+        handle = await PushNotifications.addListener('pushNotificationActionPerformed', (action: any) => {
+          const url = action?.notification?.data?.url || action?.notification?.data?.click_action;
+          if (typeof url === 'string' && url.startsWith('/')) navigate(url);
+        });
+      } catch (_) {}
+    })();
+    return () => { handle?.remove?.(); };
+  }, [navigate]);
   useEffect(() => {
     if (!IS_NATIVE) return;
     let handler: any;
@@ -205,6 +232,11 @@ function AppContent() {
             </Suspense>
           } />
           <Route path="/learn" element={<Learn />} /><Route path="/guide" element={<Learn />} />
+          <Route path="/live" element={
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-vantage-cyan" size={40} /></div>}>
+              <LiveScores />
+            </Suspense>
+          } />
           <Route path="/concierge" element={<TicketWizard />} />
           <Route path="/profile" element={<Profile />} />
           {!IS_NATIVE && Admin && <Route path="/admin" element={<Admin />} />}

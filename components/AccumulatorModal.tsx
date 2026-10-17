@@ -50,7 +50,7 @@ function getTierMeta(lang: string): Record<string, { label: string; icon: any; c
 export const AccumulatorModal: React.FC<AccumulatorModalProps> = ({ isOpen, onClose, accumulators, initialTier = 'baseline' }) => {
   const [activeTier, setActiveTier] = useState<string>(initialTier);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const { language } = useAppContext();
+  const { language, tr } = useAppContext();
   const TIER_META = getTierMeta(language);
   
   const listRef = useRef<HTMLDivElement>(null);
@@ -111,7 +111,7 @@ export const AccumulatorModal: React.FC<AccumulatorModalProps> = ({ isOpen, onCl
                         </span>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {language === 'fr' ? 'Générateur IA Quant' : 'Quant AI Generator'}
+                        {tr('Générateur IA Quant', 'Quant AI Generator', 'Generador IA Quant', 'Gerador IA Quant')}
                     </p>
                   </div>
                   <button 
@@ -206,7 +206,7 @@ export const AccumulatorModal: React.FC<AccumulatorModalProps> = ({ isOpen, onCl
                     ))
                   ) : (
                     <div className="text-center py-10 text-gray-400 text-xs">
-                      {language === 'fr' ? 'Accumulateur non généré (Pas assez de valeur)' : 'Ticket not generated (Not enough value)'}
+                                {tr('Accumulateur non généré (Pas assez de valeur)', 'Ticket not generated (Not enough value)', 'Combinada no generada (Valor insuficiente)', 'Acumulada não gerada (Valor insuficiente)')}
                     </div>
                   )}
                 </div>
@@ -215,7 +215,7 @@ export const AccumulatorModal: React.FC<AccumulatorModalProps> = ({ isOpen, onCl
                 <div className="p-4 border-t border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-black/20 shrink-0 flex items-center justify-between">
                     <div>
                         <div className="text-gray-500 text-[10px] uppercase tracking-wider font-bold mb-0.5">
-                           {language === 'fr' ? 'Cote Totale' : 'Total Odds'} ({activeTicketInfo?.leg_count || 0} legs)
+                            {tr('Cote Totale', 'Total Odds', 'Cuota Total', 'Odd Total')} ({activeTicketInfo?.leg_count || 0} legs)
                         </div>
                         <div className={`text-2xl font-bold font-orbitron ${meta.color}`}>
                            {(activeTicketInfo?.combined_odds || 0).toFixed(2)}x
@@ -233,14 +233,14 @@ export const AccumulatorModal: React.FC<AccumulatorModalProps> = ({ isOpen, onCl
                         className="px-4 py-2.5 rounded-xl font-bold text-sm bg-vantage-cyan text-white hover:bg-vantage-cyan/90"
                     >
                         {copiedId === 'full-ticket' ? <Check size={16} /> : <Copy size={16} />}
-                        <span className="ml-1">{language === 'fr' ? 'Copier Tout' : 'Copy All'}</span>
+                                    <span className="ml-1">{tr('Copier Tout', 'Copy All', 'Copiar Todo', 'Copiar Tudo')}</span>
                     </button>
                     
                     <button 
                         onClick={onClose}
                         className="px-6 py-2.5 rounded-xl font-bold text-sm text-slate-700 dark:text-white bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 shadow-sm transition-all active:scale-95"
                     >
-                        <span>{language === 'fr' ? 'Fermer' : 'Close'}</span>
+                                <span>{tr('Fermer', 'Close', 'Cerrar', 'Fechar')}</span>
                     </button>
                     </div>
                 </div>

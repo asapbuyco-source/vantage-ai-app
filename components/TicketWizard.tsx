@@ -56,7 +56,7 @@ function ticketQualityScore(match: Match): number {
 
 export const TicketWizard: React.FC<TicketWizardProps> = () => {
     const navigate = useNavigate();
-    const { t, language } = useAppContext();
+    const { t, language, tr } = useAppContext();
     const { predictions } = useData();
     const { toggleSavedPick, isPickSaved } = useAppContext();
     const { userProfile, isAdmin } = useAuth();
@@ -281,9 +281,12 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                                 <div className="p-3 bg-vantage-purple/5 border border-vantage-purple/10 rounded-lg flex items-start gap-3">
                                     <Info size={16} className="text-vantage-purple shrink-0 mt-0.5" />
                                     <p className="text-[11px] text-gray-500 italic">
-                                        {language === 'fr'
-                                          ? `L'IA selectionnera les paris les plus sûrs pour construire le meilleur ticket combiné.`
-                                          : `AI will select the safest bets to build the best possible accumulator ticket.`}
+                                        {tr(
+                                          `L'IA selectionnera les paris les plus sûrs pour construire le meilleur ticket combiné.`,
+                                          `AI will select the safest bets to build the best possible accumulator ticket.`,
+                                          `La IA seleccionará los picks más seguros para construir el mejor ticket combinado.`,
+                                          `A IA selecionará os palpites mais seguros para montar o melhor bilhete combinado.`
+                                        )}
                                     </p>
                                 </div>
                             </div>
@@ -293,7 +296,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                             onClick={() => setStep(2)}
                             className="w-full py-4 bg-vantage-purple hover:bg-purple-600 text-white font-bold rounded-2xl shadow-xl shadow-vantage-purple/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                         >
-                            <span>{language === 'fr' ? 'Suivant' : 'Next'}</span>
+                            <span>{tr('Suivant', 'Next', 'Siguiente', 'Próximo')}</span>
                             <ChevronRight size={20} />
                         </button>
                     </motion.div>
@@ -314,18 +317,21 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                                         <Wallet className="text-vantage-purple" size={24} />
                                     </div>
                                     <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
-                                        {language === 'fr' ? 'Accès VIP Requis' : 'VIP Access Required'}
+                                        {tr('Accès VIP Requis', 'VIP Access Required', 'Acceso VIP requerido', 'Acesso VIP necessário')}
                                     </h3>
                                     <p className="text-xs text-gray-500 mb-4 px-6 text-center">
-                                        {language === 'fr'
-                                            ? 'Le Conciergerie IA est une fonctionnalité exclusive aux membres VIP.'
-                                            : 'The AI Concierge is an exclusive feature for VIP members.'}
+                                        {tr(
+                                            'Le Conciergerie IA est une fonctionnalité exclusive aux membres VIP.',
+                                            'The AI Concierge is an exclusive feature for VIP members.',
+                                            'El Concierge IA es una función exclusiva para miembros VIP.',
+                                            'O Concierge IA é um recurso exclusivo para membros VIP.'
+                                        )}
                                     </p>
                                     <button
                                         onClick={() => navigate('/vip')}
                                         className="px-6 py-2.5 bg-gradient-to-r from-vantage-purple to-vantage-cyan text-white text-xs font-bold rounded-full shadow-lg hover:scale-105 transition-transform"
                                     >
-                                        {language === 'fr' ? 'Devenir VIP' : 'Upgrade to VIP'}
+                                        {tr('Devenir VIP', 'Upgrade to VIP', 'Hazte VIP', 'Torne-se VIP')}
                                     </button>
                                 </div>
                             )}
@@ -333,7 +339,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                             <GlassCard className="p-6 space-y-6">
                                 <div className="text-center">
                                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        {language === 'fr' ? 'Nombre de sélections' : 'Number of selections'}
+                                        {tr('Nombre de sélections', 'Number of selections', 'Número de selecciones', 'Número de seleções')}
                                     </span>
                                 </div>
 
@@ -378,17 +384,23 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                                     <Info size={16} className="text-vantage-purple shrink-0 mt-0.5" />
                                     <div className="text-[11px] text-gray-500">
                                         <p className="italic mb-1">
-                                            {language === 'fr'
-                                              ? `${legCount} sélections à ~1.35x moyenne → est. gain:`
-                                              : `${legCount} legs at ~1.35x avg → est. payout:`}
+                                            {tr(
+                                              `${legCount} sélections à ~1.35x moyenne → est. gain:`,
+                                              `${legCount} legs at ~1.35x avg → est. payout:`,
+                                              `${legCount} selecciones a ~1.35x promedio → ganancia est.:`,
+                                              `${legCount} seleções a ~1.35x média → ganho est.:`
+                                            )}
                                         </p>
                                         <p className="font-bold font-mono text-vantage-purple">
                                             ~{Math.round(payoutPerLeg[legCount] ?? 0).toLocaleString()} FCFA
                                         </p>
                                         <p className="text-[10px] text-gray-400 mt-1">
-                                            {language === 'fr'
-                                              ? 'Les cotes réelles varient. Plus de jambes = plus de risque, plus de gain potentiel.'
-                                              : 'Actual odds vary. More legs = more risk, bigger potential payout.'}
+                                            {tr(
+                                              `Les cotes réelles varient. Plus de jambes = plus de risque, plus de gain potentiel.`,
+                                              `Actual odds vary. More legs = more risk, bigger potential payout.`,
+                                              `Las cuotas reales varían. Más selecciones = más riesgo, mayor ganancia potencial.`,
+                                              `As odds reais variam. Mais seleções = mais risco, maior ganho potencial.`
+                                            )}
                                         </p>
                                     </div>
                                 </div>
@@ -400,7 +412,7 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                                 onClick={() => setStep(1)}
                                 className="flex-1 py-4 bg-slate-100 dark:bg-white/5 text-gray-500 font-bold rounded-2xl border border-slate-200 dark:border-white/10 transition-all active:scale-[0.98]"
                             >
-                                {language === 'fr' ? 'Retour' : 'Back'}
+                                {tr('Retour', 'Back', 'Atrás', 'Voltar')}
                             </button>
                             <button
                                 onClick={generateTicket}
@@ -504,12 +516,12 @@ export const TicketWizard: React.FC<TicketWizardProps> = () => {
                                     <div className="p-4 bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
                                         <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-500 italic">
-                                                <span className="text-vantage-purple font-bold">{generatedTicket.length}</span> {language === 'fr' ? 'paris les plus sûrs' : 'safest picks'} &bull; <span className="font-mono">{stake}</span> FCFA
+                                                <span className="text-vantage-purple font-bold">{generatedTicket.length}</span> {tr('paris les plus sûrs', 'safest picks', 'picks más seguros', 'palpites mais seguros')} &bull; <span className="font-mono">{stake}</span> FCFA
                                             </span>
                                             <div className="flex items-center gap-1 text-vantage-purple">
                                                 <Sparkles size={12} />
                                                 <span className="font-bold">
-                                                    {language === 'fr' ? 'Analysé par Vantage AI' : 'Analyzed by Vantage AI'}
+                                                    {tr('Analysé par Vantage AI', 'Analyzed by Vantage AI', 'Analizado por Vantage AI', 'Analisado por Vantage AI')}
                                                 </span>
                                             </div>
                                         </div>

@@ -14,7 +14,7 @@ interface HistoryModalProps {
 }
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) => {
-  const { language } = useAppContext();
+  const { language, tr } = useAppContext();
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateStr, setDateStr] = useState('');
@@ -71,7 +71,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) =
                         <div>
                             <h2 className="text-lg font-bold font-orbitron text-white flex items-center gap-2">
                                 <Calendar size={18} className="text-vantage-cyan" />
-                                {language === 'fr' ? 'Résultats d\'Hier' : 'Yesterday\'s Results'}
+                                {tr('Résultats d\'Hier', 'Yesterday\'s Results', 'Resultados de Ayer', 'Resultados de Ontem')}
                             </h2>
                             <span className="text-xs text-gray-500">{dateStr}</span>
                         </div>
@@ -88,8 +88,8 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) =
                             </div>
                         ) : matches.length === 0 ? (
                             <div className="text-center py-10 text-gray-500">
-                                <p>{language === 'fr' ? 'Aucune donnée disponible.' : 'No data available for yesterday.'}</p>
-                                <p className="text-xs mt-2">{language === 'fr' ? 'Les résultats n\'ont pas encore été publiés par l\'Admin.' : 'Results have not been published by Admin yet.'}</p>
+                                <p>{tr('Aucune donnée disponible.', 'No data available for yesterday.', 'No hay datos disponibles para ayer.', 'Nenhum dado disponível para ontem.')}</p>
+                                <p className="text-xs mt-2">{tr('Les résultats n\'ont pas encore été publiés par l\'Admin.', 'Results have not been published by Admin yet.', 'Los resultados aún no han sido publicados por el Admin.', 'Os resultados ainda não foram publicados pelo Admin.')}</p>
                             </div>
                         ) : (
                             matches.map((match, idx) => (

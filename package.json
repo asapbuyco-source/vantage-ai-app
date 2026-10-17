@@ -1,7 +1,7 @@
 {
     "name": "vantage-ai",
     "private": true,
-"version":  "4.4.1",
+"version":  "4.4.2",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -36,6 +36,7 @@
         "@supabase/supabase-js": "^2.112.4",
         "@types/react-router-dom": "^5.3.3",
         "cors": "^2.8.6",
+        "country-flag-icons": "^1.6.20",
         "dotenv": "^17.3.1",
         "express": "^5.2.1",
         "express-rate-limit": "^8.5.2",

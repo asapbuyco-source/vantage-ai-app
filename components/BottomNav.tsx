@@ -7,7 +7,7 @@ import { useAppContext } from '../context/AppContext';
 export const BottomNav: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { t, language } = useAppContext();
+  const { t, language, tr } = useAppContext();
 
   const getActiveTab = () => {
     const path = location.pathname;
@@ -23,7 +23,7 @@ export const BottomNav: React.FC = () => {
   const navItems = [
     { id: 'home', path: '/', icon: Home, label: t('nav.home') || 'Home' },
     { id: 'alpha', path: '/vip', icon: Crown, label: 'VIP' },
-    { id: 'intel', path: '/research', icon: BrainCircuit, label: language === 'fr' ? 'Recherche' : 'Intel' },
+    { id: 'intel', path: '/research', icon: BrainCircuit, label: tr('Recherche', 'Intel', 'Investigación', 'Pesquisa') },
     { id: 'profile', path: '/profile', icon: User, label: t('nav.profile') || 'Profile' },
   ] as const;
 

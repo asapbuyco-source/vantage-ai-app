@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, CreditCard, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, Coins, Wallet, History, Sparkles, BookOpen, TrendingUp, Target, BarChart3, Activity, PlayCircle, ExternalLink, RefreshCw, Zap, Eye, EyeOff, Send } from 'lucide-react';
+import { Settings, LogOut, ChevronRight, Moon, Sun, User, AlertTriangle, X, Mail, Lock, ArrowRight, CheckCircle2, Crown, ShieldAlert, Globe, FileText, Calendar, CreditCard, MessageCircle, ChevronLeft, Shield, Ticket, Copy, Share2, Coins, Wallet, History, Sparkles, BookOpen, TrendingUp, Target, BarChart3, Activity, PlayCircle, ExternalLink, RefreshCw, Zap, Eye, EyeOff, Send, Bell } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,7 @@ interface ProfileProps {
 }
 
 export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
-    const { t, language, setLanguage, theme, toggleTheme } = useAppContext();
+    const { t, language, setLanguage, theme, toggleTheme, tr } = useAppContext();
     const { user, userProfile, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, error, clearError, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
@@ -36,9 +36,9 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
     const [copiedCode, setCopiedCode] = useState(false);
 
     // Referral rewards are earned as free VIP days (1 day per 1000 points)
-    const referralDaysEarned = userProfile?.referralEarnings
-        ? Math.floor(userProfile.referralEarnings / 1000)
-        : (userProfile?.referralCount || 0);
+    // Days earned come ONLY from real commission (credited by the backend when a
+    // referral actually buys a VIP subscription) — signups alone earn nothing.
+    const referralDaysEarned = Math.floor((userProfile?.referralEarnings || 0) / 1000);
 
     // Sync initial mode prop with internal state & Check for Saved Referral
     useEffect(() => {
@@ -63,6 +63,27 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
             ensureReferralCode(user.uid);
         }
     }, [user, userProfile]);
+
+    // Push notification permission status (for the settings toggle)
+    const [pushStatus, setPushStatus] = useState<'unknown' | 'granted' | 'denied' | 'prompt' | 'unsupported'>('unknown');
+    useEffect(() => {
+        let alive = true;
+        import('../services/pushNotifications')
+            .then(({ getPushPermissionStatus }) => getPushPermissionStatus())
+            .then(s => { if (alive) setPushStatus(s); })
+            .catch(() => {});
+        return () => { alive = false; };
+    }, []);
+
+    const enablePush = async () => {
+        try {
+            const { requestPushPermission, getPushPermissionStatus } = await import('../services/pushNotifications');
+            if (user?.uid) await requestPushPermission(user.uid);
+            setPushStatus(await getPushPermissionStatus());
+        } catch {
+            setPushStatus('unsupported');
+        }
+    };
 
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -95,21 +116,24 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
 
 
     const handleDeleteAccount = async () => {
-        const confirmMessage = language === 'fr'
-            ? "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible."
-            : "Are you sure you want to delete your account? This action cannot be undone.";
+        const confirmMessage = tr(
+            "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
+            "Are you sure you want to delete your account? This action cannot be undone.",
+            "¿Seguro que quieres eliminar tu cuenta? Esta acción es irreversible.",
+            "Tem certeza de que deseja excluir sua conta? Esta ação é irreversível."
+        );
 
         if (window.confirm(confirmMessage)) {
             try {
                 await deleteAccount();
             } catch (e: any) {
-                alert(e.message || (language === 'fr' ? "Erreur lors de la suppression. Veuillez vous reconnecter récemment." : "Error deleting account. You may need to re-login recently."));
+                alert(e.message || tr("Erreur lors de la suppression. Veuillez vous reconnecter récemment.", "Error deleting account. You may need to re-login recently.", "Error al eliminar la cuenta. Puede que necesites iniciar sesión de nuevo.", "Erro ao excluir a conta. Talvez seja necessário fazer login novamente."));
             }
         }
     };
 
     const toggleLanguage = () => {
-        setLanguage(language === 'fr' ? 'en' : 'fr');
+        setLanguage(language === 'fr' ? 'en' : language === 'en' ? 'es' : language === 'es' ? 'pt' : 'fr');
     };
 
     const openWhatsApp = () => {
@@ -131,9 +155,12 @@ const shareReferral = () => {
         if (navigator.share) {
             navigator.share({
                 title: 'Vantage AI — AI Football Picks',
-                text: language === 'fr'
-                    ? `J'utilise Vantage AI pour mes pronostics. Inscris-toi avec mon lien et gagne des accès VIP !`
-                    : `I use Vantage AI for football predictions. Sign up with my link and get VIP access!`,
+                text: tr(
+                    `J'utilise Vantage AI pour mes pronostics. Inscris-toi avec mon lien et gagne des accès VIP !`,
+                    `I use Vantage AI for football predictions. Sign up with my link and get VIP access!`,
+                    `Uso Vantage AI para mis pronósticos. ¡Regístrate con mi enlace y gana acceso VIP!`,
+                    `Uso o Vantage AI para meus palpites. Cadastre-se com meu link e ganhe acesso VIP!`
+                ),
                 url: shareUrl
             }).catch((err) => {
                 if (err.name !== 'AbortError') console.error('Share error:', err);
@@ -222,20 +249,16 @@ const shareReferral = () => {
                         {/* Language switch — visible before anything else */}
                         <div className="flex justify-center mb-2">
                             <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-white/5 rounded-full p-1 border border-slate-200 dark:border-white/10">
-                                <button
-                                    type="button"
-                                    onClick={() => setLanguage('fr')}
-                                    className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${language === 'fr' ? 'bg-vantage-cyan text-white' : 'text-gray-500 hover:text-vantage-cyan'}`}
-                                >
-                                    Français
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setLanguage('en')}
-                                    className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${language === 'en' ? 'bg-vantage-cyan text-white' : 'text-gray-500 hover:text-vantage-cyan'}`}
-                                >
-                                    English
-                                </button>
+                                {([['fr', 'Français'], ['en', 'English'], ['es', 'Español'], ['pt', 'Português']] as const).map(([code, label]) => (
+                                    <button
+                                        key={code}
+                                        type="button"
+                                        onClick={() => setLanguage(code)}
+                                        className={`px-2 py-1 rounded-full text-[11px] font-bold transition-colors ${language === code ? 'bg-vantage-cyan text-white' : 'text-gray-500 hover:text-vantage-cyan'}`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
@@ -355,11 +378,11 @@ const shareReferral = () => {
                                     <div className="text-center pt-1">
                                         {isLoginMode ? (
                                             <button onClick={() => { setIsLoginMode(false); clearError(); }} className="text-sm font-bold text-vantage-cyan hover:text-vantage-purple transition-colors">
-                                                {language === 'fr' ? 'Nouveau ici ? ' : 'New here? '}<span className="underline underline-offset-2">{language === 'fr' ? 'Créer un compte' : 'Create an Account'}</span> →
+                                                {tr('Nouveau ici ? ', 'New here? ', '¿Nuevo aquí? ', 'Novo por aqui? ')}<span className="underline underline-offset-2">{tr('Créer un compte', 'Create an Account', 'Crear una cuenta', 'Criar uma conta')}</span> →
                                             </button>
                                         ) : (
                                             <button onClick={() => { setIsLoginMode(true); clearError(); }} className="text-sm font-bold text-vantage-cyan hover:text-vantage-purple transition-colors">
-                                                {language === 'fr' ? 'Déjà un compte ? ' : 'Have an account? '}<span className="underline underline-offset-2">{language === 'fr' ? 'Se connecter' : 'Sign in'}</span> →
+                                                {tr('Déjà un compte ? ', 'Have an account? ', '¿Ya tienes cuenta? ', 'Já tem conta? ')}<span className="underline underline-offset-2">{tr('Se connecter', 'Sign in', 'Iniciar sesión', 'Entrar')}</span> →
                                             </button>
                                         )}
                                     </div>
@@ -367,7 +390,7 @@ const shareReferral = () => {
                                     <div className="flex justify-center pt-3 pb-1">
                                         <a href="https://wa.me/237688203629" className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-gray-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-4 py-2 rounded-full hover:border-vantage-cyan/40 hover:text-vantage-cyan transition-colors">
                                             <Mail size={12} />
-                                            {language === 'fr' ? 'Contactez-nous' : 'Contact Us'}
+                                            {tr('Contactez-nous', 'Contact Us', 'Contáctanos', 'Fale conosco')}
                                         </a>
                                     </div>
                                 </>
@@ -405,7 +428,7 @@ const shareReferral = () => {
                             onClick={toggleLanguage}
                             className="px-4 py-2 bg-slate-100 dark:bg-white/10 rounded-lg text-sm font-bold text-slate-900 dark:text-white border border-slate-200 dark:border-white/5"
                         >
-                            {language === 'fr' ? 'Français' : 'English'}
+                            {{ fr: 'Français', en: 'English', es: 'Español', pt: 'Português' }[language]}
                         </button>
                     </div>
 
@@ -422,6 +445,42 @@ const shareReferral = () => {
                         >
                             {theme === 'dark' ? t('profile.theme_dark') : t('profile.theme_light')}
                         </button>
+                    </div>
+
+                    <div className="w-full h-px bg-slate-200 dark:bg-white/5" />
+
+                    {/* Push notifications toggle */}
+                    <div className="p-2">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 text-slate-700 dark:text-gray-300">
+                                <Bell size={20} />
+                                <span className="font-medium">{tr('Notifications', 'Notifications', 'Notificaciones', 'Notificações')}</span>
+                            </div>
+                            {pushStatus === 'granted' ? (
+                                <span className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20">
+                                    <CheckCircle2 size={14} /> {tr('Activées', 'Enabled', 'Activadas', 'Ativadas')}
+                                </span>
+                            ) : pushStatus === 'unsupported' ? (
+                                <span className="text-xs text-gray-400">{tr('Non disponible', 'Unavailable', 'No disponible', 'Indisponível')}</span>
+                            ) : (
+                                <button
+                                    onClick={enablePush}
+                                    className="px-4 py-2 bg-vantage-cyan/10 text-vantage-cyan rounded-lg text-sm font-bold border border-vantage-cyan/20 hover:bg-vantage-cyan/20 transition-colors"
+                                >
+                                    {tr('Activer', 'Enable', 'Activar', 'Ativar')}
+                                </button>
+                            )}
+                        </div>
+                        {pushStatus === 'denied' && (
+                            <p className="text-[10px] text-amber-500 leading-snug mt-1.5">
+                                {tr(
+                                    'Les notifications sont bloquées. Autorisez-les dans les réglages de votre téléphone : Applications → Vantage AI → Notifications.',
+                                    'Notifications are blocked. Allow them in your phone settings: Apps → Vantage AI → Notifications.',
+                                    'Las notificaciones están bloqueadas. Actívalas en los ajustes del teléfono: Aplicaciones → Vantage AI → Notificaciones.',
+                                    'As notificações estão bloqueadas. Ative-as nas configurações do telefone: Apps → Vantage AI → Notificações.'
+                                )}
+                            </p>
+                        )}
                     </div>
                 </GlassCard>
 
@@ -457,9 +516,12 @@ const shareReferral = () => {
                     </h3>
                     <GlassCard className="border-red-500/30 bg-red-500/5">
                         <p className="text-xs text-gray-500 mb-4">
-                            {language === 'fr'
-                                ? "La suppression de votre compte est définitive. Toutes vos données, y compris votre statut VIP, seront effacées."
-                                : "Deleting your account is permanent. All your data, including VIP status, will be wiped."}
+                            {tr(
+                                "La suppression de votre compte est définitive. Toutes vos données, y compris votre statut VIP, seront effacées.",
+                                "Deleting your account is permanent. All your data, including VIP status, will be wiped.",
+                                "Eliminar tu cuenta es permanente. Todos tus datos, incluido el estado VIP, se borrarán.",
+                                "Excluir sua conta é permanente. Todos os seus dados, incluindo o status VIP, serão apagados."
+                            )}
                         </p>
                         <button
                             onClick={handleDeleteAccount}
@@ -528,7 +590,7 @@ const shareReferral = () => {
                                         className="flex items-center gap-1.5 w-fit text-xs font-black text-white bg-gradient-to-r from-vantage-purple to-vantage-cyan px-4 py-2 rounded-xl shadow-lg shadow-vantage-purple/25 hover:opacity-90 transition-opacity"
                                     >
                                         <Crown size={12} />
-                                        {language === 'fr' ? 'Passer à VIP' : 'Upgrade to VIP'}
+                                        {tr('Passer à VIP', 'Upgrade to VIP', 'Hazte VIP', 'Torne-se VIP')}
                                     </button>
                                 </>
                             )}
@@ -570,17 +632,17 @@ const shareReferral = () => {
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center">
-                        <span className="text-[10px] text-gray-500 uppercase">{language === 'fr' ? 'Jours Gagnés' : 'Days Earned'}</span>
+                        <span className="text-[10px] text-gray-500 uppercase">{tr('Jours Gagnés', 'Days Earned', 'Días Ganados', 'Dias Ganhos')}</span>
                         <div className="flex items-center gap-1 text-vantage-purple">
                             <Zap size={14} />
                             <span className="text-xl font-bold">{referralDaysEarned}</span>
                         </div>
-                        <span className="text-[9px] text-gray-400 mt-0.5">{language === 'fr' ? 'jours VIP gratuits' : 'free VIP days'}</span>
+                        <span className="text-[9px] text-gray-400 mt-0.5">{tr('jours VIP gratuits', 'free VIP days', 'días VIP gratis', 'dias VIP grátis')}</span>
                     </div>
                     <div className="bg-white/50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center">
-                        <span className="text-[10px] text-gray-500 uppercase">{language === 'fr' ? 'Parrainages' : 'Referrals'}</span>
+                        <span className="text-[10px] text-gray-500 uppercase">{tr('Parrainages', 'Referrals', 'Referidos', 'Indicações')}</span>
                         <span className="text-xl font-bold text-slate-900 dark:text-white">{userProfile?.referralCount || 0}</span>
-                        <span className="text-[9px] text-gray-400 mt-0.5">{language === 'fr' ? 'amis invités' : 'friends invited'}</span>
+                        <span className="text-[9px] text-gray-400 mt-0.5">{tr('amis invités', 'friends invited', 'amigos invitados', 'amigos convidados')}</span>
                     </div>
                 </div>
 
@@ -589,12 +651,15 @@ const shareReferral = () => {
                     <Sparkles size={18} className="text-vantage-purple mt-0.5 shrink-0" />
                     <div>
                         <p className="text-xs font-bold text-vantage-purple mb-0.5">
-                            {language === 'fr' ? 'Comment ça marche ?' : 'How it works'}
+                            {tr('Comment ça marche ?', 'How it works', '¿Cómo funciona?', 'Como funciona?')}
                         </p>
                         <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                            {language === 'fr'
-                                ? 'Chaque ami qui s\'inscrit avec ton code reçoit 1 jour VIP gratuit — et toi aussi ! Les jours sont crédités automatiquement.'
-                                : 'Every friend who signs up with your code gets 1 free VIP day — and so do you! Days are credited automatically.'}
+                            {tr(
+                                'Chaque ami qui s\'abonne au VIP avec ton code te fait gagner 40% de commission — créditée uniquement quand son abonnement est confirmé.',
+                                'Every friend who subscribes to VIP with your code earns you 40% commission — credited only once their subscription is confirmed.',
+                                'Cada amigo que se suscriba a VIP con tu código te genera 40% de comisión — acreditada solo cuando se confirme su suscripción.',
+                                'Cada amigo que assinar o VIP com seu código gera 40% de comissão — creditada somente quando a assinatura for confirmada.'
+                            )}
                         </p>
                     </div>
                 </div>
@@ -611,7 +676,7 @@ const shareReferral = () => {
                     <span className="text-lg font-bold font-orbitron text-slate-900 dark:text-white truncate">
                         {parseVipExpiry(userProfile?.vipExpiry)
                             ? parseVipExpiry(userProfile?.vipExpiry)!.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: '2-digit' })
-                            : (userProfile?.isVip ? (language === 'fr' ? 'Illimité' : 'Unlimited') : (language === 'fr' ? 'Inactif' : 'Inactive'))}
+                            : (userProfile?.isVip ? tr('Illimité', 'Unlimited', 'Ilimitado', 'Ilimitado') : tr('Inactif', 'Inactive', 'Inactivo', 'Inativo'))}
                     </span>
                 </GlassCard>
                 <GlassCard className="p-4 flex flex-col justify-between">
@@ -636,7 +701,7 @@ const shareReferral = () => {
                     >
                         <div className="flex items-center space-x-3 text-slate-700 dark:text-gray-300">
                             <History size={20} />
-                            <span className="font-medium">{language === 'fr' ? 'Historique & Résultats' : 'Past Results'}</span>
+                            <span className="font-medium">{tr('Historique & Résultats', 'Past Results', 'Historial y Resultados', 'Histórico e Resultados')}</span>
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>
@@ -646,7 +711,7 @@ const shareReferral = () => {
                     >
                         <div className="flex items-center space-x-3 text-vantage-cyan">
                             <Sparkles size={20} />
-                            <span className="font-bold">{language === 'fr' ? 'Ticket Concierge' : 'Smart Ticket'}</span>
+                            <span className="font-bold">{tr('Ticket Concierge', 'Smart Ticket', 'Ticket Concierge', 'Ticket Concierge')}</span>
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>
@@ -659,8 +724,8 @@ const shareReferral = () => {
                         <div className="flex items-center space-x-3 text-slate-700 dark:text-gray-300">
                             <BookOpen size={20} />
                             <div className="text-left">
-                                <span className="font-bold block leading-tight">{language === 'fr' ? 'Centre d\'Apprentissage' : 'Learning Hub'}</span>
-                                <span className="text-[10px] text-gray-500">Guides, strategy & betting basics</span>
+                                <span className="font-bold block leading-tight">{tr('Centre d\'Apprentissage', 'Learning Hub', 'Centro de Aprendizaje', 'Central de Aprendizagem')}</span>
+                                <span className="text-[10px] text-gray-500">{tr('Guides, strategy & betting basics', 'Guides, strategy & betting basics', 'Guías, estrategia y bases de apuestas', 'Guias, estratégia e noções de apostas')}</span>
                             </div>
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
@@ -682,7 +747,7 @@ const shareReferral = () => {
                     >
                         <div className="flex items-center space-x-3 text-vantage-cyan">
                             <RefreshCw size={20} />
-                            <span className="font-bold">{language === 'fr' ? 'Revoir le Tutoriel' : 'Replay Tutorial'}</span>
+                            <span className="font-bold">{tr('Revoir le Tutoriel', 'Replay Tutorial', 'Repetir el Tutorial', 'Repetir o Tutorial')}</span>
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>
@@ -702,7 +767,7 @@ const shareReferral = () => {
                     >
                         <div className="flex items-center space-x-3 text-slate-700 dark:text-gray-300">
                             <Send size={20} className="text-sky-400" />
-                            <span className="font-medium">{language === 'fr' ? 'Rejoindre le groupe Telegram' : 'Join our Telegram group'}</span>
+                            <span className="font-medium">{tr('Rejoindre le groupe Telegram', 'Join our Telegram group', 'Unirse al grupo de Telegram', 'Entrar no grupo do Telegram')}</span>
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>

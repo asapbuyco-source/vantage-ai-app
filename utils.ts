@@ -1,5 +1,44 @@
 import { Match } from './types';
 
+/** Popular clubs — always shown first in lists (big-team priority). */
+const BIG_TEAMS = [
+  // England
+  'manchester united', 'manchester city', 'man united', 'man city',
+  'liverpool', 'chelsea', 'arsenal', 'tottenham', 'spurs', 'newcastle', 'aston villa',
+  // Spain
+  'barcelona', 'real madrid', 'atletico madrid', 'atlético madrid', 'atlético de madrid', 'sevilla', 'real betis', 'valencia',
+  // Germany
+  'bayern', 'borussia dortmund', 'dortmund', 'rb leipzig', 'bayer leverkusen',
+  // France
+  'paris saint-germain', 'psg', 'marseille', 'lyon', 'monaco',
+  // Italy
+  'juventus', 'inter milan', 'internazionale', 'ac milan', 'napoli', 'roma', 'lazio',
+  // Portugal / Netherlands
+  'benfica', 'porto', 'sporting', 'ajax', 'psv', 'feyenoord',
+  // Africa
+  'al ahly', 'zamalek', 'esperance', 'espérance', 'raja', 'wydad', 'mamelodi', 'kaizer',
+  // South America
+  'flamengo', 'palmeiras', 'corinthians', 'sao paulo', 'são paulo', 'santos', 'botafogo', 'fluminense', 'vasco', 'gremio', 'grêmio',
+  'boca juniors', 'river plate', 'racing club',
+  // Mexico / North America
+  'club america', 'club américa', 'américa', 'chivas', 'guadalajara', 'cruz azul', 'monterrey', 'tigres', 'pumas', 'toluca', 'inter miami', 'la galaxy',
+  // Middle East
+  'al hilal', 'al nassr', 'al ittihad', 'al ahli',
+];
+
+export const isBigTeam = (name: unknown): boolean => {
+  const n = String(name || '').toLowerCase();
+  if (!n) return false;
+  return BIG_TEAMS.some(t => n.includes(t));
+};
+
+/** 0 = match involves a big/popular club, 1 = small teams. Lower sorts first. */
+export const bigTeamRank = (match: Match): number => {
+  const home = match.homeTeam || match.home_team || '';
+  const away = match.awayTeam || match.away_team || '';
+  return (isBigTeam(home) || isBigTeam(away)) ? 0 : 1;
+};
+
 /** vipExpiry is stored as an ISO string (legacy / backend) or a Firestore Timestamp (new grants).
  *  This normalizes either into a Date, or null if missing/invalid. */
 export const parseVipExpiry = (expiry: unknown): Date | null => {
@@ -25,15 +64,14 @@ export interface ProbPick {
 
 export const getTopProbPicks = (match: Match): ProbPick[] => {
   const markets = [
-    { name: 'Over 0.5 Goals', prob: match.over05_prob ?? 0 },
+    // 0.5 and 4.5 lines removed — they are near-certain / near-impossible and make
+    // worthless "picks" (odds ~1.02 or a near-miss). Keep meaningful lines only.
     { name: 'Over 1.5 Goals', prob: match.over15_prob ?? 0 },
     { name: 'Over 2.5 Goals', prob: match.over25_prob ?? 0 },
     { name: 'Over 3.5 Goals', prob: match.over35_prob ?? 0 },
-    { name: 'Over 4.5 Goals', prob: match.over45_prob ?? 0 },
     { name: 'Under 1.5 Goals', prob: match.under15_prob ?? 0 },
     { name: 'Under 2.5 Goals', prob: match.under25_prob ?? 0 },
     { name: 'Under 3.5 Goals', prob: match.under35_prob ?? 0 },
-    { name: 'Under 4.5 Goals', prob: match.under45_prob ?? 0 },
     { name: 'BTTS', prob: match.btts_prob ?? 0 },
     { name: 'Home Win', prob: match.home_win_prob ?? 0 },
     { name: 'Draw', prob: match.draw_prob ?? 0 },
@@ -41,7 +79,6 @@ export const getTopProbPicks = (match: Match): ProbPick[] => {
     { name: 'DC 1X', prob: match.double_chance_1x ?? 0 },
     { name: 'DC X2', prob: match.double_chance_x2 ?? 0 },
     { name: 'DC 12', prob: match.double_chance_12 ?? 0 },
-    { name: '1H Over 0.5', prob: match.fh_over05_prob ?? 0 },
     { name: '1H Over 1.5', prob: match.fh_over15_prob ?? 0 },
     { name: '1H BTTS', prob: match.fh_btts_prob ?? 0 },
   ];
@@ -63,28 +100,30 @@ export const getTopProbPicks = (match: Match): ProbPick[] => {
 export const plainMarket = (market: string, language: string = 'en'): string => {
   if (!market) return market;
   const m = market.toLowerCase();
-  const isFr = language === 'fr';
-  if (m === 'double chance (1x)' || m === 'double chance 1x') return isFr ? 'Domicile ou Nul' : 'Home or Draw';
-  if (m === 'double chance (x2)' || m === 'double chance x2') return isFr ? 'Nul ou Extérieur' : 'Draw or Away';
-  if (m === 'double chance (12)' || m === 'double chance 12') return isFr ? 'Domicile ou Extérieur' : 'Home or Away';
-  if (m === 'btts' || m.includes('both teams to score') && !m.includes('no')) return isFr ? 'Les deux marquent' : 'Both Teams Score';
-  if (m.includes('btts no')) return isFr ? 'Une équipe ne marque pas' : 'One Team Fails to Score';
-  if (m === 'draw no bet (home)') return isFr ? 'Victoire Domicile (nul remboursé)' : 'Home Win (draw refunds)';
-  if (m === 'draw no bet (away)') return isFr ? 'Victoire Extérieur (nul remboursé)' : 'Away Win (draw refunds)';
-  if (m.includes('fh over 0.5')) return isFr ? 'But 1ère MT' : '1st-Half Goal';
-  if (m.includes('fh over 1.5')) return isFr ? 'Plus de 1,5 en 1ère MT' : '1st-Half Over 1.5';
-  if (m.includes('fh btts')) return isFr ? '1ère MT : Les deux marquent' : '1st-Half: Both Score';
-  if (m === 'home win') return isFr ? 'Victoire Domicile' : 'Home Win';
-  if (m === 'away win') return isFr ? 'Victoire Extérieur' : 'Away Win';
-  if (m === 'draw') return isFr ? 'Match Nul' : 'Draw';
+  const pick = (fr: string, en: string, es: string, pt: string) =>
+    language === 'fr' ? fr : language === 'es' ? es : language === 'pt' ? pt : en;
+  const dec = (n: string) => (language === 'fr' || language === 'es' || language === 'pt') ? n.replace('.', ',') : n;
+  if (m === 'double chance (1x)' || m === 'double chance 1x') return pick('Domicile ou Nul', 'Home or Draw', 'Local o Empate', 'Casa ou Empate');
+  if (m === 'double chance (x2)' || m === 'double chance x2') return pick('Nul ou Extérieur', 'Draw or Away', 'Empate o Visitante', 'Empate ou Fora');
+  if (m === 'double chance (12)' || m === 'double chance 12') return pick('Domicile ou Extérieur', 'Home or Away', 'Local o Visitante', 'Casa ou Fora');
+  if (m === 'btts' || m.includes('both teams to score') && !m.includes('no')) return pick('Les deux marquent', 'Both Teams Score', 'Ambos Anotan', 'Ambas Marcam');
+  if (m.includes('btts no')) return pick('Une équipe ne marque pas', 'One Team Fails to Score', 'Un equipo no anota', 'Um time não marca');
+  if (m === 'draw no bet (home)') return pick('Victoire Domicile (nul remboursé)', 'Home Win (draw refunds)', 'Gana Local (empate reembolsa)', 'Vitória Casa (empate reembolsa)');
+  if (m === 'draw no bet (away)') return pick('Victoire Extérieur (nul remboursé)', 'Away Win (draw refunds)', 'Gana Visitante (empate reembolsa)', 'Vitória Fora (empate reembolsa)');
+  if (m.includes('fh over 0.5')) return pick('But 1ère MT', '1st-Half Goal', 'Gol 1ª Parte', 'Gol 1º Tempo');
+  if (m.includes('fh over 1.5')) return pick('Plus de 1,5 en 1ère MT', '1st-Half Over 1.5', 'Más de 1.5 en 1ª Parte', 'Mais de 1.5 no 1º Tempo');
+  if (m.includes('fh btts')) return pick('1ère MT : Les deux marquent', '1st-Half: Both Score', '1ª Parte: Ambos Anotan', '1º Tempo: Ambas Marcam');
+  if (m === 'home win') return pick('Victoire Domicile', 'Home Win', 'Gana Local', 'Vitória Casa');
+  if (m === 'away win') return pick('Victoire Extérieur', 'Away Win', 'Gana Visitante', 'Vitória Fora');
+  if (m === 'draw') return pick('Match Nul', 'Draw', 'Empate', 'Empate');
   const overMatch = m.match(/^over (\d+(?:\.\d+)?) goals?$/);
-  if (overMatch) return isFr ? `Plus de ${overMatch[1].replace('.', ',')} buts` : `Over ${overMatch[1]} goals`;
+  if (overMatch) return pick(`Plus de ${dec(overMatch[1])} buts`, `Over ${overMatch[1]} goals`, `Más de ${dec(overMatch[1])} goles`, `Mais de ${dec(overMatch[1])} gols`);
   const underMatch = m.match(/^under (\d+(?:\.\d+)?) goals?$/);
-  if (underMatch) return isFr ? `Moins de ${underMatch[1].replace('.', ',')} buts` : `Under ${underMatch[1]} goals`;
+  if (underMatch) return pick(`Moins de ${dec(underMatch[1])} buts`, `Under ${underMatch[1]} goals`, `Menos de ${dec(underMatch[1])} goles`, `Menos de ${dec(underMatch[1])} gols`);
   const overShort = m.match(/^over (\d+(?:\.\d+)?)$/);
-  if (overShort) return isFr ? `Plus de ${overShort[1].replace('.', ',')}` : `Over ${overShort[1]}`;
+  if (overShort) return pick(`Plus de ${dec(overShort[1])}`, `Over ${overShort[1]}`, `Más de ${dec(overShort[1])}`, `Mais de ${dec(overShort[1])}`);
   const underShort = m.match(/^under (\d+(?:\.\d+)?)$/);
-  if (underShort) return isFr ? `Moins de ${underShort[1].replace('.', ',')}` : `Under ${underShort[1]}`;
+  if (underShort) return pick(`Moins de ${dec(underShort[1])}`, `Under ${underShort[1]}`, `Menos de ${dec(underShort[1])}`, `Menos de ${dec(underShort[1])}`);
   return market;
 };
 

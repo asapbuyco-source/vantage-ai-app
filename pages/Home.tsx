@@ -2,9 +2,9 @@ import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
-  Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon,
+  Zap, Activity, ArrowRight, Lock, Globe, Clock, Calendar, Sun, Moon, Crown,
   Trophy, AlertTriangle, Hourglass, Search, SlidersHorizontal, ChevronDown,
-  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Copy, Check, Share2, Target, BrainCircuit
+  Flame, TrendingUp, ChevronRight, Shield, BarChart3, Copy, Check, Share2, Target
 } from 'lucide-react';
 import { GlassCard } from '../components/GlassCard';
 import { CircularProgress } from '../components/CircularProgress';
@@ -17,9 +17,19 @@ import { TeamLogo } from '../components/TeamLogo';
 import { getAppSettings } from '../services/db';
 import { TicketWizard } from '../components/TicketWizard';
 import { MotionDiv } from '../components/MotionDiv';
-import { getTopProbPicks, getPrimaryPredictionText, getPrimaryPredictionProb, getTopPickText, plainMarket } from '../utils';
+import { getTopProbPicks, getPrimaryPredictionText, getPrimaryPredictionProb, getTopPickText, plainMarket, bigTeamRank } from '../utils';
+import { Flag } from '../components/Flag';
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
+import { Language } from '../i18n';
+
+const LANGUAGE_CYCLE: Language[] = ['fr', 'en', 'es', 'pt'];
+const LANGUAGE_META: Record<Language, { code: string; name: string }> = {
+  fr: { code: 'FR', name: 'Français' },
+  en: { code: 'EN', name: 'English' },
+  es: { code: 'ES', name: 'Español' },
+  pt: { code: 'PT', name: 'Português' },
+};
 
 interface HomeProps {}
 
@@ -77,14 +87,15 @@ const FormDots = ({ form }: { form?: string }) => {
 
 export const Home: React.FC<HomeProps> = () => {
   const navigate = useNavigate();
-  const { t, language, setLanguage, theme, toggleTheme, showToast } = useAppContext();
+  const { t, language, setLanguage, theme, toggleTheme, showToast, tr } = useAppContext();
   const { user, isAdmin, isVipActive } = useAuth();
   const {
     activeDate, predictions, rawFixtures, basketballPredictions, cricketPredictions,
-    winRateStats, loading, isSystemGenerating, systemError
+    winRateStats, loading, isSystemGenerating, systemError, liveCount
   } = useData();
 
   const isVip = isVipActive || isAdmin;
+  const nextLanguage = LANGUAGE_CYCLE[(LANGUAGE_CYCLE.indexOf(language) + 1) % LANGUAGE_CYCLE.length];
 
   // Load the scheduled football gen time from Firestore settings (for display only)
   const [scheduledTime, setScheduledTime] = useState('19:00');
@@ -138,7 +149,7 @@ export const Home: React.FC<HomeProps> = () => {
         await navigator.share({ text, title: 'Vantage AI Pick' });
       } else {
         await navigator.clipboard.writeText(text);
-        showToast(language === 'fr' ? 'Pick copié !' : 'Pick copied!', 'success');
+        showToast(tr('Pick copié !', 'Pick copied!', '¡Pick copiado!', 'Pick copiado!'), 'success');
       }
     } catch (e) { /* user cancelled */ }
   };
@@ -203,6 +214,8 @@ export const Home: React.FC<HomeProps> = () => {
       );
     }
     const categoryPriority: Record<string, number> = { safe: 4, value: 3, risky: 2, lean: 1 };
+    // BIG TEAMS ALWAYS FIRST — applied before any other sort, regardless of the filter
+    const bigFirst = (a: Match, b: Match) => bigTeamRank(a) - bigTeamRank(b);
     // TOP LEAGUES ALWAYS FIRST — applied as the primary key before any user sort
     const leagueFirst = (a: Match, b: Match) => {
       const tierA = getLeagueTier(a);
@@ -215,6 +228,8 @@ export const Home: React.FC<HomeProps> = () => {
     switch (sortKey) {
       case 'probability':
         result.sort((a, b) => {
+          const bf = bigFirst(a, b);
+          if (bf !== 0) return bf;
           const lf = leagueFirst(a, b);
           if (lf !== 0) return lf;
           const probA = getPrimaryPredictionProb(a);
@@ -225,6 +240,8 @@ export const Home: React.FC<HomeProps> = () => {
         break;
       case 'time': 
         result.sort((a, b) => {
+          const bf = bigFirst(a, b);
+          if (bf !== 0) return bf;
           const lf = leagueFirst(a, b);
           if (lf !== 0) return lf;
           const timeCompare = a.time.localeCompare(b.time);
@@ -234,6 +251,8 @@ export const Home: React.FC<HomeProps> = () => {
         break;
       case 'league': 
         result.sort((a, b) => {
+          const bf = bigFirst(a, b);
+          if (bf !== 0) return bf;
           const tierA = getLeagueTier(a);
           const tierB = getLeagueTier(b);
           if (tierA !== tierB) return tierA - tierB;
@@ -269,7 +288,7 @@ export const Home: React.FC<HomeProps> = () => {
   const [year, month, day] = activeDate ? activeDate.split('-').map(Number) : [];
   const displayDateObj = activeDate ? new Date(year, month - 1, day) : new Date();
 
-  const todayDisplay = displayDateObj.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB', {
+  const todayDisplay = displayDateObj.toLocaleDateString(tr('fr-FR', 'en-GB', 'es-MX', 'pt-BR'), {
     weekday: 'short', day: 'numeric', month: 'short'
   });
 
@@ -283,9 +302,9 @@ export const Home: React.FC<HomeProps> = () => {
   }, [predictions]);
 
   const sortLabels: Record<SortKey, string> = {
-    probability: language === 'fr' ? 'Probabilité' : 'Probability',
-    time: language === 'fr' ? 'Heure' : 'Time',
-    league: language === 'fr' ? 'Ligue' : 'League',
+    probability: tr('Probabilité', 'Probability', 'Probabilidad', 'Probabilidade'),
+    time: tr('Heure', 'Time', 'Hora', 'Hora'),
+    league: tr('Ligue', 'League', 'Liga', 'Liga'),
   };
 
   if (isSystemGenerating) return <AnalyzingLoader />;
@@ -301,14 +320,14 @@ export const Home: React.FC<HomeProps> = () => {
           </h1>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => setLanguage(language === 'fr' ? 'en' : 'fr')}
-            title={language === 'fr' ? 'Switch to English' : 'Passer au fran�ais'}
+<button
+            onClick={() => setLanguage(nextLanguage)}
+            title={LANGUAGE_META[nextLanguage].name}
             className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
           >
-            <Globe size={13} className="text-vantage-cyan" />
+            <Flag code={nextLanguage} className="w-5 h-[14px] rounded-[2px] shadow-sm" />
             <span className="text-[11px] font-bold font-display text-vantage-cyan">
-              {language === 'fr' ? 'EN' : 'FR'}
+              {LANGUAGE_META[nextLanguage].code}
             </span>
           </button>
           <button
@@ -366,7 +385,7 @@ export const Home: React.FC<HomeProps> = () => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">
-                {language === 'fr' ? 'Banker du Jour' : 'Banker of the Day'}
+                {tr('Banker du Jour', 'Banker of the Day', 'Banker del Día', 'Banker do Dia')}
               </p>
               {todayBanker?.pick ? (
                 <>
@@ -379,7 +398,7 @@ export const Home: React.FC<HomeProps> = () => {
                 </>
               ) : (
                 <p className="text-sm font-bold text-slate-900 dark:text-white">
-                  {language === 'fr' ? 'En attente...' : 'Coming soon...'}
+                  {tr('En attente...', 'Coming soon...', 'Próximamente...', 'Em breve...')}
                 </p>
               )}
             </div>
@@ -393,7 +412,7 @@ export const Home: React.FC<HomeProps> = () => {
                   <p className="text-[10px] font-bold text-rose-500">❌ LOST {todayBanker.pick.score}</p>
                 )}
                 {todayBanker.pick.status === 'pending' && (
-                  <p className="text-[10px] text-gray-400">{language === 'fr' ? 'En cours' : 'Pending'}</p>
+                  <p className="text-[10px] text-gray-400">{tr('En cours', 'Pending', 'En curso', 'Pendente')}</p>
                 )}
               </div>
             )}
@@ -401,17 +420,17 @@ export const Home: React.FC<HomeProps> = () => {
           {bankerSummary && (
             <div className="flex items-center gap-3 text-[10px]">
               <span className="text-emerald-400 font-bold">
-                {bankerSummary.win_rate_pct}% {language === 'fr' ? 'de réussite' : 'win rate'}
+                {bankerSummary.win_rate_pct}% {tr('de réussite', 'win rate', 'de acierto', 'de acerto')}
               </span>
               <span className="text-gray-500">·</span>
               <span className="text-gray-400">
-                {bankerSummary.wins}W — {bankerSummary.losses}L ({language === 'fr' ? '30 derniers jours' : 'last 30 days'})
+                {bankerSummary.wins}W — {bankerSummary.losses}L ({tr('30 derniers jours', 'last 30 days', 'últimos 30 días', 'últimos 30 dias')})
               </span>
               {bankerSummary.streak_type === 'win' && bankerSummary.current_streak >= 3 && (
                 <>
                   <span className="text-gray-500">·</span>
                   <span className="text-amber-400 font-bold">
-                    🔥 {bankerSummary.current_streak} {language === 'fr' ? 'victoires d\'affilée' : 'win streak'}
+                    🔥 {bankerSummary.current_streak} {tr('victoires d\'affilée', 'win streak', 'victorias seguidas', 'vitórias seguidas')}
                   </span>
                 </>
               )}
@@ -420,34 +439,12 @@ export const Home: React.FC<HomeProps> = () => {
         </div>
       )}
 
-      {/* ── Vantage Intelligence CTA ── */}
-      <button
-        onClick={() => navigate('/research')}
-        className="relative overflow-hidden w-full rounded-2xl border border-vantage-purple/25 bg-vantage-gradient-soft p-4 flex items-center gap-3 text-left hover:border-vantage-purple/50 transition-all group"
-      >
-        <div className="shrink-0 w-11 h-11 rounded-xl bg-white/10 dark:bg-black/30 border border-vantage-purple/30 flex items-center justify-center">
-          <BrainCircuit size={22} className="text-vantage-purple" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-black text-slate-900 dark:text-white leading-tight">
-            {language === 'fr' ? 'Intelligence Vantage' : 'Vantage Intelligence'}
-            <span className="ml-2 text-[10px] font-black px-1.5 py-0.5 rounded bg-vantage-purple/20 text-vantage-purple align-middle">RESEARCH</span>
-          </p>
-          <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-snug mt-0.5">
-            {language === 'fr'
-              ? 'Recherchez n\'importe quelle équipe ou joueur — classé par rapport à la ligue.'
-              : 'Research any team or player — ranked vs their league.'}
-          </p>
-        </div>
-        <ChevronRight size={16} className="text-gray-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-      </button>
-
       {/* ── Date Bar ── */}
       <div className="flex items-center justify-between gap-2 flex-wrap bg-black/5 dark:bg-white/5 px-3 py-2.5 rounded-xl border border-black/5 dark:border-white/5 text-xs">
         <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 shrink-0">
           <Clock size={12} />
           <span className="font-medium uppercase tracking-wide">
-            {language === 'fr' ? `Prochain: ${scheduledTime}` : `Next: ${scheduledTimeDisplay}`}
+            {tr(`Prochain: ${scheduledTime}`, `Next: ${scheduledTimeDisplay}`, `Próximo: ${scheduledTimeDisplay}`, `Próximo: ${scheduledTimeDisplay}`)}
           </span>
         </div>
         <div className="flex items-center gap-1.5 text-vantage-cyan font-bold min-w-0 flex-wrap">
@@ -455,7 +452,7 @@ export const Home: React.FC<HomeProps> = () => {
           <span className="uppercase">{todayDisplay}</span>
           {predictions.length > 0 && (
             <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full whitespace-nowrap">
-              {language === 'fr' ? '✓ Publié aujourd\'hui' : '✓ Published today'}
+              {tr('✓ Publié aujourd\'hui', '✓ Published today', '✓ Publicado hoy', '✓ Publicado hoje')}
             </span>
           )}
         </div>
@@ -476,10 +473,10 @@ export const Home: React.FC<HomeProps> = () => {
             >
               {sport === 'football' ? '⚽' : sport === 'basketball' ? '🏀' : '🏏'}
               {sport === 'football'
-                ? (language === 'fr' ? 'Football' : 'Football')
+                ? tr('Football', 'Football', 'Fútbol', 'Futebol')
                 : sport === 'cricket'
-                  ? (language === 'fr' ? 'Cricket' : 'Cricket')
-                : (language === 'fr' ? 'Basketball' : 'Basketball')}
+                  ? 'Cricket'
+                : tr('Basketball', 'Basketball', 'Baloncesto', 'Basquete')}
             </button>
           ))}
         </div>
@@ -492,7 +489,7 @@ export const Home: React.FC<HomeProps> = () => {
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder={language === 'fr' ? 'Chercher équipe ou ligue...' : 'Search team or league...'}
+              placeholder={tr('Chercher équipe ou ligue...', 'Search team or league...', 'Buscar equipo o liga...', 'Buscar equipe ou liga...')}
               className="bg-transparent text-xs outline-none text-slate-800 dark:text-white placeholder-gray-500 w-full"
             />
           </div>
@@ -533,13 +530,16 @@ export const Home: React.FC<HomeProps> = () => {
         <div className="text-xs text-gray-500 flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <TrendingUp size={11} />
-            {language === 'fr'
-              ? `${filteredMatches.length} matchs analysés`
-              : `${filteredMatches.length} matches today`}
+            {tr(
+              `${filteredMatches.length} matchs analysés`,
+              `${filteredMatches.length} matches today`,
+              `${filteredMatches.length} partidos analizados`,
+              `${filteredMatches.length} jogos analisados`
+            )}
           </span>
           {rawFixtures.length === 0 && predictions.length > 0 && (
             <span className="text-[10px] text-amber-400 flex items-center gap-1">
-              <Zap size={10} /> {language === 'fr' ? 'Mode IA' : 'AI Mode'}
+              <Zap size={10} /> {tr('Mode IA', 'AI Mode', 'Modo IA', 'Modo IA')}
             </span>
           )}
         </div>
@@ -547,6 +547,64 @@ export const Home: React.FC<HomeProps> = () => {
 
       {/* ─── MATCH LIST ─── */}
       <div className="space-y-6">
+        {/* Live scores entry — always discoverable, urgent when matches are live */}
+        {!loading && (
+          <div
+            onClick={() => navigate('/live')}
+            className={`group flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 cursor-pointer transition-all ${
+              liveCount > 0
+                ? 'border-red-500/40 bg-gradient-to-r from-red-500/15 via-red-500/5 to-transparent hover:border-red-500/70'
+                : 'border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:border-vantage-cyan/40'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              {liveCount > 0 ? (
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                </span>
+              ) : (
+                <Activity size={16} className="text-vantage-cyan shrink-0" />
+              )}
+              <span className="text-xs font-bold text-slate-800 dark:text-white/90 leading-tight">
+                {liveCount > 0
+                  ? tr(
+                      `${liveCount} match${liveCount > 1 ? 's' : ''} en direct — Regarder les scores`,
+                      `${liveCount} match${liveCount > 1 ? 'es' : ''} live now — Watch scores`,
+                      `${liveCount} partido${liveCount > 1 ? 's' : ''} en vivo — Ver resultados`,
+                      `${liveCount} jogo${liveCount > 1 ? 's' : ''} ao vivo — Ver placares`
+                    )
+                  : tr('Scores en direct', 'Live scores', 'Resultados en vivo', 'Placar ao vivo')}
+              </span>
+            </div>
+            <span className={`shrink-0 text-[10px] font-black uppercase tracking-wide px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 ${
+              liveCount > 0
+                ? 'text-white bg-red-500 group-hover:bg-red-600'
+                : 'text-slate-500 dark:text-gray-400 bg-slate-100 dark:bg-white/10'
+            }`}>
+              {liveCount > 0 ? tr('Direct', 'Live', 'En vivo', 'Ao vivo') : <ChevronRight size={12} />}
+            </span>
+          </div>
+        )}
+        {!isVip && !loading && (
+          <div onClick={() => navigate('/vip')}
+            className="group flex items-center justify-between gap-3 rounded-2xl border border-vantage-purple/30 bg-gradient-to-r from-vantage-purple/15 via-vantage-purple/5 to-transparent px-4 py-3 cursor-pointer hover:border-vantage-purple/60 transition-all">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Lock size={16} className="text-vantage-purple shrink-0" />
+              <span className="text-xs font-bold text-slate-800 dark:text-white/90 leading-tight">
+                {tr(
+                  'VIP débloque tous les pronostics + l\'analyse complète.',
+                  'VIP unlocks every pick + full pro analysis.',
+                  'VIP desbloquea todos los picks + el análisis completo.',
+                  'VIP desbloqueia todos os picks + a análise completa.'
+                )}
+              </span>
+            </div>
+            <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-white bg-vantage-purple px-2.5 py-1 rounded-lg group-hover:bg-purple-600 transition-colors">
+              {tr('Passer VIP', 'Upgrade', 'Hazte VIP', 'Assinar VIP')}
+            </span>
+          </div>
+        )}
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map(i => (
@@ -561,10 +619,10 @@ export const Home: React.FC<HomeProps> = () => {
                   <AlertTriangle size={24} className="text-red-500" />
                 </div>
                 <h3 className="text-slate-900 dark:text-white font-bold mb-1">
-                  {language === 'fr' ? "Erreur de l'IA" : 'AI Analysis Error'}
+                  {tr("Erreur de l'IA", 'AI Analysis Error', 'Error del Análisis IA', 'Erro da Análise IA')}
                 </h3>
                 <p className="text-xs text-gray-500 max-w-[220px]">
-                  {language === 'fr' ? 'Réessayez plus tard.' : 'Please try again later.'}
+                  {tr('Réessayez plus tard.', 'Please try again later.', 'Inténtalo de nuevo más tarde.', 'Tente novamente mais tarde.')}
                 </p>
               </>
             ) : searchQuery ? (
@@ -573,10 +631,10 @@ export const Home: React.FC<HomeProps> = () => {
                   <Search size={24} className="text-vantage-cyan" />
                 </div>
                 <h3 className="text-slate-900 dark:text-white font-bold mb-1">
-                  {language === 'fr' ? 'Aucun résultat' : 'No matches found'}
+                  {tr('Aucun résultat', 'No matches found', 'Sin resultados', 'Nenhum resultado')}
                 </h3>
                 <p className="text-xs text-gray-500">
-                  {language === 'fr' ? 'Essayez une autre recherche.' : 'Try adjusting your search.'}
+                  {tr('Essayez une autre recherche.', 'Try adjusting your search.', 'Prueba otra búsqueda.', 'Tente outra busca.')}
                 </p>
               </>
             ) : (
@@ -585,16 +643,18 @@ export const Home: React.FC<HomeProps> = () => {
                   <Hourglass size={24} className="text-vantage-cyan" />
                 </div>
                 <h3 className="text-slate-900 dark:text-white font-bold mb-1">
-                  {language === 'fr' ? 'Pronostics pas encore disponibles' : "Not Yet Available"}
+                  {tr('Pronostics pas encore disponibles', 'Not Yet Available', 'Pronósticos aún no disponibles', 'Palpites ainda não disponíveis')}
                 </h3>
                 <p className="text-xs text-gray-500 max-w-[220px] leading-relaxed">
                   {activeSport === 'basketball'
-                    ? (language === 'fr' ? "Pas de pronostics basketball pour aujourd'hui. Revenez plus tard." : 'No basketball predictions yet. Come back later.')
+                    ? tr("Pas de pronostics basketball pour aujourd'hui. Revenez plus tard.", 'No basketball predictions yet. Come back later.', 'Aún no hay pronósticos de baloncesto. Vuelve más tarde.', 'Ainda não há palpites de basquete. Volte mais tarde.')
                     : activeSport === 'cricket'
-                      ? (language === 'fr' ? "Pas de pronostics cricket pour aujourd'hui. Revenez plus tard." : 'No cricket predictions yet. Come back later.')
-                    : (language === 'fr'
-                      ? `Les pronostics sont publiés à ${scheduledTime}. Revenez dans ${countdown.h}h ${countdown.m}m.`
-                      : `Predictions publish at ${scheduledTimeDisplay}. Come back in ${countdown.h}h ${countdown.m}m.`
+                      ? tr("Pas de pronostics cricket pour aujourd'hui. Revenez plus tard.", 'No cricket predictions yet. Come back later.', 'Aún no hay pronósticos de críquet. Vuelve más tarde.', 'Ainda não há palpites de críquete. Volte mais tarde.')
+                    : tr(
+                      `Les pronostics sont publiés à ${scheduledTime}. Revenez dans ${countdown.h}h ${countdown.m}m.`,
+                      `Predictions publish at ${scheduledTimeDisplay}. Come back in ${countdown.h}h ${countdown.m}m.`,
+                      `Los pronósticos se publican a las ${scheduledTimeDisplay}. Vuelve en ${countdown.h}h ${countdown.m}m.`,
+                      `Os palpites são publicados às ${scheduledTimeDisplay}. Volte em ${countdown.h}h ${countdown.m}m.`
                     )}
                 </p>
               </>
@@ -621,8 +681,6 @@ export const Home: React.FC<HomeProps> = () => {
                   const homeProb = Math.round((match.home_win_prob || 0) * 100);
                   const drawProb = Math.round((match.draw_prob || 0) * 100);
                   const awayProb = Math.round((match.away_win_prob || 0) * 100);
-                  const isFreeMatch = freeMatchIds.has(match.id);
-                  const unlocked = isVip || isFreeMatch;
 
                   return (
                     <motion.div
@@ -667,33 +725,53 @@ export const Home: React.FC<HomeProps> = () => {
                           </div>
                         </div>
 
-                        {/* Stats row */}
-                        {unlocked ? (
-                          <div className="px-4 pb-1.5 flex justify-center gap-1 flex-wrap">
-                            {homeProb > 0 && (
-                              <>
-                                <span className="text-[10px] font-mono text-slate-500 bg-black/5 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">H {homeProb}%</span>
-                                <span className="text-[10px] font-mono text-slate-500 bg-black/5 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">D {drawProb}%</span>
-                                <span className="text-[10px] font-mono text-slate-500 bg-black/5 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">A {awayProb}%</span>
-                              </>
-                            )}
-                            {match.over25_prob > 0 && <span className="text-[10px] font-mono text-vantage-cyan/80 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>}
-                            {match.btts_prob > 0 && <span className="text-[10px] font-mono text-amber-400/80 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>}
-                          </div>
-                        ) : (
-                          <div className="px-4 pb-1.5 flex justify-center">
-                            <span onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="text-[10px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-3 py-1 rounded-full cursor-pointer hover:bg-vantage-purple/20">
-                              <Lock size={9} className="inline mr-1" />{language === 'fr' ? 'Stats VIP' : 'VIP Stats'}
-                            </span>
-                          </div>
-                        )}
+                        {/* Stats row — visible on all matches */}
+                        <div className="px-4 pb-1.5 flex justify-center gap-1 flex-wrap">
+                          {homeProb > 0 && (
+                            <>
+                              <span className="text-[10px] font-mono text-slate-500 bg-black/5 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">H {homeProb}%</span>
+                              <span className="text-[10px] font-mono text-slate-500 bg-black/5 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">D {drawProb}%</span>
+                              <span className="text-[10px] font-mono text-slate-500 bg-black/5 dark:bg-white/[0.06] px-1.5 py-0.5 rounded">A {awayProb}%</span>
+                            </>
+                          )}
+                          {match.over25_prob > 0 && <span className="text-[10px] font-mono text-vantage-cyan/80 bg-vantage-cyan/5 px-1.5 py-0.5 rounded">O2.5 {Math.round(match.over25_prob * 100)}%</span>}
+                          {match.btts_prob > 0 && <span className="text-[10px] font-mono text-amber-400/80 bg-amber-400/5 px-1.5 py-0.5 rounded">BTTS {Math.round(match.btts_prob * 100)}%</span>}
+                        </div>
 
-                        {/* Prediction — show each pick with its percentage */}
-                        {unlocked ? (
-                          <div className="mx-3 mb-3 p-3 rounded-xl bg-vantage-cyan/5 border border-vantage-cyan/15 overflow-hidden">
-                            <span className="text-[10px] text-vantage-cyan uppercase tracking-widest block mb-1.5 font-bold">{t('free.pred_label') || 'Prediction'}</span>
-                            <div className="space-y-1.5">
-                              {getTopProbPicks(match).map((p, pi) => (
+                        {/* Prediction — first pick free, the rest VIP-gated */}
+                        <div className="mx-3 mb-3 p-3 rounded-xl bg-vantage-cyan/5 border border-vantage-cyan/15 overflow-hidden">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[9px] text-vantage-cyan uppercase tracking-widest font-bold">{t('free.pred_label') || 'Prediction'}</span>
+                            {match.category === 'safe' && (
+                              <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold">
+                                {tr('SÛR', 'BANKER', 'SEGURO', 'SEGURO')}
+                              </span>
+                            )}
+                            {match.category === 'value' && (
+                              <span className="text-[9px] px-2 py-0.5 rounded-full bg-vantage-purple/15 border border-vantage-purple/30 text-vantage-purple font-bold flex items-center gap-1">
+                                <Crown size={9} /> {tr('VALEUR VIP', 'VIP VALUE', 'VALOR VIP', 'VALOR VIP')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            {getTopProbPicks(match).map((p, pi) => {
+                              const locked = !isVip && pi >= 1; // first pick free, the rest VIP
+                              if (locked) {
+                                return (
+                                  <div key={pi} onClick={(e) => { e.stopPropagation(); navigate('/vip'); }}
+                                    className="group flex items-center justify-between gap-2 rounded-lg border border-vantage-purple/25 bg-gradient-to-r from-vantage-purple/10 via-vantage-purple/5 to-transparent px-2.5 py-1.5 cursor-pointer hover:border-vantage-purple/60 hover:from-vantage-purple/20 transition-all">
+                                    <span className="flex items-center gap-1.5 text-[11px] font-bold text-vantage-purple/90 truncate">
+                                      <Lock size={10} className="shrink-0 opacity-80" />
+                                      <span className="truncate">{plainMarket(p.name, language)}</span>
+                                    </span>
+                                    <span className="flex items-center gap-1.5 shrink-0">
+                                      <span className="text-[11px] font-black font-mono text-vantage-purple/60 blur-[3px] select-none">{Math.round(p.prob * 100)}%</span>
+                                      <span className="text-[8px] font-black uppercase tracking-wide text-white bg-vantage-purple px-1.5 py-0.5 rounded shadow-sm">VIP</span>
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              return (
                                 <div key={pi} className="flex items-center justify-between gap-2">
                                   <span className="text-[11px] font-bold text-slate-900 dark:text-white truncate">{plainMarket(p.name, language)}</span>
                                   <div className="flex items-center gap-2 shrink-0">
@@ -703,38 +781,50 @@ export const Home: React.FC<HomeProps> = () => {
                                     <span className="text-[11px] font-bold font-mono text-emerald-400 w-8 text-right">{Math.round(p.prob * 100)}%</span>
                                   </div>
                                 </div>
-                              ))}
-                            </div>
-                            <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-vantage-cyan/10">
-                              {match.odds > 1 && <span className="text-[10px] font-mono text-gray-400">{Number(match.odds).toFixed(2)}x</span>}
-                              <span className="text-[10px] font-mono text-gray-400">{confidence}% match</span>
-                              {isVip && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setTicketPicks(prev => { if (prev.some(p => p.id === match.id)) return prev; return [...prev, { id: match.id, home: match.homeTeam || match.home_team || '', away: match.awayTeam || match.away_team || '', pick: pred || '', odds: Number(match.odds) || 0 }]; }); }}
-                                  className="p-1 rounded-lg bg-vantage-cyan/10 hover:bg-vantage-cyan/20 text-vantage-cyan transition-colors"
-                                  title={language === 'fr' ? 'Ajouter au ticket' : 'Add to ticket'}
-                                >
-                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="mx-3 mb-3 p-3 rounded-xl bg-vantage-purple/5 border border-vantage-purple/20">
-                            <div className="flex items-center justify-between">
-                              <div className="flex flex-col">
-                                <span className="text-[10px] text-vantage-purple uppercase tracking-widest font-bold">{t('free.pred_label') || 'Prediction'}</span>
-                                <span className="text-xs font-bold text-vantage-purple/40">{language === 'fr' ? 'Réservé VIP' : 'VIP Only'}</span>
+                              );
+                            })}
+                            {/* Guarantee a gate on EVERY match, even ones with a single pick */}
+                            {!isVip && getTopProbPicks(match).length <= 1 && (
+                              <div onClick={(e) => { e.stopPropagation(); navigate('/vip'); }}
+                                className="group flex items-center justify-between gap-2 rounded-lg border border-vantage-purple/25 bg-gradient-to-r from-vantage-purple/10 via-vantage-purple/5 to-transparent px-2.5 py-1.5 cursor-pointer hover:border-vantage-purple/60 hover:from-vantage-purple/20 transition-all">
+                                <span className="flex items-center gap-1.5 text-[11px] font-bold text-vantage-purple/90 truncate">
+                                  <Lock size={10} className="shrink-0 opacity-80" />
+                                  <span className="truncate">
+                                    {tr('Analyse complète & meilleurs détails', 'Full analysis & best details', 'Análisis completo y mejores detalles', 'Análise completa e melhores detalhes')}
+                                  </span>
+                                </span>
+                                <span className="flex items-center gap-1.5 shrink-0">
+                                  <span className="text-[11px] font-black font-mono text-vantage-purple/60 blur-[3px] select-none">00</span>
+                                  <span className="text-[8px] font-black uppercase tracking-wide text-white bg-vantage-purple px-1.5 py-0.5 rounded shadow-sm">VIP</span>
+                                </span>
                               </div>
-                              <span onClick={(e) => { e.stopPropagation(); navigate('/vip'); }} className="text-[10px] font-bold text-vantage-purple bg-vantage-purple/10 border border-vantage-purple/20 px-2.5 py-1 rounded-full cursor-pointer hover:bg-vantage-purple/20 flex items-center gap-1">
-                                <Lock size={10} /> {language === 'fr' ? 'Débloquer' : 'Unlock'}
-                              </span>
-                            </div>
+                            )}
                           </div>
-                        )}
+                          <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-vantage-cyan/10">
+                            {match.odds > 1 && <span className="text-[10px] font-mono text-gray-400">{Number(match.odds).toFixed(2)}x</span>}
+                            <span className="text-[10px] font-mono text-gray-400">{confidence}% {tr('confiance', 'confidence', 'confianza', 'confiança')}</span>
+                            {isVip ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setTicketPicks(prev => { if (prev.some(p => p.id === match.id)) return prev; return [...prev, { id: match.id, home: match.homeTeam || match.home_team || '', away: match.awayTeam || match.away_team || '', pick: pred || '', odds: Number(match.odds) || 0 }]; }); }}
+                                className="p-1 rounded-lg bg-vantage-cyan/10 hover:bg-vantage-cyan/20 text-vantage-cyan transition-colors"
+                                title={tr('Ajouter au ticket', 'Add to ticket', 'Añadir al ticket', 'Adicionar ao ticket')}
+                              >
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); navigate('/vip'); }}
+                                className="flex items-center gap-1 text-[9px] font-bold text-vantage-purple hover:text-purple-300 transition-colors"
+                                title={tr('Créer un accumulateur VIP', 'Create VIP accumulator', 'Crear una combinada VIP', 'Criar uma acumulada VIP')}
+                              >
+                                <Lock size={9} /> {tr('Accumulateur VIP', 'VIP Accumulator', 'Combinada VIP', 'Acumulada VIP')}
+                              </button>
+                            )}
+                          </div>
+                        </div>
                         <div className="px-3 pb-2.5 flex justify-center">
                           <span className="text-[9px] font-semibold text-gray-400 flex items-center gap-1">
-                            <ChevronRight size={10} /> {language === 'fr' ? 'Voir les détails' : 'Tap to view'}
+                            <ChevronRight size={10} /> {tr('Voir l\'analyse complète', 'View full analysis', 'Ver análisis completo', 'Ver análise completa')}
                           </span>
                         </div>
                       </div>
@@ -749,9 +839,12 @@ export const Home: React.FC<HomeProps> = () => {
                   className="w-full py-3 rounded-xl border border-white/10 text-xs font-bold text-gray-400 hover:text-vantage-cyan transition-colors flex items-center justify-center gap-1.5"
                 >
                   <ChevronDown size={14} />
-                  {language === 'fr'
-                    ? `Afficher ${Math.min(15, filteredMatches.length - visibleCount)} de plus`
-                    : `Show ${Math.min(15, filteredMatches.length - visibleCount)} more`}
+                  {tr(
+                    `Afficher ${Math.min(15, filteredMatches.length - visibleCount)} de plus`,
+                    `Show ${Math.min(15, filteredMatches.length - visibleCount)} more`,
+                    `Mostrar ${Math.min(15, filteredMatches.length - visibleCount)} más`,
+                    `Mostrar mais ${Math.min(15, filteredMatches.length - visibleCount)}`
+                  )}
                 </button>
               )}
             </div>
@@ -792,7 +885,7 @@ export const Home: React.FC<HomeProps> = () => {
                 >
                   <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-white dark:bg-[#1a1d26] border-b border-slate-200 dark:border-white/10 rounded-t-3xl">
                     <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                      {language === 'fr' ? 'Ticket Pro' : 'Pro Ticket'}
+                      {tr('Ticket Pro', 'Pro Ticket', 'Ticket Pro', 'Ticket Pro')}
                     </h2>
                     <button onClick={() => setShowTicket(false)} className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 text-gray-500 hover:text-red-500 transition-colors">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

@@ -5,7 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { TeamLogo } from './TeamLogo';
 
 export const BetSlip: React.FC = () => {
-    const { savedPicks, clearSavedPicks, toggleSavedPick, language } = useAppContext();
+    const { savedPicks, clearSavedPicks, toggleSavedPick, language, tr } = useAppContext();
     const [isOpen, setIsOpen] = useState(false);
 
     const count = savedPicks.length;
@@ -77,7 +77,7 @@ export const BetSlip: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                     <Bookmark size={18} className="text-vantage-purple" fill="currentColor" />
                                     <h2 className="font-bold text-white">
-                                        {language === 'fr' ? 'Mon Slip' : 'My Slip'}
+                                        {tr('Mon Slip', 'My Slip', 'Mi Slip', 'Meu Slip')}
                                         <span className="ml-2 text-xs px-2 py-0.5 bg-vantage-purple/20 text-vantage-purple rounded-full">{count}</span>
                                     </h2>
                                 </div>
@@ -134,13 +134,13 @@ export const BetSlip: React.FC = () => {
                                     onClick={clearSavedPicks}
                                     className="flex-1 py-3 rounded-xl bg-red-500/10 text-red-400 font-bold text-sm flex items-center justify-center gap-2 border border-red-500/20 hover:bg-red-500/20 transition-colors"
                                 >
-                                    <Trash2 size={16} /> {language === 'fr' ? 'Vider' : 'Clear All'}
+                                    <Trash2 size={16} /> {tr('Vider', 'Clear All', 'Vaciar', 'Limpar')}
                                 </button>
                                 <button
                                     onClick={shareWhatsApp}
                                     className="flex-2 flex-grow py-3 rounded-xl bg-green-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-green-500/20 hover:bg-green-600 transition-colors"
                                 >
-                                    <Share2 size={16} /> {language === 'fr' ? 'Partager WhatsApp' : 'Share on WhatsApp'}
+                                    <Share2 size={16} /> {tr('Partager WhatsApp', 'Share on WhatsApp', 'Compartir en WhatsApp', 'Compartilhar no WhatsApp')}
                                 </button>
                             </div>
                         </motion.div>
