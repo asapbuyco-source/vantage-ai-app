@@ -115,7 +115,18 @@ function AppContent() {
     }, 4000);
     return () => clearTimeout(timer);
   }, [user?.uid]);
-  // Notification tap → open the matching page (data.url from the push payload)
+  // In-app review prompt (native only): after 7 days + 5 opens, max once a month.
+  useEffect(() => {
+    if (!IS_NATIVE || !user?.uid) return;
+    const timer = setTimeout(() => {
+      import('./services/inAppReview')
+        .then(({ maybeRequestReview }) => maybeRequestReview())
+        .catch(() => {});
+    }, 12000);
+    return () => clearTimeout(timer);
+  }, [user?.uid]);
+  // Notification tap → open the matching page (data.url from the push payload,
+  // with a fallback map by notification type for older senders)
   useEffect(() => {
     if (!IS_NATIVE) return;
     let handle: any;
@@ -123,7 +134,12 @@ function AppContent() {
       try {
         const { PushNotifications } = await import('@capacitor/push-notifications');
         handle = await PushNotifications.addListener('pushNotificationActionPerformed', (action: any) => {
-          const url = action?.notification?.data?.url || action?.notification?.data?.click_action;
+          const data = action?.notification?.data || {};
+          const url = data.url || data.click_action || (
+            data.type === 'tip_of_day' ? '/' :
+            data.type === 'results' || data.type === 'match_result' ? '/results' :
+            data.type === 'vip' || data.type === 'vip_expiry' ? '/vip' : '/'
+          );
           if (typeof url === 'string' && url.startsWith('/')) navigate(url);
         });
       } catch (_) {}
