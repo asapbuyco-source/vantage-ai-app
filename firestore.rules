@@ -29,7 +29,7 @@ service cloud.firestore {
 
     function doesNotTouchProtectedFields() {
       let protected = ['isVip', 'vipExpiry', 'vipPlan', 'totalPaid', 'isAdmin', 'isBlocked',
-        'referralEarnings', 'lifetimeEarnings', 'referralCount'];
+        'referralEarnings', 'lifetimeEarnings', 'referralCount', 'isInfluencer', 'commissionRate'];
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(protected);
     }
 
@@ -55,7 +55,7 @@ service cloud.firestore {
         isOwner(userId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           "isVip", "vipExpiry", "vipPlan", "totalPaid", "isAdmin", "isBlocked",
-          "referralEarnings", "lifetimeEarnings", "referralCount"
+          "referralEarnings", "lifetimeEarnings", "referralCount", "isInfluencer", "commissionRate"
         ])
       ) || isAdmin();
 
@@ -66,7 +66,11 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if false;
+      // Public click counter: anyone may bump `clicks` by exactly +1 (referral links
+      // are opened by logged-out visitors). Nothing else can change.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks'])
+        && request.resource.data.clicks == resource.data.clicks + 1;
+      allow delete: if false;
     }
 
     match /daily_predictions/{dateStr} {

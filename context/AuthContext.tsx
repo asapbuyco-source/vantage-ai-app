@@ -67,6 +67,7 @@ interface AuthContextType {
     toggleUserVip: (uid: string, currentStatus: boolean, plan?: 'daily'|'weekly'|'monthly'|'annual') => Promise<void>;
     toggleUserAdmin: (uid: string, currentStatus: boolean) => Promise<void>;
     toggleUserBlock: (uid: string, currentStatus: boolean) => Promise<void>;
+    setInfluencer: (uid: string, isInfluencer: boolean, commissionRate?: number) => Promise<void>;
     verifyTransaction: (transId: string) => Promise<boolean>;
     requestPayout: (amount: number, phoneNumber: string) => Promise<void>;
     getPayoutRequests: () => Promise<PayoutRequest[]>;
@@ -432,7 +433,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const requestPayout = async (amount: number, phoneNumber: string) => {
         if (!user || !userProfile) return;
-        if (amount < 5) throw new Error("Minimum payout is $5");
+        if (amount < 1000) throw new Error("Minimum payout is 1000 FCFA");
 
         try {
             const userRef = doc(db, "profiles", user.uid);
@@ -537,6 +538,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await updateDoc(doc(db, "profiles", uid), { isBlocked: !currentStatus });
     };
 
+    const setInfluencer = async (uid: string, isInfluencer: boolean, commissionRate?: number) => {
+        if (!isAdmin) return;
+        const payload: any = { isInfluencer };
+        if (commissionRate !== undefined && !isNaN(commissionRate)) {
+            payload.commissionRate = Math.max(0, Math.min(80, Math.round(commissionRate)));
+        }
+        await updateDoc(doc(db, "profiles", uid), payload);
+    };
+
     const getAllUsers = async (lastDoc?: any, pageSize: number = 100): Promise<{ users: UserProfile[]; lastDoc: any; error?: string }> => {
         if (!isAdmin) return { users: [], lastDoc: null, error: 'Not authorized' };
         try {
@@ -620,7 +630,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         <AuthContext.Provider value={{
             user, userProfile, loading, error, isAdmin, isVipActive,
             signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, clearError: () => setError(null),
-            getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, verifyTransaction,
+            getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, setInfluencer, verifyTransaction,
             requestPayout, getPayoutRequests, processPayout, updateUserCountry, updateVaultProgress, updatePortfolioConfig
         }}>
             {children}

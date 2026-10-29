@@ -716,6 +716,23 @@ const shareReferral = () => {
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>
 
+                    {/* Partner / Influencer dashboard — only for approved partners & admins */}
+                    {(userProfile?.isInfluencer || userProfile?.isAdmin) && (
+                        <button
+                            onClick={() => navigate('/influencer')}
+                            className="w-full flex items-center justify-between p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors border-b border-slate-200 dark:border-white/5"
+                        >
+                            <div className="flex items-center space-x-3 text-vantage-purple">
+                                <Crown size={20} />
+                                <div className="text-left">
+                                    <span className="font-bold block leading-tight">{tr('Espace Partenaire', 'Partner Space', 'Espacio de Socios', 'Espaço de Parceiros')}</span>
+                                    <span className="text-[10px] text-gray-500">{tr('Gains, lien et retraits', 'Earnings, link & payouts', 'Ganancias, enlace y retiros', 'Ganhos, link e saques')}</span>
+                                </div>
+                            </div>
+                            <ChevronRight size={18} className="text-gray-400" />
+                        </button>
+                    )}
+
                     {/* Learning Hub (moved from bottom nav) */}
                     <button
                         onClick={() => navigate('/learn')}

@@ -19,7 +19,7 @@ interface AdminProps {}
 export const Admin: React.FC<AdminProps> = () => {
     const navigate = useNavigate();
     const { t } = useAppContext();
-    const { getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, getPayoutRequests, processPayout } = useAuth();
+    const { getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, setInfluencer, getPayoutRequests, processPayout } = useAuth();
     const { clearData, generateData, generateAccumulators, generateBasketballData, isSystemGenerating, setIsSystemGenerating, isBasketballGenerating, setIsBasketballGenerating, cancelAnalysis, systemError, predictions } = useData();
 
     const [activeAdminTab, setActiveAdminTab] = useState<'users' | 'payouts' | 'assets' | 'bots' | 'analytics'>('users');
@@ -1291,6 +1291,9 @@ export const Admin: React.FC<AdminProps> = () => {
                                                     {u.isAdmin && (
                                                         <span className="text-red-500 flex items-center gap-1 border-l border-gray-600 pl-2"><Shield size={10} /> ADMIN</span>
                                                     )}
+                                                    {u.isInfluencer && (
+                                                        <span className="text-vantage-cyan flex items-center gap-1 border-l border-gray-600 pl-2"><Crown size={10} /> INFLUENCER {u.commissionRate ?? 40}%</span>
+                                                    )}
                                                     {u.isBlocked && <span className="text-red-500 font-bold">BLOCKED</span>}
                                                 </span>
                                             </div>
@@ -1328,6 +1331,31 @@ export const Admin: React.FC<AdminProps> = () => {
                                                     <CheckCircle2 size={16} />
                                                 )}
                                             </button>
+                                            {/* Influencer Toggle */}
+                                            <button
+                                                onClick={async () => {
+                                                    if (!u.isInfluencer) {
+                                                        const raw = window.prompt('Commission rate % for this influencer (0-80)', String(u.commissionRate ?? 40));
+                                                        if (raw === null) return;
+                                                        const n = Number(raw);
+                                                        if (isNaN(n) || n < 0 || n > 80) { alert('Enter a rate between 0 and 80'); return; }
+                                                        await setInfluencer(u.uid, true, n);
+                                                        setUsers(prev => prev.map(x => x.uid === u.uid ? { ...x, isInfluencer: true, commissionRate: n } : x));
+                                                    } else {
+                                                        await setInfluencer(u.uid, false);
+                                                        setUsers(prev => prev.map(x => x.uid === u.uid ? { ...x, isInfluencer: false } : x));
+                                                    }
+                                                }}
+                                                disabled={processingId === u.uid}
+                                                className={`p-2 rounded-lg transition-colors ${u.isInfluencer
+                                                    ? 'bg-vantage-cyan/10 text-vantage-cyan hover:bg-vantage-cyan/20'
+                                                    : 'bg-gray-200 dark:bg-white/5 text-gray-400 hover:text-vantage-cyan'
+                                                    }`}
+                                                title={u.isInfluencer ? 'Remove influencer access' : 'Make influencer'}
+                                            >
+                                                <Crown size={16} />
+                                            </button>
+
                                             {selectPlanFor === u.uid && (
                                                 <div className="flex gap-1 flex-wrap mt-1">
                                                     {(['daily', 'weekly', 'monthly', 'annual'] as const).map(plan => (

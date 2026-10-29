@@ -20,6 +20,7 @@ import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { enableFirestorePersistence, db } from './firebaseConfig';
+import { doc, setDoc, increment } from 'firebase/firestore';
 import { PaymentModal } from './components/PaymentModal';
 import { MotionDiv } from './components/MotionDiv';
 import { parseVipExpiry } from './utils';
@@ -37,6 +38,7 @@ const IntelligenceTeam = lazy(() => import('./pages/IntelligenceTeam').then(m =>
 const IntelligencePlayer = lazy(() => import('./pages/IntelligencePlayer').then(m => ({ default: m.IntelligencePlayer })));
 const Research = lazy(() => import('./pages/Research').then(m => ({ default: m.Research })));
 const LiveScores = lazy(() => import('./pages/LiveScores').then(m => ({ default: m.LiveScores })));
+const Influencer = lazy(() => import('./pages/Influencer').then(m => ({ default: m.Influencer })));
 const IntelligenceVersus = lazy(() => import('./pages/IntelligenceChallenge').then(m => ({ default: m.IntelligenceChallenge })));
 
 function AppContent() {
@@ -69,6 +71,22 @@ function AppContent() {
 
   useEffect(() => { enableFirestorePersistence(); }, []);
   useEffect(() => { initFacebookTracking(); }, []);
+  // Referral / influencer attribution: capture ?ref=CODE from shared links, persist it
+  // for the signup form, and count the click once per visitor per day.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const ref = (params.get('ref') || '').trim().toUpperCase();
+      if (!ref) return;
+      localStorage.setItem('vantage_referral_code', ref);
+      const today = new Date().toISOString().slice(0, 10);
+      const dedupeKey = `vantage_ref_click_${ref}_${today}`;
+      if (!localStorage.getItem(dedupeKey)) {
+        localStorage.setItem(dedupeKey, '1');
+        setDoc(doc(db, 'referral_codes', ref), { clicks: increment(1) }, { merge: true }).catch(() => {});
+      }
+    } catch (_) {}
+  }, []);
   useEffect(() => {
     if (!IS_NATIVE) return;
     const setupRevenueCat = async () => {
@@ -248,6 +266,11 @@ function AppContent() {
             </Suspense>
           } />
           <Route path="/learn" element={<Learn />} /><Route path="/guide" element={<Learn />} />
+          <Route path="/influencer" element={
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-vantage-cyan" size={40} /></div>}>
+              <Influencer />
+            </Suspense>
+          } />
           <Route path="/live" element={
             <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-vantage-cyan" size={40} /></div>}>
               <LiveScores />

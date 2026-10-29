@@ -274,9 +274,11 @@ export interface UserProfile {
   email: string;
   displayName?: string;
   isVip: boolean;
-  isAdmin?: boolean;
-  isBlocked?: boolean;
-  country?: string;
+      isAdmin?: boolean;
+      isBlocked?: boolean;
+      isInfluencer?: boolean;
+      commissionRate?: number;
+      country?: string;
   vipExpiry?: string | { toDate: () => Date };
   vipPlan?: 'daily' | 'weekly' | 'monthly' | 'annual';
   totalPaid?: number;
