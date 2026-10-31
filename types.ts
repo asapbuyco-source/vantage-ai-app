@@ -288,6 +288,8 @@ export interface UserProfile {
   referralCount?: number;
       referralEarnings?: number;
       referralPurchases?: number;
+      appliedPromoCode?: string;
+      promoRedeemed?: boolean;
   lifetimeEarnings?: number;
   vaultProgress?: VaultProgress;
   portfolioBankroll?: number;

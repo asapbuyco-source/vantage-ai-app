@@ -29,7 +29,8 @@ service cloud.firestore {
 
     function doesNotTouchProtectedFields() {
       let protected = ['isVip', 'vipExpiry', 'vipPlan', 'totalPaid', 'isAdmin', 'isBlocked',
-        'referralEarnings', 'lifetimeEarnings', 'referralCount', 'isInfluencer', 'commissionRate'];
+        'referralEarnings', 'lifetimeEarnings', 'referralCount', 'isInfluencer', 'commissionRate',
+        'referralPurchases', 'promoRedeemed'];
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(protected);
     }
 
@@ -55,7 +56,8 @@ service cloud.firestore {
         isOwner(userId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           "isVip", "vipExpiry", "vipPlan", "totalPaid", "isAdmin", "isBlocked",
-          "referralEarnings", "lifetimeEarnings", "referralCount", "isInfluencer", "commissionRate"
+          "referralEarnings", "lifetimeEarnings", "referralCount", "isInfluencer", "commissionRate",
+          "referralPurchases", "promoRedeemed"
         ])
       ) || isAdmin();
 

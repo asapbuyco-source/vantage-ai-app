@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Loader2, MessageCircle, ShieldCheck, X } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { GlassCard } from './GlassCard';
 import { useAppContext } from '../context/AppContext';
@@ -29,6 +29,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
   const [loading, setLoading] = useState(false);
   const [paymentFailed, setPaymentFailed] = useState(false);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoState, setPromoState] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [promoMessage, setPromoMessage] = useState('');
 
   const isNative = Capacitor.isNativePlatform();
   const apiKey = import.meta.env.VITE_REVENUECAT_GOOGLE_API_KEY || '';
@@ -51,7 +54,44 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
     setLoading(false);
     setPaymentFailed(false);
     setErrorDetail(null);
+    setPromoCode('');
+    setPromoState('idle');
+    setPromoMessage('');
   }, [isOpen, plan.id]);
+
+  const applyPromo = async () => {
+    const code = promoCode.trim().toUpperCase();
+    if (!code || !user?.uid) return;
+    setPromoState('checking');
+    setPromoMessage('');
+    try {
+      const snap = await getDoc(doc(db, 'referral_codes', code));
+      if (!snap.exists()) {
+        setPromoState('invalid');
+        setPromoMessage(tr('Code invalide', 'Invalid code', 'Código inválido', 'Código inválido'));
+        return;
+      }
+      const ownerUid = snap.data()?.ownerUid;
+      if (ownerUid === user.uid) {
+        setPromoState('invalid');
+        setPromoMessage(tr('Vous ne pouvez pas utiliser votre propre code', 'You cannot use your own code', 'No puedes usar tu propio código', 'Você não pode usar seu próprio código'));
+        return;
+      }
+      const bonus = Number(snap.data()?.bonusDays) || 7;
+      await updateDoc(doc(db, 'profiles', user.uid), { appliedPromoCode: code });
+      setPromoState('valid');
+      setPromoMessage(tr(
+        `Code appliqué — +${bonus} jours offerts sur votre premier paiement`,
+        `Code applied — +${bonus} bonus days on your first payment`,
+        `Código aplicado — +${bonus} días gratis en tu primer pago`,
+        `Código aplicado — +${bonus} dias grátis no primeiro pagamento`
+      ));
+    } catch (e) {
+      console.warn('[Payments] promo validation failed:', e);
+      setPromoState('invalid');
+      setPromoMessage(tr('Erreur de vérification', 'Could not verify code', 'No se pudo verificar', 'Não foi possível verificar'));
+    }
+  };
 
   const handlePayment = async () => {
     if (!user) {
@@ -235,6 +275,43 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pla
                   ))}
                 </div>
               </div>
+
+              {/* Promo / influencer code — grants bonus days on the first payment */}
+              {isNative && (
+                <div className="mb-5">
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                    {tr('Code promo (optionnel)', 'Promo code (optional)', 'Código promo (opcional)', 'Código promo (opcional)')}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promoCode}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value.toUpperCase());
+                        if (promoState !== 'idle') { setPromoState('idle'); setPromoMessage(''); }
+                      }}
+                      placeholder="CODE"
+                      className="flex-1 rounded-xl bg-slate-100 dark:bg-black/30 border border-slate-200 dark:border-white/10 px-3 py-2.5 text-sm font-mono font-bold tracking-widest text-slate-900 dark:text-white outline-none focus:border-vantage-cyan"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyPromo}
+                      disabled={!promoCode.trim() || promoState === 'checking' || promoState === 'valid'}
+                      className="px-4 rounded-xl bg-vantage-purple/10 text-vantage-purple text-xs font-bold border border-vantage-purple/20 hover:bg-vantage-purple/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      {promoState === 'checking' && <Loader2 size={14} className="animate-spin" />}
+                      {promoState === 'valid'
+                        ? tr('Appliqué', 'Applied', 'Aplicado', 'Aplicado')
+                        : tr('Appliquer', 'Apply', 'Aplicar', 'Aplicar')}
+                    </button>
+                  </div>
+                  {promoMessage && (
+                    <p className={`mt-1.5 text-[10px] font-medium ${promoState === 'valid' ? 'text-emerald-500' : promoState === 'invalid' ? 'text-red-400' : 'text-gray-500'}`}>
+                      {promoMessage}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {!isNative && (
                 <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">

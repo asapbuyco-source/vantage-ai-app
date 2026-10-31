@@ -126,7 +126,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (codeSnap.exists()) {
                 const referrerId = codeSnap.data().ownerUid;
                 if (referrerId && referrerId !== newUserId) {
-                    await updateDoc(doc(db, "profiles", newUserId), { referredBy: referrerId });
+                    await updateDoc(doc(db, "profiles", newUserId), {
+                        referredBy: referrerId,
+                        // Keep the code on the profile so the payment webhook can
+                        // grant the +N bonus days (once) on the first payment.
+                        appliedPromoCode: promoCode.toUpperCase(),
+                    });
                     await updateDoc(doc(db, "profiles", referrerId), { referralCount: increment(1) });
                 }
             }
