@@ -31,7 +31,8 @@ export const Influencer: React.FC = () => {
 
     const earnings = userProfile?.referralEarnings || 0;
     const signups = userProfile?.referralCount || 0;
-    const conversion = clicks && clicks > 0 ? Math.round((signups / clicks) * 100) : null;
+    const paying = userProfile?.referralPurchases || 0;
+    const conversion = clicks && clicks > 0 ? Math.round((paying / clicks) * 100) : null;
 
     useEffect(() => {
         if (!code) return;
@@ -185,9 +186,9 @@ export const Influencer: React.FC = () => {
                 <GlassCard className="p-4">
                     <div className="flex items-center gap-2 text-gray-500 text-[10px] uppercase font-bold mb-2">
                         <TrendingUp size={14} className="text-amber-500" />
-                        {tr('Conversion', 'Conversion', 'Conversión', 'Conversão')}
+                        {tr('Clients payants', 'Paying clients', 'Clientes de pago', 'Clientes pagantes')}
                     </div>
-                    <p className="text-2xl font-black font-orbitron text-slate-900 dark:text-white">{conversion === null ? '—' : `${conversion}%`}</p>
+                    <p className="text-2xl font-black font-orbitron text-slate-900 dark:text-white">{paying}</p>
                 </GlassCard>
                 <GlassCard className="p-4 border-vantage-purple/25 bg-vantage-purple/5">
                     <div className="flex items-center gap-2 text-gray-500 text-[10px] uppercase font-bold mb-2">
@@ -197,6 +198,16 @@ export const Influencer: React.FC = () => {
                     <p className="text-xl font-black font-mono text-vantage-purple">{earnings.toLocaleString()} <span className="text-xs">FCFA</span></p>
                 </GlassCard>
             </div>
+
+            {/* Real conversion: click → paying client */}
+            {conversion !== null && (
+                <div className="flex items-center justify-between rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-4 py-2.5">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                        {tr('Conversion clic → client', 'Click → client conversion', 'Conversión clic → cliente', 'Conversão clique → cliente')}
+                    </span>
+                    <span className="text-sm font-black font-mono text-vantage-cyan">{conversion}%</span>
+                </div>
+            )}
 
             {/* Share */}
             <GlassCard className="space-y-3">

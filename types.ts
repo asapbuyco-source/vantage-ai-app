@@ -286,7 +286,8 @@ export interface UserProfile {
   referralCode?: string;
   referredBy?: string;
   referralCount?: number;
-  referralEarnings?: number;
+      referralEarnings?: number;
+      referralPurchases?: number;
   lifetimeEarnings?: number;
   vaultProgress?: VaultProgress;
   portfolioBankroll?: number;
