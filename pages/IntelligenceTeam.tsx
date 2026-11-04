@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BrainCircuit, Users, RefreshCw } from 'lucide-react';
 import { fetchTeamById, fetchSquadPlayers } from '../services/intelligence/db';
-import { TeamIntelligence, PlayerIntelligence, TEAM_DIMENSIONS } from '../services/intelligence/types';
+import { TeamIntelligence, PlayerIntelligence, TEAM_DIMENSIONS, teamDimensionLabel } from '../services/intelligence/types';
 import { getScoreLabel, leaguePercentile } from '../services/intelligence/stats';
 import { ScoreRing } from '../components/intel/ScoreRing';
 import { RadarCompare, RadarLegend } from '../components/intel/RadarCompare';
@@ -10,12 +10,14 @@ import { PercentileBar } from '../components/intel/PercentileBar';
 import { PlayerAvatar } from '../components/intel/PlayerAvatar';
 import { TeamCrest } from '../components/intel/TeamCrest';
 import { TeamLogo } from '../components/TeamLogo';
+import { useAppContext } from '../context/AppContext';
 
 const ACCENT = '#22d3ee';
 
 export const IntelligenceTeam: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { language, tr } = useAppContext();
   const [team, setTeam] = useState<TeamIntelligence | null>(null);
   const [squad, setSquad] = useState<PlayerIntelligence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +39,7 @@ export const IntelligenceTeam: React.FC = () => {
   const vti = team?.scores?.vti ?? null;
 
   const radarData = team
-    ? TEAM_DIMENSIONS.map(({ key, label }) => ({ dimension: label, value: (team.scores as any)[key] }))
+    ? TEAM_DIMENSIONS.map(({ key }) => ({ dimension: teamDimensionLabel(key, language), value: (team.scores as any)[key] }))
     : [];
 
   const rawRows = team ? [
@@ -65,7 +67,7 @@ export const IntelligenceTeam: React.FC = () => {
           </button>
           <div className="flex items-center gap-2">
             <BrainCircuit size={16} className="text-vantage-cyan" />
-            <h1 className="text-sm font-bold">Team Intelligence</h1>
+            <h1 className="text-sm font-bold">{tr('Intelligence Équipe', 'Team Intelligence', 'Inteligencia de Equipo', 'Inteligência de Equipe')}</h1>
             <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-vantage-cyan/15 text-vantage-cyan border border-vantage-cyan/30">INTEL</span>
           </div>
           <div className="w-9" />
@@ -75,14 +77,19 @@ export const IntelligenceTeam: React.FC = () => {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <RefreshCw size={28} className="animate-spin text-vantage-cyan" />
-          <p className="text-xs text-gray-500">Loading intelligence report…</p>
+          <p className="text-xs text-gray-500">{tr('Chargement du rapport…', 'Loading intelligence report…', 'Cargando informe…', 'Carregando relatório…')}</p>
         </div>
       ) : !team || vti == null ? (
         <div className="flex flex-col items-center justify-center py-24 px-6 text-center gap-3">
           <BrainCircuit size={40} className="text-gray-600" />
-          <h2 className="text-base font-bold">No intelligence coverage</h2>
+          <h2 className="text-base font-bold">{tr('Pas encore de couverture', 'No intelligence coverage', 'Sin cobertura aún', 'Sem cobertura ainda')}</h2>
           <p className="text-xs text-gray-500 max-w-xs">
-            This club isn't in the Vantage Intelligence database yet. Coverage spans Big-5 leagues + 23 competitions.
+            {tr(
+              "Ce club n'est pas encore dans la base Vantage Intelligence. Couverture : Big-5 + 23 compétitions.",
+              'This club is not in the Vantage Intelligence database yet. Coverage spans Big-5 leagues + 23 competitions.',
+              'Este club aún no está en la base de Vantage Intelligence. Cobertura: Big-5 + 23 competiciones.',
+              'Este clube ainda não está na base Vantage Intelligence. Cobertura: Big-5 + 23 competições.'
+            )}
           </p>
         </div>
       ) : (
@@ -113,20 +120,56 @@ export const IntelligenceTeam: React.FC = () => {
 
           {/* Dimension bars */}
           <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Dimension Scores</h3>
-            {TEAM_DIMENSIONS.map(({ key, label }) => (
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{tr('Scores par dimension', 'Dimension Scores', 'Puntuación por dimensión', 'Pontuação por dimensão')}</h3>
+            {TEAM_DIMENSIONS.map(({ key }) => (
               <PercentileBar
                 key={key}
                 score={(team.scores as any)[key]}
-                label={label}
+                label={teamDimensionLabel(key, language)}
                 color={ACCENT}
               />
             ))}
           </section>
 
+          {/* Strengths & Weaknesses — derived from dimension scores */}
+          {(() => {
+            const dims = TEAM_DIMENSIONS
+              .map(({ key }) => ({ key, label: teamDimensionLabel(key, language), score: Number((team.scores as any)[key]) || 0 }))
+              .filter(d => d.score > 0)
+              .sort((a, b) => b.score - a.score);
+            const strengths = dims.filter(d => d.score >= 60).slice(0, 3);
+            const weaknesses = [...dims].reverse().filter(d => d.score < 45).slice(0, 2);
+            if (strengths.length === 0 && weaknesses.length === 0) return null;
+            return (
+              <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-2">
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                  {tr('Forces & faiblesses', 'Strengths & Weaknesses', 'Fortalezas y debilidades', 'Forças e fraquezas')}
+                </h3>
+                {strengths.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {strengths.map(d => (
+                      <span key={d.key} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        ↑ {d.label} {Math.round(d.score)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {weaknesses.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {weaknesses.map(d => (
+                      <span key={d.key} className="text-[10px] font-bold px-2 py-1 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20">
+                        ↓ {d.label} {Math.round(d.score)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })()}
+
           {/* Raw metrics */}
           <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Raw Metrics (per 90)</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">{tr('Métriques brutes (par 90)', 'Raw Metrics (per 90)', 'Métricas brutas (por 90)', 'Métricas brutas (por 90)')}</h3>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
               {rawRows.map(r => (
                 <div key={r.label} className="flex items-center justify-between text-[10px] font-mono border-b border-white/5 pb-1">
@@ -140,10 +183,10 @@ export const IntelligenceTeam: React.FC = () => {
           {/* Squad depth */}
           <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3 flex items-center gap-1.5">
-              <Users size={12} /> Squad Depth — by Player Intelligence
+              <Users size={12} /> {tr("Profondeur d'effectif — par Intelligence Joueur", 'Squad Depth — by Player Intelligence', 'Profundidad de plantilla — por Inteligencia de Jugador', 'Profundidade do elenco — por Inteligência de Jogador')}
             </h3>
             {squad.length === 0 ? (
-              <p className="text-[11px] text-gray-500">No squad data for this season.</p>
+              <p className="text-[11px] text-gray-500">{tr("Pas de données d'effectif cette saison.", 'No squad data for this season.', 'Sin datos de plantilla esta temporada.', 'Sem dados do elenco nesta temporada.')}</p>
             ) : (
               <div className="space-y-1.5">
                 {squad.map((p, i) => (
@@ -155,7 +198,7 @@ export const IntelligenceTeam: React.FC = () => {
                     <PlayerAvatar playerId={p.player_id} name={p.player_name} size={32} />
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-bold truncate">{p.player_name}</p>
-                      <p className="text-[9px] text-gray-500">{p.position} · {Math.round(p.minutes_played)} mins</p>
+                      <p className="text-[9px] text-gray-500">{p.position} · {Math.round(p.minutes_played)} {tr('min', 'mins', 'min', 'min')}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <span className="text-sm font-black font-mono" style={{ color: p.scores?.vpii != null && p.scores.vpii >= 65 ? '#10B981' : p.scores?.vpii != null && p.scores.vpii >= 45 ? '#D97706' : '#DC2626' }}>
@@ -170,7 +213,12 @@ export const IntelligenceTeam: React.FC = () => {
           </section>
 
           <p className="text-[9px] text-gray-600 leading-relaxed px-1">
-            Z-score normalized vs league baselines (50 = league average). Understat/FBref season aggregates via Vantage Intelligence.
+            {tr(
+              'Normalisé (z-score) par rapport aux moyennes de la ligue (50 = moyenne). Agrégats de saison Understat/FBref via Vantage Intelligence.',
+              'Z-score normalized vs league baselines (50 = league average). Understat/FBref season aggregates via Vantage Intelligence.',
+              'Normalizado (z-score) frente a la media de la liga (50 = media). Agregados de temporada Understat/FBref vía Vantage Intelligence.',
+              'Normalizado (z-score) em relação à média da liga (50 = média). Agregados de temporada Understat/FBref via Vantage Intelligence.'
+            )}
           </p>
         </div>
       )}

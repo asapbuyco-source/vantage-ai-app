@@ -20,7 +20,7 @@ interface ProfileProps {
 
 export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
     const { t, language, setLanguage, theme, toggleTheme, tr } = useAppContext();
-    const { user, userProfile, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, error, clearError, loading: authLoading } = useAuth();
+    const { user, userProfile, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, error, clearError, loading: authLoading, updatePreferences } = useAuth();
     const navigate = useNavigate();
 
     const [isLoginMode, setIsLoginMode] = useState(true);
@@ -83,6 +83,25 @@ export const Profile: React.FC<ProfileProps> = ({ initialMode, onBack }) => {
         } catch {
             setPushStatus('unsupported');
         }
+    };
+
+    // Notification category preferences (stored in profiles.preferences.notifications)
+    const [notifPrefs, setNotifPrefs] = useState({ dailyPicks: true, results: true, liveGoals: false, vipExpiry: true });
+    useEffect(() => {
+        const n = userProfile?.preferences?.notifications;
+        if (!n) return;
+        setNotifPrefs({
+            dailyPicks: n.dailyPicks !== false,
+            results: n.results !== false,
+            liveGoals: n.liveGoals === true,
+            vipExpiry: n.vipExpiry !== false,
+        });
+    }, [userProfile?.preferences?.notifications]);
+
+    const toggleNotif = async (key: keyof typeof notifPrefs) => {
+        const next = { ...notifPrefs, [key]: !notifPrefs[key] };
+        setNotifPrefs(next);
+        try { await updatePreferences({ notifications: next }); } catch (e) { console.warn('[Prefs] save failed', e); }
     };
 
     const handleEmailAuth = async (e: React.FormEvent) => {
@@ -481,6 +500,28 @@ const shareReferral = () => {
                                 )}
                             </p>
                         )}
+
+                        {/* Notification categories */}
+                        <div className="mt-2 pt-2 border-t border-slate-200 dark:border-white/5 space-y-0.5">
+                            {([
+                                ['dailyPicks', tr('Pronostics du jour', 'Daily picks', 'Pronósticos del día', 'Palpites do dia')],
+                                ['results', tr('Résultats des pronostics', 'Prediction results', 'Resultados de pronósticos', 'Resultados dos palpites')],
+                                ['liveGoals', tr('Buts en direct', 'Live goals', 'Goles en vivo', 'Gols ao vivo')],
+                                ['vipExpiry', tr('Expiration VIP', 'VIP expiry', 'Vencimiento VIP', 'Expiração VIP')],
+                            ] as const).map(([key, label]) => (
+                                <div key={key} className="flex items-center justify-between pl-9 pr-1 py-1.5">
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleNotif(key)}
+                                        className={`relative w-9 h-5 rounded-full transition-colors ${notifPrefs[key] ? 'bg-vantage-cyan' : 'bg-slate-300 dark:bg-white/10'}`}
+                                        aria-pressed={notifPrefs[key]}
+                                    >
+                                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${notifPrefs[key] ? 'left-[18px]' : 'left-0.5'}`} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </GlassCard>
 

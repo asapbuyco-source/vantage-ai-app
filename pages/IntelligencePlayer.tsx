@@ -8,8 +8,24 @@ import { ScoreRing } from '../components/intel/ScoreRing';
 import { RadarCompare, RadarLegend } from '../components/intel/RadarCompare';
 import { PercentileBar } from '../components/intel/PercentileBar';
 import { PlayerAvatar } from '../components/intel/PlayerAvatar';
+import { useAppContext } from '../context/AppContext';
 
 const ACCENT = '#22d3ee';
+
+const PLAYER_DIM_LABELS: Record<string, { fr: string; en: string; es: string; pt: string }> = {
+  finishing: { fr: 'Finition', en: 'Finishing', es: 'Definición', pt: 'Finalização' },
+  creativity: { fr: 'Créativité', en: 'Creativity', es: 'Creatividad', pt: 'Criatividade' },
+  progression: { fr: 'Progression', en: 'Progression', es: 'Progresión', pt: 'Progressão' },
+  decision_making: { fr: 'Prise de décision', en: 'Decision Making', es: 'Toma de decisiones', pt: 'Tomada de decisão' },
+  defensive: { fr: 'Défense', en: 'Defensive', es: 'Defensiva', pt: 'Defensiva' },
+  possession_value: { fr: 'Valeur de possession', en: 'Possession Value', es: 'Valor de posesión', pt: 'Valor de posse' },
+};
+
+const playerDimLabel = (key: string, language: string): string => {
+  const e = PLAYER_DIM_LABELS[key];
+  if (!e) return key;
+  return language === 'fr' ? e.fr : language === 'es' ? e.es : language === 'pt' ? e.pt : e.en;
+};
 
 interface DimDef {
   key: keyof Omit<PlayerScores, 'vpii' | 'physical'>;
@@ -74,6 +90,7 @@ const DIMENSIONS: DimDef[] = [
 export const IntelligencePlayer: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { language, tr } = useAppContext();
   const [player, setPlayer] = useState<PlayerIntelligence | null>(null);
   const [loading, setLoading] = useState(true);
   const [openDim, setOpenDim] = useState<string | null>(null);
@@ -91,7 +108,7 @@ export const IntelligencePlayer: React.FC = () => {
   const vpii = player?.scores?.vpii ?? null;
 
   const radarData = player
-    ? DIMENSIONS.map(d => ({ dimension: d.label.slice(0, 10), value: (player.scores as any)[d.key] }))
+    ? DIMENSIONS.map(d => ({ dimension: playerDimLabel(d.key, language).slice(0, 10), value: (player.scores as any)[d.key] }))
     : [];
 
   return (
@@ -104,7 +121,7 @@ export const IntelligencePlayer: React.FC = () => {
           </button>
           <div className="flex items-center gap-2">
             <BrainCircuit size={16} className="text-vantage-cyan" />
-            <h1 className="text-sm font-bold">Player Intelligence</h1>
+            <h1 className="text-sm font-bold">{tr('Intelligence Joueur', 'Player Intelligence', 'Inteligencia de Jugador', 'Inteligência de Jogador')}</h1>
             <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-vantage-cyan/15 text-vantage-cyan border border-vantage-cyan/30">INTEL</span>
           </div>
           <div className="w-9" />
@@ -114,14 +131,14 @@ export const IntelligencePlayer: React.FC = () => {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <RefreshCw size={28} className="animate-spin text-vantage-cyan" />
-          <p className="text-xs text-gray-500">Loading intelligence report…</p>
+          <p className="text-xs text-gray-500">{tr('Chargement du rapport…', 'Loading intelligence report…', 'Cargando informe…', 'Carregando relatório…')}</p>
         </div>
       ) : !player || vpii == null ? (
         <div className="flex flex-col items-center justify-center py-24 px-6 text-center gap-3">
           <BrainCircuit size={40} className="text-gray-600" />
-          <h2 className="text-base font-bold">No intelligence coverage</h2>
+          <h2 className="text-base font-bold">{tr('Pas encore de couverture', 'No intelligence coverage', 'Sin cobertura aún', 'Sem cobertura ainda')}</h2>
           <p className="text-xs text-gray-500 max-w-xs">
-            This player isn't in the Vantage Intelligence database yet.
+            {tr("Ce joueur n'est pas encore dans la base Vantage Intelligence.", 'This player is not in the Vantage Intelligence database yet.', 'Este jugador aún no está en la base de Vantage Intelligence.', 'Este jogador ainda não está na base Vantage Intelligence.')}
           </p>
         </div>
       ) : (
@@ -145,7 +162,7 @@ export const IntelligencePlayer: React.FC = () => {
                 <ScoreRing score={vpii} size={84} fontSize={26} accentColor={ACCENT} />
               </div>
             </div>
-            <p className="text-[9px] text-gray-500">{Math.round(player.minutes_played)} minutes played · Season {player.season}</p>
+            <p className="text-[9px] text-gray-500">{Math.round(player.minutes_played)} {tr('minutes jouées', 'minutes played', 'minutos jugados', 'minutos jogados')} · {tr('Saison', 'Season', 'Temporada', 'Temporada')} {player.season}</p>
 
             {/* Radar */}
             <div className="flex justify-center mt-2">
@@ -166,7 +183,7 @@ export const IntelligencePlayer: React.FC = () => {
                 >
                   <div className="flex items-center gap-2.5">
                     <dim.icon size={15} style={{ color: dim.color }} />
-                    <span className="text-xs font-bold">{dim.label}</span>
+                    <span className="text-xs font-bold">{playerDimLabel(dim.key, language)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-black font-mono" style={{ color: score != null ? dim.color : '#475569' }}>
@@ -178,7 +195,7 @@ export const IntelligencePlayer: React.FC = () => {
                 {isOpen && (
                   <div className="px-4 pb-4 pt-1 space-y-2 border-t border-white/5">
                     {/* Composite bar */}
-                    <PercentileBar score={score} label={`${dim.label} index`} color={dim.color} />
+                    <PercentileBar score={score} label={`${playerDimLabel(dim.key, language)} ${tr('indice', 'index', 'índice', 'índice')}`} color={dim.color} />
                     {/* Raw stats */}
                     <div className="pt-2 space-y-1">
                       {dim.stats.map(s => {
@@ -187,7 +204,7 @@ export const IntelligencePlayer: React.FC = () => {
                         return (
                           <div key={s.key} className="flex items-center justify-between text-[10px] font-mono px-1">
                             <span className="text-gray-500">
-                              {s.label}{inv && <span className="text-[8px] ml-1 text-gray-600">(lower = better)</span>}
+                              {s.label}{inv && <span className="text-[8px] ml-1 text-gray-600">{tr('(plus bas = mieux)', '(lower = better)', '(más bajo = mejor)', '(menor = melhor)')}</span>}
                             </span>
                             <span className="font-bold text-gray-200">{raw != null ? fmt(raw) : '—'}</span>
                           </div>
@@ -205,15 +222,20 @@ export const IntelligencePlayer: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5 opacity-50">
                 <Activity size={15} className="text-gray-500" />
-                <span className="text-xs font-bold text-gray-500">Physical</span>
+                <span className="text-xs font-bold text-gray-500">{tr('Physique', 'Physical', 'Físico', 'Físico')}</span>
               </div>
-              <span className="text-[10px] font-bold text-gray-600">Data unavailable</span>
+              <span className="text-[10px] font-bold text-gray-600">{tr('Données indisponibles', 'Data unavailable', 'Datos no disponibles', 'Dados indisponíveis')}</span>
             </div>
-            <p className="text-[9px] text-gray-600 mt-1">We don't manufacture scores — no verified physical dataset exists for this metric.</p>
+            <p className="text-[9px] text-gray-600 mt-1">{tr("Nous n'inventons pas de scores — aucune donnée physique vérifiée n'existe pour cette métrique.", 'We do not manufacture scores — no verified physical dataset exists for this metric.', 'No inventamos puntuaciones — no existe un conjunto de datos físicos verificado para esta métrica.', 'Não inventamos pontuações — não existe um conjunto de dados físicos verificado para esta métrica.')}</p>
           </section>
 
           <p className="text-[9px] text-gray-600 leading-relaxed px-1">
-            All values per-90, z-score normalized vs league baselines (50 = average). Understat/FBref season aggregates via Vantage Intelligence.
+            {tr(
+              'Toutes les valeurs par 90, normalisées (z-score) vs moyennes de la ligue (50 = moyenne). Agrégats Understat/FBref via Vantage Intelligence.',
+              'All values per-90, z-score normalized vs league baselines (50 = average). Understat/FBref season aggregates via Vantage Intelligence.',
+              'Todos los valores por 90, normalizados (z-score) frente a la media de la liga (50 = media). Agregados Understat/FBref vía Vantage Intelligence.',
+              'Todos os valores por 90, normalizados (z-score) em relação à média da liga (50 = média). Agregados Understat/FBref via Vantage Intelligence.'
+            )}
           </p>
         </div>
       )}

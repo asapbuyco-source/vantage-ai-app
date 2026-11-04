@@ -129,3 +129,21 @@ export const TEAM_DIMENSIONS: { key: TeamDimensionKey; label: string }[] = [
   { key: 'possession_value', label: 'Possession' },
   { key: 'consistency', label: 'Consistency' },
 ];
+
+export const TEAM_DIMENSION_LABELS: Record<string, { fr: string; en: string; es: string; pt: string }> = {
+  attacking: { fr: 'Attaque', en: 'Attacking', es: 'Ataque', pt: 'Ataque' },
+  creation: { fr: 'Création', en: 'Creation', es: 'Creación', pt: 'Criação' },
+  progression: { fr: 'Progression', en: 'Progression', es: 'Progresión', pt: 'Progressão' },
+  defensive: { fr: 'Défense', en: 'Defensive', es: 'Defensiva', pt: 'Defensiva' },
+  possession_value: { fr: 'Possession', en: 'Possession', es: 'Posesión', pt: 'Posse' },
+  consistency: { fr: 'Régularité', en: 'Consistency', es: 'Consistencia', pt: 'Consistência' },
+};
+
+export const teamDimensionLabel = (key: string, language: string): string => {
+  const entry = TEAM_DIMENSION_LABELS[key];
+  if (!entry) return key;
+  if (language === 'fr') return entry.fr;
+  if (language === 'es') return entry.es;
+  if (language === 'pt') return entry.pt;
+  return entry.en;
+};

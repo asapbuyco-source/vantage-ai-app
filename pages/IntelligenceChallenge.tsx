@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, BrainCircuit, RefreshCw, Swords, Users, Plus, X } from 'lucide-react';
 import { fetchTeamById, fetchPlayerById, searchIntelligence } from '../services/intelligence/db';
 import { SearchResult } from '../services/intelligence/types';
-import { TeamIntelligence, PlayerIntelligence, TEAM_DIMENSIONS } from '../services/intelligence/types';
+import { TeamIntelligence, PlayerIntelligence, TEAM_DIMENSIONS, teamDimensionLabel } from '../services/intelligence/types';
 import { predictMatchup, getScoreLabel, projectGoals } from '../services/intelligence/stats';
 import { ScoreRing } from '../components/intel/ScoreRing';
 import { RadarCompare, RadarLegend } from '../components/intel/RadarCompare';
@@ -12,6 +12,7 @@ import { TeamCrest } from '../components/intel/TeamCrest';
 import { PlayerAvatar } from '../components/intel/PlayerAvatar';
 import { DreamPitch } from '../components/intel/DreamPitch';
 import { MatchSim } from '../components/intel/MatchSim';
+import { useAppContext } from '../context/AppContext';
 
 const HOME = '#22d3ee';
 const AWAY = '#a855f7';
@@ -25,8 +26,24 @@ const DIM_LABELS: Record<string, string> = {
   attacking: 'Attack', creation: 'Creation', consistency: 'Consistency',
 };
 
+const DIM_LABELS_I18N: Record<string, { fr: string; en: string; es: string; pt: string }> = {
+  finishing: { fr: 'Finition', en: 'Finishing', es: 'Definición', pt: 'Finalização' },
+  creativity: { fr: 'Créativité', en: 'Creativity', es: 'Creatividad', pt: 'Criatividade' },
+  progression: { fr: 'Progression', en: 'Progression', es: 'Progresión', pt: 'Progressão' },
+  decision_making: { fr: 'Décisions', en: 'Decisions', es: 'Decisiones', pt: 'Decisões' },
+  defensive: { fr: 'Défense', en: 'Defensive', es: 'Defensiva', pt: 'Defensiva' },
+  possession_value: { fr: 'Possession', en: 'Possession', es: 'Posesión', pt: 'Posse' },
+};
+
+const dimLabel = (key: string, language: string): string => {
+  const e = DIM_LABELS_I18N[key];
+  if (!e) return DIM_LABELS[key] ?? key;
+  return language === 'fr' ? e.fr : language === 'es' ? e.es : language === 'pt' ? e.pt : e.en;
+};
+
 export const IntelligenceChallenge: React.FC = () => {
   const navigate = useNavigate();
+  const { language, tr } = useAppContext();
   const search = new URLSearchParams(window.location.search);
   const type = (search.get('type') || 'teams') as ChallengeType;
   const hId = search.get('h');
@@ -89,7 +106,7 @@ export const IntelligenceChallenge: React.FC = () => {
   if (loading) {
     return (
       <Shell><RefreshCw size={28} className="animate-spin text-vantage-cyan" />
-        <p className="text-xs text-gray-500 text-center mt-3">Building matchup…</p></Shell>
+        <p className="text-xs text-gray-500 text-center mt-3">{tr('Construction du match…', 'Building matchup…', 'Construyendo el partido…', 'Montando a partida…')}</p></Shell>
     );
   }
 
@@ -114,8 +131,8 @@ export const IntelligenceChallenge: React.FC = () => {
     return (
       <Shell>
         <BrainCircuit size={40} className="text-gray-600 mx-auto mb-3" />
-        <h2 className="text-base font-bold text-white text-center">Insufficient coverage</h2>
-        <p className="text-xs text-gray-500 text-center max-w-xs mt-1">One or both selections aren't in the intelligence database.</p>
+        <h2 className="text-base font-bold text-white text-center">{tr('Couverture insuffisante', 'Insufficient coverage', 'Cobertura insuficiente', 'Cobertura insuficiente')}</h2>
+        <p className="text-xs text-gray-500 text-center max-w-xs mt-1">{tr("Une ou les deux sélections ne sont pas dans la base.", 'One or both selections are not in the intelligence database.', 'Una o ambas selecciones no están en la base.', 'Uma ou ambas as seleções não estão na base.')}</p>
       </Shell>
     );
   }
@@ -125,13 +142,13 @@ export const IntelligenceChallenge: React.FC = () => {
     return (
       <Shell>
         <BrainCircuit size={40} className="text-gray-600 mx-auto mb-3" />
-        <h2 className="text-base font-bold text-white text-center">Roster data unavailable</h2>
+        <h2 className="text-base font-bold text-white text-center">{tr("Données d'effectif indisponibles", 'Roster data unavailable', 'Datos de plantilla no disponibles', 'Dados do elenco indisponíveis')}</h2>
         <p className="text-xs text-gray-500 text-center max-w-xs mt-1">
-          Some players in your XI aren't in the intelligence database yet. Try picking well-known league players.
+          {tr("Certains joueurs de votre XI ne sont pas encore dans la base. Essayez des joueurs connus des grands championnats.", 'Some players in your XI are not in the intelligence database yet. Try picking well-known league players.', 'Algunos jugadores de tu XI aún no están en la base. Prueba con jugadores conocidos de las grandes ligas.', 'Alguns jogadores do seu XI ainda não estão na base. Tente jogadores conhecidos das grandes ligas.')}
         </p>
         <div className="flex justify-center mt-4">
           <button onClick={() => navigate('/research')} className="px-5 py-2 rounded-full bg-vantage-cyan/15 text-vantage-cyan text-xs font-bold border border-vantage-cyan/30">
-            Back to Research
+            {tr('Retour à la recherche', 'Back to Research', 'Volver a la investigación', 'Voltar à pesquisa')}
           </button>
         </div>
       </Shell>
@@ -146,22 +163,19 @@ export const IntelligenceChallenge: React.FC = () => {
     homeName = home.team_name; awayName = away.team_name;
     homeIdx = home.scores.vti; awayIdx = away.scores.vti;
     homeAttack = home.scores.attacking; awayAttack = away.scores.attacking;
-    radar = TEAM_DIMENSIONS.map(({ key, label }) => ({
-      dimension: label,
+    radar = TEAM_DIMENSIONS.map(({ key }) => ({
+      dimension: teamDimensionLabel(key, language),
       value: (home.scores as any)[key], value2: (away.scores as any)[key],
     }));
-    tug = [
-      ['Attacking', 'attacking'], ['Creation', 'creation'], ['Progression', 'progression'],
-      ['Defensive', 'defensive'], ['Possession', 'possession_value'], ['Consistency', 'consistency'],
-    ].map(([label, k]) => ({ label, homeValue: (home.scores as any)[k], awayValue: (away.scores as any)[k] }));
+    tug = TEAM_DIMENSIONS.map(({ key }) => ({ label: teamDimensionLabel(key, language), homeValue: (home.scores as any)[key], awayValue: (away.scores as any)[key] }));
   } else if ((type === 'players' && pH && pA)) {
     homeName = pH.player_name; awayName = pA.player_name;
     homeIdx = pH.scores.vpii; awayIdx = pA.scores.vpii;
     radar = PLAYER_DIMS.map(d => ({
-      dimension: DIM_LABELS[d].slice(0, 10),
+      dimension: dimLabel(d, language).slice(0, 10),
       value: (pH.scores as any)[d], value2: (pA.scores as any)[d],
     }));
-    tug = PLAYER_DIMS.map(d => ({ label: DIM_LABELS[d], homeValue: (pH.scores as any)[d], awayValue: (pA.scores as any)[d] }));
+    tug = PLAYER_DIMS.map(d => ({ label: dimLabel(d, language), homeValue: (pH.scores as any)[d], awayValue: (pA.scores as any)[d] }));
   } else if (type === 'dream' && dreamH.length > 0 && dreamA.length > 0) {
     const dh = avgDims(dreamH), da = avgDims(dreamA);
     homeName = `Dream XI (${dreamH.length})`; awayName = `Dream XI (${dreamA.length})`;
@@ -171,8 +185,8 @@ export const IntelligenceChallenge: React.FC = () => {
       return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : null;
     };
     homeIdx = idxOf(dh); awayIdx = idxOf(da);
-    radar = PLAYER_DIMS.map(d => ({ dimension: DIM_LABELS[d].slice(0, 10), value: dh[d], value2: da[d] }));
-    tug = PLAYER_DIMS.map(d => ({ label: DIM_LABELS[d], homeValue: dh[d], awayValue: da[d] }));
+    radar = PLAYER_DIMS.map(d => ({ dimension: dimLabel(d, language).slice(0, 10), value: dh[d], value2: da[d] }));
+    tug = PLAYER_DIMS.map(d => ({ label: dimLabel(d, language), homeValue: dh[d], awayValue: da[d] }));
   }
 
   const prediction = homeIdx != null && awayIdx != null ? predictMatchup(homeIdx, awayIdx) : null;
@@ -199,10 +213,10 @@ export const IntelligenceChallenge: React.FC = () => {
                 style={{ color: leader ? HOME : AWAY, borderColor: leader ? `${HOME}44` : `${AWAY}44`, background: leader ? `${HOME}11` : `${AWAY}11` }}>
                 +{adv}
               </span>
-              <span className="text-[8px] font-bold uppercase tracking-widest text-gray-500">Advantage</span>
+              <span className="text-[8px] font-bold uppercase tracking-widest text-gray-500">{tr('Avantage', 'Advantage', 'Ventaja', 'Vantagem')}</span>
               {prediction && (
                 <div className="w-24 mt-3">
-                  <p className="text-[7px] font-bold uppercase tracking-widest text-gray-500 text-center mb-1">Intel model</p>
+                  <p className="text-[7px] font-bold uppercase tracking-widest text-gray-500 text-center mb-1">{tr('Modèle Intel', 'Intel model', 'Modelo Intel', 'Modelo Intel')}</p>
                   <div className="flex h-2 rounded-full overflow-hidden mb-1">
                     <div style={{ width: `${prediction.home}%`, background: HOME }} />
                     <div style={{ width: `${prediction.draw}%`, background: '#94A3B855' }} />
@@ -213,7 +227,7 @@ export const IntelligenceChallenge: React.FC = () => {
               )}
               {homeAttack != null && awayAttack != null && projectGoals(homeAttack) != null && (
                 <div className="mt-2 w-24">
-                  <p className="text-[7px] font-bold uppercase tracking-widest text-gray-500 text-center mb-0.5">Projected score</p>
+                  <p className="text-[7px] font-bold uppercase tracking-widest text-gray-500 text-center mb-0.5">{tr('Score projeté', 'Projected score', 'Marcador proyectado', 'Placar projetado')}</p>
                   <p className="text-[11px] font-black font-mono text-white text-center">
                     {projectGoals(homeAttack)?.toFixed(1)} – {projectGoals(awayAttack)?.toFixed(1)}
                   </p>
@@ -234,7 +248,7 @@ export const IntelligenceChallenge: React.FC = () => {
 
         {/* Radar */}
         <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Shape of the Matchup</h3>
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{tr('Forme du match', 'Shape of the Matchup', 'Forma del partido', 'Forma da partida')}</h3>
           <div className="flex justify-center">
             <RadarCompare data={radar} size={260} primaryColor={HOME} secondaryColor={AWAY} primaryName={homeName} secondaryName={awayName} />
           </div>
@@ -243,20 +257,20 @@ export const IntelligenceChallenge: React.FC = () => {
 
         {/* Dimension battle */}
         <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Dimension Battle</h3>
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">{tr('Duel par dimension', 'Dimension Battle', 'Duelo por dimensión', 'Duelo por dimensão')}</h3>
           <TugOfWar rows={tug} homeColor={HOME} awayColor={AWAY} />
         </section>
 
         {/* Dream lineups on the pitch */}
         {type === 'dream' && (
           <section className="space-y-3">
-            <DreamPitch roster={dreamH.map(p => ({ id: p.player_id, name: p.player_name, meta: p.position }))} accent={HOME} label="Home XI" />
-            <DreamPitch roster={dreamA.map(p => ({ id: p.player_id, name: p.player_name, meta: p.position }))} accent={AWAY} label="Away XI" />
+            <DreamPitch roster={dreamH.map(p => ({ id: p.player_id, name: p.player_name, meta: p.position }))} accent={HOME} label={tr('XI Domicile', 'Home XI', 'XI Local', 'XI Casa')} />
+            <DreamPitch roster={dreamA.map(p => ({ id: p.player_id, name: p.player_name, meta: p.position }))} accent={AWAY} label={tr('XI Extérieur', 'Away XI', 'XI Visitante', 'XI Fora')} />
           </section>
         )}
 
         <p className="text-[9px] text-gray-600 leading-relaxed px-1">
-          Z-scored vs league baselines (50 = average).{type !== 'teams' ? ' Composite indices averaged across selected players.' : ''} Intel model estimate — neutral venue.
+          {tr('Normalisé (z-score) vs moyennes de la ligue (50 = moyenne).', 'Z-scored vs league baselines (50 = average).', 'Normalizado (z-score) frente a la media de la liga (50 = media).', 'Normalizado (z-score) em relação à média da liga (50 = média).')}{type !== 'teams' ? tr(' Indices composites moyennés sur les joueurs sélectionnés.', ' Composite indices averaged across selected players.', ' Índices compuestos promediados entre los jugadores seleccionados.', ' Índices compostos calculados pela média dos jogadores selecionados.') : ''} {tr('Estimation du modèle Intel — terrain neutre.', 'Intel model estimate — neutral venue.', 'Estimación del modelo Intel — sede neutral.', 'Estimativa do modelo Intel — local neutro.')}
         </p>
       </div>
     </Shell>
@@ -265,6 +279,7 @@ export const IntelligenceChallenge: React.FC = () => {
 
 const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
+  const { tr } = useAppContext();
   return (
     <div className="min-h-screen bg-vantage-bg pb-20 font-sans text-white">
       <div className="sticky top-0 z-20 bg-vantage-bg/95 backdrop-blur-md border-b border-white/10">
@@ -272,7 +287,7 @@ const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"><ArrowLeft size={20} /></button>
           <div className="flex items-center gap-2">
             <Swords size={16} className="text-vantage-cyan" />
-            <h1 className="text-sm font-bold">Challenge</h1>
+            <h1 className="text-sm font-bold">{tr('Défi', 'Challenge', 'Desafío', 'Desafio')}</h1>
           </div>
           <div className="w-9" />
         </div>

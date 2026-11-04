@@ -65,6 +65,7 @@ export interface Match {
   odds_last_bookmaker_update?: string;
   odds_age_minutes?: number | null;
   odds_fresh?: boolean;
+  bookmaker_odds?: Record<string, Record<string, number>>;
   vault_eligible?: boolean;
   max_stake_pct?: number;
   provider_source?: string;
@@ -290,6 +291,16 @@ export interface UserProfile {
       referralPurchases?: number;
       appliedPromoCode?: string;
       promoRedeemed?: boolean;
+      preferences?: {
+        favoriteLeagues?: string[];
+        favoriteTeams?: string[];
+        notifications?: {
+          dailyPicks?: boolean;
+          results?: boolean;
+          liveGoals?: boolean;
+          vipExpiry?: boolean;
+        };
+      };
   lifetimeEarnings?: number;
   vaultProgress?: VaultProgress;
   portfolioBankroll?: number;

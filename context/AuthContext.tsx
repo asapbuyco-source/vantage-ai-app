@@ -75,6 +75,7 @@ interface AuthContextType {
     updateUserCountry: (country: string) => Promise<void>;
     updateVaultProgress: (progress: { currentDay: number; bankroll: number; startDate: string; completedDays: number[] }) => Promise<void>;
     updatePortfolioConfig: (bankroll: number, riskTolerance: 'low' | 'medium' | 'high') => Promise<void>;
+    updatePreferences: (patch: Partial<NonNullable<UserProfile['preferences']>>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -549,8 +550,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (commissionRate !== undefined && !isNaN(commissionRate)) {
             payload.commissionRate = Math.max(0, Math.min(80, Math.round(commissionRate)));
         }
-        await updateDoc(doc(db, "profiles", uid), payload);
+            await updateDoc(doc(db, "profiles", uid), payload);
     };
+
+    const updatePreferences = async (patch: Partial<NonNullable<UserProfile['preferences']>>) => {
+        if (!user) return;
+        const current: any = userProfile?.preferences || {};
+        const merged: any = { ...current, ...patch };
+        if (patch.notifications) {
+            merged.notifications = { ...(current.notifications || {}), ...patch.notifications };
+        }
+        await updateDoc(doc(db, "profiles", user.uid), { preferences: merged });
+        await fetchProfile(user);
+    };
+
 
     const getAllUsers = async (lastDoc?: any, pageSize: number = 100): Promise<{ users: UserProfile[]; lastDoc: any; error?: string }> => {
         if (!isAdmin) return { users: [], lastDoc: null, error: 'Not authorized' };
@@ -636,7 +649,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             user, userProfile, loading, error, isAdmin, isVipActive,
             signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, logout, deleteAccount, clearError: () => setError(null),
             getAllUsers, toggleUserVip, toggleUserAdmin, toggleUserBlock, setInfluencer, verifyTransaction,
-            requestPayout, getPayoutRequests, processPayout, updateUserCountry, updateVaultProgress, updatePortfolioConfig
+            requestPayout, getPayoutRequests, processPayout, updateUserCountry, updateVaultProgress, updatePortfolioConfig, updatePreferences
         }}>
             {children}
         </AuthContext.Provider>

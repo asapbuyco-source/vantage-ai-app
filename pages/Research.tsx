@@ -7,6 +7,7 @@ import { projectGoals } from '../services/intelligence/stats';
 import { TeamCrest } from '../components/intel/TeamCrest';
 import { PlayerAvatar } from '../components/intel/PlayerAvatar';
 import { DreamPitch } from '../components/intel/DreamPitch';
+import { useAppContext } from '../context/AppContext';
 
 const RECENT_KEY = 'vantage_intel_recent_v2';
 
@@ -20,6 +21,7 @@ type ChallengeKind = 'teams' | 'players' | 'dream';
 
 export const Research: React.FC = () => {
   const navigate = useNavigate();
+  const { language, tr } = useAppContext();
   const [params] = useSearchParams();
   const [mode, setMode] = useState<Mode>('search');
   const [kind, setKind] = useState<ChallengeKind>('teams');
@@ -155,9 +157,9 @@ export const Research: React.FC = () => {
   const clearRecents = () => { setRecent([]); try { localStorage.removeItem(RECENT_KEY); } catch { /* ignore */ } };
 
   const placeholder = useMemo(() => {
-    if (mode === 'challenge') return pickingSide === 'home' ? 'Search HOME selection…' : 'Search AWAY selection…';
-    return 'Search players or teams…';
-  }, [mode, pickingSide]);
+    if (mode === 'challenge') return pickingSide === 'home' ? tr('Rechercher la sélection DOMICILE…', 'Search HOME selection…', 'Buscar selección LOCAL…', 'Buscar seleção CASA…') : tr('Rechercher la sélection EXTÉRIEUR…', 'Search AWAY selection…', 'Buscar selección VISITANTE…', 'Buscar seleção FORA…');
+    return tr('Rechercher un joueur ou une équipe…', 'Search players or teams…', 'Buscar jugadores o equipos…', 'Buscar jogadores ou equipes…');
+  }, [mode, pickingSide, language]);
 
   return (
     <div className="space-y-5">
@@ -171,13 +173,13 @@ export const Research: React.FC = () => {
           VANTAGE <span className="text-transparent bg-clip-text bg-vantage-gradient">INTELLIGENCE</span>
         </h1>
         <p className="text-xs text-gray-400 max-w-xs mx-auto leading-relaxed">
-          Research any team or player — or pit two clubs against each other.
+          {tr('Analysez n\'importe quelle équipe ou joueur — ou opposez deux clubs.', 'Research any team or player — or pit two clubs against each other.', 'Investiga cualquier equipo o jugador — o enfrenta a dos clubes.', 'Pesquise qualquer equipe ou jogador — ou coloque dois clubes frente a frente.')}
         </p>
         {coverage && (
           <div className="flex items-center justify-center gap-4 mt-4 text-[10px] font-mono">
-            <span className="text-gray-300"><span className="font-black text-vantage-cyan">{coverage.players.toLocaleString()}</span> players</span>
+            <span className="text-gray-300"><span className="font-black text-vantage-cyan">{coverage.players.toLocaleString()}</span> {tr('joueurs', 'players', 'jugadores', 'jogadores')}</span>
             <span className="w-px h-3 bg-white/10" />
-            <span className="text-gray-300"><span className="font-black text-vantage-purple">{coverage.teams.toLocaleString()}</span> teams</span>
+            <span className="text-gray-300"><span className="font-black text-vantage-purple">{coverage.teams.toLocaleString()}</span> {tr('équipes', 'teams', 'equipos', 'equipes')}</span>
           </div>
         )}
       </div>
@@ -185,10 +187,10 @@ export const Research: React.FC = () => {
       {/* Mode switch */}
       <div className="grid grid-cols-2 gap-1 p-1 bg-slate-200 dark:bg-white/5 rounded-xl">
         <button onClick={() => setMode('search')} className={`py-2 rounded-lg text-xs font-bold transition-colors ${mode === 'search' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}>
-          <Search size={12} className="inline mr-1.5" />Research
+          <Search size={12} className="inline mr-1.5" />{tr('Recherche', 'Research', 'Investigación', 'Pesquisa')}
         </button>
         <button onClick={() => setMode('challenge')} className={`py-2 rounded-lg text-xs font-bold transition-colors ${mode === 'challenge' ? 'bg-white dark:bg-white/10 shadow text-slate-900 dark:text-white' : 'text-gray-500'}`}>
-          <Swords size={12} className="inline mr-1.5" />Challenge
+          <Swords size={12} className="inline mr-1.5" />{tr('Défi', 'Challenge', 'Desafío', 'Desafio')}
         </button>
       </div>
 
@@ -212,12 +214,12 @@ export const Research: React.FC = () => {
         {query.trim().length >= 2 && (
           <div className="absolute left-0 right-0 top-full mt-2 max-h-[340px] overflow-y-auto rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0d1219] shadow-glass z-40">
             {results.length === 0 && !searching && (
-              <p className="text-center text-xs text-gray-500 py-6">No matches in the intelligence database.</p>
+              <p className="text-center text-xs text-gray-500 py-6">{tr('Aucun résultat dans la base.', 'No matches in the intelligence database.', 'Sin resultados en la base.', 'Nenhum resultado na base.')}</p>
             )}
             {searching && results.length === 0 && (
               <div className="flex items-center justify-center gap-2 py-6">
                 <Loader2 size={14} className="animate-spin text-vantage-cyan" />
-                <span className="text-xs text-gray-500">Searching…</span>
+                <span className="text-xs text-gray-500">{tr('Recherche…', 'Searching…', 'Buscando…', 'Pesquisando…')}</span>
               </div>
             )}
             {results.map((r, i) => (
@@ -252,7 +254,7 @@ export const Research: React.FC = () => {
         <div className="space-y-4">
           {/* Challenge kind */}
           <div className="grid grid-cols-3 gap-1 p-1 bg-slate-200 dark:bg-white/5 rounded-xl">
-            {([['teams', 'Teams', Users], ['players', 'Players', User], ['dream', 'Dream XI', Sparkles]] as const).map(([k, label, Icon]) => (
+            {([['teams', tr('Équipes', 'Teams', 'Equipos', 'Equipes'), Users], ['players', tr('Joueurs', 'Players', 'Jugadores', 'Jogadores'), User], ['dream', tr('XI Rêve', 'Dream XI', 'XI Soñado', 'XI dos Sonhos'), Sparkles]] as const).map(([k, label, Icon]) => (
               <button key={k} onClick={() => { setKind(k); setHomePick(null); setAwayPick(null); setDreamH([]); setPickingSide('home'); }}
                 className={`py-2 rounded-lg text-[11px] font-bold transition-colors flex items-center justify-center gap-1 ${kind === k ? 'bg-white dark:bg-white/10 shadow text-vantage-cyan' : 'text-gray-500'}`}>
                 <Icon size={12} /> {label}
@@ -267,17 +269,17 @@ export const Research: React.FC = () => {
               <div className="rounded-xl border border-vantage-purple/30 bg-vantage-purple/5 p-3 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-vantage-purple/15 flex items-center justify-center text-lg shrink-0">🤖</div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black text-white leading-tight">Rival Squad</p>
+                  <p className="text-xs font-black text-white leading-tight">{tr('Effectif Rival', 'Rival Squad', 'Plantilla Rival', 'Elenco Rival')}</p>
                   {aiXIRoster ? (
                     <p className="text-[9px] text-gray-400 truncate">
-                      Auto-built from the world's top-ranked players — led by {aiXI?.top?.name}
+                      {tr('Auto-construit avec les meilleurs joueurs du monde — mené par', 'Auto-built from the world\'s top-ranked players — led by', 'Creado automáticamente con los mejores jugadores del mundo — liderado por', 'Montado automaticamente com os melhores jogadores do mundo — liderado por')} {aiXI?.top?.name}
                     </p>
                   ) : (
-                    <p className="text-[9px] text-gray-500">Assembling squad…</p>
+                    <p className="text-[9px] text-gray-500">{tr('Composition en cours…', 'Assembling squad…', 'Montando plantilla…', 'Montando elenco…')}</p>
                   )}
                 </div>
                 {(aiXIRoster?.length ?? 0) > 0 && (
-                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-vantage-purple/15 text-vantage-purple shrink-0">READY</span>
+                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-vantage-purple/15 text-vantage-purple shrink-0">{tr('PRÊT', 'READY', 'LISTO', 'PRONTO')}</span>
                 )}
               </div>
 
@@ -285,7 +287,7 @@ export const Research: React.FC = () => {
                 <DreamPitch
                   roster={dreamH}
                   accent="#22d3ee"
-                  label={`Your XI${dreamH.length ? ` (${dreamH.length}/11)` : ''}`}
+                  label={`${tr('Votre XI', 'Your XI', 'Tu XI', 'Seu XI')}${dreamH.length ? ` (${dreamH.length}/11)` : ''}`}
                   onRemove={id => setDreamH(dreamH.filter(x => x.id !== id))}
                   estGoals={dreamGoals}
                 />
@@ -309,13 +311,13 @@ export const Research: React.FC = () => {
                           ? <PlayerAvatar playerId={pick.id} name={pick.name} size={38} ringColor={color.replace('text-', '')} />
                           : <TeamCrest teamName={pick.name} teamId={pick.id} size={38} />}
                         <span className="text-xs font-bold text-white truncate max-w-full">{pick.name}</span>
-                        <span className="text-[8px] uppercase tracking-widest text-gray-500">{side} · tap to change</span>
+                        <span className="text-[8px] uppercase tracking-widest text-gray-500">{side} · {tr('toucher pour changer', 'tap to change', 'toca para cambiar', 'toque para alterar')}</span>
                       </>
                     ) : (
                       <>
                         {kind === 'teams' ? <Users size={18} className="text-gray-500" /> : <User size={18} className="text-gray-500" />}
                         <span className={`text-[10px] font-bold uppercase tracking-widest ${color}`}>{side}</span>
-                        <span className="text-[9px] text-gray-600">tap then search below</span>
+                        <span className="text-[9px] text-gray-600">{tr('toucher puis rechercher ci-dessous', 'tap then search below', 'toca y busca abajo', 'toque e pesquise abaixo')}</span>
                       </>
                     )}
                   </button>
@@ -329,10 +331,10 @@ export const Research: React.FC = () => {
             onClick={launchChallenge}
             className="w-full py-3.5 rounded-xl bg-vantage-gradient text-white text-sm font-black tracking-wide flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
           >
-            <Swords size={16} /> Play a Rival
+            <Swords size={16} /> {tr('Lancer un duel', 'Play a Rival', 'Jugar un duelo', 'Jogar um duelo')}
           </button>
-          {kind === 'dream' && dreamH.length < 5 && <p className="text-center text-[10px] text-gray-500">Pick at least 5 players for your XI ({dreamH.length}/11)</p>}
-          {!canBattle && kind !== 'dream' && <p className="text-center text-[10px] text-gray-500">Select two different {kind} to continue</p>}
+          {kind === 'dream' && dreamH.length < 5 && <p className="text-center text-[10px] text-gray-500">{tr(`Choisissez au moins 5 joueurs pour votre XI (${dreamH.length}/11)`, `Pick at least 5 players for your XI (${dreamH.length}/11)`, `Elige al menos 5 jugadores para tu XI (${dreamH.length}/11)`, `Escolha pelo menos 5 jogadores para seu XI (${dreamH.length}/11)`)}</p>}
+          {!canBattle && kind !== 'dream' && <p className="text-center text-[10px] text-gray-500">{tr(`Sélectionnez deux ${kind === 'teams' ? 'équipes' : 'joueurs'} différents pour continuer`, `Select two different ${kind} to continue`, `Selecciona dos ${kind === 'teams' ? 'equipos' : 'jugadores'} diferentes para continuar`, `Selecione dois ${kind === 'teams' ? 'equipes' : 'jogadores'} diferentes para continuar`)}</p>}
         </div>
       )}
 
@@ -340,7 +342,7 @@ export const Research: React.FC = () => {
       {mode === 'search' && (
         <>
           <div className="flex gap-1.5 flex-wrap">
-            {([['all', 'All'], ['player', 'Players'], ['team', 'Teams']] as const).map(([key, label]) => (
+            {([['all', tr('Tous', 'All', 'Todos', 'Todos')], ['player', tr('Joueurs', 'Players', 'Jugadores', 'Jogadores')], ['team', tr('Équipes', 'Teams', 'Equipos', 'Equipes')]] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setFilter(key)}
@@ -374,9 +376,9 @@ export const Research: React.FC = () => {
             <section>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                  <Clock size={11} /> Recent research
+                  <Clock size={11} /> {tr('Recherches récentes', 'Recent research', 'Búsquedas recientes', 'Pesquisas recentes')}
                 </h3>
-                <button onClick={clearRecents} title="Clear history" className="p-1 rounded hover:bg-white/10 text-gray-500 hover:text-red-400 transition-colors">
+                <button onClick={clearRecents} title={tr('Effacer l\'historique', 'Clear history', 'Borrar historial', 'Limpar histórico')} className="p-1 rounded hover:bg-white/10 text-gray-500 hover:text-red-400 transition-colors">
                   <Trash2 size={12} />
                 </button>
               </div>
@@ -399,7 +401,7 @@ export const Research: React.FC = () => {
           )}
 
           <section>
-            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Try searching</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">{tr('Essayez de rechercher', 'Try searching', 'Prueba a buscar', 'Tente pesquisar')}</h3>
             <div className="flex flex-wrap gap-2">
               {EXAMPLES.map(ex => (
                 <button key={ex} onClick={() => setQuery(ex)} className="px-3 py-1.5 rounded-full text-xs font-bold bg-vantage-cyan/10 border border-vantage-cyan/20 text-vantage-cyan hover:bg-vantage-cyan/20 transition-colors">
@@ -410,12 +412,12 @@ export const Research: React.FC = () => {
           </section>
 
           <section className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-2.5">
-            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Inside every report</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{tr('Dans chaque rapport', 'Inside every report', 'En cada informe', 'Em cada relatório')}</h3>
             {[
-              ['Intelligence Index', 'Single headline score vs league (50 = average)'],
-              ['6 Dimensions', 'Radar with dashed league-average ring'],
-              ['Percentile Bars', 'Honest P-values from normal CDF'],
-              ['Team vs Team', 'Full matchup report for any two clubs'],
+              [tr('Indice d\'Intelligence', 'Intelligence Index', 'Índice de Inteligencia', 'Índice de Inteligência'), tr('Score global vs ligue (50 = moyenne)', 'Single headline score vs league (50 = average)', 'Puntuación global vs liga (50 = media)', 'Pontuação global vs liga (50 = média)')],
+              [tr('6 Dimensions', '6 Dimensions', '6 Dimensiones', '6 Dimensões'), tr('Radar avec anneau de moyenne de ligue', 'Radar with dashed league-average ring', 'Radar con anillo de media de liga', 'Radar com anel da média da liga')],
+              [tr('Barres de percentile', 'Percentile Bars', 'Barras de percentil', 'Barras de percentil'), tr('Valeurs P honnêtes (CDF normale)', 'Honest P-values from normal CDF', 'Valores P honestos (CDF normal)', 'Valores P honestos (CDF normal)')],
+              [tr('Équipe vs Équipe', 'Team vs Team', 'Equipo vs Equipo', 'Equipe vs Equipe'), tr('Rapport complet pour deux clubs', 'Full matchup report for any two clubs', 'Informe completo para dos clubes', 'Relatório completo para dois clubes')],
             ].map(([t, d]) => (
               <div key={t} className="flex items-start gap-2.5">
                 <span className="w-1 h-1 rounded-full bg-vantage-cyan mt-1.5 shrink-0" />

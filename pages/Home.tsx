@@ -88,7 +88,7 @@ const FormDots = ({ form }: { form?: string }) => {
 export const Home: React.FC<HomeProps> = () => {
   const navigate = useNavigate();
   const { t, language, setLanguage, theme, toggleTheme, showToast, tr } = useAppContext();
-  const { user, isAdmin, isVipActive } = useAuth();
+  const { user, userProfile, isAdmin, isVipActive } = useAuth();
   const {
     activeDate, predictions, rawFixtures, basketballPredictions, cricketPredictions,
     winRateStats, loading, isSystemGenerating, systemError, liveCount
@@ -214,6 +214,14 @@ export const Home: React.FC<HomeProps> = () => {
       );
     }
     const categoryPriority: Record<string, number> = { safe: 4, value: 3, risky: 2, lean: 1 };
+    // FAVORITE LEAGUES FIRST — personalization from onboarding
+    const favoriteLeagues = (userProfile?.preferences?.favoriteLeagues || []).map((l: string) => l.toLowerCase());
+    const isFavoriteLeague = (m: Match) => {
+      if (favoriteLeagues.length === 0) return false;
+      const league = (m.league || '').toLowerCase();
+      return favoriteLeagues.some(l => league === l || league.includes(l) || l.includes(league));
+    };
+    const favoriteFirst = (a: Match, b: Match) => (isFavoriteLeague(a) ? 0 : 1) - (isFavoriteLeague(b) ? 0 : 1);
     // BIG TEAMS ALWAYS FIRST — applied before any other sort, regardless of the filter
     const bigFirst = (a: Match, b: Match) => bigTeamRank(a) - bigTeamRank(b);
     // TOP LEAGUES ALWAYS FIRST — applied as the primary key before any user sort
@@ -228,6 +236,8 @@ export const Home: React.FC<HomeProps> = () => {
     switch (sortKey) {
       case 'probability':
         result.sort((a, b) => {
+          const ff = favoriteFirst(a, b);
+          if (ff !== 0) return ff;
           const bf = bigFirst(a, b);
           if (bf !== 0) return bf;
           const lf = leagueFirst(a, b);
@@ -240,6 +250,8 @@ export const Home: React.FC<HomeProps> = () => {
         break;
       case 'time': 
         result.sort((a, b) => {
+          const ff = favoriteFirst(a, b);
+          if (ff !== 0) return ff;
           const bf = bigFirst(a, b);
           if (bf !== 0) return bf;
           const lf = leagueFirst(a, b);
@@ -251,6 +263,8 @@ export const Home: React.FC<HomeProps> = () => {
         break;
       case 'league': 
         result.sort((a, b) => {
+          const ff = favoriteFirst(a, b);
+          if (ff !== 0) return ff;
           const bf = bigFirst(a, b);
           if (bf !== 0) return bf;
           const tierA = getLeagueTier(a);

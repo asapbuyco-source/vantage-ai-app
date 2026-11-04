@@ -322,6 +322,9 @@ export const VIP: React.FC<VIPProps> = () => {
                     <div className="flex justify-between items-center px-4 pt-4 pb-2">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest leading-none truncate max-w-[80px]">{match.league}</span>
+                        {match.league_tier != null && (
+                          <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-white/10 text-gray-400 border border-white/10 whitespace-nowrap">T{match.league_tier}</span>
+                        )}
                         <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${cfg.badge}`}>
                           {cfg.icon} {cfg.label}
                         </span>
@@ -350,7 +353,9 @@ export const VIP: React.FC<VIPProps> = () => {
                       <div className="flex flex-col items-center gap-1 shrink-0 px-1">
                         <span className="text-[10px] font-mono text-gray-400">VS</span>
                         {match.odds > 1 && (
-                          <span className="text-[10px] font-bold font-mono bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">{match.odds.toFixed(2)}x</span>
+                          <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${match.odds_fresh === false ? 'bg-amber-500/15 text-amber-500' : 'bg-black/5 dark:bg-white/10 text-gray-600 dark:text-gray-300'}`} title={match.odds_fresh === false ? tr('Cotes anciennes', 'Stale odds', 'Cuotas antiguas', 'Odds antigas') : undefined}>
+                            {match.odds.toFixed(2)}x{match.odds_fresh === false ? ' ⚠' : ''}
+                          </span>
                         )}
                       </div>
                       <div className="flex items-center justify-end gap-2.5 w-5/12 overflow-hidden">
@@ -376,6 +381,24 @@ export const VIP: React.FC<VIPProps> = () => {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+
+                    {/* Model vs Market probability comparison */}
+                    <div className="mx-4 mb-2 rounded-lg bg-white/5 border border-white/10 px-2.5 py-2 space-y-1.5">
+                      <div className="flex items-center justify-between text-[9px] font-bold">
+                        <span className="text-gray-500 uppercase tracking-wide">{tr('Modèle', 'Model', 'Modelo', 'Modelo')}</span>
+                        <span className="font-mono text-emerald-400">{modelProb > 0 ? Math.round(modelProb * 100) : '—'}%</span>
+                      </div>
+                      <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400" style={{ width: `${Math.min(100, Math.round(modelProb * 100))}%` }} />
+                      </div>
+                      <div className="flex items-center justify-between text-[9px] font-bold">
+                        <span className="text-gray-500 uppercase tracking-wide">{tr('Marché', 'Market', 'Mercado', 'Mercado')}</span>
+                        <span className="font-mono text-gray-300">{odds > 1 ? Math.round((1 / odds) * 100) : '—'}%</span>
+                      </div>
+                      <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                        <div className="h-full rounded-full bg-slate-400/70" style={{ width: `${odds > 1 ? Math.min(100, Math.round((1 / odds) * 100)) : 0}%` }} />
                       </div>
                     </div>
 
@@ -414,13 +437,81 @@ export const VIP: React.FC<VIPProps> = () => {
                       </div>
                     )}
 
-                    {/* AI Reasoning */}
+                    {/* Why this pick — data-backed reasons */}
+                    {(() => {
+                      const reasons: string[] = [];
+                      if (edgePct != null && edgePct > 0) {
+                        reasons.push(tr(
+                          `+${edgePct.toFixed(0)}% de valeur vs la cote`,
+                          `+${edgePct.toFixed(0)}% value vs the odds`,
+                          `+${edgePct.toFixed(0)}% de valor frente a la cuota`,
+                          `+${edgePct.toFixed(0)}% de valor frente à odd`
+                        ));
+                      }
+                      const agreementPct = Math.round(Number((match as any).model_agreement ?? match.result_confidence ?? 0) * 100);
+                      if (agreementPct >= 60) {
+                        reasons.push(tr(
+                          `${agreementPct}% d'accord du modèle`,
+                          `${agreementPct}% model agreement`,
+                          `${agreementPct}% de acuerdo del modelo`,
+                          `${agreementPct}% de concordância do modelo`
+                        ));
+                      }
+                      const xgTotal = (match.expected_goals_home ?? 0) + (match.expected_goals_away ?? 0);
+                      if (xgTotal > 0) {
+                        reasons.push(tr(
+                          `${xgTotal.toFixed(1)} buts attendus (xG)`,
+                          `${xgTotal.toFixed(1)} expected goals (xG)`,
+                          `${xgTotal.toFixed(1)} goles esperados (xG)`,
+                          `${xgTotal.toFixed(1)} gols esperados (xG)`
+                        ));
+                      }
+                      if (match.odds_fresh === false) {
+                        reasons.push(tr(
+                          'Cotes anciennes — vérifier avant de miser',
+                          'Stale odds — check before betting',
+                          'Cuotas antiguas — verifica antes de apostar',
+                          'Odds antigas — verifique antes de apostar'
+                        ));
+                      }
+                      if (reasons.length === 0) return null;
+                      return (
+                        <div className="mx-4 mb-2 space-y-1">
+                          {reasons.slice(0, 3).map((r, ri) => (
+                            <p key={ri} className="text-[10px] text-gray-500 flex items-start gap-1.5">
+                              <CheckCircle2 size={10} className="text-emerald-400 mt-0.5 shrink-0" />
+                              <span className="leading-snug">{r}</span>
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
+                    {/* AI Reasoning — expandable */}
                     <div className="mx-4 mb-2 p-3 rounded-xl bg-gradient-to-r from-vantage-purple/5 to-transparent border border-vantage-purple/15">
                       <div className="flex items-start gap-2">
                         <BrainCircuit size={13} className="text-vantage-purple mt-0.5 shrink-0" />
-                        <div>
-                          <span className="text-[10px] text-vantage-purple font-bold uppercase tracking-wide">{tr('Analyse IA', 'AI Analysis', 'Análisis IA', 'Análise IA')}</span>
-                          <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed mt-0.5 line-clamp-2" title={getAnalysisText(match)}>{getAnalysisText(match)}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] text-vantage-purple font-bold uppercase tracking-wide">{tr('Analyse IA', 'AI Analysis', 'Análisis IA', 'Análise IA')}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedCards(prev => {
+                                  const next = new Set(prev);
+                                  const key = String(match.id);
+                                  if (next.has(key)) next.delete(key); else next.add(key);
+                                  return next;
+                                });
+                              }}
+                              className="text-[9px] font-bold text-vantage-cyan hover:underline shrink-0"
+                            >
+                              {expandedCards.has(String(match.id))
+                                ? tr('Réduire', 'Show less', 'Mostrar menos', 'Mostrar menos')
+                                : tr('Lire plus', 'Read more', 'Leer más', 'Ler mais')}
+                            </button>
+                          </div>
+                          <p className={`text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed mt-0.5 ${expandedCards.has(String(match.id)) ? '' : 'line-clamp-2'}`} title={getAnalysisText(match)}>{getAnalysisText(match)}</p>
                         </div>
                       </div>
                     </div>

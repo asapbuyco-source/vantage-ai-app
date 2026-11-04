@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BrainCircuit, Swords, ChevronDown, ChevronUp, ArrowUpRight } from 'lucide-react';
-import { TeamIntelligence, TEAM_DIMENSIONS, TeamDimensionKey } from '../../services/intelligence/types';
+import { TeamIntelligence, TEAM_DIMENSIONS, TeamDimensionKey, teamDimensionLabel } from '../../services/intelligence/types';
 import { findTeamByName, fetchSquadPlayers } from '../../services/intelligence/db';
 import { getScoreLabel } from '../../services/intelligence/stats';
+import { useAppContext } from '../../context/AppContext';
 import { ScoreRing } from './ScoreRing';
 import { RadarCompare, RadarLegend } from './RadarCompare';
 import { TugOfWar } from './TugOfWar';
@@ -19,6 +20,7 @@ const AWAY = '#a855f7';
 
 export const TeamStrengthSection: React.FC<TeamStrengthSectionProps> = ({ homeTeamName, awayTeamName }) => {
   const navigate = useNavigate();
+  const { language, tr } = useAppContext();
   const [home, setHome] = useState<TeamIntelligence | null>(null);
   const [away, setAway] = useState<TeamIntelligence | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,13 +45,13 @@ export const TeamStrengthSection: React.FC<TeamStrengthSectionProps> = ({ homeTe
       <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6">
         <div className="flex items-center gap-2 mb-4">
           <BrainCircuit size={16} className="text-vantage-cyan" />
-          <span className="text-xs font-bold uppercase tracking-widest text-gray-300">Team Strength</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-gray-300">{tr('Force des équipes', 'Team Strength', 'Fuerza de equipos', 'Força das equipes')}</span>
         </div>
         <div className="flex justify-center gap-8">
           <div className="w-24 h-24 rounded-full bg-white/5 animate-pulse" />
           <div className="w-24 h-24 rounded-full bg-white/5 animate-pulse" />
         </div>
-        <p className="text-center text-[10px] text-gray-500 mt-4">Matching clubs in intelligence database…</p>
+        <p className="text-center text-[10px] text-gray-500 mt-4">{tr('Recherche des clubs dans la base…', 'Matching clubs in intelligence database…', 'Buscando clubes en la base…', 'Procurando clubes na base…')}</p>
       </div>
     );
   }
@@ -64,18 +66,18 @@ export const TeamStrengthSection: React.FC<TeamStrengthSectionProps> = ({ homeTe
   const adv = Math.round(Math.abs(homeVti - awayVti));
   const advLeader = homeVti >= awayVti ? 'home' : 'away';
 
-  const radarData = TEAM_DIMENSIONS.map(({ key, label }) => ({
-    dimension: label,
+  const radarData = TEAM_DIMENSIONS.map(({ key }) => ({
+    dimension: teamDimensionLabel(key, language),
     value: home.scores[key as TeamDimensionKey],
     value2: away.scores[key as TeamDimensionKey],
   }));
 
   const tugRows = [
-    { label: 'Attack', homeValue: home.scores.attacking, awayValue: away.scores.attacking },
-    { label: 'Creation', homeValue: home.scores.creation, awayValue: away.scores.creation },
-    { label: 'Progression', homeValue: home.scores.progression, awayValue: away.scores.progression },
-    { label: 'Defense', homeValue: home.scores.defensive, awayValue: away.scores.defensive },
-    { label: 'Possession', homeValue: home.scores.possession_value, awayValue: away.scores.possession_value },
+    { label: teamDimensionLabel('attacking', language), homeValue: home.scores.attacking, awayValue: away.scores.attacking },
+    { label: teamDimensionLabel('creation', language), homeValue: home.scores.creation, awayValue: away.scores.creation },
+    { label: teamDimensionLabel('progression', language), homeValue: home.scores.progression, awayValue: away.scores.progression },
+    { label: teamDimensionLabel('defensive', language), homeValue: home.scores.defensive, awayValue: away.scores.defensive },
+    { label: teamDimensionLabel('possession_value', language), homeValue: home.scores.possession_value, awayValue: away.scores.possession_value },
   ];
 
   const rawStatsRows = [
@@ -98,7 +100,7 @@ export const TeamStrengthSection: React.FC<TeamStrengthSectionProps> = ({ homeTe
       <div className="flex items-center justify-between px-4 pt-4 pb-3">
         <div className="flex items-center gap-2">
           <BrainCircuit size={16} className="text-vantage-cyan" />
-          <span className="text-xs font-bold uppercase tracking-widest text-gray-200">Team Strength</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-gray-200">{tr('Force des équipes', 'Team Strength', 'Fuerza de equipos', 'Força das equipes')}</span>
           <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-vantage-cyan/15 text-vantage-cyan border border-vantage-cyan/30">INTEL</span>
         </div>
         <button onClick={() => setExpanded(v => !v)} className="text-[10px] font-bold text-gray-400 flex items-center gap-1 hover:text-vantage-cyan transition-colors">
@@ -155,7 +157,7 @@ export const TeamStrengthSection: React.FC<TeamStrengthSectionProps> = ({ homeTe
         <div className="border-t border-white/10 space-y-5 px-4 py-4">
           {/* Radar overlay */}
           <section>
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Shape of the Matchup</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{tr('Forme du match', 'Shape of the Matchup', 'Forma del partido', 'Forma da partida')}</h4>
             <div className="flex justify-center">
               <RadarCompare
                 data={radarData}
@@ -171,19 +173,19 @@ export const TeamStrengthSection: React.FC<TeamStrengthSectionProps> = ({ homeTe
 
           {/* Tug-of-war dimensions */}
           <section>
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Dimension Battle</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">{tr('Duel par dimension', 'Dimension Battle', 'Duelo por dimensión', 'Duelo por dimensão')}</h4>
             <TugOfWar rows={tugRows} homeColor={HOME} awayColor={AWAY} />
           </section>
 
           {/* Raw stats comparison table */}
           <section>
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Raw Metrics (per 90)</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">{tr('Métriques brutes (par 90)', 'Raw Metrics (per 90)', 'Métricas brutas (por 90)', 'Métricas brutas (por 90)')}</h4>
             <div className="rounded-xl overflow-hidden border border-white/10">
               <table className="w-full text-[10px] font-mono">
                 <thead>
                   <tr className="bg-white/[0.04] text-gray-400">
                     <th className="text-left py-1.5 px-2 font-bold" style={{ color: HOME }}>{home.team_name}</th>
-                    <th className="text-center py-1.5 px-2 font-bold uppercase tracking-wider text-[8px]">Metric</th>
+                    <th className="text-center py-1.5 px-2 font-bold uppercase tracking-wider text-[8px]">{tr('Métrique', 'Metric', 'Métrica', 'Métrica')}</th>
                     <th className="text-right py-1.5 px-2 font-bold" style={{ color: AWAY }}>{away.team_name}</th>
                   </tr>
                 </thead>

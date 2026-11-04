@@ -503,6 +503,64 @@ fetchDetails();
                         );
                     })()}
 
+                    {/* Multi-bookmaker odds comparison */}
+                    {(() => {
+                        const bookmakerOdds = (match as any).bookmaker_odds as Record<string, Record<string, number>> | undefined;
+                        if (!bookmakerOdds) return null;
+                        const entries = Object.entries(bookmakerOdds)
+                            .filter(([, row]) => row && (row.home_odds || row.over25_odds || row.btts_yes_odds));
+                        if (entries.length === 0) return null;
+                        const cols = [
+                            { key: 'home_odds', label: '1' },
+                            { key: 'draw_odds', label: 'X' },
+                            { key: 'away_odds', label: '2' },
+                            { key: 'over25_odds', label: 'O2.5' },
+                            { key: 'btts_yes_odds', label: 'BTTS' },
+                        ].filter(c => entries.some(([, row]) => Number(row[c.key]) > 0));
+                        if (cols.length === 0) return null;
+                        const best = (key: string) => Math.max(...entries.map(([, row]) => Number(row[key]) || 0));
+                        return (
+                            <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                                <div className="flex items-center justify-between mb-2 gap-2">
+                                    <span className="text-[10px] font-bold text-vantage-cyan uppercase tracking-widest">
+                                        {tr('COMPARAISON DES COTES', 'ODDS COMPARISON', 'COMPARACIÓN DE CUOTAS', 'COMPARAÇÃO DE ODDS')}
+                                    </span>
+                                    <span className="text-[8px] text-gray-500">
+                                        {tr('meilleure cote surlignée', 'best price highlighted', 'mejor cuota resaltada', 'melhor odd destacada')}
+                                    </span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-[10px]">
+                                        <thead>
+                                            <tr className="text-gray-500">
+                                                <th className="text-left font-semibold pb-1">{tr('Bookmaker', 'Bookmaker', 'Casa', 'Casa')}</th>
+                                                {cols.map(c => (
+                                                    <th key={c.key} className="text-center font-semibold pb-1 px-1">{c.label}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {entries.map(([name, row]) => (
+                                                <tr key={name} className="border-t border-white/5">
+                                                    <td className="py-1 text-gray-300 truncate max-w-[90px]">{name}</td>
+                                                    {cols.map(c => {
+                                                        const v = Number(row[c.key]) || 0;
+                                                        const isBest = v > 0 && v === best(c.key);
+                                                        return (
+                                                            <td key={c.key} className={`py-1 px-1 text-center font-mono ${isBest ? 'text-emerald-400 font-black' : 'text-gray-400'}`}>
+                                                                {v > 0 ? v.toFixed(2) : '—'}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {/* Decision Guide */}
                     <div className="space-y-3 mb-6">
                         {/* AI Match Rating */}

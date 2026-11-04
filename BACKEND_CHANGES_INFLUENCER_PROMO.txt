@@ -1,0 +1,319 @@
+================================================================================
+ VANTAGE AI — BACKEND CHANGES TO DEPLOY
+ Influencer / affiliate program + promo codes (+7 bonus days) + push fixes
+ Companion app version: 4.4.5 (versionCode 71)
+================================================================================
+
+CONTEXT
+-------
+The mobile app (Play Store) now supports:
+  • Influencer accounts (admin sets isInfluencer + commissionRate on a profile)
+  • A Partner Dashboard (/influencer) reading: referral_codes/{code}.clicks,
+    profiles.referralCount, profiles.referralEarnings, profiles.referralPurchases
+  • Promo code entry at signup AND at payment (saved as profiles.appliedPromoCode)
+The backend must now:
+  1. Pay each influencer their OWN commissionRate (was hardcoded 40%)
+  2. Grant the buyer +7 bonus access days on their FIRST paid subscription
+     (once per account) when a code was used
+  3. Attribute the influencer if the code was entered at payment time
+  4. Track paying customers + write an audit ledger
+
+--------------------------------------------------------------------------------
+ CHANGE 1 (REQUIRED) — backend/paymentFulfillment.js
+--------------------------------------------------------------------------------
+Replace the ENTIRE file with the code below. It:
+  • Reads referrer BEFORE writes (Firestore transactions require reads first)
+  • Resolves profiles.appliedPromoCode -> referral_codes/{code}.ownerUid
+  • Blocks self-referral (referrerUid === uid)
+  • Uses referrer.commissionRate (clamped 0-80, default 40) instead of hardcoded 0.40
+  • Adds bonusDays (referral_codes/{code}.bonusDays, default 7) to the expiry on
+    the FIRST payment only, once per account (profiles.promoRedeemed)
+  • Sets profiles.referredBy when the code is entered at payment time
+  • Increments profiles.referralPurchases only on first payments (unique customers)
+  • Writes referral_commissions/{provider}_{transactionId} audit ledger
+  • Increments referral_codes/{code}.redemptions when a bonus is granted
+  • Keeps the existing renewal behavior (extend from current expiry)
+
+-----8<----- FILE START: backend/paymentFulfillment.js -----8<-----
+import admin from "firebase-admin";
+import { PLAN_CONFIG, getVipExpiry } from "./paymentPlans.js";
+
+export async function fulfillVipPayment({
+  uid,
+  provider,
+  transactionId,
+  plan,
+  amount,
+  raw = {},
+}) {
+  if (!admin.apps.length) {
+    const err = new Error("Firebase Admin not initialized");
+    err.status = 503;
+    throw err;
+  }
+
+  const db = admin.firestore();
+  const txRef = db.collection("payment_transactions").doc(`${provider}_${transactionId}`);
+  const userRef = db.collection("profiles").doc(uid);
+
+  return db.runTransaction(async (tx) => {
+    const existingTx = await tx.get(txRef);
+    if (existingTx.exists) {
+      return { alreadyProcessed: true, plan: existingTx.data().plan };
+    }
+
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists) {
+      const err = new Error("User profile not found");
+      err.status = 404;
+      throw err;
+    }
+
+    const user = userSnap.data();
+    const planCfg = PLAN_CONFIG[plan];
+    if (!planCfg) {
+      const err = new Error("Invalid plan");
+      err.status = 400;
+      throw err;
+    }
+
+    const paidAmount = Number(amount || planCfg.amount) || 0;
+    const firstPayment = !(Number(user.totalPaid) > 0);
+
+    // ── Reads first (Firestore requires all reads before writes) ───────────────
+    // Promo code / influencer code stored on the buyer's profile (from signup or
+    // from the code entered at payment in the app).
+    const promoCode = String(user.appliedPromoCode || "").trim().toUpperCase();
+    let promoRef = null;
+    let promoDoc = null;
+    if (promoCode) {
+      promoRef = db.collection("referral_codes").doc(promoCode);
+      const promoSnap = await tx.get(promoRef);
+      if (promoSnap.exists) promoDoc = promoSnap.data() || {};
+    }
+
+    // Referrer: signup attribution wins; otherwise the code entered at payment.
+    let referrerUid = user.referredBy || (promoDoc && promoDoc.ownerUid) || null;
+    if (referrerUid === uid) referrerUid = null; // no self-referral
+
+    let referrerRef = null;
+    let referrerSnap = null;
+    if (referrerUid) {
+      referrerRef = db.collection("profiles").doc(referrerUid);
+      referrerSnap = await tx.get(referrerRef);
+    }
+
+    // Renewal must EXTEND from the current expiry, not reset from today —
+    // otherwise a user renewing with 20 days left loses them.
+    const now = new Date();
+    const stillVip = user.isVip && user.vipExpiry && new Date(user.vipExpiry) > now;
+    let expiryDate = new Date(getVipExpiry(plan, stillVip ? new Date(user.vipExpiry) : now));
+
+    // Promo bonus: +N days on the FIRST paid subscription, once per account.
+    // (Bonus access days are Play-policy compliant — the Play price is untouched.)
+    const canRedeemPromo = firstPayment && !user.promoRedeemed && Boolean(referrerUid);
+    const bonusDays = canRedeemPromo ? (Number(promoDoc && promoDoc.bonusDays) || 7) : 0;
+    if (bonusDays > 0) {
+      expiryDate = new Date(expiryDate.getTime() + bonusDays * 24 * 60 * 60 * 1000);
+    }
+    const expiry = expiryDate.toISOString();
+
+    // ── Writes ────────────────────────────────────────────────────────────────
+    const userUpdate = {
+      isVip: true,
+      vipExpiry: expiry,
+      vipPlan: plan,
+      totalPaid: admin.firestore.FieldValue.increment(paidAmount),
+      updatedAt: new Date().toISOString(),
+    };
+    if (referrerUid && !user.referredBy) {
+      // Attribute the influencer when the code was entered at payment time.
+      userUpdate.referredBy = referrerUid;
+    }
+    if (canRedeemPromo) {
+      userUpdate.promoRedeemed = true;
+    }
+    tx.update(userRef, userUpdate);
+
+    if (canRedeemPromo && bonusDays > 0 && promoRef && promoDoc) {
+      tx.update(promoRef, { redemptions: admin.firestore.FieldValue.increment(1) });
+    }
+
+    if (referrerRef && referrerSnap && referrerSnap.exists) {
+      const referrer = referrerSnap.data() || {};
+      // Influencer/affiliate commission: rate is admin-set on the referrer's
+      // profile (0-80), default 40%. Recurring — credited on every confirmed
+      // payment (initial + renewals).
+      const rawRate = Number(referrer.commissionRate);
+      const rate = Number.isFinite(rawRate) ? Math.max(0, Math.min(80, rawRate)) : 40;
+      const commission = Math.floor(paidAmount * (rate / 100));
+      if (commission > 0) {
+        const referrerUpdate = {
+          referralEarnings: admin.firestore.FieldValue.increment(commission),
+          lifetimeEarnings: admin.firestore.FieldValue.increment(commission),
+        };
+        if (firstPayment) {
+          // Unique paying customers (renewals don't inflate this count)
+          referrerUpdate.referralPurchases = admin.firestore.FieldValue.increment(1);
+        }
+        tx.update(referrerRef, referrerUpdate);
+        // Audit ledger — one doc per commission (disputes / accounting)
+        tx.set(db.collection("referral_commissions").doc(`${provider}_${transactionId}`), {
+          referrerUid,
+          buyerUid: uid,
+          provider,
+          transactionId,
+          plan,
+          amount: paidAmount,
+          rate,
+          commission,
+          bonusDays,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    tx.set(txRef, {
+      uid,
+      provider,
+      transactionId,
+      plan,
+      amount: amount || planCfg.amount,
+      status: "fulfilled",
+      raw,
+      fulfilledAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { alreadyProcessed: false, plan, vipExpiry: expiry, bonusDays };
+  });
+}
+-----8<----- FILE END -----8<-----
+
+NOTE: this exact file was already committed to the backend repo at
+  branch codex/a-grade-hardening, commit 4a415a6
+If the deployed repo does not have it yet, apply the file above.
+
+--------------------------------------------------------------------------------
+ CHANGE 2 (RECOMMENDED) — backend/pushService.js
+--------------------------------------------------------------------------------
+Two small fixes so notifications deep-link correctly on Android and dead tokens
+are cleaned up with FCM v1:
+
+2a) Android tap navigation — the URL currently goes ONLY into
+    webpush.fcm_options.link (web push only). Add `url` into the `data` payload.
+    In BOTH sendPushToUser() and broadcastPush(), change:
+        data: notification.data || {},
+    to:
+        data: { ...(notification.data || {}), url: notification.url || '/' },
+
+2b) Stale-token cleanup — FCM v1 errors use different messages. In
+    sendPushToUser() the check is:
+        err.message.includes('invalid registration token') || err.message.includes('not registered')
+    Add the v1 code check:
+        err.code === 'messaging/registration-token-not-registered'
+    (and in broadcastPush, the failure.error?.code check likewise).
+    Current v1 messages are like "Requested entity was not found." so the
+    string checks above rarely match.
+
+--------------------------------------------------------------------------------
+ CHANGE 3 (OPTIONAL CONFIG) — referral_codes docs
+--------------------------------------------------------------------------------
+Each influencer's code lives in Firestore: referral_codes/{CODE}
+  { ownerUid, createdAt, clicks? }
+Optional fields you may add per code (backend defaults apply if absent):
+  bonusDays   (number, default 7)   -> bonus days granted on first payment
+  redemptions (number)              -> incremented automatically by the backend
+The app reads `clicks` from this doc for the Partner Dashboard.
+The app increments `clicks` directly (rules allow +1 only).
+
+--------------------------------------------------------------------------------
+ CHANGE 4 — firestore.rules (ALREADY DEPLOYED via Firebase CLI)
+--------------------------------------------------------------------------------
+These rules were deployed to project vantage-ai-4d17d from the app repo.
+If the backend repo keeps its own copy of firestore.rules, sync it. The changes:
+
+1) isVip() — enforce expiry for Timestamp vipExpiry:
+     function isVip() {
+       let profile = get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
+       return signedIn()
+         && exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
+         && profile.isVip == true
+         && (!(profile.vipExpiry is timestamp) || profile.vipExpiry >= request.time);
+     }
+
+2) referral_codes — public click counter (referral/influencer links are opened
+   by logged-out visitors). Only `clicks` may change, exactly +1:
+     match /referral_codes/{code} {
+       allow read: if signedIn();
+       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks'])
+         && request.resource.data.clicks == resource.data.clicks + 1;
+       allow delete: if false;
+     }
+
+3) profiles protected fields (clients cannot write these) — add:
+     isInfluencer, commissionRate, referralPurchases, promoRedeemed
+
+--------------------------------------------------------------------------------
+ DEPLOYMENT STEPS
+--------------------------------------------------------------------------------
+1. Merge the backend branch into main (the Railway service deploys from main):
+     git checkout main
+     git merge codex/a-grade-hardening
+     git push origin main
+   (or point Railway at codex/a-grade-hardening and redeploy)
+2. Railway redeploy backend — no new environment variables are required.
+3. Verify the server boots (GET /health → 200).
+4. No Firestore indexes need to be added (no new queries, only doc reads).
+   New collection `referral_commissions` is written via Admin SDK (rules are
+   default-deny for clients, which is correct).
+
+--------------------------------------------------------------------------------
+ DATA MODEL REFERENCE
+--------------------------------------------------------------------------------
+profiles/{uid}:
+  isInfluencer     boolean   admin-granted (Partner Dashboard access)
+  commissionRate   number    percent 0-80 (default 40 if absent/invalid)
+  referralCode     string    the influencer/user code (also the promo code)
+  referralCount    number    signups attributed
+  referralEarnings number    FCFA commission balance
+  lifetimeEarnings number    FCFA lifetime commission
+  referralPurchases number   unique paying customers (first payments only)
+  appliedPromoCode string    code entered at signup or payment (client-writable)
+  promoRedeemed    boolean   backend-only; true after bonus granted once
+  referredBy       string    referrer uid (set at signup or at payment via code)
+
+referral_codes/{CODE}:
+  ownerUid    string   influencer uid
+  clicks      number   link clicks (client increments +1, rules-limited)
+  bonusDays   number   optional, default 7
+  redemptions number   backend-incremented on bonus grants
+
+referral_commissions/{provider}_{transactionId}:
+  referrerUid, buyerUid, provider, transactionId, plan, amount, rate,
+  commission, bonusDays, createdAt
+
+--------------------------------------------------------------------------------
+ TEST CHECKLIST
+--------------------------------------------------------------------------------
+1. Create a test user; enter an influencer code in the app payment screen.
+   → profiles/{uid}.appliedPromoCode == CODE
+2. Complete a sandbox purchase (RevenueCat / Play test).
+   → profiles/{uid}.vipExpiry extended by plan duration + 7 days
+   → profiles/{uid}.promoRedeemed == true
+   → profiles/{uid}.referredBy == influencer uid
+   → influencer profile: referralEarnings += floor(amount * rate/100)
+   → influencer profile: referralPurchases += 1 (first payment only)
+   → referral_commissions/{provider}_{txId} doc created (with bonusDays: 7)
+   → referral_codes/{CODE}.redemptions += 1
+3. Same user buys again (renewal).
+   → NO extra bonus days (promoRedeemed stays true)
+   → commission still credited (recurring), referralPurchases NOT incremented
+4. Influencer tries their own code → app rejects; backend also blocks
+   (referrerUid === uid → no commission, no bonus).
+5. Partner Dashboard shows: clicks, signups, paying clients, earnings,
+   click→client conversion %.
+
+================================================================================
+ END
+================================================================================

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Crown, Gift, ArrowRight, X, Globe, Check, TrendingUp, BarChart3, BrainCircuit } from 'lucide-react';
+import { Zap, Crown, Gift, ArrowRight, X, Globe, Check, TrendingUp, BarChart3, BrainCircuit, Star } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Flag } from './Flag';
@@ -40,6 +40,21 @@ const slides = [
         desc_fr: 'Analyse football avancée propulsée par des données en direct, des modèles statistiques et de vrais indicateurs de performance.',
         desc_es: 'Análisis de fútbol avanzado impulsado por datos en vivo, modelos estadísticos e indicadores de rendimiento reales.',
         desc_pt: 'Análise de futebol avançada com dados ao vivo, modelos estatísticos e indicadores reais de desempenho.',
+    },
+    {
+        id: 'personalization',
+        icon: Star,
+        color: 'text-vantage-cyan',
+        bg: 'from-vantage-cyan/20 via-vantage-purple/10 to-transparent',
+        badge_en: 'Personalise', badge_fr: 'Personnalisez', badge_es: 'Personaliza', badge_pt: 'Personalize',
+        title_en: 'Pick your\nleagues',
+        title_fr: 'Choisissez vos\nligues',
+        title_es: 'Elige tus\nligas',
+        title_pt: 'Escolha suas\nligas',
+        desc_en: 'Select the leagues you follow — we show them first and can alert you on their matches.',
+        desc_fr: 'Sélectionnez les ligues que vous suivez — elles passent en premier et vous recevez leurs alertes.',
+        desc_es: 'Selecciona las ligas que sigues — aparecen primero y recibirás sus alertas.',
+        desc_pt: 'Selecione as ligas que você acompanha — aparecem primeiro e você recebe alertas.',
     },
     {
         id: 'ev_explained',
@@ -133,15 +148,16 @@ const slides = [
     },
 ];
 
-const firstRunSlideIds = new Set(['language', 'welcome', 'ev_explained', 'long_game', 'vip']);
+const firstRunSlideIds = new Set(['language', 'welcome', 'personalization', 'ev_explained', 'long_game', 'vip']);
 
 export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const navigate = useNavigate();
     const { language, setLanguage, showToast, tr } = useAppContext();
-    const { updateUserCountry } = useAuth();
+    const { updateUserCountry, updatePreferences } = useAuth();
     const [step, setStep] = useState(0);
     const [direction, setDirection] = useState(1);
     const [selectedCountry, setSelectedCountry] = useState<string>('other');
+    const [favLeagues, setFavLeagues] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
 
     const onboardingSlides = slides.filter(slide => firstRunSlideIds.has(slide.id));
@@ -149,6 +165,22 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const isLast = step === onboardingSlides.length - 1;
     const isCountrySlide = current.id === 'country';
     const isLanguageSlide = current.id === 'language';
+    const isPersonalizationSlide = current.id === 'personalization';
+
+    const favoriteLeagueOptions = [
+        'English Premier League',
+        'UEFA Champions League',
+        'La Liga',
+        'Bundesliga',
+        'Serie A',
+        'Ligue 1',
+        'UEFA Europa League',
+        'NBA',
+        'Liga MX (Mexico)',
+        'Saudi Pro League',
+        'Premier Soccer League (South Africa)',
+        'CAF Champions League',
+    ];
 
     const countries = [
         { code: 'cm', label_en: 'Cameroon', label_fr: 'Cameroun', label_es: 'Camerún', label_pt: 'Camarões' },
@@ -181,6 +213,15 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 showToast(tr('Pays non enregistré, vous pourrez le modifier plus tard.', 'Country save failed, you can update it later in Profile.', 'No se pudo guardar el país, puedes cambiarlo luego en el Perfil.', 'Não foi possível salvar o país, você pode alterá-lo depois no Perfil.'), 'error');
             } finally {
                 setIsSaving(false);
+            }
+        }
+
+        // Save favorite leagues when leaving the personalization slide
+        if (isPersonalizationSlide && favLeagues.length > 0) {
+            try {
+                await updatePreferences({ favoriteLeagues: favLeagues });
+            } catch (e) {
+                console.warn('Failed to save favorite leagues', e);
             }
         }
 
@@ -233,7 +274,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: direction * -60 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                        className={`h-full w-full flex flex-col items-center px-6 ${isCountrySlide ? 'overflow-y-auto py-4' : 'justify-center py-4'}`}
+                        className={`h-full w-full flex flex-col items-center px-6 ${isCountrySlide || isPersonalizationSlide ? 'overflow-y-auto py-4' : 'justify-center py-4'}`}
                     >
                         {/* Icon container */}
                         <div className="relative mb-6 flex-shrink-0">
@@ -284,6 +325,27 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         <p className={`font-bold text-sm ${language === code ? 'text-white' : 'text-gray-300'}`}>{name}</p>
                                     </button>
                                 ))}
+                            </div>
+                        )}
+
+                        {/* Favorite leagues — personalization */}
+                        {isPersonalizationSlide && (
+                            <div className="w-full max-w-xs grid grid-cols-2 gap-2 flex-shrink-0 pb-4">
+                                {favoriteLeagueOptions.map(lg => {
+                                    const selected = favLeagues.includes(lg);
+                                    return (
+                                        <button
+                                            key={lg}
+                                            onClick={() => setFavLeagues(prev => selected ? prev.filter(x => x !== lg) : [...prev, lg])}
+                                            className={`flex items-center gap-1.5 p-2.5 rounded-xl border-2 text-left transition-all ${selected ? 'border-vantage-cyan bg-vantage-cyan/20' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                                        >
+                                            <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${selected ? 'bg-vantage-cyan border-vantage-cyan' : 'border-gray-500'}`}>
+                                                {selected && <Check size={10} className="text-white" strokeWidth={3} />}
+                                            </span>
+                                            <span className={`text-[10px] font-bold leading-tight ${selected ? 'text-white' : 'text-gray-300'}`}>{lg}</span>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
 

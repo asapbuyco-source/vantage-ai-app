@@ -6,6 +6,7 @@ import { PlayerAvatar } from './intel/PlayerAvatar';
 import { getFixtureLineupsFromDB, LineupPlayer } from '../services/sportsData';
 import { findTeamByName, fetchSquadPlayers } from '../services/intelligence/db';
 import { TeamIntelligence, PlayerIntelligence } from '../services/intelligence/types';
+import { useAppContext } from '../context/AppContext';
 
 interface TeamDetailSheetProps {
   open: boolean;
@@ -23,6 +24,7 @@ interface TeamDetailSheetProps {
 export const TeamDetailSheet: React.FC<TeamDetailSheetProps> = ({
   open, onClose, teamName, side, teamLogo, fixtureId,
 }) => {
+  const { tr } = useAppContext();
   const [lineup, setLineup] = useState<LineupPlayer[] | null>(null);
   const [lineupLoading, setLineupLoading] = useState(false);
   const [intelTeam, setIntelTeam] = useState<TeamIntelligence | null>(null);
@@ -107,13 +109,13 @@ export const TeamDetailSheet: React.FC<TeamDetailSheetProps> = ({
                 ) : starters.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-white/15 px-4 py-6 text-center">
                     <ShieldAlert size={20} className="mx-auto text-gray-600 mb-1.5" />
-                    <p className="text-xs font-semibold text-gray-400">Lineup unavailable</p>
-                    <p className="text-[9px] text-gray-600 mt-0.5">Published lineups will appear here once confirmed.</p>
+                    <p className="text-xs font-semibold text-gray-400">{tr('Composition indisponible', 'Lineup unavailable', 'Alineación no disponible', 'Escalação indisponível')}</p>
+                    <p className="text-[9px] text-gray-600 mt-0.5">{tr('Les compositions officielles apparaîtront ici une fois confirmées.', 'Published lineups will appear here once confirmed.', 'Las alineaciones oficiales aparecerán aquí una vez confirmadas.', 'As escalações oficiais aparecerão aqui quando confirmadas.')}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <p className="text-[9px] uppercase tracking-widest text-gray-500 mb-1.5">Starting XI</p>
+                      <p className="text-[9px] uppercase tracking-widest text-gray-500 mb-1.5">{tr('XI Titulaire', 'Starting XI', 'XI Titular', 'XI Titular')}</p>
                       <div className="space-y-1">
                         {starters.map((p: any, i: number) => (
                           <div key={i} className="flex items-center gap-2.5 rounded-lg bg-white/[0.03] px-2.5 py-1.5">
@@ -128,7 +130,7 @@ export const TeamDetailSheet: React.FC<TeamDetailSheetProps> = ({
                     </div>
                     {subs.length > 0 && (
                       <div>
-                        <p className="text-[9px] uppercase tracking-widest text-gray-500 mb-1.5">Substitutes</p>
+                        <p className="text-[9px] uppercase tracking-widest text-gray-500 mb-1.5">{tr('Remplaçants', 'Substitutes', 'Suplentes', 'Reservas')}</p>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                           {subs.map((p: any, i: number) => (
                             <div key={i} className="flex items-center gap-2 text-[10px] text-gray-400">
@@ -179,7 +181,7 @@ export const TeamDetailSheet: React.FC<TeamDetailSheetProps> = ({
                   className="flex items-center justify-between rounded-xl px-4 py-3 border transition-colors"
                   style={{ borderColor: `${accent}33`, background: `${accent}0D` }}
                 >
-                  <span className="text-xs font-bold" style={{ color: accent }}>Open full intelligence report</span>
+                  <span className="text-xs font-bold" style={{ color: accent }}>{tr('Ouvrir le rapport complet', 'Open full intelligence report', 'Abrir informe completo', 'Abrir relatório completo')}</span>
                   <ArrowUpRight size={14} style={{ color: accent }} />
                 </a>
               )}
